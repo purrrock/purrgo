@@ -1,0 +1,22 @@
+{
+  "package": "com.purr.go",
+  "name": "PurrGo",
+  "versionName": "1.0.0",
+  "versionCode": 1,
+  "icon": "/assets/images/purrgo.png",
+  "permissions": [
+    { "name": "watch.permission.LOCATION" },
+    { "name": "watch.permission.VIBRATE" }],
+  "features": [],
+  "router": {
+    "entry": "main",
+    "pages": {
+      "main": {
+        "component": "index"
+      }
+    }
+  },
+  "config": {
+    "designWidth": 410
+  }
+}
