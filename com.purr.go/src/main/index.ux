@@ -1,18 +1,180 @@
 <template>
-  <p>{{text}}</p>
+  <div class="container">
+    <canvas id="navCanvas" class="canvas-element"></canvas>
+  </div>
 </template>
 
 <style>
-  p {
-    font-size: 48px;
-    text-align: center;
+  .container {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+    background-color: #000000;
+  }
+  
+  .canvas-element {
+    /* Базовое разрешение экрана часов DT G1 */
+    width: 466px;
+    height: 466px;
   }
 </style>
 
 <script>
+  // Импорт замоканного массива точек маршрута из соседнего JS-файла
+  // (Обход ограничения модуля @system.file для ресурсов .pkg)
+  import { mockRoutePoints } from './mock_track.js';
+
   export default {
     data: {
-      text: "PurrGo!"
+      // Исходные координаты старта (Mock WGS84)
+      userLat: 53.713589,
+      userLon: 28.419289,
+      // Текущий азимут в радианах (0 = Север). 
+      // В будущем обновляется из коллбека @system.compass
+      userHeading: 0, 
+      
+      routePoints: [],
+      canvasSize: 466,
+      // Коэффициент перевода градусов в пиксели для Equirectangular проекции
+      zoomLevel: 60000 
+    },
+
+    /**
+     * Жизненный цикл: onReady
+     * Гарантирует, что нативный узел canvas примонтирован и готов к биндингу C++ контекста.
+     */
+    onReady() {
+      console.info('PurrGo: Инициализация графического ядра');
+      
+      // Захват C++ Proxy указателя
+      this.ctx = this.$element('navCanvas').getContext('2d');
+      
+      if (!this.ctx) {
+        console.error('PurrGo: Ошибка инициализации Canvas API');
+        return;
+      }
+
+      // Загрузка данных из бандла сборщика
+      this.routePoints = mockRoutePoints;
+      
+      // Вызов первого кадра
+      this.renderFrame();
+    },
+
+    /**
+     * Математика плоской проекции (Equirectangular Projection)
+     * Крайне дешевая в плане тактов CPU функция перевода GPS в пиксели.
+     */
+    projectToCanvas(lat, lon) {
+      const cx = this.canvasSize / 2; 
+      const cy = this.canvasSize / 2;
+      
+      // Перевод широты в радианы для компенсации сжатия меридианов
+      const latRad = this.userLat * (Math.PI / 180);
+      
+      // Вычисление дельты относительно позиции пользователя
+      const deltaLon = lon - this.userLon;
+      const deltaLat = lat - this.userLat;
+
+      // X: масштабирование с учетом искажения долготы
+      const x = cx + (deltaLon * this.zoomLevel * Math.cos(latRad));
+      // Y: инверсия оси (GPS Север = +Y, Canvas Вниз = +Y)
+      const y = cy - (deltaLat * this.zoomLevel); 
+
+      return { x, y };
+    },
+
+    /**
+     * Основной цикл рендеринга
+     * Используются строго подтвержденные методы Glyphix Canvas API.
+     */
+    renderFrame() {
+      // 1. Очистка буфера кадра (Hardware clearRect отсутствует)
+      this.ctx.fillStyle = '#000000';
+      this.ctx.fillRect(0, 0, this.canvasSize, this.canvasSize);
+
+      // 2. Изоляция матрицы трансформации
+      this.ctx.save();
+      
+      // 3. Аппаратный поворот карты под курс пользователя (Course-Up)
+      const cx = this.canvasSize / 2;
+      const cy = this.canvasSize / 2;
+      
+      this.ctx.translate(cx, cy);
+      // Вращаем мир в обратную сторону от вектора движения пользователя
+      this.ctx.rotate(-this.userHeading);
+      this.ctx.translate(-cx, -cy);
+
+      // 4. Отрисовка геометрии трека (в повернутой матрице)
+      this.drawTrack();
+      
+      // 5. Возврат матрицы к локальным экранным координатам устройства
+      this.ctx.restore();
+
+      // 6. Отрисовка статичных элементов поверх карты (Курсор и Телеметрия)
+      this.drawUserCursor(cx, cy);
+      this.drawTelemetry();
+    },
+
+    /**
+     * Отрисовка полилинии маршрута
+     */
+    drawTrack() {
+      const points = this.routePoints;
+      if (points.length < 2) return;
+
+      this.ctx.beginPath();
+      const start = this.projectToCanvas(points[0].lat, points[0].lon);
+      this.ctx.moveTo(start.x, start.y);
+
+      for (let i = 1; i < points.length; i++) {
+        const p = this.projectToCanvas(points[i].lat, points[i].lon);
+        this.ctx.lineTo(p.x, p.y);
+      }
+
+      this.ctx.strokeStyle = '#00ff00'; // Зеленая линия трека
+      this.ctx.lineWidth = 6;
+      this.ctx.stroke();
+    },
+
+    /**
+     * Отрисовка маркера пользователя.
+     * Вызывается после ctx.restore(), поэтому курсор всегда строго направлен
+     * к физическому верхнему краю экрана часов.
+     */
+    drawUserCursor(cx, cy) {
+      const size = 16;
+
+      this.ctx.beginPath();
+      this.ctx.moveTo(cx, cy - size);              // Нос
+      this.ctx.lineTo(cx - size * 0.7, cy + size); // Левое крыло
+      this.ctx.lineTo(cx, cy + size * 0.4);        // Вырез в хвосте (стреловидность)
+      this.ctx.lineTo(cx + size * 0.7, cy + size); // Правое крыло
+      this.ctx.lineTo(cx, cy - size);              // Замыкание
+
+      // Заливка и обводка
+      this.ctx.fillStyle = '#ff0000';
+      this.ctx.fill();
+      
+      this.ctx.strokeStyle = '#ffffff';
+      this.ctx.lineWidth = 2;
+      this.ctx.stroke();
+    },
+
+    /**
+     * Отрисовка текстовой телеметрии (Direct Canvas Text Render).
+     * Экономит память за счет отказа от DOM-узлов <text>.
+     */
+    drawTelemetry() {
+      this.ctx.fillStyle = '#ffffff';
+      
+      // Glyphix не поддерживает textAlign или font-синтаксис в Canvas API, 
+      // координаты выравнивания задаются фиксированно
+      this.ctx.fillText(`GPS FIX`, 190, 40);
+      this.ctx.fillText(`Pts: ${this.routePoints.length}`, 190, 80);
     }
-  }
+  };
 </script>
