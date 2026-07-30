@@ -1,13 +1,24 @@
 {
   "package": "com.purr.go",
   "name": "PurrGo",
-  "versionName": "1.0.0",
+  "versionName": "0.1.0",
   "versionCode": 1,
   "icon": "/assets/images/purrgo.png",
   "permissions": [
-    { "name": "watch.permission.LOCATION" },
-    { "name": "watch.permission.VIBRATE" }],
-  "features": [],
+    {
+      "name": "watch.permission.LOCATION"
+    },
+    {
+      "name": "watch.permission.ACCESS_SENSORS"
+    },
+	{
+      "name": "watch.permission.FOREGROUND_SERVICE"
+    }
+  ],
+  "config": {
+    "designWidth": 466,
+    "designImageScale": 1.0
+  },
   "router": {
     "entry": "main",
     "pages": {
@@ -15,8 +26,5 @@
         "component": "index"
       }
     }
-  },
-  "config": {
-    "designWidth": 410
   }
 }
