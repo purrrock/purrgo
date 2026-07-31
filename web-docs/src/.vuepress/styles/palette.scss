@@ -1,0 +1,28 @@
+$vp-font: var(--font-family);
+$vp-font-heading: var(--font-family);
+$vp-font-mono: var(--font-family-mono);
+
+$vp-c-bg-elv-soft: (
+  light: rgba(255, 255, 255, 0.5),
+  dark: rgba(32, 33, 39, 0.6),
+);
+
+$vp-c-accent: (
+  light: #7432c4,
+  dark: #b16ee8,
+);
+
+$vp-c-accent-bg: (
+  light: #9f3ff4,
+  dark: #ad65ef,
+);
+
+$vp-c-accent-hover: (
+  light: #b86ff8,
+  dark: #bd7cf5,
+);
+
+$vp-c-accent-soft: (
+  light: #a855f724,
+  dark: #d8b4fe33,
+);

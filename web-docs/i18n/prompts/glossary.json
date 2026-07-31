@@ -1,0 +1,14 @@
+{
+  "entries": [
+    { "source": "组件", "target": "component" },
+    { "source": "指令", "target": "command", "context": "template command like on/if/for" },
+    { "source": "监听", "target": "listen/watch", "context": "event or property listening" },
+    { "source": "触发", "target": "trigger/emit" },
+    { "source": "打包", "target": "build/bundle", "context": "project build process" },
+    { "source": "模拟器", "target": "emulator" },
+    { "source": "快应用", "target": "Quick App" },
+    { "source": "资源", "target": "resource/asset" },
+    { "source": "规范", "target": "specification/spec" },
+    { "source": "控件", "target": "widget" }
+  ]
+}
