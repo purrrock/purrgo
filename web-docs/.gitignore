@@ -1,0 +1,17 @@
+temp/
+.idea/
+.DS_Store
+
+node_modules/
+src/.vuepress/.cache/
+src/.vuepress/.temp/
+src/.vuepress/dist/
+src/.vuepress/public/res/demo
+src/.vuepress/public/cpp-apis
+src/.vuepress/components/emulator
+
+# Translation system
+.translation-cache/
+.translation-review/
+.env
+dist-i18n

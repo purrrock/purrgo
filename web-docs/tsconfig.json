@@ -1,0 +1,6 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./tsconfig.i18n.json" }
+  ]
+}

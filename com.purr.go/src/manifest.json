@@ -5,15 +5,14 @@
   "versionCode": 1,
   "icon": "/assets/images/purrgo.png",
   "permissions": [
-    {
-      "name": "watch.permission.LOCATION"
-    },
-    {
-      "name": "watch.permission.ACCESS_SENSORS"
-    },
-	{
-      "name": "watch.permission.FOREGROUND_SERVICE"
-    }
+    { "name": "watch.permission.LOCATION" },
+    { "name": "watch.permission.ACCESS_SENSORS" },
+	{ "name": "watch.permission.FOREGROUND_SERVICE"},
+    { "name": "watch.permission.LOCATION" },
+    { "name": "watch.permission.FOREGROUND_SERVICE" },
+    { "name": "watch.permission.READ_USER_STORAGE" },
+    { "name": "watch.permission.WRITE_USER_STORAGE" },
+    { "name": "system.permission.READ_EXTERNAL_STORAGE" }
   ],
   "config": {
     "designWidth": 466,
