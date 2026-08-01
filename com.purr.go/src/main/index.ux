@@ -26,6 +26,7 @@
   // Импорт замоканного массива точек маршрута из соседнего JS-файла
   // (Обход ограничения модуля @system.file для ресурсов .pkg)
   import { mockRoutePoints } from './mock_track.js';
+  import geolocation from '@system.geolocation';
 
   export default {
     data: {
@@ -60,8 +61,31 @@
       // Загрузка данных из бандла сборщика
       this.routePoints = mockRoutePoints;
       
+      this.fetchCurrentLocation();
+
       // Вызов первого кадра
       this.renderFrame();
+    },
+
+    /**
+     * Получение текущей геопозиции
+     */
+    async fetchCurrentLocation() {
+      try {
+        const location = await geolocation.getLocation({ timeout: 30000 });
+        if (location && location.latitude !== undefined && location.longitude !== undefined) {
+          this.userLat = location.latitude;
+          this.userLon = location.longitude;
+          this.renderFrame();
+        } else if (location && location.data) {
+          // Fallback just in case the API documentation structure is used
+          this.userLat = location.data.latitude;
+          this.userLon = location.data.longitude;
+          this.renderFrame();
+        }
+      } catch (error) {
+        console.error('PurrGo: Исключение при получении геолокации', error);
+      }
     },
 
     /**
