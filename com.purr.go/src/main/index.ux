@@ -47,7 +47,31 @@
      * Гарантирует, что нативный узел canvas примонтирован и готов к биндингу C++ контекста.
      */
     onReady() {
-      console.info('PurrGo: Инициализация графического ядра');
+	
+	console.info('PurrGo: Проверка признаков эмулятора...');
+
+    // 1. Проверяем наличие нестандартных глобальных объектов или свойств эмулятора
+    try {
+      if (typeof __DEV__ !== 'undefined' && __DEV__) {
+        console.info('Обнаружен флаг __DEV__ (вероятно, эмулятор/режим отладки)');
+      }
+    } catch (e) {}
+
+    // 2. Проверяем реакцию модуля geolocation на вызов в текущей среде
+    const geolocation = require('@system.geolocation');
+    if (geolocation && typeof geolocation.getLocation === 'function') {
+      geolocation.getLocation({
+        success: (data) => {
+          console.info(`Geolocation success: lat=${data.latitude}, lon=${data.longitude}`);
+        },
+        fail: (data, code) => {
+          console.info(`Geolocation failed with code ${code}: ${data}`);
+          // Если на эмуляторе датчик недоступен или возвращает специфический код ошибки — фиксируем это
+        }
+      });
+    }
+	
+	  console.info('PurrGo: Инициализация графического ядра');
       
       // Захват C++ Proxy указателя
       this.ctx = this.$element('navCanvas').getContext('2d');
