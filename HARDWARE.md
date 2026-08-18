@@ -153,7 +153,7 @@ The release firmware may additionally use u-blox UBX protocol where it provides 
 
 # 3. Development Display
 
-The first development display may be a small OLED or TFT display.
+The first development display may be a small E-Ink display.
 
 The development display is not required to have the same technology or resolution as the final display.
 
@@ -282,8 +282,6 @@ The release firmware shall be designed so that most of the application logic is 
 
 # 8. Release GNSS Receiver
 
-## 8.1 Preferred Architecture
-
 The preferred release GNSS receiver is a modern u-blox M10-family module.
 
 A **u-blox MAX-M10S-class receiver** is the current candidate.
@@ -306,51 +304,24 @@ The development GY-NEO6MV2 module shall not dictate the final PCB design.
 
 ---
 
-# 9. GNSS Antenna
-
-The release design shall use a dedicated GNSS antenna positioned as far as practical from:
-
-- switching regulators;
-- high-speed digital signals;
-- SD card traces;
-- display electronics;
-- high-current battery paths.
-
-The antenna implementation shall be selected after the enclosure and PCB geometry are defined.
-
-The final antenna may be:
-
-- ceramic patch antenna;
-- active GNSS antenna;
-- other GNSS antenna suitable for the selected receiver.
-
-The exact antenna model is **not fixed yet**.
-
-Antenna performance and placement are considered part of the RF design and shall be validated on the physical PCB.
-
----
-
-# 10. Release Display
+# 9. Release Display
 
 The release display is intentionally not fixed to a conventional TFT or OLED.
 
 Two technologies are currently preferred:
 
 1. **Memory LCD**
-2. **Black/white/red electrophoretic display (E-Ink / e-paper)**
+2. **Black/white electrophoretic display (E-Ink / e-paper)**
 
 The final choice shall be based on actual measurements and usability tests.
 
----
-
-# 11. Option A — Memory LCD
 
 Memory LCD is currently the preferred choice if smooth map interaction is required.
 
 Desired characteristics:
 
-- approximately 400×240 or higher;
-- monochrome or limited colour;
+- approximately 296X128 or higher;
+- gray-levels or limited colour;
 - sunlight-readable;
 - very low static power;
 - fast enough update rate for navigation UI;
@@ -368,63 +339,7 @@ Memory LCD is particularly attractive for a Garmin-like user interface.
 
 ---
 
-# 12. Option B — Black/White/Red E-Ink
-
-A second release-display candidate is a small electrophoretic display with:
-
-- black;
-- white;
-- red.
-
-This is the same general display technology used by many electronic shelf labels.
-
-The desired resolution is approximately:
-
-```text
-400×300
-```
-
-or higher.
-
-The exact display model is not yet fixed.
-
-## Advantages
-
-- excellent readability in direct sunlight;
-- no conventional backlight;
-- almost no display power while the image is static;
-- excellent suitability for a stationary map;
-- black/white/red provides useful cartographic emphasis.
-
-Possible usage:
-
-```text
-BLACK  — roads, text, terrain
-WHITE  — background
-RED    — current track / selected object / warning
-```
-
-## Limitations
-
-Electrophoretic displays have significantly slower refresh characteristics than LCDs.
-
-Full-screen refresh may also produce visible flashing.
-
-Therefore the PurrGo UI must not assume that the display can be refreshed like a conventional TFT.
-
-The firmware shall support:
-
-- full refresh;
-- partial refresh where supported by the selected panel;
-- refresh scheduling;
-- reduced refresh frequency;
-- static-map operation.
-
-The map shall not necessarily be redrawn at every GNSS update.
-
----
-
-# 13. Display Strategy
+# 10. Display Strategy
 
 The navigation system shall separate:
 
@@ -462,7 +377,7 @@ The firmware shall avoid unnecessary display updates.
 
 ---
 
-# 14. Map Storage
+# 11. Map Storage
 
 The release device shall use removable or replaceable non-volatile storage.
 
@@ -488,7 +403,7 @@ The STM32 shall not perform full OpenStreetMap processing or route calculation.
 
 ---
 
-# 15. Map Architecture
+# 12. Map Architecture
 
 The map system shall use pre-generated map data.
 
@@ -525,7 +440,7 @@ This significantly reduces:
 
 ---
 
-# 16. Battery
+# 13. Battery
 
 The primary release battery is:
 
@@ -552,7 +467,7 @@ Battery percentage shall not be calculated from voltage alone unless a suitable 
 
 ---
 
-# 17. Power Management
+# 14. Power Management
 
 The release device shall use a dedicated low-quiescent-current power-management solution.
 
@@ -590,7 +505,7 @@ The exact regulator topology shall be selected after measuring the current requi
 
 ---
 
-# 18. Power Modes
+# 15. Power Modes
 
 The firmware shall explicitly define power modes.
 
@@ -642,7 +557,7 @@ The device may:
 
 ---
 
-# 19. SD Card Power Control
+# 16. SD Card Power Control
 
 The release hardware should provide the possibility of switching SD card power.
 
@@ -668,7 +583,7 @@ The firmware shall also minimize filesystem activity by buffering track records 
 
 ---
 
-# 20. User Controls
+# 17. User Controls
 
 The release device shall use physical controls rather than a touchscreen.
 
@@ -702,7 +617,7 @@ Physical controls are preferred because they:
 
 ---
 
-# 21. USB
+# 18. USB
 
 USB shall be provided primarily for:
 
@@ -718,7 +633,7 @@ USB power consumption shall therefore be excluded from the normal operating powe
 
 ---
 
-# 22. Debug Interfaces
+# 19. Debug Interfaces
 
 The release PCB should expose test/debug connections for:
 
@@ -735,14 +650,14 @@ A convenient test connector or test pads should be provided.
 
 ---
 
-# 23. Development vs Release Hardware
+# 20. Development vs Release Hardware
 
 | Component | Development | Release |
 |---|---|---|
 | MCU | STM32F446RE / NUCLEO-F446RE | STM32U5 family |
 | Debugger | Integrated ST-LINK | External SWD during development |
 | GNSS | GY-NEO6MV2 | Modern u-blox M10-class |
-| Display | OLED/TFT | Memory LCD or B/W/R E-Ink |
+| Display | OLED/TFT | Memory LCD or B/W E-Ink |
 | Storage | microSD | microSD |
 | Controls | Buttons / TM1638 | Physical buttons |
 | Battery | USB / bench supply | 1 × 18650 |
@@ -752,13 +667,12 @@ A convenient test connector or test pads should be provided.
 
 ---
 
-# 24. Initial Development Hardware
+# 21. Initial Development Hardware
 
 The minimum hardware required to start the project is:
 
 - NUCLEO-F446RE;
 - GY-NEO6MV2 GNSS module;
-- GNSS antenna;
 - USB cable;
 - small display;
 - microSD module;
@@ -770,7 +684,7 @@ The existing TM1638 module may be used for additional low-level UI experiments.
 
 ---
 
-# 25. Release Target
+# 22. Release Target
 
 The release hardware shall target:
 
@@ -792,7 +706,7 @@ Actual battery life shall be determined from measurements of the completed hardw
 
 ---
 
-# 26. Energy Budget
+# 23. Energy Budget
 
 The project shall use measured power consumption rather than estimates wherever possible.
 
@@ -822,7 +736,7 @@ The usable battery energy shall account for:
 
 ---
 
-# 27. Hardware Design Principles
+# 24. Hardware Design Principles
 
 The following principles are mandatory for the release design:
 
@@ -839,7 +753,7 @@ The following principles are mandatory for the release design:
 
 ---
 
-# 28. Current Hardware Decision
+# 25. Current Hardware Decision
 
 The current project direction is:
 
@@ -870,23 +784,21 @@ RELEASE
        │
        ├────────── Memory LCD
        │             OR
-       │        B/W/R E-Ink
+       │        B/W E-Ink
        │
        └────────── u-blox M10
-                      │
-                   GNSS antenna
 ```
 
 The final display technology remains an engineering decision between:
 
 - **Memory LCD** — preferred for fast map interaction;
-- **black/white/red E-Ink** — preferred for maximum sunlight readability and potentially lower average display power.
+- **black/white E-Ink** — preferred for maximum sunlight readability and potentially lower average display power.
 
 The final choice shall be made after testing actual display modules with the PurrGo map renderer.
 
 ---
 
-# 29. Hardware Roadmap
+# 26. Hardware Roadmap
 
 ### Prototype 1
 
@@ -962,7 +874,6 @@ Integrate:
 
 - STM32U5;
 - GNSS;
-- antenna;
 - display;
 - SD;
 - buttons;
