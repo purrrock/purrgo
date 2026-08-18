@@ -11,3 +11,10 @@ target_include_directories(minmea PUBLIC minmea)
 
 # Отключение предупреждений компилятора для стороннего кода
 target_compile_options(minmea PRIVATE -w)
+
+# Проверка целевой ОС (Windows). 
+# POSIX-функция timegm() отсутствует в стандартной библиотеке среды MinGW-w64.
+# Директива препроцессора заменяет вызовы timegm на Windows-совместимый аналог _mkgmtime.
+if(WIN32)
+    target_compile_definitions(minmea PRIVATE timegm=_mkgmtime)
+endif()
