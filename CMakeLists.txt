@@ -5,6 +5,17 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
 
+# Определение значения по умолчанию в зависимости от целевой ОС
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    set(DEFAULT_BUILD_EMULATOR ON)
+else()
+    # Для кросс-компиляции (CMAKE_SYSTEM_NAME = "Generic" или "Linux")
+    set(DEFAULT_BUILD_EMULATOR OFF)
+endif()
+
+# Инициализация опции с динамическим значением по умолчанию
+option(BUILD_EMULATOR "Build hardware-in-the-loop PC emulator" ${DEFAULT_BUILD_EMULATOR})
+
 add_subdirectory(third_party)
 
 # Автоматический рекурсивный поиск всех .c файлов в директории src/core/.
@@ -67,4 +78,10 @@ target_include_directories(purrgo_platform_pc
     add_executable(test_gnss tests/core/test_gnss.c)
     target_link_libraries(test_gnss PRIVATE purrgo_core)
     add_test(NAME test_gnss COMMAND test_gnss)
+endif()
+
+# Подключение директории эмулятора перенесено в конец дерева сборки, 
+# чтобы цель purrgo_core уже существовала в контексте CMake на момент вызова.
+if(BUILD_EMULATOR)
+    add_subdirectory(apps/emulator)
 endif()
