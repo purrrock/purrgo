@@ -11,6 +11,19 @@ add_library(purrgo_core
     src/core/navigation.c
 )
 
+    add_library(purrgo_ublox7
+        src/platform/ublox/ublox7_config.c
+    )
+
+    target_include_directories(purrgo_ublox7 PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/platform/ublox
+    )
+
+    target_link_libraries(purrgo_ublox7 PUBLIC purrgo_core)
+
+add_subdirectory(third_party)
+
 target_include_directories(purrgo_core
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
