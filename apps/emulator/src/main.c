@@ -2,8 +2,9 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include "display.h"
+#include <purrgo/gnss_types.h>
 
-#define PIXEL_SCALE 3
+#define PIXEL_SCALE 2
 #define WINDOW_WIDTH (DISPLAY_WIDTH * PIXEL_SCALE)
 #define UI_AREA_HEIGHT 200
 #define WINDOW_HEIGHT (DISPLAY_HEIGHT * PIXEL_SCALE + UI_AREA_HEIGHT)
@@ -91,7 +92,7 @@ void handle_button_press(const char* btn_name) {
 }
 
 int main(int argc, char* argv[]) {
-    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) < 0) {
         fprintf(stderr, "SDL could not initialize! SDL_Error: %s\n", SDL_GetError());
         return 1;
     }
@@ -128,10 +129,85 @@ int main(int argc, char* argv[]) {
     display_init();
     display_draw_string(0, 0, "PurrGo Emulator\nReady.", COLOR_BLACK, COLOR_WHITE);
 
+    purrgo_gnss_solution_t mock_gnss = {
+        .valid = true,
+        .lat_1e7 = 557558310,
+        .lon_1e7 = 376173000,
+        .speed_knots = 269, // 5km/h ~ 2.69 knots -> 269
+        .alt_m = 150,
+        .satellites = 9,
+        .hours = 12,
+        .minutes = 34,
+        .seconds = 56,
+        .day = 1,
+        .month = 1,
+        .year = 24
+    };
+
+    uint32_t last_update_time = SDL_GetTicks();
+
     bool quit = false;
     SDL_Event e;
 
     while (!quit) {
+        uint32_t current_time = SDL_GetTicks();
+        if (current_time - last_update_time >= 1000) {
+            last_update_time = current_time;
+
+            mock_gnss.seconds++;
+            if (mock_gnss.seconds >= 60) {
+                mock_gnss.seconds = 0;
+                mock_gnss.minutes++;
+                if (mock_gnss.minutes >= 60) {
+                    mock_gnss.minutes = 0;
+                    mock_gnss.hours = (mock_gnss.hours + 1) % 24;
+                }
+            }
+
+            // Slightly increment coordinates to simulate movement
+            mock_gnss.lat_1e7 += 10;
+            mock_gnss.lon_1e7 += 15;
+        }
+
+        display_clear(COLOR_WHITE);
+
+        char buf[32];
+        int y_pos = 10;
+
+        // TIME
+        snprintf(buf, sizeof(buf), "TIME: %02d:%02d:%02d", mock_gnss.hours, mock_gnss.minutes, mock_gnss.seconds);
+        display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
+        y_pos += 20;
+
+        // FIX & SAT
+        snprintf(buf, sizeof(buf), "FIX: %s   SAT: %d", mock_gnss.valid ? "3D" : "NO", mock_gnss.satellites);
+        display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
+        y_pos += 20;
+
+        // LAT
+        int lat_deg = mock_gnss.lat_1e7 / 10000000;
+        int lat_frac = (mock_gnss.lat_1e7 > 0 ? mock_gnss.lat_1e7 : -mock_gnss.lat_1e7) % 10000000;
+        snprintf(buf, sizeof(buf), "LAT: %d.%07d", lat_deg, lat_frac);
+        display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
+        y_pos += 20;
+
+        // LON
+        int lon_deg = mock_gnss.lon_1e7 / 10000000;
+        int lon_frac = (mock_gnss.lon_1e7 > 0 ? mock_gnss.lon_1e7 : -mock_gnss.lon_1e7) % 10000000;
+        snprintf(buf, sizeof(buf), "LON: %d.%07d", lon_deg, lon_frac);
+        display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
+        y_pos += 20;
+
+        // ALT
+        snprintf(buf, sizeof(buf), "ALT: %d m", mock_gnss.alt_m);
+        display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
+        y_pos += 20;
+
+        // SPD
+        int speed_kmh = (mock_gnss.speed_knots * 1852) / 100000; // knots * 1.852 km/h
+        snprintf(buf, sizeof(buf), "SPD: %d km/h", speed_kmh);
+        display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
+
         while (SDL_PollEvent(&e) != 0) {
             if (e.type == SDL_QUIT) {
                 quit = true;
