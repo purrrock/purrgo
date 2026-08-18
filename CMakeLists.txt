@@ -40,11 +40,11 @@ if (WIN32 OR UNIX)
         ${PC_PLATFORM_SOURCES}
     )
     
-    # Добавлен ${CMAKE_CURRENT_SOURCE_DIR}/include для разрешения зависимостей
-    target_include_directories(purrgo_platform_pc
-        PUBLIC
-            ${CMAKE_CURRENT_SOURCE_DIR}/src/platform/pc${CMAKE_CURRENT_SOURCE_DIR}/include
-    )
+target_include_directories(purrgo_platform_pc
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/platform/pc
+)
 
     file(GLOB PC_APP_SOURCES CONFIGURE_DEPENDS "apps/pc/*.c")
     add_executable(purrgo_pc
