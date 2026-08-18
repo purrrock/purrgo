@@ -3,7 +3,7 @@
 
 purrgo_file_t* purrgo_fs_open(const char* filepath, fs_mode_t mode) {
     const char* c_mode = (mode == FS_WRITE_APPEND) ? "ab" : "wb";
-    // Приведение типа указателя FILE* к платформонезависимому purrgo_file_t*
+    // Приведение типа указателя FILE* ОС к платформонезависимому purrgo_file_t*
     return (purrgo_file_t*)fopen(filepath, c_mode);
 }
 
