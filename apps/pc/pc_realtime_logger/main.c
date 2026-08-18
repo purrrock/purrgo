@@ -5,16 +5,27 @@
 #include <stdbool.h>
 
 #define NMEA_BUFFER_SIZE 128
-#define COM_PORT "COM10"
 #define BAUD_RATE 9600
 
-int main() {
-    if (!serial_hal_open(COM_PORT, BAUD_RATE)) {
-        printf("Failed to open port %s. Check Device Manager.\n", COM_PORT);
+// Использование аргументов командной строки: argc содержит количество аргументов,
+// argv - массив указателей на строки аргументов (argv[0] - имя исполняемого файла).
+int main(int argc, char *argv[]) {
+    // Проверка наличия переданного аргумента с номером COM-порта.
+    if (argc < 2) {
+        printf("Usage: %s <COM_PORT>\n", argv[0]);
+        printf("Example: %s COM3\n", argv[0]);
         return 1;
     }
 
-    printf("Port %s opened at %d bps.\nListening for U-blox 7 NMEA stream...\n\n", COM_PORT, BAUD_RATE);
+    // Получение имени порта из первого пользовательского аргумента
+    const char *com_port = argv[1];
+
+    if (!serial_hal_open(com_port, BAUD_RATE)) {
+        printf("Failed to open port %s. Check Device Manager.\n", com_port);
+        return 1;
+    }
+
+    printf("Port %s opened at %d bps.\nListening for U-blox 7 NMEA stream...\n\n", com_port, BAUD_RATE);
 
     purrgo_gnss_solution_t solution = {0};
     char line_buffer[NMEA_BUFFER_SIZE];
@@ -29,7 +40,7 @@ int main() {
             if (line_pos < NMEA_BUFFER_SIZE - 1) {
                 line_buffer[line_pos++] = (char)rx_byte;
             } else {
-                // Если строка длиннее буфера и без символа завершения — сброс автомата
+                // Сброс автомата при превышении длины буфера без получения символа завершения \n
                 line_pos = 0; 
             }
 
@@ -37,14 +48,12 @@ int main() {
             if (rx_byte == '\n') {
                 line_buffer[line_pos] = '\0';
                 
-                // Передача собранной строки в платформонезависимое ядро
                 purrgo_gnss_process_nmea(line_buffer, &solution);
                 
-                // Консольный вывод текущего состояния структуры (обновляется после каждого RMC/GGA)
                 if (solution.valid) {
                     int32_t lat_int = solution.lat_1e7 / 10000000;
                     int32_t lat_frac = solution.lat_1e7 % 10000000;
-                    if (lat_frac < 0) lat_frac = -lat_frac; // Модуль для правильного вывода долей
+                    if (lat_frac < 0) lat_frac = -lat_frac;
 
                     int32_t lon_int = solution.lon_1e7 / 10000000;
                     int32_t lon_frac = solution.lon_1e7 % 10000000;
@@ -60,7 +69,6 @@ int main() {
                            solution.speed_knots / 100, solution.speed_knots % 100);
                 }
                 
-                // Очистка индекса для сборки следующей строки
                 line_pos = 0;
             }
         } else if (res < 0) {
