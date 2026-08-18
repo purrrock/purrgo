@@ -1,6 +1,6 @@
 # PurrGo
 
-PurrGo is an open-source navigation application for WearPro-based smartwatches.
+PurrGo is an open-source navigation application.
 
 Features
 
