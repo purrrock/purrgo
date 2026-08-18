@@ -42,7 +42,7 @@ if (WIN32 OR UNIX)
     )
     
     target_include_directories(purrgo_platform_pc
-        PRIVATE
+        PUBLIC
             ${CMAKE_CURRENT_SOURCE_DIR}/src/platform/pc
     )
 

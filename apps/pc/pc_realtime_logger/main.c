@@ -1,4 +1,4 @@
-#include "platform/pc/serial_hal.h"
+#include "serial_hal.h"
 #include "purrgo/gnss_adapter.h"
 #include <stdio.h>
 #include <stdint.h>
