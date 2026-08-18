@@ -6,7 +6,7 @@
 
 #define PIXEL_SCALE 2
 #define WINDOW_WIDTH (DISPLAY_WIDTH * PIXEL_SCALE)
-#define UI_AREA_HEIGHT 200
+#define UI_AREA_HEIGHT 100
 #define WINDOW_HEIGHT (DISPLAY_HEIGHT * PIXEL_SCALE + UI_AREA_HEIGHT)
 
 typedef struct {
@@ -16,14 +16,14 @@ typedef struct {
 } ButtonState;
 
 ButtonState buttons[] = {
-    {{10, DISPLAY_HEIGHT * PIXEL_SCALE + 10, 80, 40}, "UP", 0},
-    {{10, DISPLAY_HEIGHT * PIXEL_SCALE + 60, 80, 40}, "DOWN", 1},
-    {{100, DISPLAY_HEIGHT * PIXEL_SCALE + 10, 80, 40}, "LEFT", 2},
-    {{100, DISPLAY_HEIGHT * PIXEL_SCALE + 60, 80, 40}, "RIGHT", 3},
-    {{190, DISPLAY_HEIGHT * PIXEL_SCALE + 10, 80, 40}, "PLUS", 4},
-    {{190, DISPLAY_HEIGHT * PIXEL_SCALE + 60, 80, 40}, "MINUS", 5},
-    {{280, DISPLAY_HEIGHT * PIXEL_SCALE + 10, 80, 40}, "MENU", 6},
-    {{280, DISPLAY_HEIGHT * PIXEL_SCALE + 60, 80, 40}, "OK", 7}
+    {{10, DISPLAY_HEIGHT * PIXEL_SCALE + 15, 50, 30}, "UP", 0},
+    {{10, DISPLAY_HEIGHT * PIXEL_SCALE + 55, 50, 30}, "DOWN", 1},
+    {{72, DISPLAY_HEIGHT * PIXEL_SCALE + 15, 50, 30}, "LEFT", 2},
+    {{72, DISPLAY_HEIGHT * PIXEL_SCALE + 55, 50, 30}, "RIGHT", 3},
+    {{134, DISPLAY_HEIGHT * PIXEL_SCALE + 15, 50, 30}, "PLUS", 4},
+    {{134, DISPLAY_HEIGHT * PIXEL_SCALE + 55, 50, 30}, "MINUS", 5},
+    {{196, DISPLAY_HEIGHT * PIXEL_SCALE + 15, 50, 30}, "MENU", 6},
+    {{196, DISPLAY_HEIGHT * PIXEL_SCALE + 55, 50, 30}, "OK", 7}
 };
 #define NUM_BUTTONS (sizeof(buttons)/sizeof(buttons[0]))
 
@@ -64,15 +64,12 @@ void draw_text(SDL_Renderer* renderer, int x, int y, const char* text) {
             for (int row = 0; row < 8; row++) {
                 for (int col = 0; col < 8; col++) {
                     if ((bitmap[row] >> col) & 1) {
-                        SDL_RenderDrawPoint(renderer, cur_x + col * 2, y + row * 2);
-                        SDL_RenderDrawPoint(renderer, cur_x + col * 2 + 1, y + row * 2);
-                        SDL_RenderDrawPoint(renderer, cur_x + col * 2, y + row * 2 + 1);
-                        SDL_RenderDrawPoint(renderer, cur_x + col * 2 + 1, y + row * 2 + 1);
+                        SDL_RenderDrawPoint(renderer, cur_x + col, y + row);
                     }
                 }
             }
         }
-        cur_x += 16;
+        cur_x += 8;
         text++;
     }
 }
@@ -254,7 +251,12 @@ int main(int argc, char* argv[]) {
             SDL_SetRenderDrawColor(renderer, 50, 50, 50, 255);
             SDL_RenderDrawRect(renderer, &buttons[i].rect);
 
-            draw_text(renderer, buttons[i].rect.x + 10, buttons[i].rect.y + 10, buttons[i].label);
+            int text_len = strlen(buttons[i].label);
+            int text_w = text_len * 8;
+            int text_h = 8;
+            int text_x = buttons[i].rect.x + (buttons[i].rect.w - text_w) / 2;
+            int text_y = buttons[i].rect.y + (buttons[i].rect.h - text_h) / 2;
+            draw_text(renderer, text_x, text_y, buttons[i].label);
         }
 
         SDL_RenderPresent(renderer);
