@@ -1,10 +1,11 @@
 #include "serial_hal.h"
-#include "gnss_adapter.h"
-#include "track_logger.h" // Подключение API логгера
+#include "purrgo/gnss_adapter.h"
+#include "purrgo/track_logger.h" // Подключение API логгера
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <signal.h>
+#include <string.h>
 
 #define NMEA_BUFFER_SIZE 128
 #define BAUD_RATE 9600
@@ -62,7 +63,10 @@ int main(int argc, char *argv[]) {
                 
                 purrgo_gnss_process_nmea(line_buffer, &solution);
                 
-                if (solution.valid) {
+                // Фильтрация дубликатов: запись и вывод осуществляются только 1 раз за эпоху,
+                // после обработки сообщения GGA (содержащего высоту). К этому моменту 
+                // координаты и время уже гарантированно обновлены сообщением RMC.
+                if (solution.valid && strstr(line_buffer, "GGA") != NULL) {
                     // 1. Инициализация логгера при первом получении 3D Fix
                     if (!is_logging_active) {
                         if (purrgo_logger_start(&solution)) {
