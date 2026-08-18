@@ -1,3 +1,38 @@
+cmake_minimum_required(VERSION 3.20)
+project(purrgo C)
+
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_C_EXTENSIONS OFF)
+
+add_subdirectory(third_party)
+
+# Автоматический рекурсивный поиск всех .c файлов в директории src/core/.
+file(GLOB_RECURSE CORE_SOURCES CONFIGURE_DEPENDS "src/core/*.c")
+
+add_library(purrgo_core
+    ${CORE_SOURCES}
+)
+
+target_include_directories(purrgo_core
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(purrgo_core PRIVATE minmea)
+
+file(GLOB_RECURSE UBLOX_SOURCES CONFIGURE_DEPENDS "src/platform/ublox/*.c")
+add_library(purrgo_ublox7
+    ${UBLOX_SOURCES}
+)
+
+target_include_directories(purrgo_ublox7 PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/platform/ublox
+)
+
+target_link_libraries(purrgo_ublox7 PUBLIC purrgo_core)
+
 if (WIN32 OR UNIX)
     file(GLOB_RECURSE PC_PLATFORM_SOURCES CONFIGURE_DEPENDS "src/platform/pc/*.c")
     
@@ -5,19 +40,18 @@ if (WIN32 OR UNIX)
         ${PC_PLATFORM_SOURCES}
     )
     
+    # Добавлен ${CMAKE_CURRENT_SOURCE_DIR}/include для разрешения зависимостей
     target_include_directories(purrgo_platform_pc
-        PRIVATE
-            ${CMAKE_CURRENT_SOURCE_DIR}/src/platform/pc
+        PUBLIC
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/platform/pc${CMAKE_CURRENT_SOURCE_DIR}/include
     )
 
-    # Использование GLOB без рекурсии для исключения захвата исходников из вложенных папок
     file(GLOB PC_APP_SOURCES CONFIGURE_DEPENDS "apps/pc/*.c")
     add_executable(purrgo_pc
         ${PC_APP_SOURCES}
     )
     target_link_libraries(purrgo_pc PRIVATE purrgo_core purrgo_platform_pc)
 
-    # Корректный путь к исходникам приложения логгера
     file(GLOB_RECURSE LOGGER_APP_SOURCES CONFIGURE_DEPENDS "apps/pc/pc_realtime_logger/*.c")
     add_executable(pc_realtime_logger
         ${LOGGER_APP_SOURCES}

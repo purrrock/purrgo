@@ -1,6 +1,6 @@
 #include "serial_hal.h"
-#include "purrgo/gnss_adapter.h"
-#include "purrgo/track_logger.h" // Подключение API логгера
+#include "gnss_adapter.h"
+#include "track_logger.h" // Подключение API логгера
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
