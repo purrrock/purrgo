@@ -67,4 +67,4 @@ void purrgo_gnss_process_nmea(const char *nmea_line, purrgo_gnss_solution_t *sol
             break;
     }
 }
-```
+

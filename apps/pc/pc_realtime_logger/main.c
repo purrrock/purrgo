@@ -1,4 +1,4 @@
-#include "serial_hal.h"
+#include "platform/pc/serial_hal.h"
 #include "purrgo/gnss_adapter.h"
 #include <stdio.h>
 #include <stdint.h>
@@ -7,7 +7,7 @@
 #define NMEA_BUFFER_SIZE 128
 #define BAUD_RATE 9600
 
-// Использование аргументов командной строки: argc содержит количество аргументов,
+// Использование аргpurrgo/ументов командной строки: argc содержит количество аргументов,
 // argv - массив указателей на строки аргументов (argv[0] - имя исполняемого файла).
 int main(int argc, char *argv[]) {
     // Проверка наличия переданного аргумента с номером COM-порта.
