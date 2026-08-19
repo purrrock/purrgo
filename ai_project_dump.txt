@@ -245,7 +245,7 @@ The release firmware may additionally use u-blox UBX protocol where it provides 
 
 # 3. Development Display
 
-The first development display may be a small E-Ink display.
+The first development display may be a E-Ink 296X128, 4 grey levels display.
 
 The development display is not required to have the same technology or resolution as the final display.
 
@@ -2017,16 +2017,21 @@ const uint8_t* display_get_framebuffer(void) {
 #include <SDL2/SDL.h>
 #include <stdio.h>
 #include <stdbool.h>
+#include <string.h>
 #include "display.h"
 #include <purrgo/gnss_types.h>
 #include <purrgo/gnss_mock.h>
 #include <purrgo/app_fsm.h>
 #include <purrgo/config.h>
+#include <purrgo/sun.h>
 
 #define PIXEL_SCALE 2
 #define WINDOW_WIDTH (DISPLAY_WIDTH * PIXEL_SCALE)
 #define UI_AREA_HEIGHT 100
 #define WINDOW_HEIGHT (DISPLAY_HEIGHT * PIXEL_SCALE + UI_AREA_HEIGHT)
+
+// Период обновления E-Ink дисплея: ~3 FPS (333 мс)
+#define EINK_REFRESH_PERIOD_MS 333
 
 typedef struct {
     SDL_Rect rect;
@@ -2068,8 +2073,6 @@ void render_fb_to_texture(SDL_Texture* texture) {
 }
 
 void draw_text(SDL_Renderer* renderer, int x, int y, const char* text) {
-    // Since SDL doesn't have built-in text rendering without SDL_ttf,
-    // we use our 5x7 font just by drawing points on renderer directly!
     extern const unsigned char font5x7[256][5];
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
 
@@ -2099,7 +2102,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    SDL_Window* window = SDL_CreateWindow("PurrGo Emulator",
+    SDL_Window* window = SDL_CreateWindow("PurrGo Emulator (E-Ink 3 FPS)",
                                           SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
                                           WINDOW_WIDTH, WINDOW_HEIGHT,
                                           SDL_WINDOW_SHOWN);
@@ -2129,98 +2132,175 @@ int main(int argc, char* argv[]) {
     }
 
     display_init();
-    display_draw_string(0, 0, "PurrGo Emulator\nReady.", COLOR_BLACK, COLOR_WHITE);
 
     purrgo_gnss_solution_t mock_gnss;
     purrgo_gnss_mock_init(&mock_gnss);
 
     purrgo_app_init();
 
-    uint32_t last_update_time = SDL_GetTicks();
+    purrgo_sun_info_t sun_info;
+    memset(&sun_info, 0, sizeof(sun_info));
+    uint32_t last_sun_update = 0;
+    bool sun_initialized = false;
+    bool first_fix_obtained = false;
+
+    uint32_t last_gnss_time = SDL_GetTicks();
+    uint32_t last_eink_refresh = 0;
 
     bool quit = false;
     SDL_Event e;
 
     while (!quit) {
         uint32_t current_time = SDL_GetTicks();
-        if (current_time - last_update_time >= 1000) {
-            last_update_time = current_time;
+
+        // 1. Обновление GNSS данных раз в секунду (1 Гц)
+        if (current_time - last_gnss_time >= 1000) {
+            last_gnss_time = current_time;
             purrgo_gnss_mock_update(&mock_gnss);
             purrgo_app_update(&mock_gnss);
+
+            if (mock_gnss.valid) {
+                if (!first_fix_obtained) {
+                    first_fix_obtained = true;
+                    purrgo_sun_calc(mock_gnss.lat_1e7, mock_gnss.lon_1e7,
+                                    mock_gnss.year % 100, mock_gnss.month, mock_gnss.day,
+                                    mock_gnss.hours, mock_gnss.minutes,
+                                    app_config.tz_offset_minutes, &sun_info);
+                    sun_initialized = true;
+                    last_sun_update = current_time;
+                } else if (current_time - last_sun_update >= 60000) {
+                    purrgo_sun_calc(mock_gnss.lat_1e7, mock_gnss.lon_1e7,
+                                    mock_gnss.year % 100, mock_gnss.month, mock_gnss.day,
+                                    mock_gnss.hours, mock_gnss.minutes,
+                                    app_config.tz_offset_minutes, &sun_info);
+                    last_sun_update = current_time;
+                }
+            }
         }
 
-        display_clear(COLOR_WHITE);
+        // 2. Отрисовка кадра в E-Ink Framebuffer с частотой 3 FPS (333 мс)
+        if (current_time - last_eink_refresh >= EINK_REFRESH_PERIOD_MS) {
+            last_eink_refresh = current_time;
+            display_clear(COLOR_WHITE);
 
-        char buf[32];
+            char buf[32];
 
-        if (purrgo_app_get_state() == APP_STATE_MENU_CONFIG) {
-            display_draw_string(10, 10, "=== CONFIG ===", COLOR_BLACK, COLOR_WHITE);
+            switch (purrgo_app_get_state()) {
+                case APP_STATE_MENU_CONFIG: {
+                    display_draw_string(10, 10, "=== CONFIG ===", COLOR_BLACK, COLOR_WHITE);
 
-            int16_t draft_tz = purrgo_app_get_draft_tz_offset();
-            char sign = (draft_tz >= 0) ? '+' : '-';
-            int16_t abs_tz = (draft_tz >= 0) ? draft_tz : -draft_tz;
-            int hours = abs_tz / 60;
-            int mins = abs_tz % 60;
+                    int16_t draft_tz = purrgo_app_get_draft_tz_offset();
+                    char sign = (draft_tz >= 0) ? '+' : '-';
+                    int16_t abs_tz = (draft_tz >= 0) ? draft_tz : -draft_tz;
+                    int hours = abs_tz / 60;
+                    int mins = abs_tz % 60;
 
-            snprintf(buf, sizeof(buf), "TZ: UTC%c%02d:%02d", sign, hours, mins);
-            display_draw_string(10, 22, buf, COLOR_WHITE, COLOR_BLACK);
+                    snprintf(buf, sizeof(buf), "TZ: UTC%c%02d:%02d", sign, hours, mins);
+                    display_draw_string(10, 25, buf, COLOR_WHITE, COLOR_BLACK);
 
-            display_draw_string(10, 34, "+/- : Change", COLOR_BLACK, COLOR_WHITE);
-            display_draw_string(10, 46, "OK : Save", COLOR_BLACK, COLOR_WHITE);
-            display_draw_string(10, 58, "MENU: Cancel", COLOR_BLACK, COLOR_WHITE);
-        } else {
-            int y_pos = 10;
+                    display_draw_string(10, 45, "+/- : Change", COLOR_BLACK, COLOR_WHITE);
+                    display_draw_string(10, 60, "OK  : Save", COLOR_BLACK, COLOR_WHITE);
+                    display_draw_string(10, 75, "MENU: Cancel", COLOR_BLACK, COLOR_WHITE);
+                    break;
+                }
 
-        // UTC TIME
-        snprintf(buf, sizeof(buf), "UTC: %02d:%02d:%02d", mock_gnss.hours, mock_gnss.minutes, mock_gnss.seconds);
-        display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
-        y_pos += 12;
+                case APP_STATE_SATELLITES: {
+                    int y_pos = 10;
 
-        // LOCAL TIME
-        int32_t total_mins = (int32_t)mock_gnss.hours * 60 + (int32_t)mock_gnss.minutes + app_config.tz_offset_minutes;
-        while (total_mins < 0) {
-            total_mins += 1440;
+                    // UTC TIME
+                    snprintf(buf, sizeof(buf), "UTC: %02d:%02d:%02d", mock_gnss.hours, mock_gnss.minutes, mock_gnss.seconds);
+                    display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
+                    y_pos += 12;
+
+                    // LOCAL TIME
+                    int32_t total_mins = (int32_t)mock_gnss.hours * 60 + (int32_t)mock_gnss.minutes + app_config.tz_offset_minutes;
+                    while (total_mins < 0) total_mins += 1440;
+                    while (total_mins >= 1440) total_mins -= 1440;
+                    uint8_t loc_hours = (uint8_t)(total_mins / 60);
+                    uint8_t loc_minutes = (uint8_t)(total_mins % 60);
+
+                    snprintf(buf, sizeof(buf), "LOC: %02d:%02d:%02d", loc_hours, loc_minutes, mock_gnss.seconds);
+                    display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
+                    y_pos += 12;
+
+                    // FIX & SAT
+                    snprintf(buf, sizeof(buf), "FIX: %s   SAT: %d", mock_gnss.valid ? "3D" : "NO", mock_gnss.satellites_tracked);
+                    display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
+                    y_pos += 12;
+
+                    // LAT
+                    int lat_deg = mock_gnss.lat_1e7 / 10000000;
+                    int lat_frac = (mock_gnss.lat_1e7 > 0 ? mock_gnss.lat_1e7 : -mock_gnss.lat_1e7) % 10000000;
+                    snprintf(buf, sizeof(buf), "LAT: %d.%07d", lat_deg, lat_frac);
+                    display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
+                    y_pos += 12;
+
+                    // LON
+                    int lon_deg = mock_gnss.lon_1e7 / 10000000;
+                    int lon_frac = (mock_gnss.lon_1e7 > 0 ? mock_gnss.lon_1e7 : -mock_gnss.lon_1e7) % 10000000;
+                    snprintf(buf, sizeof(buf), "LON: %d.%07d", lon_deg, lon_frac);
+                    display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
+                    y_pos += 12;
+
+                    // ALT
+                    snprintf(buf, sizeof(buf), "ALT: %d m", mock_gnss.alt_m);
+                    display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
+                    y_pos += 12;
+
+                    // SPD
+                    int speed_kmh = (mock_gnss.speed_knots * 1852) / 100000;
+                    snprintf(buf, sizeof(buf), "SPD: %d km/h", speed_kmh);
+                    display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
+                    y_pos += 12;
+
+                    if (sun_initialized) {
+                        snprintf(buf, sizeof(buf), "SR: %02d:%02d SS: %02d:%02d",
+                                 sun_info.sunrise_hour, sun_info.sunrise_minute,
+                                 sun_info.sunset_hour, sun_info.sunset_minute);
+                        display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
+                        y_pos += 12;
+
+                        if (sun_info.status == SUN_STATUS_NORMAL) {
+                            int hours = sun_info.time_to_event_min / 60;
+                            int mins = sun_info.time_to_event_min % 60;
+                            if (sun_info.is_daytime) {
+                                snprintf(buf, sizeof(buf), "Sunset in: %02dh %02dm", hours, mins);
+                            } else {
+                                snprintf(buf, sizeof(buf), "Sunrise in: %02dh %02dm", hours, mins);
+                            }
+                            display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
+                            y_pos += 12;
+                        }
+                    }
+                    break;
+                }
+
+                case APP_STATE_MAP:
+                    display_draw_string(10, 10, "=== MAP ===", COLOR_BLACK, COLOR_WHITE);
+                    display_draw_string(10, 50, "[ Render Engine ]", COLOR_BLACK, COLOR_WHITE);
+                    display_draw_string(10, 65, "[  Placeholder  ]", COLOR_BLACK, COLOR_WHITE);
+                    break;
+
+                case APP_STATE_COMPASS:
+                    display_draw_string(10, 10, "=== COMPASS ===", COLOR_BLACK, COLOR_WHITE);
+                    display_draw_string(10, 50, "[ Bearing Pointer ]", COLOR_BLACK, COLOR_WHITE);
+                    display_draw_string(10, 65, "[   Placeholder   ]", COLOR_BLACK, COLOR_WHITE);
+                    break;
+
+                case APP_STATE_TRIP_COMPUTER:
+                    display_draw_string(10, 10, "=== TRIP COMP ===", COLOR_BLACK, COLOR_WHITE);
+                    display_draw_string(10, 50, "[ Odometer Stats ]", COLOR_BLACK, COLOR_WHITE);
+                    display_draw_string(10, 65, "[   Placeholder  ]", COLOR_BLACK, COLOR_WHITE);
+                    break;
+
+                default:
+                    break;
+            }
+
+            render_fb_to_texture(fb_texture);
         }
-        while (total_mins >= 1440) {
-            total_mins -= 1440;
-        }
-        uint8_t loc_hours = (uint8_t)(total_mins / 60);
-        uint8_t loc_minutes = (uint8_t)(total_mins % 60);
 
-        snprintf(buf, sizeof(buf), "LOC: %02d:%02d:%02d", loc_hours, loc_minutes, mock_gnss.seconds);
-        display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
-        y_pos += 12;
-
-        // FIX & SAT
-        snprintf(buf, sizeof(buf), "FIX: %s   SAT: %d", mock_gnss.valid ? "3D" : "NO", mock_gnss.satellites_tracked);
-        display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
-        y_pos += 12;
-
-        // LAT
-        int lat_deg = mock_gnss.lat_1e7 / 10000000;
-        int lat_frac = (mock_gnss.lat_1e7 > 0 ? mock_gnss.lat_1e7 : -mock_gnss.lat_1e7) % 10000000;
-        snprintf(buf, sizeof(buf), "LAT: %d.%07d", lat_deg, lat_frac);
-        display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
-        y_pos += 12;
-
-        // LON
-        int lon_deg = mock_gnss.lon_1e7 / 10000000;
-        int lon_frac = (mock_gnss.lon_1e7 > 0 ? mock_gnss.lon_1e7 : -mock_gnss.lon_1e7) % 10000000;
-        snprintf(buf, sizeof(buf), "LON: %d.%07d", lon_deg, lon_frac);
-        display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
-        y_pos += 12;
-
-        // ALT
-        snprintf(buf, sizeof(buf), "ALT: %d m", mock_gnss.alt_m);
-        display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
-        y_pos += 12;
-
-        // SPD
-        int speed_kmh = (mock_gnss.speed_knots * 1852) / 100000; // knots * 1.852 km/h
-        snprintf(buf, sizeof(buf), "SPD: %d km/h", speed_kmh);
-        display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
-        }
-
+        // 3. Обработка событий SDL (без задержек ввода)
         while (SDL_PollEvent(&e) != 0) {
             if (e.type == SDL_QUIT) {
                 quit = true;
@@ -2252,15 +2332,13 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        render_fb_to_texture(fb_texture);
-
+        // 4. Отрисовка окна эмулятора и кнопок UI
         SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255);
         SDL_RenderClear(renderer);
 
         SDL_Rect dest_rect = {0, 0, WINDOW_WIDTH, DISPLAY_HEIGHT * PIXEL_SCALE};
         SDL_RenderCopy(renderer, fb_texture, NULL, &dest_rect);
 
-        // Draw buttons UI
         for (size_t i = 0; i < NUM_BUTTONS; ++i) {
             SDL_SetRenderDrawColor(renderer, 150, 150, 150, 255);
             SDL_RenderFillRect(renderer, &buttons[i].rect);
@@ -2276,7 +2354,7 @@ int main(int argc, char* argv[]) {
         }
 
         SDL_RenderPresent(renderer);
-        SDL_Delay(16); // ~60 FPS
+        SDL_Delay(10); // Разгрузка CPU при отзывчивом вводе
     }
 
     SDL_DestroyTexture(fb_texture);
@@ -2286,7 +2364,6 @@ int main(int argc, char* argv[]) {
 
     return 0;
 }
-
 ```
 
 --- FILE: apps\pc\main.c ---
@@ -3971,13 +4048,15 @@ https://www.u-blox.com/en/product/neo-7-series
 
 #include "purrgo/gnss_types.h"
 #include <stdbool.h>
+#include <stdint.h>
 
 // Экраны (состояния) приложения
 typedef enum {
-    APP_STATE_MAP,
-    APP_STATE_TRIP_COMPUTER,
-    APP_STATE_SATELLITES,
-    APP_STATE_MENU_CONFIG // Полноэкранный режим настройки
+    APP_STATE_SATELLITES,    // Спутники, координаты, качество фикса
+    APP_STATE_MAP,           // Векторная карта и трек
+    APP_STATE_COMPASS,       // Навигационный компас и курс
+    APP_STATE_TRIP_COMPUTER, // Путевой компьютер: одометр, скорость
+    APP_STATE_MENU_CONFIG    // Полноэкранные настройки (Часовой пояс)
 } purrgo_state_t;
 
 // Аппаратные кнопки устройства
@@ -3995,19 +4074,19 @@ typedef enum {
 // Инициализация конечного автомата
 void purrgo_app_init(void);
 
-// Получить текущее черновое значение смещения часового пояса (для отображения в меню до нажатия OK)
-int16_t purrgo_app_get_draft_tz_offset(void);
-
-// Обработчик нажатий кнопок (вызывается из прерываний или поллинга)
+// Обработчик нажатий кнопок
 void purrgo_app_handle_button(purrgo_btn_t button);
 
-// Основной цикл обновления логики (вызывается периодически)
+// Основной цикл обновления логики
 void purrgo_app_update(const purrgo_gnss_solution_t* current_fix);
 
-// Получение текущего состояния для слоя отрисовки (Renderer)
+// Получение текущего состояния для слоя отрисовки
 purrgo_state_t purrgo_app_get_state(void);
 
-// Применение смещения часового пояса к фиксу
+// Получение черновика часового пояса для экрана настроек
+int16_t purrgo_app_get_draft_tz_offset(void);
+
+// Функция применения часового пояса с календарным пересчетом
 void purrgo_app_apply_timezone(const purrgo_gnss_solution_t* utc, purrgo_gnss_solution_t* local, int16_t tz_offset_minutes);
 
 #endif // PURRGO_APP_FSM_H
@@ -4079,6 +4158,29 @@ uint32_t purrgo_geo_distance_m(int32_t lat1_1e7, int32_t lon1_1e7, int32_t lat2_
 uint16_t purrgo_geo_azimuth_deg(int32_t lat1_1e7, int32_t lon1_1e7, int32_t lat2_1e7, int32_t lon2_1e7);
 
 #endif // PURRGO_GEO_H
+```
+
+--- FILE: include\purrgo\gfx_line.h ---
+```h
+#ifndef GFX_LINE_H
+#define GFX_LINE_H
+
+#include "purrgo/gfx_renderer.h"
+#include <stdint.h>
+
+/**
+ * @brief Отрисовка линии с использованием целочисленного алгоритма Брезенхема.
+ *
+ * @param ctx Контекст графического ядра.
+ * @param x0 Начальная координата x.
+ * @param y0 Начальная координата y.
+ * @param x1 Конечная координата x.
+ * @param y1 Конечная координата y.
+ */
+void gfx_draw_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1, int16_t y1);
+
+#endif /* GFX_LINE_H */
+
 ```
 
 --- FILE: include\purrgo\gfx_renderer.h ---
@@ -4627,26 +4729,30 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
         return;
     }
 
-    // Логика переключения основных экранов
-    switch (current_state) {
-        case APP_STATE_SATELLITES:
-            if (button == PURRGO_BTN_OK) current_state = APP_STATE_MAP;
-            break;
-        case APP_STATE_MAP:
-            if (button == PURRGO_BTN_OK) current_state = APP_STATE_TRIP_COMPUTER;
-            break;
-        case APP_STATE_TRIP_COMPUTER:
-            if (button == PURRGO_BTN_OK) current_state = APP_STATE_SATELLITES;
-            break;
-        default:
-            break;
+    // Переключение основных навигационных экранов кнопкой OK
+    if (button == PURRGO_BTN_OK) {
+        switch (current_state) {
+            case APP_STATE_SATELLITES:
+                current_state = APP_STATE_MAP;
+                break;
+            case APP_STATE_MAP:
+                current_state = APP_STATE_COMPASS;
+                break;
+            case APP_STATE_COMPASS:
+                current_state = APP_STATE_TRIP_COMPUTER;
+                break;
+            case APP_STATE_TRIP_COMPUTER:
+                current_state = APP_STATE_SATELLITES;
+                break;
+            default:
+                break;
+        }
     }
 }
 
 static bool is_leap_year(uint8_t year) {
-    // The project explicitly uses a 2-digit representation of the year 2000-2099.
-    // For years in the range 2000-2099, the year is a leap year if the 2-digit
-    // representation is divisible by 4. (Year 2000 is divisible by 400).
+    // В рамках проекта используется двухзначный год 2000-2099.
+    // Год является високосным, если его двухзначное значение делится на 4 без остатка.
     return (year % 4 == 0);
 }
 
@@ -4660,7 +4766,7 @@ static uint8_t days_in_month(uint8_t month, uint8_t year) {
     return 31;
 }
 
-// Перевод UTC времени в локальное с учетом минутного смещения
+// Перевод UTC времени в локальное с учетом минутного смещения и полной календарной математикой
 void purrgo_app_apply_timezone(const purrgo_gnss_solution_t* utc, purrgo_gnss_solution_t* local, int16_t tz_offset_minutes) {
     *local = *utc;
 
@@ -4669,7 +4775,7 @@ void purrgo_app_apply_timezone(const purrgo_gnss_solution_t* utc, purrgo_gnss_so
     // Переводим часы и минуты фикса в общее количество минут от начала суток
     int32_t total_mins = (int32_t)local->hours * 60 + (int32_t)local->minutes + tz_offset_minutes;
 
-    // Коррекция перехода через полночь
+    // Коррекция перехода через полночь назад
     while (total_mins < 0) {
         total_mins += 1440;
 
@@ -4683,13 +4789,14 @@ void purrgo_app_apply_timezone(const purrgo_gnss_solution_t* utc, purrgo_gnss_so
                 if (local->year > 0) {
                     local->year--;
                 } else {
-                    local->year = 99; // Wrap 00 to 99 within 2000-2099 semantics
+                    local->year = 99; // Заворот с 2000 на 2099 год
                 }
             }
             local->day = days_in_month(local->month, local->year);
         }
     }
 
+    // Коррекция перехода через полночь вперед
     while (total_mins >= 1440) {
         total_mins -= 1440;
 
@@ -4705,7 +4812,7 @@ void purrgo_app_apply_timezone(const purrgo_gnss_solution_t* utc, purrgo_gnss_so
                 if (local->year < 99) {
                     local->year++;
                 } else {
-                    local->year = 0; // Wrap to 00
+                    local->year = 0; // Заворот с 2099 на 2000 год
                 }
             }
         }
@@ -4723,6 +4830,8 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
         case APP_STATE_SATELLITES:
             break;
         case APP_STATE_MAP:
+            break;
+        case APP_STATE_COMPASS:
             break;
         case APP_STATE_TRIP_COMPUTER:
             break;
@@ -5477,10 +5586,11 @@ static uint16_t get_day_of_year(uint8_t year_2digit, uint8_t month, uint8_t day)
     return doy;
 }
 
-void purrgo_sun_calc_integer(int32_t lat_1e7, int32_t lon_1e7,
-                             uint8_t year_2digit, uint8_t month, uint8_t day,
-                             int16_t tz_offset_minutes,
-                             purrgo_sun_info_t *info) {
+void purrgo_sun_calc(int32_t lat_1e7, int32_t lon_1e7,
+                     uint8_t year_2digit, uint8_t month, uint8_t day,
+                     uint8_t utc_hour, uint8_t utc_minute,
+                     int16_t tz_offset_minutes,
+                     purrgo_sun_info_t *info) {
     
     uint16_t doy = get_day_of_year(year_2digit, month, day);
     if (doy > 366) doy = 366;
@@ -5527,8 +5637,9 @@ void purrgo_sun_calc_integer(int32_t lat_1e7, int32_t lon_1e7,
     
     int32_t H_deg = acos_lut[acos_idx];
 
-    // 5. Перевод долготы в минуты (1 градус = 4 минуты времени)
-    int32_t lon_min = (lon_1e7 * 4) / 10000000;
+// 5. Перевод долготы в минуты (1 градус = 4 минуты времени)
+    // Оптимизация: деление на 2500000 исключает переполнение int32_t
+    int32_t lon_min = lon_1e7 / 2500000;
 
     // 6. Базовое время полудня (12:00 = 720 минут)
     int32_t solar_noon = 720 - lon_min - eot_min;
@@ -5549,10 +5660,45 @@ void purrgo_sun_calc_integer(int32_t lat_1e7, int32_t lon_1e7,
     while (sunset_loc < 0) sunset_loc += 1440;
     while (sunset_loc >= 1440) sunset_loc -= 1440;
 
-    info->sunrise_hour   = sunrise_loc / 60;
-    info->sunrise_minute = sunrise_loc % 60;
-    info->sunset_hour    = sunset_loc / 60;
-    info->sunset_minute  = sunset_loc % 60;
+    info->sunrise_hour   = (uint8_t)(sunrise_loc / 60);
+    info->sunrise_minute = (uint8_t)(sunrise_loc % 60);
+    info->sunset_hour    = (uint8_t)(sunset_loc / 60);
+    info->sunset_minute  = (uint8_t)(sunset_loc % 60);
+
+    // 9. Определение дневного времени и обратного отсчета
+    if (info->status == SUN_STATUS_NORMAL) {
+        int32_t current_utc_min = (int32_t)utc_hour * 60 + (int32_t)utc_minute;
+        int32_t current_loc_min = current_utc_min + tz_offset_minutes;
+        
+        while (current_loc_min < 0) current_loc_min += 1440;
+        while (current_loc_min >= 1440) current_loc_min -= 1440;
+
+        // Корректная проверка вхождения в интервал (с учетом перехода через полночь)
+        if (sunrise_loc <= sunset_loc) {
+            info->is_daytime = (current_loc_min >= sunrise_loc && current_loc_min < sunset_loc);
+        } else {
+            info->is_daytime = (current_loc_min >= sunrise_loc || current_loc_min < sunset_loc);
+        }
+
+        // Вычисление дельты времени с защитой от отрицательных значений
+        int32_t diff = 0;
+        if (info->is_daytime) {
+            diff = sunset_loc - current_loc_min;
+        } else {
+            diff = sunrise_loc - current_loc_min;
+        }
+
+        if (diff < 0) {
+            diff += 1440;
+        }
+        
+        info->time_to_event_min = (int16_t)diff;
+
+    } else {
+        // Логика для полярного дня и полярной ночи
+        info->is_daytime = (info->status == SUN_STATUS_POLAR_DAY);
+        info->time_to_event_min = -1; // Сигнал UI скрыть обратный отсчет
+    }
 }
 ```
 
@@ -5987,6 +6133,195 @@ size_t purrgo_ubx_build(
                         &out[6u + payload_length],
                         &out[7u + payload_length]);
     return n;
+}
+
+```
+
+--- FILE: src\core\gfx\gfx_line.c ---
+```c
+#include "purrgo/gfx_line.h"
+
+// Битовые маски зон для алгоритма Коэна-Сазерленда
+#define INSIDE 0 // 0000
+#define LEFT   1 // 0001
+#define RIGHT  2 // 0010
+#define BOTTOM 4 // 0100
+#define TOP    8 // 1000
+
+// Побитовая оптимизация модуля без ветвления для архитектуры ARM Cortex
+static inline int16_t gfx_abs(int16_t a) {
+    // Арифметический сдвиг вправо на 15 бит даст -1 (0xFFFF) для отрицательных, и 0 для положительных
+    int16_t mask = a >> 15;
+    return (a + mask) ^ mask;
+}
+
+// Вычисление кода зоны для точки относительно границ экрана
+static uint8_t compute_outcode(gfx_context_t *ctx, int16_t x, int16_t y) {
+    uint8_t code = INSIDE;
+    if (x < 0) {
+        code |= LEFT;
+    } else if (x >= ctx->width) {
+        code |= RIGHT;
+    }
+    
+    if (y < 0) {
+        code |= BOTTOM;
+    } else if (y >= ctx->height) {
+        code |= TOP;
+    }
+    return code;
+}
+
+void gfx_draw_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1, int16_t y1)
+{
+    if (ctx == NULL || ctx->draw_pixel == NULL) return;
+
+    // 1. Отсечение отрезка (Cohen-Sutherland)
+    uint8_t outcode0 = compute_outcode(ctx, x0, y0);
+    uint8_t outcode1 = compute_outcode(ctx, x1, y1);
+    bool accept = false;
+
+    while (true) {
+        if (!(outcode0 | outcode1)) {
+            // Побитовое ИЛИ равно 0: обе точки внутри экрана
+            accept = true;
+            break;
+        } else if (outcode0 & outcode1) {
+            // Побитовое И не равно 0: обе точки находятся в одной невидимой зоне
+            break;
+        } else {
+            // Линия пересекает границу экрана. Вычисляем точку пересечения.
+            int16_t x, y;
+            uint8_t outcodeOut = outcode0 ? outcode0 : outcode1;
+
+            // Использование 32-битной арифметики для предотвращения переполнения
+            // при умножении (координаты до умножения int16_t)
+            int32_t dx = x1 - x0;
+            int32_t dy = y1 - y0;
+
+            if (outcodeOut & TOP) {
+                x = x0 + dx * (ctx->height - 1 - y0) / dy;
+                y = ctx->height - 1;
+            } else if (outcodeOut & BOTTOM) {
+                x = x0 + dx * (0 - y0) / dy;
+                y = 0;
+            } else if (outcodeOut & RIGHT) {
+                y = y0 + dy * (ctx->width - 1 - x0) / dx;
+                x = ctx->width - 1;
+            } else if (outcodeOut & LEFT) {
+                y = y0 + dy * (0 - x0) / dx;
+                x = 0;
+            }
+
+            // Заменяем точку вне экрана на точку пересечения и обновляем код
+            if (outcodeOut == outcode0) {
+                x0 = x;
+                y0 = y;
+                outcode0 = compute_outcode(ctx, x0, y0);
+            } else {
+                x1 = x;
+                y1 = y;
+                outcode1 = compute_outcode(ctx, x1, y1);
+            }
+        }
+    }
+
+    if (!accept) {
+        return; // Линия полностью вне экрана
+    }
+
+    // 2. Отрисовка видимой части (Bresenham optimized)
+    int16_t dx = gfx_abs(x1 - x0);
+    int16_t sx = x0 < x1 ? 1 : -1;
+    int16_t dy = -gfx_abs(y1 - y0); // Храним dy как отрицательное значение
+    int16_t sy = y0 < y1 ? 1 : -1;
+    
+    // Инициализация ошибки без деления
+    int16_t err = dx + dy; 
+    int16_t e2;
+
+    while (true) {
+        ctx->draw_pixel(ctx->framebuffer, x0, y0, ctx->color_fg);
+
+        if (x0 == x1 && y0 == y1) {
+            break;
+        }
+
+        // Вычисление смещения через побитовый сдвиг (умножение на 2)
+        e2 = err << 1; 
+        
+        if (e2 >= dy) {
+            err += dy;
+            x0 += sx;
+        }
+        if (e2 <= dx) {
+            err += dx;
+            y0 += sy;
+        }
+    }
+}
+```
+
+--- FILE: src\core\gfx\gfx_renderer.c ---
+```c
+#include "purrgo/gfx_renderer.h"
+#include <stddef.h>
+
+bool gfx_init(gfx_context_t *ctx,
+              int16_t width,
+              int16_t height,
+              void *framebuffer,
+              gfx_draw_pixel_fn draw_pixel_cb)
+{
+    if (ctx == NULL || framebuffer == NULL || draw_pixel_cb == NULL) {
+        return false;
+    }
+
+    ctx->width = width;
+    ctx->height = height;
+    ctx->framebuffer = framebuffer;
+    ctx->draw_pixel = draw_pixel_cb;
+    ctx->color_fg = 1;
+    ctx->color_bg = 0;
+
+    return true;
+}
+
+void gfx_set_color(gfx_context_t *ctx, gfx_color_t fg, gfx_color_t bg)
+{
+    if (ctx == NULL) return;
+
+    ctx->color_fg = fg;
+    ctx->color_bg = bg;
+}
+
+void gfx_draw_pixel(gfx_context_t *ctx, int16_t x, int16_t y)
+{
+    if (ctx == NULL || ctx->draw_pixel == NULL) return;
+
+    // Software clipping
+    if (x >= 0 && x < ctx->width && y >= 0 && y < ctx->height) {
+        ctx->draw_pixel(ctx->framebuffer, x, y, ctx->color_fg);
+    }
+}
+
+void gfx_clear(gfx_context_t *ctx)
+{
+    if (ctx == NULL) return;
+
+    // Temporarily swap foreground color with background color
+    // since gfx_draw_pixel uses color_fg
+    gfx_color_t old_fg = ctx->color_fg;
+    ctx->color_fg = ctx->color_bg;
+
+    for (int16_t y = 0; y < ctx->height; y++) {
+        for (int16_t x = 0; x < ctx->width; x++) {
+            gfx_draw_pixel(ctx, x, y);
+        }
+    }
+
+    // Restore foreground color
+    ctx->color_fg = old_fg;
 }
 
 ```
