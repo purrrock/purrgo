@@ -2183,7 +2183,7 @@ int main(int argc, char* argv[]) {
             last_eink_refresh = current_time;
             display_clear(COLOR_WHITE);
 
-            char buf[32];
+            char buf[64];
 
             switch (purrgo_app_get_state()) {
                 case APP_STATE_MENU_CONFIG: {
@@ -2254,21 +2254,39 @@ int main(int argc, char* argv[]) {
                     y_pos += 12;
 
                     if (sun_initialized) {
-                        snprintf(buf, sizeof(buf), "SR: %02d:%02d SS: %02d:%02d",
-                                 sun_info.sunrise_hour, sun_info.sunrise_minute,
-                                 sun_info.sunset_hour, sun_info.sunset_minute);
-                        display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
-                        y_pos += 12;
-
                         if (sun_info.status == SUN_STATUS_NORMAL) {
-                            int hours = sun_info.time_to_event_min / 60;
-                            int mins = sun_info.time_to_event_min % 60;
+                            snprintf(buf, sizeof(buf), "SUN %02d:%02d-%02d:%02d",
+                                     sun_info.sunrise_hour, sun_info.sunrise_minute,
+                                     sun_info.sunset_hour, sun_info.sunset_minute);
+                            display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
+                            y_pos += 12;
+
+                            int remain_h = sun_info.time_to_event_min / 60;
+                            int remain_m = sun_info.time_to_event_min % 60;
                             if (sun_info.is_daytime) {
-                                snprintf(buf, sizeof(buf), "Sunset in: %02dh %02dm", hours, mins);
+                                snprintf(buf, sizeof(buf), "TO SUNSET: %02dh %02dm", remain_h, remain_m);
                             } else {
-                                snprintf(buf, sizeof(buf), "Sunrise in: %02dh %02dm", hours, mins);
+                                snprintf(buf, sizeof(buf), "TO SUNRISE: %02dh %02dm", remain_h, remain_m);
                             }
                             display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
+                            y_pos += 12;
+
+                            int start_min = sun_info.sunrise_hour * 60 + sun_info.sunrise_minute;
+                            int end_min = sun_info.sunset_hour * 60 + sun_info.sunset_minute;
+                            int total_day_min = end_min - start_min;
+                            if (total_day_min < 0) total_day_min += 1440;
+                            snprintf(buf, sizeof(buf), "DAY: %02dh %02dm", total_day_min / 60, total_day_min % 60);
+                            display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
+                            y_pos += 12;
+                        } else if (sun_info.status == SUN_STATUS_POLAR_DAY) {
+                            display_draw_string(10, y_pos, "POLAR DAY", COLOR_BLACK, COLOR_WHITE);
+                            y_pos += 12;
+                            display_draw_string(10, y_pos, "NO SUNSET DAY: 24h 00m", COLOR_BLACK, COLOR_WHITE);
+                            y_pos += 12;
+                        } else if (sun_info.status == SUN_STATUS_POLAR_NIGHT) {
+                            display_draw_string(10, y_pos, "POLAR NIGHT", COLOR_BLACK, COLOR_WHITE);
+                            y_pos += 12;
+                            display_draw_string(10, y_pos, "NO SUNRISE DAY: 00h 00m", COLOR_BLACK, COLOR_WHITE);
                             y_pos += 12;
                         }
                     }
@@ -4160,6 +4178,21 @@ uint16_t purrgo_geo_azimuth_deg(int32_t lat1_1e7, int32_t lon1_1e7, int32_t lat2
 #endif // PURRGO_GEO_H
 ```
 
+--- FILE: include\purrgo\gfx_circle.h ---
+```h
+#ifndef GFX_CIRCLE_H
+#define GFX_CIRCLE_H
+
+#include "purrgo/gfx_renderer.h"
+#include <stdint.h>
+
+void gfx_draw_circle(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t r);
+void gfx_fill_circle(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t r);
+
+#endif /* GFX_CIRCLE_H */
+
+```
+
 --- FILE: include\purrgo\gfx_line.h ---
 ```h
 #ifndef GFX_LINE_H
@@ -4179,7 +4212,34 @@ uint16_t purrgo_geo_azimuth_deg(int32_t lat1_1e7, int32_t lon1_1e7, int32_t lat2
  */
 void gfx_draw_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1, int16_t y1);
 
+/**
+ * @brief Отрисовка утолщенной линии с использованием целочисленного алгоритма (дублирование пикселей).
+ *
+ * @param ctx Контекст графического ядра.
+ * @param x0 Начальная координата x.
+ * @param y0 Начальная координата y.
+ * @param x1 Конечная координата x.
+ * @param y1 Конечная координата y.
+ * @param thickness Толщина линии в пикселях.
+ */
+void gfx_draw_thick_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1, int16_t y1, int16_t thickness);
+
 #endif /* GFX_LINE_H */
+
+```
+
+--- FILE: include\purrgo\gfx_rect.h ---
+```h
+#ifndef GFX_RECT_H
+#define GFX_RECT_H
+
+#include "purrgo/gfx_renderer.h"
+#include <stdint.h>
+
+void gfx_draw_rect(gfx_context_t *ctx, int16_t x, int16_t y, int16_t w, int16_t h);
+void gfx_fill_rect(gfx_context_t *ctx, int16_t x, int16_t y, int16_t w, int16_t h);
+
+#endif /* GFX_RECT_H */
 
 ```
 
@@ -6137,9 +6197,118 @@ size_t purrgo_ubx_build(
 
 ```
 
+--- FILE: src\core\gfx\gfx_circle.c ---
+```c
+#include "purrgo/gfx_circle.h"
+#include <stddef.h>
+
+void gfx_draw_circle(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t r)
+{
+    if (ctx == NULL || r < 0) return;
+
+    int16_t x = r;
+    int16_t y = 0;
+
+    // Переменная ошибки для алгоритма Брезенхема/Midpoint.
+    // Начинается с 1 - r, но для целых чисел удобнее использовать 1 - r,
+    // или эквивалентную форму (здесь используем err = 1 - r)
+    int16_t err = 1 - r;
+
+    // Отрисовываем 8 симметричных точек
+    while (x >= y) {
+        // Октанты 1 и 8 (справа)
+        gfx_draw_pixel(ctx, x0 + x, y0 + y);
+        gfx_draw_pixel(ctx, x0 + x, y0 - y);
+
+        // Октанты 2 и 7 (сверху)
+        gfx_draw_pixel(ctx, x0 + y, y0 + x);
+        gfx_draw_pixel(ctx, x0 + y, y0 - x);
+
+        // Октанты 3 и 6 (слева)
+        gfx_draw_pixel(ctx, x0 - x, y0 + y);
+        gfx_draw_pixel(ctx, x0 - x, y0 - y);
+
+        // Октанты 4 и 5 (снизу)
+        gfx_draw_pixel(ctx, x0 - y, y0 + x);
+        gfx_draw_pixel(ctx, x0 - y, y0 - x);
+
+        y++;
+
+        // Обновление переменной ошибки
+        if (err < 0) {
+            // Если точка внутри окружности, смещаемся только по y
+            err += 2 * y + 1;
+        } else {
+            // Иначе смещаемся и по x, и по y
+            x--;
+            err += 2 * (y - x) + 1;
+        }
+    }
+}
+
+// Отрисовка горизонтальной линии с аппаратным/прямым отсечением для быстрой заливки
+static void draw_horizontal_line(gfx_context_t *ctx, int16_t x_start, int16_t x_end, int16_t y)
+{
+    // Отсекаем по Y (clipping)
+    if (y < 0 || y >= ctx->height) return;
+
+    // Гарантируем, что x_start <= x_end
+    if (x_start > x_end) {
+        int16_t temp = x_start;
+        x_start = x_end;
+        x_end = temp;
+    }
+
+    // Отсекаем по X (clipping)
+    if (x_end < 0 || x_start >= ctx->width) return;
+
+    if (x_start < 0) x_start = 0;
+    if (x_end >= ctx->width) x_end = ctx->width - 1;
+
+    // Рисуем линию
+    for (int16_t x = x_start; x <= x_end; x++) {
+        ctx->draw_pixel(ctx->framebuffer, x, y, ctx->color_bg);
+    }
+}
+
+void gfx_fill_circle(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t r)
+{
+    if (ctx == NULL || ctx->draw_pixel == NULL || r < 0) return;
+
+    int16_t x = r;
+    int16_t y = 0;
+    int16_t err = 1 - r;
+
+    while (x >= y) {
+        // Отрисовка горизонтальных линий между симметричными точками на одной высоте
+        // Линии по y0 + y и y0 - y, шириной от x0 - x до x0 + x
+        draw_horizontal_line(ctx, x0 - x, x0 + x, y0 + y);
+        draw_horizontal_line(ctx, x0 - x, x0 + x, y0 - y);
+
+        // Линии по y0 + x и y0 - x, шириной от x0 - y до x0 + y
+        // (рисуем их только если они не пересекаются с предыдущими, т.е. x != y)
+        if (x != y) {
+            draw_horizontal_line(ctx, x0 - y, x0 + y, y0 + x);
+            draw_horizontal_line(ctx, x0 - y, x0 + y, y0 - x);
+        }
+
+        y++;
+
+        if (err < 0) {
+            err += 2 * y + 1;
+        } else {
+            x--;
+            err += 2 * (y - x) + 1;
+        }
+    }
+}
+
+```
+
 --- FILE: src\core\gfx\gfx_line.c ---
 ```c
 #include "purrgo/gfx_line.h"
+#include "purrgo/gfx_renderer.h"
 
 // Битовые маски зон для алгоритма Коэна-Сазерленда
 #define INSIDE 0 // 0000
@@ -6260,6 +6429,124 @@ void gfx_draw_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1, int16
         }
     }
 }
+
+void gfx_draw_thick_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1, int16_t y1, int16_t thickness)
+{
+    if (ctx == NULL || thickness <= 0) return;
+
+    if (thickness == 1) {
+        gfx_draw_line(ctx, x0, y0, x1, y1);
+        return;
+    }
+
+    // Быстрое отсечение по Bounding Box с учетом толщины линии.
+    // Предотвращает бесполезные циклы алгоритма Брезенхема для линий,
+    // полностью лежащих за границами экрана.
+    int16_t min_x = (x0 < x1 ? x0 : x1) - thickness;
+    int16_t max_x = (x0 > x1 ? x0 : x1) + thickness;
+    int16_t min_y = (y0 < y1 ? y0 : y1) - thickness;
+    int16_t max_y = (y0 > y1 ? y0 : y1) + thickness;
+
+    if (max_x < 0 || min_x >= ctx->width || max_y < 0 || min_y >= ctx->height) {
+        return;
+    }
+
+    int16_t dx = gfx_abs(x1 - x0);
+    int16_t sx = (x0 < x1) ? 1 : -1;
+    int16_t dy = -gfx_abs(y1 - y0); // Сохраняем dy как отрицательное значение
+    int16_t sy = (y0 < y1) ? 1 : -1;
+    
+    // Инициализация ошибки без деления
+    int16_t err = dx + dy; 
+    int16_t e2;
+
+    // Смещение для дублирования пикселей: деление на 2 заменено битовым сдвигом вправо
+    int16_t half_thick = thickness >> 1;
+    int16_t start_offset = -half_thick;
+    int16_t end_offset = start_offset + thickness - 1;
+
+    // Флаг: если dx > abs(dy) (в нашем случае dy отрицательный, поэтому dx > -dy),
+    // линия более горизонтальная, дублируем пиксели по перпендикуляру — оси Y.
+    bool steep = (dx > -dy);
+
+    while (true) {
+        // Отрисовка утолщения для текущей точки.
+        // Используется gfx_draw_pixel с программным отсечением, так как из-за смещения
+        // краевые пиксели толстой линии могут выйти за пределы экрана.
+        for (int16_t offset = start_offset; offset <= end_offset; ++offset) {
+            if (steep) {
+                gfx_draw_pixel(ctx, x0, y0 + offset);
+            } else {
+                gfx_draw_pixel(ctx, x0 + offset, y0);
+            }
+        }
+
+        if (x0 == x1 && y0 == y1) {
+            break;
+        }
+
+        // Вычисление смещения через побитовый сдвиг (умножение на 2)
+        e2 = err << 1;
+        
+        if (e2 >= dy) {
+            err += dy;
+            x0 += sx;
+        }
+        if (e2 <= dx) {
+            err += dx;
+            y0 += sy;
+        }
+    }
+}
+```
+
+--- FILE: src\core\gfx\gfx_rect.c ---
+```c
+#include "purrgo/gfx_rect.h"
+#include <stddef.h>
+
+void gfx_draw_rect(gfx_context_t *ctx, int16_t x, int16_t y, int16_t w, int16_t h)
+{
+    if (ctx == NULL || w <= 0 || h <= 0) return;
+
+    // Top and bottom
+    for (int16_t i = x; i < x + w; i++) {
+        gfx_draw_pixel(ctx, i, y);
+        gfx_draw_pixel(ctx, i, y + h - 1);
+    }
+    // Left and right (avoiding corners already drawn by top/bottom)
+    for (int16_t i = y + 1; i < y + h - 1; i++) {
+        gfx_draw_pixel(ctx, x, i);
+        gfx_draw_pixel(ctx, x + w - 1, i);
+    }
+}
+
+// Utility function to get max of two int16_t
+static inline int16_t max16(int16_t a, int16_t b) {
+    return (a > b) ? a : b;
+}
+
+// Utility function to get min of two int16_t
+static inline int16_t min16(int16_t a, int16_t b) {
+    return (a < b) ? a : b;
+}
+
+void gfx_fill_rect(gfx_context_t *ctx, int16_t x, int16_t y, int16_t w, int16_t h)
+{
+    if (ctx == NULL || ctx->draw_pixel == NULL || w <= 0 || h <= 0) return;
+
+    int16_t start_x = max16(0, x);
+    int16_t start_y = max16(0, y);
+    int16_t end_x = min16(ctx->width, x + w);
+    int16_t end_y = min16(ctx->height, y + h);
+
+    for (int16_t cy = start_y; cy < end_y; cy++) {
+        for (int16_t cx = start_x; cx < end_x; cx++) {
+            ctx->draw_pixel(ctx->framebuffer, cx, cy, ctx->color_bg);
+        }
+    }
+}
+
 ```
 
 --- FILE: src\core\gfx\gfx_renderer.c ---
