@@ -78,6 +78,10 @@ target_include_directories(purrgo_platform_pc
     add_executable(test_gnss tests/core/test_gnss.c)
     target_link_libraries(test_gnss PRIVATE purrgo_core)
     add_test(NAME test_gnss COMMAND test_gnss)
+
+    add_executable(test_map tests/core/test_map.c)
+    target_link_libraries(test_map PRIVATE purrgo_core)
+    add_test(NAME test_map COMMAND test_map)
 endif()
 
 # Подключение директории эмулятора перенесено в конец дерева сборки, 

@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 /* * Цветовая абстракция. 
  * Для 1-bit: 0 (Black), 1 (White).
