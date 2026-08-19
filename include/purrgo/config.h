@@ -6,13 +6,13 @@
 
 // Глобальная структура настроек устройства
 typedef struct {
-    int8_t timezone_offset_h;     // Сдвиг часового пояса (-12 .. +14)
+	int16_t tz_offset_minutes; // Смещение часового пояса от UTC в минутах (например, +180 для UTC+3:00, +210 для UTC+3:30, -210 для UTC-3:30)
     track_logger_mode_t log_mode; // Режим записи трека (Standard/Expedition)
     bool backlight_on;            // Состояние подсветки дисплея
 } purrgo_config_t;
 
 // Экспорт глобального экземпляра настроек
-extern purrgo_config_t app_config;
+extern purrgo_config_t app_config;int16_t tz_offset_minutes; // Смещение часового пояса от UTC в минутах (например, +180 для UTC+3:00, +210 для UTC+3:30, -210 для UTC-3:30)
 
 // Инициализация настроек значениями по умолчанию
 void purrgo_config_init(void);
