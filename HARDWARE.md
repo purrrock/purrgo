@@ -23,7 +23,6 @@ The final device shall provide:
 - current coordinates;
 - speed;
 - altitude;
-- course over ground;
 - UTC time;
 - satellite/fix information;
 - track recording;
@@ -166,7 +165,6 @@ LAT
 LON
 ALT
 SPD
-COURSE
 SAT
 FIX
 TIME
