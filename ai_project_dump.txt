@@ -2021,6 +2021,7 @@ const uint8_t* display_get_framebuffer(void) {
 #include <purrgo/gnss_types.h>
 #include <purrgo/gnss_mock.h>
 #include <purrgo/app_fsm.h>
+#include <purrgo/config.h>
 
 #define PIXEL_SCALE 2
 #define WINDOW_WIDTH (DISPLAY_WIDTH * PIXEL_SCALE)
@@ -2162,42 +2163,57 @@ int main(int argc, char* argv[]) {
             int mins = abs_tz % 60;
 
             snprintf(buf, sizeof(buf), "TZ: UTC%c%02d:%02d", sign, hours, mins);
-            display_draw_string(10, 40, buf, COLOR_BLACK, COLOR_WHITE);
+            display_draw_string(10, 22, buf, COLOR_WHITE, COLOR_BLACK);
 
-            display_draw_string(10, 60, "+/- : Change", COLOR_BLACK, COLOR_WHITE);
-            display_draw_string(10, 80, "OK : Save", COLOR_BLACK, COLOR_WHITE);
-            display_draw_string(10, 100, "MENU: Cancel", COLOR_BLACK, COLOR_WHITE);
+            display_draw_string(10, 34, "+/- : Change", COLOR_BLACK, COLOR_WHITE);
+            display_draw_string(10, 46, "OK : Save", COLOR_BLACK, COLOR_WHITE);
+            display_draw_string(10, 58, "MENU: Cancel", COLOR_BLACK, COLOR_WHITE);
         } else {
             int y_pos = 10;
 
-            // TIME
-        snprintf(buf, sizeof(buf), "TIME: %02d:%02d:%02d", mock_gnss.hours, mock_gnss.minutes, mock_gnss.seconds);
+        // UTC TIME
+        snprintf(buf, sizeof(buf), "UTC: %02d:%02d:%02d", mock_gnss.hours, mock_gnss.minutes, mock_gnss.seconds);
         display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
-        y_pos += 20;
+        y_pos += 12;
+
+        // LOCAL TIME
+        int32_t total_mins = (int32_t)mock_gnss.hours * 60 + (int32_t)mock_gnss.minutes + app_config.tz_offset_minutes;
+        while (total_mins < 0) {
+            total_mins += 1440;
+        }
+        while (total_mins >= 1440) {
+            total_mins -= 1440;
+        }
+        uint8_t loc_hours = (uint8_t)(total_mins / 60);
+        uint8_t loc_minutes = (uint8_t)(total_mins % 60);
+
+        snprintf(buf, sizeof(buf), "LOC: %02d:%02d:%02d", loc_hours, loc_minutes, mock_gnss.seconds);
+        display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
+        y_pos += 12;
 
         // FIX & SAT
         snprintf(buf, sizeof(buf), "FIX: %s   SAT: %d", mock_gnss.valid ? "3D" : "NO", mock_gnss.satellites);
         display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
-        y_pos += 20;
+        y_pos += 12;
 
         // LAT
         int lat_deg = mock_gnss.lat_1e7 / 10000000;
         int lat_frac = (mock_gnss.lat_1e7 > 0 ? mock_gnss.lat_1e7 : -mock_gnss.lat_1e7) % 10000000;
         snprintf(buf, sizeof(buf), "LAT: %d.%07d", lat_deg, lat_frac);
         display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
-        y_pos += 20;
+        y_pos += 12;
 
         // LON
         int lon_deg = mock_gnss.lon_1e7 / 10000000;
         int lon_frac = (mock_gnss.lon_1e7 > 0 ? mock_gnss.lon_1e7 : -mock_gnss.lon_1e7) % 10000000;
         snprintf(buf, sizeof(buf), "LON: %d.%07d", lon_deg, lon_frac);
         display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
-        y_pos += 20;
+        y_pos += 12;
 
         // ALT
         snprintf(buf, sizeof(buf), "ALT: %d m", mock_gnss.alt_m);
         display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
-        y_pos += 20;
+        y_pos += 12;
 
         // SPD
         int speed_kmh = (mock_gnss.speed_knots * 1852) / 100000; // knots * 1.852 km/h
@@ -2647,6 +2663,9 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix);
 // Получение текущего состояния для слоя отрисовки (Renderer)
 purrgo_state_t purrgo_app_get_state(void);
 
+// Применение смещения часового пояса к фиксу
+void purrgo_app_apply_timezone(purrgo_gnss_solution_t* fix, int16_t tz_offset_minutes);
+
 #endif // PURRGO_APP_FSM_H
 ```
 
@@ -2918,6 +2937,14 @@ typedef struct {
     uint8_t day;          // Дата UTC
     uint8_t month;
     uint8_t year;
+
+    // Новые поля для навигации
+    int32_t course_deg_100; // Истинный курс (Course over ground) в градусах * 100
+    int32_t hdop_100;       // Horizontal Dilution of Precision * 100
+    int32_t vdop_100;       // Vertical Dilution of Precision * 100
+    int32_t pdop_100;       // Position Dilution of Precision * 100
+    uint8_t fix_quality;    // Качество фикса (из $GPGGA)
+    uint8_t fix_type;       // Тип фикса (из $GPGSA: 1=Нет, 2=2D, 3=3D)
 } purrgo_gnss_solution_t;
 
 #endif // PURRGO_GNSS_TYPES_H
@@ -3040,6 +3067,63 @@ void purrgo_nav_update(const purrgo_gnss_solution_t* current_fix,
                        purrgo_nav_status_t* status);
 
 #endif // PURRGO_NAVIGATION_H
+```
+
+--- FILE: include\purrgo\sun.h ---
+```h
+#ifndef PURRGO_SUN_H
+#define PURRGO_SUN_H
+
+#include <stdint.h>
+#include <stdbool.h>
+
+// Статус солнечного дня
+typedef enum {
+    SUN_STATUS_NORMAL,      // Обычный день (есть и восход, и закат)
+    SUN_STATUS_POLAR_DAY,   // Полярный день (Солнце не заходит)
+    SUN_STATUS_POLAR_NIGHT  // Полярная ночь (Солнце не восходит)
+} purrgo_sun_status_t;
+
+// Результат астрономического расчета
+typedef struct {
+    purrgo_sun_status_t status;
+    
+    uint8_t sunrise_hour;      // Час восхода (локальное время, 0..23)
+    uint8_t sunrise_minute;    // Минута восхода (0..59)
+    
+    uint8_t sunset_hour;       // Час заката (локальное время, 0..23)
+    uint8_t sunset_minute;     // Минута заката (0..59)
+    
+    int16_t time_to_event_min; // Минут до ближайшего события (заката или восхода)
+    bool is_daytime;           // true — сейчас день, false — ночь
+} purrgo_sun_info_t;
+
+// Вычисление параметров восхода/заката
+void purrgo_sun_calc(int32_t lat_1e7, int32_t lon_1e7,
+                     uint8_t year_2digit, uint8_t month, uint8_t day,
+                     uint8_t utc_hour, uint8_t utc_minute,
+                     int16_t tz_offset_minutes,
+                     purrgo_sun_info_t *info);
+
+#endif // PURRGO_SUN_H
+```
+
+--- FILE: include\purrgo\sun_tables.h ---
+```h
+/* AUTO-GENERATED BY tools/generate_sun_tables.py. DO NOT EDIT. */
+#ifndef PURRGO_SUN_TABLES_H
+#define PURRGO_SUN_TABLES_H
+
+#include <stdint.h>
+
+extern const int16_t sun_sin_dec_lut[367];
+extern const int16_t sun_cos_dec_lut[367];
+extern const int8_t sun_eot_lut[367];
+extern const uint8_t acos_lut[201];
+extern const int16_t sin_lut[91];
+extern const int16_t cos_lut[91];
+#endif // PURRGO_SUN_TABLES_H
+
 ```
 
 --- FILE: include\purrgo\track_logger.h ---
@@ -3215,21 +3299,73 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
     }
 }
 
+static bool is_leap_year(uint8_t year) {
+    // NMEA year is typically 2 digits. Assume 2000s base if year < 80.
+    // However, the rule states to preserve the year field as-is and deduce full year.
+    // Usually, 2-digit years are since 2000 in this context, or we can just check divisibility by 4
+    // since 2000 was a leap year and years 2004..2096 are leap years if divisible by 4.
+    // If year + 2000 is used:
+    uint16_t full_year = 2000 + year;
+    return (full_year % 4 == 0 && (full_year % 100 != 0 || full_year % 400 == 0));
+}
+
+static uint8_t days_in_month(uint8_t month, uint8_t year) {
+    if (month == 2) {
+        return is_leap_year(year) ? 29 : 28;
+    }
+    if (month == 4 || month == 6 || month == 9 || month == 11) {
+        return 30;
+    }
+    return 31;
+}
+
 // Перевод UTC времени в локальное с учетом минутного смещения
-static void apply_timezone(purrgo_gnss_solution_t* fix) {
+void purrgo_app_apply_timezone(purrgo_gnss_solution_t* fix, int16_t tz_offset_minutes) {
     if (!fix->valid) return;
 
     // Переводим часы и минуты фикса в общее количество минут от начала суток
-    int32_t total_mins = (int32_t)fix->hours * 60 + (int32_t)fix->minutes + app_config.tz_offset_minutes;
+    int32_t total_mins = (int32_t)fix->hours * 60 + (int32_t)fix->minutes + tz_offset_minutes;
 
-    // Коррекция перехода через полночь (0..1439 минут в сутках)
+    // Коррекция перехода через полночь
     while (total_mins < 0) {
         total_mins += 1440;
-        fix->day--; // Упрощенно: без учета границ месяцев
+
+        if (fix->day > 1) {
+            fix->day--;
+        } else {
+            if (fix->month > 1) {
+                fix->month--;
+            } else {
+                fix->month = 12;
+                if (fix->year > 0) {
+                    fix->year--;
+                } else {
+                    fix->year = 99; // Assume wrap around to 1999 or just stick to 99
+                }
+            }
+            fix->day = days_in_month(fix->month, fix->year);
+        }
     }
+
     while (total_mins >= 1440) {
         total_mins -= 1440;
-        fix->day++;
+
+        uint8_t dim = days_in_month(fix->month, fix->year);
+        if (fix->day < dim) {
+            fix->day++;
+        } else {
+            fix->day = 1;
+            if (fix->month < 12) {
+                fix->month++;
+            } else {
+                fix->month = 1;
+                if (fix->year < 99) {
+                    fix->year++;
+                } else {
+                    fix->year = 0; // Wrap to 00
+                }
+            }
+        }
     }
 
     fix->hours = (uint8_t)(total_mins / 60);
@@ -3238,7 +3374,7 @@ static void apply_timezone(purrgo_gnss_solution_t* fix) {
 
 void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
     purrgo_gnss_solution_t display_fix = *current_fix;
-    apply_timezone(&display_fix);
+    purrgo_app_apply_timezone(&display_fix, app_config.tz_offset_minutes);
 
     switch (current_state) {
         case APP_STATE_SATELLITES:
@@ -3295,8 +3431,16 @@ static uint32_t isqrt64(uint64_t n) {
 }
 
 uint32_t purrgo_geo_distance_m(int32_t lat1, int32_t lon1, int32_t lat2, int32_t lon2) {
-    int32_t dlat = lat2 - lat1;
-    int32_t dlon = lon2 - lon1;
+    int64_t dlat = (int64_t)lat2 - (int64_t)lat1;
+    int64_t dlon = (int64_t)lon2 - (int64_t)lon1;
+
+    // Handle wrap-around at 180th meridian (-180 to +180 degrees)
+    // 180 degrees = 1800000000 in 1e7 format. 360 degrees = 3600000000.
+    if (dlon > 1800000000LL) {
+        dlon -= 3600000000LL;
+    } else if (dlon < -1800000000LL) {
+        dlon += 3600000000LL;
+    }
 
     // Эквидистантная цилиндрическая проекция (оптимальна для дистанций < 500 км).
     // Формула гаверсинуса (Haversine) требует много вычислений синусов, 
@@ -3333,8 +3477,15 @@ uint32_t purrgo_geo_distance_m(int32_t lat1, int32_t lon1, int32_t lat2, int32_t
 }
 
 uint16_t purrgo_geo_azimuth_deg(int32_t lat1, int32_t lon1, int32_t lat2, int32_t lon2) {
-    int32_t dlat = lat2 - lat1;
-    int32_t dlon = lon2 - lon1;
+    int64_t dlat = (int64_t)lat2 - (int64_t)lat1;
+    int64_t dlon = (int64_t)lon2 - (int64_t)lon1;
+
+    // Handle wrap-around at 180th meridian
+    if (dlon > 1800000000LL) {
+        dlon -= 3600000000LL;
+    } else if (dlon < -1800000000LL) {
+        dlon += 3600000000LL;
+    }
 
     int32_t mean_lat = (lat1 / 2) + (lat2 / 2);
     int32_t mean_lat_abs = mean_lat < 0 ? -mean_lat : mean_lat;
@@ -3349,19 +3500,19 @@ uint16_t purrgo_geo_azimuth_deg(int32_t lat1, int32_t lon1, int32_t lat2, int32_
     }
 
     // Вычисление векторов в проекционной сетке
-    int32_t x = dlat; // Ось X направлена на Север
-    int32_t y = (int32_t)(((int64_t)dlon * cos_lat) / 10000); // Ось Y направлена на Восток
+    int64_t x = dlat; // Ось X направлена на Север
+    int64_t y = (dlon * cos_lat) / 10000; // Ось Y направлена на Восток
 
-    int32_t abs_x = x < 0 ? -x : x;
-    int32_t abs_y = y < 0 ? -y : y;
+    int64_t abs_x = x < 0 ? -x : x;
+    int64_t abs_y = y < 0 ? -y : y;
     
     if (abs_x == 0 && abs_y == 0) return 0; // Точки совпадают
 
-    int32_t min = abs_x < abs_y ? abs_x : abs_y;
-    int32_t max = abs_x > abs_y ? abs_x : abs_y;
+    int64_t min = abs_x < abs_y ? abs_x : abs_y;
+    int64_t max = abs_x > abs_y ? abs_x : abs_y;
 
-    // Нормализация аргумента (0..100) для Look-up table
-    int32_t a = (min * 100) / max;
+    // Нормализация аргумента (0..100) для Look-up table. Safe 64-bit multiplication to avoid overflow.
+    int32_t a = (int32_t)((min * 100LL) / max);
     
     // Линейная интерполяция арктангенса базового угла
     int32_t a_idx = a / 10;
@@ -3458,7 +3609,12 @@ void purrgo_gnss_process_nmea(const char *nmea_line, purrgo_gnss_solution_t *sol
                     
                     // Масштабирование скорости (узлы * 100)
                     if (frame.speed.scale != 0) {
-                        solution->speed_knots = (frame.speed.value * 100) / frame.speed.scale;
+                        solution->speed_knots = (int32_t)(((int64_t)frame.speed.value * 100) / frame.speed.scale);
+                    }
+
+                    // Масштабирование курса (градусы * 100)
+                    if (frame.course.scale != 0) {
+                        solution->course_deg_100 = (int32_t)(((int64_t)frame.course.value * 100) / frame.course.scale);
                     }
                     
                     solution->hours = frame.time.hours;
@@ -3478,11 +3634,31 @@ void purrgo_gnss_process_nmea(const char *nmea_line, purrgo_gnss_solution_t *sol
                 if (frame.altitude.scale != 0) {
                     solution->alt_m = frame.altitude.value / frame.altitude.scale;
                 }
+                solution->fix_quality = frame.fix_quality;
+                if (frame.hdop.scale != 0) {
+                    solution->hdop_100 = (int32_t)(((int64_t)frame.hdop.value * 100) / frame.hdop.scale);
+                }
+            }
+            break;
+        }
+        case MINMEA_SENTENCE_GSA: {
+            struct minmea_sentence_gsa frame;
+            if (minmea_parse_gsa(&frame, nmea_line)) {
+                solution->fix_type = frame.fix_type;
+                if (frame.hdop.scale != 0) {
+                    solution->hdop_100 = (int32_t)(((int64_t)frame.hdop.value * 100) / frame.hdop.scale);
+                }
+                if (frame.vdop.scale != 0) {
+                    solution->vdop_100 = (int32_t)(((int64_t)frame.vdop.value * 100) / frame.vdop.scale);
+                }
+                if (frame.pdop.scale != 0) {
+                    solution->pdop_100 = (int32_t)(((int64_t)frame.pdop.value * 100) / frame.pdop.scale);
+                }
             }
             break;
         }
         default:
-            // Игнорируем $GPVTG, $GPGSA, $GPGSV, $GPGLL и проприетарные $GPTXT от u-blox
+            // Игнорируем $GPVTG, $GPGSV, $GPGLL и проприетарные $GPTXT от u-blox
             break;
     }
 }
@@ -3551,8 +3727,8 @@ void purrgo_gnss_mock_update(purrgo_gnss_solution_t* state) {
 
 ```
 
---- FILE: src\core\gpx_parser.h ---
-```h
+--- FILE: src\core\gpx_parser.c ---
+```c
 #include "purrgo/gpx_parser.h"
 #include <string.h>
 
@@ -3884,6 +4060,266 @@ void purrgo_nav_update(const purrgo_gnss_solution_t* current_fix,
         status->is_arrived = false;
     }
 }
+```
+
+--- FILE: src\core\sun.c ---
+```c
+#include "purrgo/sun.h"
+#include "purrgo/sun_tables.h" // Файл с LUT, сгенерированный скриптом на Python
+
+// Константа: синус угла захода солнца (-0.833 градуса с учетом рефракции атмосферы)
+// sin(-0.833) * 10000 = -145
+#define SIN_SUNSET_10K -145
+
+// Таблица арккосинуса (от -10000 до 10000 -> углы от 180 до 0 градусов)
+// 201 элемент (шаг 0.01) позволяет получить точность до ~1 градуса (4 минуты времени)
+extern const uint8_t acos_lut[201]; 
+
+// Целочисленный синус для широты (дополнительная таблица или использование geo.c)
+extern const int16_t sin_lut[91]; 
+extern const int16_t cos_lut[91];
+
+// Расчет дня в году
+static uint16_t get_day_of_year(uint8_t year_2digit, uint8_t month, uint8_t day) {
+    static const uint16_t days_before_month[] = {
+        0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334
+    };
+    uint16_t doy = days_before_month[month - 1] + day;
+    if (month > 2 && (year_2digit % 4 == 0)) {
+        doy++;
+    }
+    return doy;
+}
+
+void purrgo_sun_calc_integer(int32_t lat_1e7, int32_t lon_1e7,
+                             uint8_t year_2digit, uint8_t month, uint8_t day,
+                             int16_t tz_offset_minutes,
+                             purrgo_sun_info_t *info) {
+    
+    uint16_t doy = get_day_of_year(year_2digit, month, day);
+    if (doy > 366) doy = 366;
+
+    // 1. Получение астрономических параметров на текущий день из Flash (масштаб 10000)
+    int32_t sin_dec = sun_sin_dec_lut[doy];
+    int32_t cos_dec = sun_cos_dec_lut[doy];
+    int32_t eot_min = sun_eot_lut[doy];
+
+    // 2. Получение тригонометрии для текущей широты
+    int32_t lat_abs = lat_1e7 < 0 ? -lat_1e7 : lat_1e7;
+    int32_t lat_deg = lat_abs / 10000000;
+    if (lat_deg > 90) lat_deg = 90;
+    
+    int32_t sin_lat = sin_lut[lat_deg];
+    if (lat_1e7 < 0) sin_lat = -sin_lat; // Учет Южного полушария
+    int32_t cos_lat = cos_lut[lat_deg];
+
+    // 3. Вычисление часового угла: cos(H) = (sin(-0.833) - sin(lat)*sin(dec)) / (cos(lat)*cos(dec))
+    int32_t numerator = (SIN_SUNSET_10K * 10000) - (sin_lat * sin_dec);
+    int32_t denominator = (cos_lat * cos_dec) / 10000;
+    
+    if (denominator == 0) denominator = 1; // Защита от деления на ноль на полюсах
+    
+    int32_t cos_H_10k = numerator / denominator;
+
+    // Проверка полярного дня и ночи
+    if (cos_H_10k > 10000) {
+        info->status = SUN_STATUS_POLAR_NIGHT;
+        return;
+    }
+    if (cos_H_10k < -10000) {
+        info->status = SUN_STATUS_POLAR_DAY;
+        return;
+    }
+
+    info->status = SUN_STATUS_NORMAL;
+
+    // 4. Поиск угла H в градусах через таблицу арккосинуса
+    // Нормализация аргумента к индексам массива 0..200
+    int32_t acos_idx = (cos_H_10k + 10000) / 100; 
+    if (acos_idx < 0) acos_idx = 0;
+    if (acos_idx > 200) acos_idx = 200;
+    
+    int32_t H_deg = acos_lut[acos_idx];
+
+    // 5. Перевод долготы в минуты (1 градус = 4 минуты времени)
+    int32_t lon_min = (lon_1e7 * 4) / 10000000;
+
+    // 6. Базовое время полудня (12:00 = 720 минут)
+    int32_t solar_noon = 720 - lon_min - eot_min;
+
+    // 7. Смещение заката и восхода от полудня (H_deg * 4 мин)
+    int32_t event_offset = H_deg * 4;
+
+    int32_t sunrise_utc = solar_noon - event_offset;
+    int32_t sunset_utc  = solar_noon + event_offset;
+
+    // 8. Накатываем часовой пояс
+    int32_t sunrise_loc = sunrise_utc + tz_offset_minutes;
+    int32_t sunset_loc  = sunset_utc + tz_offset_minutes;
+
+    // Нормализация 0..1440 минут
+    while (sunrise_loc < 0) sunrise_loc += 1440;
+    while (sunrise_loc >= 1440) sunrise_loc -= 1440;
+    while (sunset_loc < 0) sunset_loc += 1440;
+    while (sunset_loc >= 1440) sunset_loc -= 1440;
+
+    info->sunrise_hour   = sunrise_loc / 60;
+    info->sunrise_minute = sunrise_loc % 60;
+    info->sunset_hour    = sunset_loc / 60;
+    info->sunset_minute  = sunset_loc % 60;
+}
+```
+
+--- FILE: src\core\sun_tables.c ---
+```c
+/* AUTO-GENERATED BY tools/generate_sun_tables.py. DO NOT EDIT. */
+#include "purrgo/sun_tables.h"
+
+const int16_t sun_sin_dec_lut[367] = {
+     -3917,  -3917,  -3904,  -3890,  -3875,  -3858,  -3841,  -3822,  -3802,  -3781,  -3758,  -3735, 
+     -3710,  -3684,  -3657,  -3628,  -3599,  -3568,  -3537,  -3504,  -3470,  -3435,  -3399,  -3361, 
+     -3323,  -3284,  -3244,  -3202,  -3160,  -3116,  -3072,  -3027,  -2981,  -2933,  -2885,  -2836, 
+     -2787,  -2736,  -2684,  -2632,  -2579,  -2525,  -2470,  -2414,  -2358,  -2301,  -2243,  -2185, 
+     -2126,  -2066,  -2006,  -1945,  -1883,  -1821,  -1759,  -1696,  -1632,  -1568,  -1504,  -1439, 
+     -1374,  -1308,  -1242,  -1175,  -1109,  -1042,   -974,   -907,   -839,   -771,   -703,   -634, 
+      -566,   -497,   -429,   -360,   -291,   -222,   -153,    -84,    -15,     54,    122,    191, 
+       260,    328,    397,    465,    533,    601,    668,    736,    803,    869,    936,   1002, 
+      1068,   1134,   1199,   1263,   1328,   1392,   1455,   1518,   1581,   1643,   1704,   1765, 
+      1826,   1886,   1945,   2004,   2062,   2119,   2176,   2232,   2288,   2343,   2397,   2450, 
+      2503,   2555,   2606,   2657,   2707,   2755,   2804,   2851,   2897,   2943,   2988,   3031, 
+      3074,   3117,   3158,   3198,   3238,   3276,   3313,   3350,   3386,   3420,   3454,   3487, 
+      3518,   3549,   3579,   3607,   3635,   3662,   3687,   3712,   3735,   3758,   3779,   3800, 
+      3819,   3837,   3854,   3870,   3885,   3899,   3912,   3924,   3934,   3944,   3952,   3960, 
+      3966,   3971,   3975,   3978,   3980,   3980,   3980,   3978,   3976,   3972,   3967,   3961, 
+      3954,   3946,   3937,   3927,   3915,   3903,   3889,   3875,   3859,   3842,   3824,   3805, 
+      3785,   3764,   3742,   3719,   3695,   3670,   3644,   3616,   3588,   3559,   3529,   3497, 
+      3465,   3432,   3398,   3363,   3327,   3290,   3252,   3213,   3174,   3133,   3092,   3049, 
+      3006,   2962,   2917,   2872,   2825,   2778,   2730,   2681,   2631,   2581,   2530,   2478, 
+      2426,   2372,   2319,   2264,   2209,   2153,   2096,   2039,   1982,   1923,   1865,   1805, 
+      1745,   1685,   1624,   1563,   1501,   1438,   1376,   1312,   1249,   1185,   1121,   1056, 
+       991,    926,    860,    794,    728,    662,    595,    528,    461,    394,    326,    259, 
+       191,    124,     56,    -12,    -80,   -148,   -216,   -284,   -352,   -420,   -487,   -555, 
+      -623,   -690,   -757,   -824,   -891,   -958,  -1024,  -1090,  -1156,  -1222,  -1287,  -1352, 
+     -1417,  -1481,  -1545,  -1608,  -1671,  -1734,  -1796,  -1857,  -1918,  -1978,  -2038,  -2098, 
+     -2156,  -2214,  -2272,  -2328,  -2384,  -2440,  -2494,  -2548,  -2602,  -2654,  -2705,  -2756, 
+     -2806,  -2855,  -2903,  -2951,  -2997,  -3043,  -3087,  -3131,  -3174,  -3215,  -3256,  -3296, 
+     -3335,  -3372,  -3409,  -3445,  -3479,  -3513,  -3545,  -3576,  -3606,  -3635,  -3663,  -3690, 
+     -3716,  -3740,  -3763,  -3785,  -3806,  -3826,  -3845,  -3862,  -3878,  -3893,  -3907,  -3919, 
+     -3930,  -3940,  -3949,  -3957,  -3963,  -3968,  -3972,  -3974,  -3976,  -3976,  -3974,  -3972, 
+     -3968,  -3963,  -3957,  -3950,  -3941,  -3931,  -3920, 
+};
+
+const int16_t sun_cos_dec_lut[367] = {
+      9201,   9201,   9206,   9212,   9219,   9226,   9233,   9241,   9249,   9258,   9267,   9276, 
+      9286,   9297,   9307,   9319,   9330,   9342,   9354,   9366,   9379,   9392,   9405,   9418, 
+      9432,   9445,   9459,   9473,   9488,   9502,   9516,   9531,   9545,   9560,   9575,   9589, 
+      9604,   9619,   9633,   9647,   9662,   9676,   9690,   9704,   9718,   9732,   9745,   9758, 
+      9771,   9784,   9797,   9809,   9821,   9833,   9844,   9855,   9866,   9876,   9886,   9896, 
+      9905,   9914,   9923,   9931,   9938,   9946,   9952,   9959,   9965,   9970,   9975,   9980, 
+      9984,   9988,   9991,   9994,   9996,   9998,   9999,  10000,  10000,  10000,   9999,   9998, 
+      9997,   9995,   9992,   9989,   9986,   9982,   9978,   9973,   9968,   9962,   9956,   9950, 
+      9943,   9936,   9928,   9920,   9911,   9903,   9894,   9884,   9874,   9864,   9854,   9843, 
+      9832,   9821,   9809,   9797,   9785,   9773,   9760,   9748,   9735,   9722,   9708,   9695, 
+      9682,   9668,   9654,   9641,   9627,   9613,   9599,   9585,   9571,   9557,   9543,   9529, 
+      9516,   9502,   9488,   9475,   9461,   9448,   9435,   9422,   9409,   9397,   9385,   9372, 
+      9361,   9349,   9338,   9327,   9316,   9305,   9295,   9286,   9276,   9267,   9258,   9250, 
+      9242,   9234,   9227,   9221,   9214,   9208,   9203,   9198,   9194,   9189,   9186,   9183, 
+      9180,   9178,   9176,   9175,   9174,   9174,   9174,   9175,   9176,   9177,   9179,   9182, 
+      9185,   9188,   9192,   9197,   9202,   9207,   9213,   9219,   9225,   9232,   9240,   9248, 
+      9256,   9264,   9273,   9283,   9292,   9302,   9313,   9323,   9334,   9345,   9357,   9368, 
+      9380,   9393,   9405,   9418,   9430,   9443,   9456,   9470,   9483,   9496,   9510,   9524, 
+      9537,   9551,   9565,   9579,   9593,   9606,   9620,   9634,   9648,   9661,   9675,   9688, 
+      9701,   9715,   9728,   9740,   9753,   9766,   9778,   9790,   9802,   9813,   9825,   9836, 
+      9847,   9857,   9867,   9877,   9887,   9896,   9905,   9913,   9922,   9930,   9937,   9944, 
+      9951,   9957,   9963,   9968,   9973,   9978,   9982,   9986,   9989,   9992,   9995,   9997, 
+      9998,   9999,  10000,  10000,  10000,   9999,   9998,   9996,   9994,   9991,   9988,   9985, 
+      9981,   9976,   9971,   9966,   9960,   9954,   9947,   9940,   9933,   9925,   9917,   9908, 
+      9899,   9890,   9880,   9870,   9859,   9849,   9837,   9826,   9814,   9802,   9790,   9778, 
+      9765,   9752,   9739,   9725,   9712,   9698,   9684,   9670,   9656,   9641,   9627,   9613, 
+      9598,   9584,   9569,   9555,   9540,   9526,   9511,   9497,   9483,   9469,   9455,   9441, 
+      9428,   9414,   9401,   9388,   9375,   9363,   9351,   9339,   9327,   9316,   9305,   9294, 
+      9284,   9274,   9265,   9256,   9247,   9239,   9231,   9224,   9217,   9211,   9205,   9200, 
+      9195,   9191,   9187,   9184,   9181,   9179,   9177,   9176,   9176,   9176,   9176,   9177, 
+      9179,   9181,   9184,   9187,   9191,   9195,   9200, 
+};
+
+const int8_t sun_eot_lut[367] = {
+        -3,     -3,     -3,     -4,     -4,     -5,     -5,     -6,     -6,     -6,     -7,     -7, 
+        -8,     -8,     -8,     -9,     -9,     -9,    -10,    -10,    -10,    -11,    -11,    -11, 
+       -11,    -12,    -12,    -12,    -12,    -13,    -13,    -13,    -13,    -13,    -13,    -14, 
+       -14,    -14,    -14,    -14,    -14,    -14,    -14,    -14,    -14,    -14,    -14,    -14, 
+       -14,    -14,    -14,    -14,    -14,    -14,    -14,    -14,    -14,    -13,    -13,    -13, 
+       -13,    -13,    -13,    -12,    -12,    -12,    -12,    -11,    -11,    -11,    -11,    -10, 
+       -10,    -10,    -10,     -9,     -9,     -9,     -8,     -8,     -8,     -8,     -7,     -7, 
+        -7,     -6,     -6,     -6,     -5,     -5,     -5,     -4,     -4,     -4,     -3,     -3, 
+        -3,     -3,     -2,     -2,     -2,     -1,     -1,     -1,     -1,      0,      0,      0, 
+         1,      1,      1,      1,      1,      2,      2,      2,      2,      2,      3,      3, 
+         3,      3,      3,      3,      3,      3,      4,      4,      4,      4,      4,      4, 
+         4,      4,      4,      4,      4,      4,      4,      4,      4,      4,      4,      4, 
+         4,      3,      3,      3,      3,      3,      3,      3,      3,      2,      2,      2, 
+         2,      2,      2,      1,      1,      1,      1,      1,      0,      0,      0,      0, 
+         0,     -1,     -1,     -1,     -1,     -2,     -2,     -2,     -2,     -2,     -3,     -3, 
+        -3,     -3,     -3,     -4,     -4,     -4,     -4,     -4,     -5,     -5,     -5,     -5, 
+        -5,     -5,     -6,     -6,     -6,     -6,     -6,     -6,     -6,     -6,     -6,     -6, 
+        -6,     -7,     -7,     -7,     -7,     -7,     -7,     -7,     -7,     -7,     -6,     -6, 
+        -6,     -6,     -6,     -6,     -6,     -6,     -6,     -6,     -5,     -5,     -5,     -5, 
+        -5,     -5,     -4,     -4,     -4,     -4,     -3,     -3,     -3,     -3,     -2,     -2, 
+        -2,     -1,     -1,     -1,      0,      0,      0,      1,      1,      1,      2,      2, 
+         2,      3,      3,      3,      4,      4,      5,      5,      5,      6,      6,      6, 
+         7,      7,      8,      8,      8,      9,      9,      9,     10,     10,     10,     11, 
+        11,     11,     12,     12,     12,     13,     13,     13,     13,     14,     14,     14, 
+        14,     15,     15,     15,     15,     15,     15,     16,     16,     16,     16,     16, 
+        16,     16,     16,     16,     16,     16,     16,     16,     16,     16,     16,     16, 
+        16,     16,     16,     16,     16,     16,     15,     15,     15,     15,     15,     14, 
+        14,     14,     14,     13,     13,     13,     12,     12,     12,     11,     11,     11, 
+        10,     10,     10,      9,      9,      8,      8,      8,      7,      7,      6,      6, 
+         5,      5,      5,      4,      4,      3,      3,      2,      2,      1,      1,      0, 
+         0,     -1,     -1,     -1,     -2,     -2,     -3, 
+};
+
+const uint8_t acos_lut[201] = {
+       180,    172,    169,    166,    164,    162,    160,    158,    157,    156,    154,    153, 
+       152,    150,    149,    148,    147,    146,    145,    144,    143,    142,    141,    140, 
+       139,    139,    138,    137,    136,    135,    134,    134,    133,    132,    131,    131, 
+       130,    129,    128,    128,    127,    126,    125,    125,    124,    123,    123,    122, 
+       121,    121,    120,    119,    119,    118,    117,    117,    116,    115,    115,    114, 
+       114,    113,    112,    112,    111,    110,    110,    109,    109,    108,    107,    107, 
+       106,    106,    105,    104,    104,    103,    103,    102,    102,    101,    100,    100, 
+        99,     99,     98,     97,     97,     96,     96,     95,     95,     94,     93,     93, 
+        92,     92,     91,     91,     90,     89,     89,     88,     88,     87,     87,     86, 
+        85,     85,     84,     84,     83,     83,     82,     81,     81,     80,     80,     79, 
+        78,     78,     77,     77,     76,     76,     75,     74,     74,     73,     73,     72, 
+        71,     71,     70,     70,     69,     68,     68,     67,     66,     66,     65,     65, 
+        64,     63,     63,     62,     61,     61,     60,     59,     59,     58,     57,     57, 
+        56,     55,     55,     54,     53,     52,     52,     51,     50,     49,     49,     48, 
+        47,     46,     46,     45,     44,     43,     42,     41,     41,     40,     39,     38, 
+        37,     36,     35,     34,     33,     32,     31,     30,     28,     27,     26,     24, 
+        23,     22,     20,     18,     16,     14,     11,      8,      0, 
+};
+
+const int16_t sin_lut[91] = {
+         0,    175,    349,    523,    698,    872,   1045,   1219,   1392,   1564,   1736,   1908, 
+      2079,   2250,   2419,   2588,   2756,   2924,   3090,   3256,   3420,   3584,   3746,   3907, 
+      4067,   4226,   4384,   4540,   4695,   4848,   5000,   5150,   5299,   5446,   5592,   5736, 
+      5878,   6018,   6157,   6293,   6428,   6561,   6691,   6820,   6947,   7071,   7193,   7314, 
+      7431,   7547,   7660,   7771,   7880,   7986,   8090,   8192,   8290,   8387,   8480,   8572, 
+      8660,   8746,   8829,   8910,   8988,   9063,   9135,   9205,   9272,   9336,   9397,   9455, 
+      9511,   9563,   9613,   9659,   9703,   9744,   9781,   9816,   9848,   9877,   9903,   9925, 
+      9945,   9962,   9976,   9986,   9994,   9998,  10000, 
+};
+
+const int16_t cos_lut[91] = {
+     10000,   9998,   9994,   9986,   9976,   9962,   9945,   9925,   9903,   9877,   9848,   9816, 
+      9781,   9744,   9703,   9659,   9613,   9563,   9511,   9455,   9397,   9336,   9272,   9205, 
+      9135,   9063,   8988,   8910,   8829,   8746,   8660,   8572,   8480,   8387,   8290,   8192, 
+      8090,   7986,   7880,   7771,   7660,   7547,   7431,   7314,   7193,   7071,   6947,   6820, 
+      6691,   6561,   6428,   6293,   6157,   6018,   5878,   5736,   5592,   5446,   5299,   5150, 
+      5000,   4848,   4695,   4540,   4384,   4226,   4067,   3907,   3746,   3584,   3420,   3256, 
+      3090,   2924,   2756,   2588,   2419,   2250,   2079,   1908,   1736,   1564,   1392,   1219, 
+      1045,    872,    698,    523,    349,    175,      0, 
+};
+
+
 ```
 
 --- FILE: src\core\track_logger.c ---
@@ -4495,6 +4931,59 @@ int main(void) {
     assert(purrgo_geo_distance_m(lat1, lon1, lat3, lon3) == 111195U);
     assert(purrgo_geo_azimuth_deg(lat1, lon1, lat3, lon3) == 0U); // Север
 
+    // South
+    int32_t lat4 = -10000000; // 1.0000000 S
+    int32_t lon4 = 0;
+    assert(purrgo_geo_distance_m(lat1, lon1, lat4, lon4) == 111195U);
+    assert(purrgo_geo_azimuth_deg(lat1, lon1, lat4, lon4) == 180U); // Юг
+
+    // East
+    int32_t lat5 = 0;
+    int32_t lon5 = 10000000; // 1.0000000 E
+    assert(purrgo_geo_distance_m(lat1, lon1, lat5, lon5) == 111195U);
+    assert(purrgo_geo_azimuth_deg(lat1, lon1, lat5, lon5) == 90U); // Восток
+
+    // West
+    int32_t lat6 = 0;
+    int32_t lon6 = -10000000; // 1.0000000 W
+    assert(purrgo_geo_distance_m(lat1, lon1, lat6, lon6) == 111195U);
+    assert(purrgo_geo_azimuth_deg(lat1, lon1, lat6, lon6) == 270U); // Запад
+
+    // Northeast (approx)
+    assert(purrgo_geo_azimuth_deg(lat1, lon1, lat3, lon5) == 45U);
+
+    // Southeast (approx)
+    assert(purrgo_geo_azimuth_deg(lat1, lon1, lat4, lon5) == 135U);
+
+    // Southwest (approx)
+    assert(purrgo_geo_azimuth_deg(lat1, lon1, lat4, lon6) == 225U);
+
+    // Northwest (approx)
+    assert(purrgo_geo_azimuth_deg(lat1, lon1, lat3, lon6) == 315U);
+
+    // Coordinate limit tests to verify int64 bounds correctly block overflow
+    int32_t lat7 = 900000000; // 90 N
+    int32_t lon7 = 1800000000; // 180 E
+    int32_t lat8 = -900000000; // 90 S
+    int32_t lon8 = -1800000000; // 180 W
+
+    // Distance calculation should not assert/crash
+    purrgo_geo_distance_m(lat7, lon7, lat8, lon8);
+
+    // Azimuth test with wrap-around at 180th meridian
+    // Moving from 179 E to -179 W (179 W) is a short distance East.
+    // Coordinates:
+    int32_t wrap_lon1 = 1790000000;
+    int32_t wrap_lon2 = -1790000000;
+    assert(purrgo_geo_azimuth_deg(0, wrap_lon1, 0, wrap_lon2) == 90U);
+
+    // Distance moving across 180th should be equivalent to 2 degrees
+    // We can't strictly compare distance precision easily due to projection,
+    // but we can ensure it's not the huge difference of 358 degrees!
+    uint32_t dist_across_wrap = purrgo_geo_distance_m(0, wrap_lon1, 0, wrap_lon2);
+    // Since 2 degrees is 222390m, we ensure dist is approx around 222390m
+    assert(dist_across_wrap > 222000U && dist_across_wrap < 223000U);
+
     return 0;
 }
 ```
@@ -4503,15 +4992,256 @@ int main(void) {
 ```c
 #include <assert.h>
 #include "purrgo/gnss.h"
+#include "purrgo/app_fsm.h"
+#include "purrgo/gnss_types.h"
+#include "purrgo/gnss_adapter.h"
+#include <string.h>
+
+static void test_timezone(void) {
+    purrgo_gnss_solution_t fix;
+
+    // Test 1: No timezone offset
+    fix.valid = true;
+    fix.hours = 12; fix.minutes = 34; fix.seconds = 56;
+    fix.day = 15; fix.month = 5; fix.year = 23;
+    purrgo_app_apply_timezone(&fix, 0);
+    assert(fix.hours == 12 && fix.minutes == 34 && fix.day == 15 && fix.month == 5 && fix.year == 23);
+
+    // Test 2: Positive offset without midnight crossing
+    fix.hours = 10; fix.minutes = 0; fix.day = 15; fix.month = 5; fix.year = 23;
+    purrgo_app_apply_timezone(&fix, 120); // +2 hours
+    assert(fix.hours == 12 && fix.minutes == 0 && fix.day == 15 && fix.month == 5);
+
+    // Test 3: Positive offset crossing midnight
+    fix.hours = 23; fix.minutes = 0; fix.day = 15; fix.month = 5; fix.year = 23;
+    purrgo_app_apply_timezone(&fix, 120); // +2 hours
+    assert(fix.hours == 1 && fix.minutes == 0 && fix.day == 16 && fix.month == 5);
+
+    // Test 4: Negative offset crossing midnight
+    fix.hours = 1; fix.minutes = 0; fix.day = 15; fix.month = 5; fix.year = 23;
+    purrgo_app_apply_timezone(&fix, -120); // -2 hours
+    assert(fix.hours == 23 && fix.minutes == 0 && fix.day == 14 && fix.month == 5);
+
+    // Test 5: End of a 31-day month
+    fix.hours = 23; fix.minutes = 0; fix.day = 31; fix.month = 1; fix.year = 23;
+    purrgo_app_apply_timezone(&fix, 120); // +2 hours
+    assert(fix.hours == 1 && fix.minutes == 0 && fix.day == 1 && fix.month == 2);
+
+    // Test 6: End of a 30-day month
+    fix.hours = 23; fix.minutes = 0; fix.day = 30; fix.month = 4; fix.year = 23;
+    purrgo_app_apply_timezone(&fix, 120); // +2 hours
+    assert(fix.hours == 1 && fix.minutes == 0 && fix.day == 1 && fix.month == 5);
+
+    // Test 7: February in a non-leap year
+    fix.hours = 23; fix.minutes = 0; fix.day = 28; fix.month = 2; fix.year = 23;
+    purrgo_app_apply_timezone(&fix, 120); // +2 hours
+    assert(fix.hours == 1 && fix.minutes == 0 && fix.day == 1 && fix.month == 3);
+
+    // Test 8: February 29 in a leap year
+    fix.hours = 23; fix.minutes = 0; fix.day = 28; fix.month = 2; fix.year = 24;
+    purrgo_app_apply_timezone(&fix, 120); // +2 hours
+    assert(fix.hours == 1 && fix.minutes == 0 && fix.day == 29 && fix.month == 2);
+
+    fix.hours = 23; fix.minutes = 0; fix.day = 29; fix.month = 2; fix.year = 24;
+    purrgo_app_apply_timezone(&fix, 120); // +2 hours
+    assert(fix.hours == 1 && fix.minutes == 0 && fix.day == 1 && fix.month == 3);
+
+    // Test 9: December 31 -> January 1
+    fix.hours = 23; fix.minutes = 0; fix.day = 31; fix.month = 12; fix.year = 23;
+    purrgo_app_apply_timezone(&fix, 120); // +2 hours
+    assert(fix.hours == 1 && fix.minutes == 0 && fix.day == 1 && fix.month == 1 && fix.year == 24);
+
+    // Test 10: January 1 with a negative timezone offset -> previous year
+    fix.hours = 1; fix.minutes = 0; fix.day = 1; fix.month = 1; fix.year = 24;
+    purrgo_app_apply_timezone(&fix, -120); // -2 hours
+    assert(fix.hours == 23 && fix.minutes == 0 && fix.day == 31 && fix.month == 12 && fix.year == 23);
+
+    // Test 11: Minimum configured timezone offset (-720)
+    fix.hours = 1; fix.minutes = 0; fix.day = 15; fix.month = 5; fix.year = 23;
+    purrgo_app_apply_timezone(&fix, -720); // -12 hours
+    assert(fix.hours == 13 && fix.minutes == 0 && fix.day == 14 && fix.month == 5);
+
+    // Test 12: Maximum configured timezone offset (+840)
+    fix.hours = 23; fix.minutes = 0; fix.day = 15; fix.month = 5; fix.year = 23;
+    purrgo_app_apply_timezone(&fix, 840); // +14 hours
+    assert(fix.hours == 13 && fix.minutes == 0 && fix.day == 16 && fix.month == 5);
+}
+
+static void test_gnss_parser_framing(void) {
+    purrgo_gnss_parser_t parser;
+    purrgo_gnss_parser_init(&parser);
+
+    // One byte at a time
+    assert(purrgo_gnss_parser_feed(&parser, '$') == false);
+    assert(purrgo_gnss_parser_feed(&parser, 'G') == false);
+    assert(purrgo_gnss_parser_feed(&parser, '\n') == true);
+    assert(strcmp(parser.line, "$G") == 0);
+    assert(parser.length == 2);
+
+    purrgo_gnss_parser_init(&parser);
+
+    // Test sentence overlong/malformed input exceeding buffer length
+    // Line buffer size is 128
+    for(int i = 0; i < 127; i++) {
+        purrgo_gnss_parser_feed(&parser, 'A');
+    }
+    // Next byte should overflow and reset length
+    assert(purrgo_gnss_parser_feed(&parser, 'B') == false);
+    assert(parser.length == 0);
+}
+
+static void test_gnss_adapter_nmea(void) {
+    purrgo_gnss_solution_t sol;
+    memset(&sol, 0, sizeof(sol));
+
+    // Test RMC valid
+    const char *rmc_valid = "$GPRMC,123519,A,4807.038,N,01131.000,E,022.4,084.4,230394,003.1,W*6A\n";
+    purrgo_gnss_process_nmea(rmc_valid, &sol);
+    assert(sol.valid == true);
+    assert(sol.hours == 12 && sol.minutes == 35 && sol.seconds == 19);
+    assert(sol.day == 23 && sol.month == 3 && sol.year == 94);
+    assert(sol.lat_1e7 == 481173000); // 48 + 07.038/60 -> 48.1173
+    assert(sol.lon_1e7 == 115166666); // 11 + 31.000/60 -> 11.5166666 (integer truncated)
+    assert(sol.speed_knots == 2240); // 22.4 * 100
+    assert(sol.course_deg_100 == 8440); // 84.4 * 100
+
+    // Test GGA valid
+    const char *gga_valid = "$GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,*47\n";
+    purrgo_gnss_process_nmea(gga_valid, &sol);
+    assert(sol.satellites == 8);
+    assert(sol.alt_m == 545);
+    assert(sol.fix_quality == 1);
+    assert(sol.hdop_100 == 90);
+
+    // Test RMC invalid (keeps existing data valid except for the valid flag itself)
+    // 0A is the valid checksum for this string
+    const char *rmc_invalid = "$GPRMC,123519,V,4807.038,N,01131.000,E,,,230394,,*0A\n";
+    purrgo_gnss_process_nmea(rmc_invalid, &sol);
+    assert(sol.valid == false); // Flag becomes invalid
+    assert(sol.alt_m == 545); // Unrelated fields preserved
+
+    // Test GSA
+    const char *gsa = "$GPGSA,A,3,04,05,,09,12,,,24,,,,,2.5,1.3,2.1*39\n";
+    purrgo_gnss_process_nmea(gsa, &sol);
+    assert(sol.fix_type == 3);
+    assert(sol.pdop_100 == 250);
+    assert(sol.hdop_100 == 130);
+    assert(sol.vdop_100 == 210);
+
+    // Negative coordinates and subzero fractional parts
+    const char *rmc_neg = "$GPRMC,123519,A,4807.038,S,01131.000,W,022.4,084.4,230394,003.1,W*65\n";
+    purrgo_gnss_process_nmea(rmc_neg, &sol);
+    assert(sol.lat_1e7 == -481173000);
+    assert(sol.lon_1e7 == -115166666);
+}
 
 int main(void)
 {
     purrgo_gnss_parser_t parser;
     purrgo_gnss_parser_init(&parser);
     assert(parser.length == 0U);
+
+    test_timezone();
+    test_gnss_parser_framing();
+    test_gnss_adapter_nmea();
+
     return 0;
 }
 
+```
+
+--- FILE: tools\generate_sun_tables.py ---
+```py
+#!/usr/bin/env python3
+import math
+import os
+
+# Пути для сохранения сгенерированных файлов
+OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "..", "src", "core")
+H_FILE = os.path.join(OUTPUT_DIR, "sun_tables.h")
+C_FILE = os.path.join(OUTPUT_DIR, "sun_tables.c")
+
+def write_array(h_file, c_file, declaration, data):
+    """Вспомогательная функция для форматированного вывода C-массивов"""
+    h_file.write(f"extern {declaration};\n")
+    c_file.write(f"{declaration} = {{\n    ")
+    for i, val in enumerate(data):
+        c_file.write(f"{val:>6}, ")
+        if (i + 1) % 12 == 0:
+            c_file.write("\n    ")
+    c_file.write("\n};\n\n")
+
+def main():
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    
+    with open(H_FILE, "w") as h, open(C_FILE, "w") as c:
+        h.write("/* AUTO-GENERATED BY tools/generate_sun_tables.py. DO NOT EDIT. */\n")
+        h.write("#ifndef PURRGO_SUN_TABLES_H\n#define PURRGO_SUN_TABLES_H\n\n")
+        h.write("#include <stdint.h>\n\n")
+        
+        c.write("/* AUTO-GENERATED BY tools/generate_sun_tables.py. DO NOT EDIT. */\n")
+        c.write("#include \"sun_tables.h\"\n\n")
+
+        # 1. Астрономические параметры Солнца (Дни 0-366)
+        # Индекс 0 дублирует день 1, чтобы в коде можно было обращаться напрямую: lut[day_of_year]
+        sin_dec = []
+        cos_dec = []
+        eot_min = []
+
+        for day in range(367):
+            d = 1 if day == 0 else day
+
+            # Аппроксимация дробного года (в радианах)
+            gamma = (2 * math.pi / 365.25) * (d - 1)
+
+            # Уравнение времени (Equation of Time) в минутах. Максимум ~16 минут.
+            eqtime = 229.18 * (0.000075 + 0.001868 * math.cos(gamma) - 0.032077 * math.sin(gamma) - \
+                     0.014615 * math.cos(2 * gamma) - 0.040849 * math.sin(2 * gamma))
+
+            # Угол склонения Солнца (Solar Declination) в радианах
+            decl = 0.006918 - 0.399912 * math.cos(gamma) + 0.070257 * math.sin(gamma) - \
+                   0.006758 * math.cos(2 * gamma) + 0.000907 * math.sin(2 * gamma) - \
+                   0.002697 * math.cos(3 * gamma) + 0.00148 * math.sin(3 * gamma)
+
+            # Масштаб 10000 для тригонометрии
+            sin_dec.append(int(round(math.sin(decl) * 10000)))
+            cos_dec.append(int(round(math.cos(decl) * 10000)))
+            # Для EoT достаточно int8_t (диапазон от -14 до +16 минут)
+            eot_min.append(int(round(eqtime)))
+
+        write_array(h, c, "const int16_t sun_sin_dec_lut[367]", sin_dec)
+        write_array(h, c, "const int16_t sun_cos_dec_lut[367]", cos_dec)
+        write_array(h, c, "const int8_t sun_eot_lut[367]", eot_min)
+
+        # 2. Таблица арккосинуса (acos)
+        # Аргумент (cos_H * 10000) от -10000 до 10000. Шаг 100 -> 201 значение.
+        acos_vals = []
+        for i in range(201):
+            val = (i * 100) - 10000
+            val = max(-10000, min(10000, val)) # Защита границ
+            angle = math.degrees(math.acos(val / 10000.0))
+            acos_vals.append(int(round(angle)))
+
+        # Результат в градусах (0..180) помещается в uint8_t
+        write_array(h, c, "const uint8_t acos_lut[201]", acos_vals)
+
+        # 3. Тригонометрия для широты (0..90 градусов)
+        sin_lat = []
+        cos_lat = []
+        for deg in range(91):
+            rad = math.radians(deg)
+            sin_lat.append(int(round(math.sin(rad) * 10000)))
+            cos_lat.append(int(round(math.cos(rad) * 10000)))
+
+        write_array(h, c, "const int16_t sin_lut[91]", sin_lat)
+        write_array(h, c, "const int16_t cos_lut[91]", cos_lat)
+
+        h.write("#endif // PURRGO_SUN_TABLES_H\n")
+
+    print(f"Success: Tables generated in {OUTPUT_DIR}/sun_tables.[c,h]")
+
+if __name__ == "__main__":
+    main()
 ```
 
 --- FILE: tools\README.md ---
