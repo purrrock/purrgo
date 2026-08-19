@@ -76,8 +76,9 @@ void purrgo_sun_calc(int32_t lat_1e7, int32_t lon_1e7,
     
     int32_t H_deg = acos_lut[acos_idx];
 
-    // 5. Перевод долготы в минуты (1 градус = 4 минуты времени)
-    int32_t lon_min = (lon_1e7 * 4) / 10000000;
+// 5. Перевод долготы в минуты (1 градус = 4 минуты времени)
+    // Оптимизация: деление на 2500000 исключает переполнение int32_t
+    int32_t lon_min = lon_1e7 / 2500000;
 
     // 6. Базовое время полудня (12:00 = 720 минут)
     int32_t solar_noon = 720 - lon_min - eot_min;
@@ -98,34 +99,43 @@ void purrgo_sun_calc(int32_t lat_1e7, int32_t lon_1e7,
     while (sunset_loc < 0) sunset_loc += 1440;
     while (sunset_loc >= 1440) sunset_loc -= 1440;
 
-    info->sunrise_hour   = sunrise_loc / 60;
-    info->sunrise_minute = sunrise_loc % 60;
-    info->sunset_hour    = sunset_loc / 60;
-    info->sunset_minute  = sunset_loc % 60;
+    info->sunrise_hour   = (uint8_t)(sunrise_loc / 60);
+    info->sunrise_minute = (uint8_t)(sunrise_loc % 60);
+    info->sunset_hour    = (uint8_t)(sunset_loc / 60);
+    info->sunset_minute  = (uint8_t)(sunset_loc % 60);
 
+    // 9. Определение дневного времени и обратного отсчета
     if (info->status == SUN_STATUS_NORMAL) {
         int32_t current_utc_min = (int32_t)utc_hour * 60 + (int32_t)utc_minute;
         int32_t current_loc_min = current_utc_min + tz_offset_minutes;
+        
         while (current_loc_min < 0) current_loc_min += 1440;
         while (current_loc_min >= 1440) current_loc_min -= 1440;
 
-        if (current_loc_min >= sunrise_loc && current_loc_min < sunset_loc) {
-            info->is_daytime = true;
-            info->time_to_event_min = sunset_loc - current_loc_min;
+        // Корректная проверка вхождения в интервал (с учетом перехода через полночь)
+        if (sunrise_loc <= sunset_loc) {
+            info->is_daytime = (current_loc_min >= sunrise_loc && current_loc_min < sunset_loc);
         } else {
-            info->is_daytime = false;
-            if (current_loc_min < sunrise_loc) {
-                info->time_to_event_min = sunrise_loc - current_loc_min;
-            } else {
-                info->time_to_event_min = (1440 - current_loc_min) + sunrise_loc;
-            }
+            info->is_daytime = (current_loc_min >= sunrise_loc || current_loc_min < sunset_loc);
         }
+
+        // Вычисление дельты времени с защитой от отрицательных значений
+        int32_t diff = 0;
+        if (info->is_daytime) {
+            diff = sunset_loc - current_loc_min;
+        } else {
+            diff = sunrise_loc - current_loc_min;
+        }
+
+        if (diff < 0) {
+            diff += 1440;
+        }
+        
+        info->time_to_event_min = (int16_t)diff;
+
     } else {
-        if (info->status == SUN_STATUS_POLAR_DAY) {
-            info->is_daytime = true;
-        } else {
-            info->is_daytime = false;
-        }
-        info->time_to_event_min = -1;
+        // Логика для полярного дня и полярной ночи
+        info->is_daytime = (info->status == SUN_STATUS_POLAR_DAY);
+        info->time_to_event_min = -1; // Сигнал UI скрыть обратный отсчет
     }
 }
