@@ -4,6 +4,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "purrgo/gfx_renderer.h"
 
 /* Абстракция файловой системы для инъекции зависимостей */
 typedef struct {
@@ -11,11 +12,6 @@ typedef struct {
     uint32_t (*read)(void* handle, void* buffer, uint32_t size);
     bool (*seek)(void* handle, uint32_t offset);
 } purrgo_fs_t;
-
-/* Интерфейс графического вывода */
-typedef struct {
-    void (*draw_line)(int16_t x0, int16_t y0, int16_t x1, int16_t y1, uint8_t color);
-} purrgo_gfx_t;
 
 /* Нативный формат координат системы (градусы * 10^7) */
 typedef struct {
@@ -34,7 +30,7 @@ typedef struct {
 void purrgo_map_render_layer(
     purrgo_fs_t* idx_fs, 
     purrgo_fs_t* mlp_fs, 
-    purrgo_gfx_t* gfx, 
+    gfx_context_t* gfx,
     const purrgo_bbox_t* camera,
     const purrgo_viewport_t* viewport
 );
