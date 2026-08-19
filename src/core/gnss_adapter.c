@@ -27,6 +27,11 @@ static int32_t convert_to_1e7(struct minmea_float f) {
 }
 
 void purrgo_gnss_process_nmea(const char *nmea_line, purrgo_gnss_solution_t *solution) {
+    // Validate checksum strictly before modifying the solution
+    if (!minmea_check(nmea_line, true)) {
+        return;
+    }
+
     // Определение типа NMEA-сообщения
     switch (minmea_sentence_id(nmea_line, false)) {
         case MINMEA_SENTENCE_RMC: {
@@ -60,7 +65,7 @@ void purrgo_gnss_process_nmea(const char *nmea_line, purrgo_gnss_solution_t *sol
         case MINMEA_SENTENCE_GGA: {
             struct minmea_sentence_gga frame;
             if (minmea_parse_gga(&frame, nmea_line)) {
-                solution->satellites = frame.satellites_tracked;
+                solution->satellites_tracked = frame.satellites_tracked;
                 if (frame.altitude.scale != 0) {
                     solution->alt_m = frame.altitude.value / frame.altitude.scale;
                 }

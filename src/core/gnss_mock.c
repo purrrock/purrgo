@@ -15,7 +15,7 @@ void purrgo_gnss_mock_init(purrgo_gnss_solution_t* state) {
     // Static Mock data
     state->speed_knots = 269; // 5km/h ~ 2.69 knots -> 269
     state->alt_m = 150;
-    state->satellites = 9;
+    state->satellites_tracked = 9;
 
     // Static time and date
     state->hours = 12;
