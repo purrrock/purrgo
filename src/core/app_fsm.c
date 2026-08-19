@@ -91,21 +91,73 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
     }
 }
 
+static bool is_leap_year(uint8_t year) {
+    // NMEA year is typically 2 digits. Assume 2000s base if year < 80.
+    // However, the rule states to preserve the year field as-is and deduce full year.
+    // Usually, 2-digit years are since 2000 in this context, or we can just check divisibility by 4
+    // since 2000 was a leap year and years 2004..2096 are leap years if divisible by 4.
+    // If year + 2000 is used:
+    uint16_t full_year = 2000 + year;
+    return (full_year % 4 == 0 && (full_year % 100 != 0 || full_year % 400 == 0));
+}
+
+static uint8_t days_in_month(uint8_t month, uint8_t year) {
+    if (month == 2) {
+        return is_leap_year(year) ? 29 : 28;
+    }
+    if (month == 4 || month == 6 || month == 9 || month == 11) {
+        return 30;
+    }
+    return 31;
+}
+
 // Перевод UTC времени в локальное с учетом минутного смещения
-static void apply_timezone(purrgo_gnss_solution_t* fix) {
+void purrgo_app_apply_timezone(purrgo_gnss_solution_t* fix, int16_t tz_offset_minutes) {
     if (!fix->valid) return;
 
     // Переводим часы и минуты фикса в общее количество минут от начала суток
-    int32_t total_mins = (int32_t)fix->hours * 60 + (int32_t)fix->minutes + app_config.tz_offset_minutes;
+    int32_t total_mins = (int32_t)fix->hours * 60 + (int32_t)fix->minutes + tz_offset_minutes;
 
-    // Коррекция перехода через полночь (0..1439 минут в сутках)
+    // Коррекция перехода через полночь
     while (total_mins < 0) {
         total_mins += 1440;
-        fix->day--; // Упрощенно: без учета границ месяцев
+
+        if (fix->day > 1) {
+            fix->day--;
+        } else {
+            if (fix->month > 1) {
+                fix->month--;
+            } else {
+                fix->month = 12;
+                if (fix->year > 0) {
+                    fix->year--;
+                } else {
+                    fix->year = 99; // Assume wrap around to 1999 or just stick to 99
+                }
+            }
+            fix->day = days_in_month(fix->month, fix->year);
+        }
     }
+
     while (total_mins >= 1440) {
         total_mins -= 1440;
-        fix->day++;
+
+        uint8_t dim = days_in_month(fix->month, fix->year);
+        if (fix->day < dim) {
+            fix->day++;
+        } else {
+            fix->day = 1;
+            if (fix->month < 12) {
+                fix->month++;
+            } else {
+                fix->month = 1;
+                if (fix->year < 99) {
+                    fix->year++;
+                } else {
+                    fix->year = 0; // Wrap to 00
+                }
+            }
+        }
     }
 
     fix->hours = (uint8_t)(total_mins / 60);
@@ -114,7 +166,7 @@ static void apply_timezone(purrgo_gnss_solution_t* fix) {
 
 void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
     purrgo_gnss_solution_t display_fix = *current_fix;
-    apply_timezone(&display_fix);
+    purrgo_app_apply_timezone(&display_fix, app_config.tz_offset_minutes);
 
     switch (current_state) {
         case APP_STATE_SATELLITES:
