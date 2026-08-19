@@ -1,5 +1,6 @@
 #include "purrgo/track_logger.h"
 #include "purrgo/geo.h"
+#include "purrgo/config.h" // Подключаем доступ к app_config.timezone_offset_h
 #include <stdio.h>
 #include <string.h>
 
@@ -50,7 +51,40 @@ static uint32_t datetime_to_epoch(uint8_t year, uint8_t month, uint8_t day, uint
     
     return ((days * 24 + h) * 60 + m) * 60 + s;
 }
+// Обратный конвертер из секунд (с 2000 года) в локальную дату и время.
+// Корректно обрабатывает високосные года до 2099 года (2100 не является високосным).
+static void epoch_to_datetime(uint32_t epoch, uint8_t *year, uint8_t *month, uint8_t *day, 
+                              uint8_t *h, uint8_t *m, uint8_t *s) {
+    uint32_t time_of_day = epoch % 86400;
+    uint32_t days = epoch / 86400;
 
+    *h = time_of_day / 3600;
+    *m = (time_of_day % 3600) / 60;
+    *s = time_of_day % 60;
+
+    uint32_t y = 0;
+    while (1) {
+        uint32_t days_in_year = (y % 4 == 0) ? 366 : 365;
+        if (days >= days_in_year) {
+            days -= days_in_year;
+            y++;
+        } else {
+            break;
+        }
+    }
+    *year = (uint8_t)y;
+
+    uint8_t mo = 1;
+    uint16_t days_in_month[] = {0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    if (y % 4 == 0) days_in_month[2] = 29;
+
+    while (days >= days_in_month[mo]) {
+        days -= days_in_month[mo];
+        mo++;
+    }
+    *month = mo;
+    *day = (uint8_t)(days + 1);
+}
 // Вспомогательная функция для сброса данных на файловую систему
 static void flush_buffer(void) {
     if (buffer_pos > 0 && active_file != NULL) {
@@ -84,11 +118,23 @@ bool purrgo_logger_start(const purrgo_gnss_solution_t* first_fix) {
     if (current_state == LOGGER_STATE_RECORDING) return false;
     if (!first_fix || !first_fix->valid) return false;
 
-    // Генерация имени файла формата YYMMDD-HHMMSS.gpx
+    // 1. Получаем базовое UTC время в секундах
+    uint32_t utc_epoch = datetime_to_epoch(first_fix->year, first_fix->month, first_fix->day, 
+                                           first_fix->hours, first_fix->minutes, first_fix->seconds);
+    
+    // 2. Смещаем на локальный часовой пояс
+    uint32_t local_epoch = utc_epoch + (app_config.timezone_offset_h * 3600);
+    
+    uint8_t l_year, l_month, l_day, l_hour, l_min, l_sec;
+    epoch_to_datetime(local_epoch, &l_year, &l_month, &l_day, &l_hour, &l_min, &l_sec);
+
+    // Запоминаем ЛОКАЛЬНЫЙ день старта для проверки смены суток
+    current_track_day = l_day;
+
+    // Имя файла формируется по локальному времени пользователя
     char filename[32];
     snprintf(filename, sizeof(filename), "%02d%02d%02d-%02d%02d%02d.gpx", 
-             first_fix->year, first_fix->month, first_fix->day,
-             first_fix->hours, first_fix->minutes, first_fix->seconds);
+             l_year, l_month, l_day, l_hour, l_min, l_sec);
 
     active_file = purrgo_fs_open(filename, FS_WRITE_CREATE);
     if (!active_file) {
@@ -97,8 +143,7 @@ bool purrgo_logger_start(const purrgo_gnss_solution_t* first_fix) {
     }
 
     buffer_pos = 0;
-	current_track_day = first_fix->day;
-    is_first_point = true; // Сброс состояния фильтра при старте нового трека
+    is_first_point = true;
     
     write_to_buffer(GPX_HEADER);
     current_state = LOGGER_STATE_RECORDING;
@@ -107,16 +152,23 @@ bool purrgo_logger_start(const purrgo_gnss_solution_t* first_fix) {
 
 void purrgo_logger_add_point(const purrgo_gnss_solution_t* fix) {
     if (current_state != LOGGER_STATE_RECORDING || !fix || !fix->valid) return;
-	// Проверка смены суток по UTC
-    if (fix->day != current_track_day) {
-        purrgo_logger_stop(); // Безопасное закрытие текущего трека с записью тегов
-        
-        // Попытка старта нового трека. При неудаче (например, кончилось место на SD) - выход.
+
+    uint32_t utc_epoch = datetime_to_epoch(fix->year, fix->month, fix->day, 
+                                           fix->hours, fix->minutes, fix->seconds);
+    
+    uint32_t local_epoch = utc_epoch + (app_config.timezone_offset_h * 3600);
+    
+    uint8_t l_year, l_month, l_day, l_hour, l_min, l_sec;
+    epoch_to_datetime(local_epoch, &l_year, &l_month, &l_day, &l_hour, &l_min, &l_sec);
+
+    // Проверка смены суток происходит по ЛОКАЛЬНОМУ времени
+    if (l_day != current_track_day) {
+        purrgo_logger_stop();
         if (!purrgo_logger_start(fix)) {
-            return;
+            return; 
         }
     }
-    uint32_t current_time = datetime_to_epoch(fix->year, fix->month, fix->day, fix->hours, fix->minutes, fix->seconds);
+
     bool should_record = false;
 
     // Логика фильтрации (Decimation)
@@ -124,8 +176,7 @@ void purrgo_logger_add_point(const purrgo_gnss_solution_t* fix) {
         should_record = true;
     } else {
         uint32_t dist_m = purrgo_geo_distance_m(last_recorded_lat, last_recorded_lon, fix->lat_1e7, fix->lon_1e7);
-        // Защита от переполнения/глюков времени при потере фикса
-        uint32_t dt_s = (current_time >= last_recorded_time) ? (current_time - last_recorded_time) : 0; 
+        uint32_t dt_s = (utc_epoch >= last_recorded_time) ? (utc_epoch - last_recorded_time) : 0; 
 
         uint32_t target_dist = (current_mode == LOGGER_MODE_EXPEDITION) ? 100 : 5;
         uint32_t target_time = (current_mode == LOGGER_MODE_EXPEDITION) ? 900 : 300;
@@ -135,16 +186,15 @@ void purrgo_logger_add_point(const purrgo_gnss_solution_t* fix) {
         }
     }
 
-    // Если точка не прошла фильтр, выходим без записи
     if (!should_record) return;
 
-    // Обновляем состояние фильтра для следующего шага
     last_recorded_lat = fix->lat_1e7;
     last_recorded_lon = fix->lon_1e7;
-    last_recorded_time = current_time;
+    last_recorded_time = utc_epoch; // Фильтр хранит историю в UTC
     is_first_point = false;
 
-    // Запись точки в буфер (форматирование GPX)
+    // Запись точки в файл.
+    // ВАЖНО: Внутри GPX файла (тег <time>) мы обязаны писать оригинальные данные fix (UTC время).
     int32_t lat_abs = fix->lat_1e7 < 0 ? -fix->lat_1e7 : fix->lat_1e7;
     int32_t lon_abs = fix->lon_1e7 < 0 ? -fix->lon_1e7 : fix->lon_1e7;
 
@@ -162,7 +212,6 @@ void purrgo_logger_add_point(const purrgo_gnss_solution_t* fix) {
 
     write_to_buffer(point_str);
 }
-
 void purrgo_logger_stop(void) {
     if (current_state == LOGGER_STATE_RECORDING) {
         write_to_buffer(GPX_FOOTER);
