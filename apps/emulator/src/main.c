@@ -6,6 +6,7 @@
 #include <purrgo/gnss_mock.h>
 #include <purrgo/app_fsm.h>
 #include <purrgo/config.h>
+#include <purrgo/sun.h>
 
 #define PIXEL_SCALE 2
 #define WINDOW_WIDTH (DISPLAY_WIDTH * PIXEL_SCALE)
@@ -120,6 +121,12 @@ int main(int argc, char* argv[]) {
 
     purrgo_app_init();
 
+    purrgo_sun_info_t sun_info;
+    memset(&sun_info, 0, sizeof(sun_info));
+    uint32_t last_sun_update = 0;
+    bool sun_initialized = false;
+    bool first_fix_obtained = false;
+
     uint32_t last_update_time = SDL_GetTicks();
 
     bool quit = false;
@@ -131,6 +138,25 @@ int main(int argc, char* argv[]) {
             last_update_time = current_time;
             purrgo_gnss_mock_update(&mock_gnss);
             purrgo_app_update(&mock_gnss);
+
+            if (mock_gnss.valid) {
+                if (!first_fix_obtained) {
+                    first_fix_obtained = true;
+                    purrgo_sun_calc(mock_gnss.lat_1e7, mock_gnss.lon_1e7,
+                                    mock_gnss.year % 100, mock_gnss.month, mock_gnss.day,
+                                    mock_gnss.hours, mock_gnss.minutes,
+                                    app_config.tz_offset_minutes, &sun_info);
+                    sun_initialized = true;
+                    last_sun_update = current_time;
+                } else if (current_time - last_sun_update >= 60000) {
+                    purrgo_sun_calc(mock_gnss.lat_1e7, mock_gnss.lon_1e7,
+                                    mock_gnss.year % 100, mock_gnss.month, mock_gnss.day,
+                                    mock_gnss.hours, mock_gnss.minutes,
+                                    app_config.tz_offset_minutes, &sun_info);
+                    last_sun_update = current_time;
+                }
+            }
+
         }
 
         display_clear(COLOR_WHITE);
@@ -203,6 +229,27 @@ int main(int argc, char* argv[]) {
         int speed_kmh = (mock_gnss.speed_knots * 1852) / 100000; // knots * 1.852 km/h
         snprintf(buf, sizeof(buf), "SPD: %d km/h", speed_kmh);
         display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
+        y_pos += 12;
+
+        if (sun_initialized) {
+            snprintf(buf, sizeof(buf), "\x0F %02d:%02d / \x10 %02d:%02d",
+                     sun_info.sunrise_hour, sun_info.sunrise_minute,
+                     sun_info.sunset_hour, sun_info.sunset_minute);
+            display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
+            y_pos += 12;
+
+            if (sun_info.status == SUN_STATUS_NORMAL) {
+                int hours = sun_info.time_to_event_min / 60;
+                int mins = sun_info.time_to_event_min % 60;
+                if (sun_info.is_daytime) {
+                    snprintf(buf, sizeof(buf), "\xC7\xE0\xEA\xE0\xF2 \xF7\xE5\xF0\xE5\xE7: %02d\xF7 %02d\xEC\xE8\xED", hours, mins);
+                } else {
+                    snprintf(buf, sizeof(buf), "\xC2\xEE\xF1\xF5\xEE\xE4 \xF7\xE5\xF0\xE5\xE7: %02d\xF7 %02d\xEC\xE8\xED", hours, mins);
+                }
+                display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
+                y_pos += 12;
+            }
+        }
         }
 
         while (SDL_PollEvent(&e) != 0) {
