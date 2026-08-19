@@ -1,4 +1,5 @@
 #include "purrgo/gfx_line.h"
+#include "purrgo/gfx_renderer.h"
 
 // Битовые маски зон для алгоритма Коэна-Сазерленда
 #define INSIDE 0 // 0000
@@ -118,9 +119,6 @@ void gfx_draw_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1, int16
             y0 += sy;
         }
     }
-<<<<<<< HEAD
-}
-=======
 }
 
 void gfx_draw_thick_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1, int16_t y1, int16_t thickness)
@@ -132,30 +130,44 @@ void gfx_draw_thick_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1,
         return;
     }
 
+    // Быстрое отсечение по Bounding Box с учетом толщины линии.
+    // Предотвращает бесполезные циклы алгоритма Брезенхема для линий,
+    // полностью лежащих за границами экрана.
+    int16_t min_x = (x0 < x1 ? x0 : x1) - thickness;
+    int16_t max_x = (x0 > x1 ? x0 : x1) + thickness;
+    int16_t min_y = (y0 < y1 ? y0 : y1) - thickness;
+    int16_t max_y = (y0 > y1 ? y0 : y1) + thickness;
+
+    if (max_x < 0 || min_x >= ctx->width || max_y < 0 || min_y >= ctx->height) {
+        return;
+    }
+
     int16_t dx = gfx_abs(x1 - x0);
-    int16_t dy = gfx_abs(y1 - y0);
     int16_t sx = (x0 < x1) ? 1 : -1;
+    int16_t dy = -gfx_abs(y1 - y0); // Сохраняем dy как отрицательное значение
     int16_t sy = (y0 < y1) ? 1 : -1;
-    int16_t err = ((dx > dy) ? dx : -dy) / 2;
+    
+    // Инициализация ошибки без деления
+    int16_t err = dx + dy; 
     int16_t e2;
 
-    // Смещение для дублирования пикселей:
-    // половина толщины в одну сторону и половина в другую
-    int16_t half_thick = thickness / 2;
+    // Смещение для дублирования пикселей: деление на 2 заменено битовым сдвигом вправо
+    int16_t half_thick = thickness >> 1;
     int16_t start_offset = -half_thick;
     int16_t end_offset = start_offset + thickness - 1;
 
-    // Флаг: если dx > dy (линия крутая по X), дублируем по Y, иначе дублируем по X
-    bool steep = (dx > dy);
+    // Флаг: если dx > abs(dy) (в нашем случае dy отрицательный, поэтому dx > -dy),
+    // линия более горизонтальная, дублируем пиксели по перпендикуляру — оси Y.
+    bool steep = (dx > -dy);
 
-    while (1) {
-        // Отрисовка утолщения для текущей точки
+    while (true) {
+        // Отрисовка утолщения для текущей точки.
+        // Используется gfx_draw_pixel с программным отсечением, так как из-за смещения
+        // краевые пиксели толстой линии могут выйти за пределы экрана.
         for (int16_t offset = start_offset; offset <= end_offset; ++offset) {
             if (steep) {
-                // Линия идет вдоль X, утолщаем по Y
                 gfx_draw_pixel(ctx, x0, y0 + offset);
             } else {
-                // Линия идет вдоль Y, утолщаем по X
                 gfx_draw_pixel(ctx, x0 + offset, y0);
             }
         }
@@ -164,15 +176,16 @@ void gfx_draw_thick_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1,
             break;
         }
 
-        e2 = err;
-        if (e2 > -dx) {
-            err -= dy;
+        // Вычисление смещения через побитовый сдвиг (умножение на 2)
+        e2 = err << 1;
+        
+        if (e2 >= dy) {
+            err += dy;
             x0 += sx;
         }
-        if (e2 < dy) {
+        if (e2 <= dx) {
             err += dx;
             y0 += sy;
         }
     }
 }
->>>>>>> 9d9b7535ba2bcbe3446b9399a59a0273eb4a0d07
