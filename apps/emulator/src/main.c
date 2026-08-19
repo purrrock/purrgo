@@ -239,7 +239,7 @@ int main(int argc, char* argv[]) {
 
                     if (sun_initialized) {
                         if (sun_info.status == SUN_STATUS_NORMAL) {
-                            snprintf(buf, sizeof(buf), "SUN UP: %02d:%02d SUN DWN: %02d:%02d",
+                            snprintf(buf, sizeof(buf), "SUN %02d:%02d-%02d:%02d",
                                      sun_info.sunrise_hour, sun_info.sunrise_minute,
                                      sun_info.sunset_hour, sun_info.sunset_minute);
                             display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
