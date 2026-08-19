@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include "display.h"
 #include <purrgo/gnss_types.h>
+#include <purrgo/gnss_mock.h>
 
 #define PIXEL_SCALE 2
 #define WINDOW_WIDTH (DISPLAY_WIDTH * PIXEL_SCALE)
@@ -112,20 +113,8 @@ int main(int argc, char* argv[]) {
     display_init();
     display_draw_string(0, 0, "PurrGo Emulator\nReady.", COLOR_BLACK, COLOR_WHITE);
 
-    purrgo_gnss_solution_t mock_gnss = {
-        .valid = true,
-        .lat_1e7 = 557558310,
-        .lon_1e7 = 376173000,
-        .speed_knots = 269, // 5km/h ~ 2.69 knots -> 269
-        .alt_m = 150,
-        .satellites = 9,
-        .hours = 12,
-        .minutes = 34,
-        .seconds = 56,
-        .day = 1,
-        .month = 1,
-        .year = 24
-    };
+    purrgo_gnss_solution_t mock_gnss;
+    purrgo_gnss_mock_init(&mock_gnss);
 
     uint32_t last_update_time = SDL_GetTicks();
 
@@ -136,20 +125,7 @@ int main(int argc, char* argv[]) {
         uint32_t current_time = SDL_GetTicks();
         if (current_time - last_update_time >= 1000) {
             last_update_time = current_time;
-
-            mock_gnss.seconds++;
-            if (mock_gnss.seconds >= 60) {
-                mock_gnss.seconds = 0;
-                mock_gnss.minutes++;
-                if (mock_gnss.minutes >= 60) {
-                    mock_gnss.minutes = 0;
-                    mock_gnss.hours = (mock_gnss.hours + 1) % 24;
-                }
-            }
-
-            // Slightly increment coordinates to simulate movement
-            mock_gnss.lat_1e7 += 10;
-            mock_gnss.lon_1e7 += 15;
+            purrgo_gnss_mock_update(&mock_gnss);
         }
 
         display_clear(COLOR_WHITE);
