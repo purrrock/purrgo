@@ -1,0 +1,30 @@
+// file: include/purrgo/map.h
+#ifndef PURRGO_MAP_H
+#define PURRGO_MAP_H
+
+#include <stdint.h>
+#include <stdbool.h>
+
+/* Абстракция файловой системы для инъекции зависимостей (FatFs на STM32 / stdio на PC) */
+typedef struct {
+    void* handle;
+    uint32_t (*read)(void* handle, void* buffer, uint32_t size);
+    bool (*seek)(void* handle, uint32_t offset);
+} purrgo_fs_t;
+
+/* Интерфейс графического вывода */
+typedef struct {
+    void (*draw_line)(int16_t x0, int16_t y0, int16_t x1, int16_t y1, uint8_t color);
+} purrgo_gfx_t;
+
+/* Нативный формат координат системы (градусы * 10^7) */
+typedef struct {
+    int32_t min_x;
+    int32_t min_y;
+    int32_t max_x;
+    int32_t max_y;
+} purrgo_bbox_t;
+
+void purrgo_map_render_layer(purrgo_fs_t* idx_fs, purrgo_fs_t* mlp_fs, purrgo_gfx_t* gfx, const purrgo_bbox_t* camera);
+
+#endif // PURRGO_MAP_H
