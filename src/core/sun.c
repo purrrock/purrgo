@@ -25,10 +25,11 @@ static uint16_t get_day_of_year(uint8_t year_2digit, uint8_t month, uint8_t day)
     return doy;
 }
 
-void purrgo_sun_calc_integer(int32_t lat_1e7, int32_t lon_1e7,
-                             uint8_t year_2digit, uint8_t month, uint8_t day,
-                             int16_t tz_offset_minutes,
-                             purrgo_sun_info_t *info) {
+void purrgo_sun_calc(int32_t lat_1e7, int32_t lon_1e7,
+                     uint8_t year_2digit, uint8_t month, uint8_t day,
+                     uint8_t utc_hour, uint8_t utc_minute,
+                     int16_t tz_offset_minutes,
+                     purrgo_sun_info_t *info) {
     
     uint16_t doy = get_day_of_year(year_2digit, month, day);
     if (doy > 366) doy = 366;
@@ -101,4 +102,30 @@ void purrgo_sun_calc_integer(int32_t lat_1e7, int32_t lon_1e7,
     info->sunrise_minute = sunrise_loc % 60;
     info->sunset_hour    = sunset_loc / 60;
     info->sunset_minute  = sunset_loc % 60;
+
+    if (info->status == SUN_STATUS_NORMAL) {
+        int32_t current_utc_min = (int32_t)utc_hour * 60 + (int32_t)utc_minute;
+        int32_t current_loc_min = current_utc_min + tz_offset_minutes;
+        while (current_loc_min < 0) current_loc_min += 1440;
+        while (current_loc_min >= 1440) current_loc_min -= 1440;
+
+        if (current_loc_min >= sunrise_loc && current_loc_min < sunset_loc) {
+            info->is_daytime = true;
+            info->time_to_event_min = sunset_loc - current_loc_min;
+        } else {
+            info->is_daytime = false;
+            if (current_loc_min < sunrise_loc) {
+                info->time_to_event_min = sunrise_loc - current_loc_min;
+            } else {
+                info->time_to_event_min = (1440 - current_loc_min) + sunrise_loc;
+            }
+        }
+    } else {
+        if (info->status == SUN_STATUS_POLAR_DAY) {
+            info->is_daytime = true;
+        } else {
+            info->is_daytime = false;
+        }
+        info->time_to_event_min = -1;
+    }
 }
