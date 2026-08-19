@@ -5,6 +5,7 @@
 #include <purrgo/gnss_types.h>
 #include <purrgo/gnss_mock.h>
 #include <purrgo/app_fsm.h>
+#include <purrgo/config.h>
 
 #define PIXEL_SCALE 2
 #define WINDOW_WIDTH (DISPLAY_WIDTH * PIXEL_SCALE)
@@ -154,8 +155,23 @@ int main(int argc, char* argv[]) {
         } else {
             int y_pos = 10;
 
-            // TIME
-        snprintf(buf, sizeof(buf), "TIME: %02d:%02d:%02d", mock_gnss.hours, mock_gnss.minutes, mock_gnss.seconds);
+        // UTC TIME
+        snprintf(buf, sizeof(buf), "UTC: %02d:%02d:%02d", mock_gnss.hours, mock_gnss.minutes, mock_gnss.seconds);
+        display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
+        y_pos += 12;
+
+        // LOCAL TIME
+        int32_t total_mins = (int32_t)mock_gnss.hours * 60 + (int32_t)mock_gnss.minutes + app_config.tz_offset_minutes;
+        while (total_mins < 0) {
+            total_mins += 1440;
+        }
+        while (total_mins >= 1440) {
+            total_mins -= 1440;
+        }
+        uint8_t loc_hours = (uint8_t)(total_mins / 60);
+        uint8_t loc_minutes = (uint8_t)(total_mins % 60);
+
+        snprintf(buf, sizeof(buf), "LOC: %02d:%02d:%02d", loc_hours, loc_minutes, mock_gnss.seconds);
         display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
         y_pos += 12;
 
