@@ -3,27 +3,60 @@
 
 // Вспомогательная функция для перевода формата minmea_float (значение, масштаб) 
 // в микроградусы (1e7) с использованием исключительно целочисленной арифметики.
-static int32_t convert_to_1e7(struct minmea_float f) {
-    if (f.scale == 0) return 0;
-    
-    // NMEA передает координаты в формате DDDMM.MMMMM.
-    // Библиотека minmea возвращает это как f.value = DDDMMMMMMM и f.scale.
-    // Избегаем функции minmea_tocoord, так как она использует float и вызовет генерацию SoftFP на STM32.
-    
-    int32_t abs_value = f.value < 0 ? -f.value : f.value;
-    
-    // Выделение градусов (DDD) и минут с долями (MM.MMMMM)
-    int32_t degrees = abs_value / (f.scale * 100);
-    int32_t minutes_scaled = abs_value % (f.scale * 100);
-    
-    // Перевод минут в градусы: (minutes_scaled / scale) / 60
-    // Для формата 1e7 умножаем на 10 000 000.
-    // Используем 64-битную арифметику (int64_t) для предотвращения переполнения регистра.
-    int64_t fractional_deg_1e7 = ((int64_t)minutes_scaled * 10000000LL) / ((int64_t)f.scale * 60LL);
-    
-    int32_t result = (degrees * 10000000) + (int32_t)fractional_deg_1e7;
-    
-    return f.value < 0 ? -result : result;
+static int32_t convert_to_1e7(struct minmea_float f)
+{
+    if (f.scale == 0) {
+        return 0;
+    }
+
+    /*
+     * NMEA coordinates are represented as DDDMM.MMMMM.
+     *
+     * minmea stores the value as an integer plus a decimal scale.
+     *
+     * We intentionally do not use minmea_tocoord(), because the
+     * navigation core must remain free of floating-point arithmetic.
+     */
+
+    /*
+     * Widen before negation.
+     *
+     * Negating INT32_MIN in int32_t is undefined behavior because
+     * +2147483648 cannot be represented by int32_t.
+     */
+    int64_t abs_value = f.value < 0
+                      ? -(int64_t)f.value
+                      : (int64_t)f.value;
+
+    /*
+     * Split DDDMM.MMMMM into:
+     *
+     *     degrees
+     *     minutes_scaled
+     *
+     * The multiplication is explicitly widened to int64_t.
+     */
+    int64_t degrees =
+        abs_value / ((int64_t)f.scale * 100LL);
+
+    int64_t minutes_scaled =
+        abs_value % ((int64_t)f.scale * 100LL);
+
+    /*
+     * Convert minutes to degrees * 1e7:
+     *
+     *     minutes / 60 * 10,000,000
+     *
+     * Keep the entire calculation in int64_t.
+     */
+    int64_t fractional_deg_1e7 =
+        (minutes_scaled * 10000000LL) /
+        ((int64_t)f.scale * 60LL);
+
+    int64_t result =
+        degrees * 10000000LL + fractional_deg_1e7;
+
+    return (int32_t)(f.value < 0 ? -result : result);
 }
 
 void purrgo_gnss_process_nmea(const char *nmea_line, purrgo_gnss_solution_t *solution) {
