@@ -146,42 +146,42 @@ int main(int argc, char* argv[]) {
             int mins = abs_tz % 60;
 
             snprintf(buf, sizeof(buf), "TZ: UTC%c%02d:%02d", sign, hours, mins);
-            display_draw_string(10, 40, buf, COLOR_WHITE, COLOR_BLACK);
+            display_draw_string(10, 22, buf, COLOR_WHITE, COLOR_BLACK);
 
-            display_draw_string(10, 60, "+/- : Change", COLOR_BLACK, COLOR_WHITE);
-            display_draw_string(10, 80, "OK : Save", COLOR_BLACK, COLOR_WHITE);
-            display_draw_string(10, 100, "MENU: Cancel", COLOR_BLACK, COLOR_WHITE);
+            display_draw_string(10, 34, "+/- : Change", COLOR_BLACK, COLOR_WHITE);
+            display_draw_string(10, 46, "OK : Save", COLOR_BLACK, COLOR_WHITE);
+            display_draw_string(10, 58, "MENU: Cancel", COLOR_BLACK, COLOR_WHITE);
         } else {
             int y_pos = 10;
 
             // TIME
         snprintf(buf, sizeof(buf), "TIME: %02d:%02d:%02d", mock_gnss.hours, mock_gnss.minutes, mock_gnss.seconds);
         display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
-        y_pos += 20;
+        y_pos += 12;
 
         // FIX & SAT
         snprintf(buf, sizeof(buf), "FIX: %s   SAT: %d", mock_gnss.valid ? "3D" : "NO", mock_gnss.satellites);
         display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
-        y_pos += 20;
+        y_pos += 12;
 
         // LAT
         int lat_deg = mock_gnss.lat_1e7 / 10000000;
         int lat_frac = (mock_gnss.lat_1e7 > 0 ? mock_gnss.lat_1e7 : -mock_gnss.lat_1e7) % 10000000;
         snprintf(buf, sizeof(buf), "LAT: %d.%07d", lat_deg, lat_frac);
         display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
-        y_pos += 20;
+        y_pos += 12;
 
         // LON
         int lon_deg = mock_gnss.lon_1e7 / 10000000;
         int lon_frac = (mock_gnss.lon_1e7 > 0 ? mock_gnss.lon_1e7 : -mock_gnss.lon_1e7) % 10000000;
         snprintf(buf, sizeof(buf), "LON: %d.%07d", lon_deg, lon_frac);
         display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
-        y_pos += 20;
+        y_pos += 12;
 
         // ALT
         snprintf(buf, sizeof(buf), "ALT: %d m", mock_gnss.alt_m);
         display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
-        y_pos += 20;
+        y_pos += 12;
 
         // SPD
         int speed_kmh = (mock_gnss.speed_knots * 1852) / 100000; // knots * 1.852 km/h
