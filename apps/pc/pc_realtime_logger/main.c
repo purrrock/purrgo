@@ -92,7 +92,7 @@ int main(int argc, char *argv[]) {
                     printf("[GNSS FIX] %02d:%02d:%02d UTC | Sats: %02d | "
                            "Lat: %d.%07d, Lon: %d.%07d | Alt: %4dm\n",
                            solution.hours, solution.minutes, solution.seconds,
-                           solution.satellites,
+                           solution.satellites_tracked,
                            lat_int, lat_frac,
                            lon_int, lon_frac,
                            solution.alt_m);

@@ -176,7 +176,7 @@ int main(int argc, char* argv[]) {
         y_pos += 12;
 
         // FIX & SAT
-        snprintf(buf, sizeof(buf), "FIX: %s   SAT: %d", mock_gnss.valid ? "3D" : "NO", mock_gnss.satellites);
+        snprintf(buf, sizeof(buf), "FIX: %s   SAT: %d", mock_gnss.valid ? "3D" : "NO", mock_gnss.satellites_tracked);
         display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
         y_pos += 12;
 
