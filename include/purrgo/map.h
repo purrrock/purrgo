@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-/* Абстракция файловой системы для инъекции зависимостей (FatFs на STM32 / stdio на PC) */
+/* Абстракция файловой системы для инъекции зависимостей */
 typedef struct {
     void* handle;
     uint32_t (*read)(void* handle, void* buffer, uint32_t size);
@@ -25,6 +25,18 @@ typedef struct {
     int32_t max_y;
 } purrgo_bbox_t;
 
-void purrgo_map_render_layer(purrgo_fs_t* idx_fs, purrgo_fs_t* mlp_fs, purrgo_gfx_t* gfx, const purrgo_bbox_t* camera);
+/* Параметры целевого дисплея (Viewport) */
+typedef struct {
+    uint16_t width;
+    uint16_t height;
+} purrgo_viewport_t;
+
+void purrgo_map_render_layer(
+    purrgo_fs_t* idx_fs, 
+    purrgo_fs_t* mlp_fs, 
+    purrgo_gfx_t* gfx, 
+    const purrgo_bbox_t* camera,
+    const purrgo_viewport_t* viewport
+);
 
 #endif // PURRGO_MAP_H
