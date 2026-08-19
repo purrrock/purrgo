@@ -8,6 +8,7 @@
 typedef struct {
     int32_t lat_1e7;
     int32_t lon_1e7;
+	int16_t ele_m;
     char name[16];
 } purrgo_waypoint_t;
 
