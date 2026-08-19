@@ -1,100 +1,129 @@
 #include "purrgo/app_fsm.h"
 #include "purrgo/config.h"
+#include <stdio.h>
 
-// Глобальный экземпляр настроек
 purrgo_config_t app_config;
 
 static purrgo_state_t current_state;
+static purrgo_state_t previous_state; // Для возврата из меню при отмене
+
+// Черновые (несохраненные) настройки
+static int16_t draft_tz_offset_minutes;
 
 void purrgo_config_init(void) {
-    app_config.timezone_offset_h = 3; // По умолчанию UTC+3 (например, Москва/Минск)
-    app_config.log_mode = LOGGER_MODE_STANDARD;
+    app_config.tz_offset_minutes = 180; // UTC+3:00 по умолчанию (Москва/Минск)
+    app_config.log_mode = 0;
     app_config.backlight_on = true;
 }
 
 void purrgo_app_init(void) {
     purrgo_config_init();
-    current_state = APP_STATE_SATELLITES; // При включении показываем поиск спутников
+    current_state = APP_STATE_SATELLITES;
+    previous_state = APP_STATE_SATELLITES;
+    draft_tz_offset_minutes = app_config.tz_offset_minutes;
 }
 
 purrgo_state_t purrgo_app_get_state(void) {
     return current_state;
 }
 
+int16_t purrgo_app_get_draft_tz_offset(void) {
+    return draft_tz_offset_minutes;
+}
+
 void purrgo_app_handle_button(purrgo_btn_t button) {
-    // Глобальная обработка кнопок (смена экранов)
-    // В дальнейшем логика усложнится: кнопки UP/DOWN в меню будут листать пункты,
-    // а на карте - менять масштаб.
-    
+    // Нажатие кнопки MENU в любом основном режиме переключает в меню CONFIG
+    if (button == PURRGO_BTN_MENU) {
+        if (current_state != APP_STATE_MENU_CONFIG) {
+            // Вход в меню: сохраняем предыдущий экран и копируем активные настройки во временный черновик
+            previous_state = current_state;
+            current_state = APP_STATE_MENU_CONFIG;
+            draft_tz_offset_minutes = app_config.tz_offset_minutes;
+        } else {
+            // Выход из меню без сохранения: отбрасываем draft и возвращаем прежний экран
+            current_state = previous_state;
+        }
+        return;
+    }
+
+    // Обработка ввода внутри полноэкранного меню CONFIG
+    if (current_state == APP_STATE_MENU_CONFIG) {
+        switch (button) {
+            case PURRGO_BTN_PLUS:
+                // Увеличение часового пояса шагом в 15 минут (максимум UTC+14:00 = 840 минут)
+                if (draft_tz_offset_minutes + 15 <= 840) {
+                    draft_tz_offset_minutes += 15;
+                }
+                break;
+
+            case PURRGO_BTN_MINUS:
+                // Уменьшение часового пояса шагом в 15 минут (минимум UTC-12:00 = -720 минут)
+                if (draft_tz_offset_minutes - 15 >= -720) {
+                    draft_tz_offset_minutes -= 15;
+                }
+                break;
+
+            case PURRGO_BTN_OK:
+                // Применение и сохранение настроек
+                app_config.tz_offset_minutes = draft_tz_offset_minutes;
+                current_state = previous_state;
+                break;
+
+            default:
+                break;
+        }
+        return;
+    }
+
+    // Логика переключения основных экранов
     switch (current_state) {
-        case APP_STATE_MAP:
-            if (button == BTN_BACK) current_state = APP_STATE_SATELLITES;
-            if (button == BTN_OK)   current_state = APP_STATE_TRIP_COMPUTER;
-            break;
-            
-        case APP_STATE_TRIP_COMPUTER:
-            if (button == BTN_BACK) current_state = APP_STATE_MAP;
-            if (button == BTN_OK)   current_state = APP_STATE_SETTINGS;
-            break;
-            
         case APP_STATE_SATELLITES:
-            if (button == BTN_OK)   current_state = APP_STATE_MAP;
+            if (button == PURRGO_BTN_OK) current_state = APP_STATE_MAP;
             break;
-            
-        case APP_STATE_SETTINGS:
-            if (button == BTN_BACK) current_state = APP_STATE_TRIP_COMPUTER;
-            // Пример: Нажатие UP/DOWN меняет часовой пояс
-            if (button == BTN_UP && app_config.timezone_offset_h < 14) {
-                app_config.timezone_offset_h++;
-            }
-            if (button == BTN_DOWN && app_config.timezone_offset_h > -12) {
-                app_config.timezone_offset_h--;
-            }
+        case APP_STATE_MAP:
+            if (button == PURRGO_BTN_OK) current_state = APP_STATE_TRIP_COMPUTER;
+            break;
+        case APP_STATE_TRIP_COMPUTER:
+            if (button == PURRGO_BTN_OK) current_state = APP_STATE_SATELLITES;
+            break;
+        default:
             break;
     }
 }
 
-// Вспомогательная функция для перевода UTC времени в локальное
+// Перевод UTC времени в локальное с учетом минутного смещения
 static void apply_timezone(purrgo_gnss_solution_t* fix) {
     if (!fix->valid) return;
 
-    int32_t local_hour = fix->hours + app_config.timezone_offset_h;
-    
-    // Базовая коррекция часов и перехода через полночь (для UI)
-    // Для полноценного календаря требуется расчет с учетом дней в месяце и високосных лет.
-    if (local_hour >= 24) {
-        fix->hours = (uint8_t)(local_hour - 24);
-        fix->day++; // Упрощенно: без учета конца месяца
-    } else if (local_hour < 0) {
-        fix->hours = (uint8_t)(local_hour + 24);
-        fix->day--; // Упрощенно: без учета начала месяца
-    } else {
-        fix->hours = (uint8_t)local_hour;
+    // Переводим часы и минуты фикса в общее количество минут от начала суток
+    int32_t total_mins = (int32_t)fix->hours * 60 + (int32_t)fix->minutes + app_config.tz_offset_minutes;
+
+    // Коррекция перехода через полночь (0..1439 минут в сутках)
+    while (total_mins < 0) {
+        total_mins += 1440;
+        fix->day--; // Упрощенно: без учета границ месяцев
     }
+    while (total_mins >= 1440) {
+        total_mins -= 1440;
+        fix->day++;
+    }
+
+    fix->hours = (uint8_t)(total_mins / 60);
+    fix->minutes = (uint8_t)(total_mins % 60);
 }
 
 void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
-    // Создаем локальную копию фикса, чтобы не мутировать глобальные данные парсера
     purrgo_gnss_solution_t display_fix = *current_fix;
-    
     apply_timezone(&display_fix);
 
-    // Логика обновления активного экрана. Отрисовка здесь не производится, 
-    // она будет вызвана отдельным модулем (например, display_render), 
-    // который запросит текущий state через purrgo_app_get_state().
-    
     switch (current_state) {
         case APP_STATE_SATELLITES:
-            // Подготовка данных для экрана спутников (локальное время, координаты)
             break;
         case APP_STATE_MAP:
-            // Расчет позиции на карте, обновление путевых точек
             break;
         case APP_STATE_TRIP_COMPUTER:
-            // Обновление одометра и расчет скорости
             break;
-        case APP_STATE_SETTINGS:
-            // Логика экрана настроек
+        case APP_STATE_MENU_CONFIG:
             break;
     }
 }

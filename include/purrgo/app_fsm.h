@@ -6,22 +6,29 @@
 
 // Экраны (состояния) приложения
 typedef enum {
-    APP_STATE_MAP,            // Векторная карта и трек
-    APP_STATE_TRIP_COMPUTER,  // Скорость, дистанция, ETA
-    APP_STATE_SATELLITES,     // Уровни сигнала, координаты, фикс
-    APP_STATE_SETTINGS        // Настройки (Часовой пояс, режим логгера)
+    APP_STATE_MAP,
+    APP_STATE_TRIP_COMPUTER,
+    APP_STATE_SATELLITES,
+    APP_STATE_MENU_CONFIG // Полноэкранный режим настройки
 } purrgo_state_t;
 
 // Аппаратные кнопки устройства
 typedef enum {
-    BTN_UP,
-    BTN_DOWN,
-    BTN_OK,
-    BTN_BACK
+    PURRGO_BTN_UP,
+    PURRGO_BTN_DOWN,
+    PURRGO_BTN_LEFT,
+    PURRGO_BTN_RIGHT,
+    PURRGO_BTN_PLUS,
+    PURRGO_BTN_MINUS,
+    PURRGO_BTN_MENU,
+    PURRGO_BTN_OK
 } purrgo_btn_t;
 
 // Инициализация конечного автомата
 void purrgo_app_init(void);
+
+// Получить текущее черновое значение смещения часового пояса (для отображения в меню до нажатия OK)
+int16_t purrgo_app_get_draft_tz_offset(void);
 
 // Обработчик нажатий кнопок (вызывается из прерываний или поллинга)
 void purrgo_app_handle_button(purrgo_btn_t button);
