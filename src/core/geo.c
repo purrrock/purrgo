@@ -38,8 +38,16 @@ static uint32_t isqrt64(uint64_t n) {
 }
 
 uint32_t purrgo_geo_distance_m(int32_t lat1, int32_t lon1, int32_t lat2, int32_t lon2) {
-    int32_t dlat = lat2 - lat1;
-    int32_t dlon = lon2 - lon1;
+    int64_t dlat = (int64_t)lat2 - (int64_t)lat1;
+    int64_t dlon = (int64_t)lon2 - (int64_t)lon1;
+
+    // Handle wrap-around at 180th meridian (-180 to +180 degrees)
+    // 180 degrees = 1800000000 in 1e7 format. 360 degrees = 3600000000.
+    if (dlon > 1800000000LL) {
+        dlon -= 3600000000LL;
+    } else if (dlon < -1800000000LL) {
+        dlon += 3600000000LL;
+    }
 
     // Эквидистантная цилиндрическая проекция (оптимальна для дистанций < 500 км).
     // Формула гаверсинуса (Haversine) требует много вычислений синусов, 
@@ -76,8 +84,15 @@ uint32_t purrgo_geo_distance_m(int32_t lat1, int32_t lon1, int32_t lat2, int32_t
 }
 
 uint16_t purrgo_geo_azimuth_deg(int32_t lat1, int32_t lon1, int32_t lat2, int32_t lon2) {
-    int32_t dlat = lat2 - lat1;
-    int32_t dlon = lon2 - lon1;
+    int64_t dlat = (int64_t)lat2 - (int64_t)lat1;
+    int64_t dlon = (int64_t)lon2 - (int64_t)lon1;
+
+    // Handle wrap-around at 180th meridian
+    if (dlon > 1800000000LL) {
+        dlon -= 3600000000LL;
+    } else if (dlon < -1800000000LL) {
+        dlon += 3600000000LL;
+    }
 
     int32_t mean_lat = (lat1 / 2) + (lat2 / 2);
     int32_t mean_lat_abs = mean_lat < 0 ? -mean_lat : mean_lat;
@@ -92,19 +107,19 @@ uint16_t purrgo_geo_azimuth_deg(int32_t lat1, int32_t lon1, int32_t lat2, int32_
     }
 
     // Вычисление векторов в проекционной сетке
-    int32_t x = dlat; // Ось X направлена на Север
-    int32_t y = (int32_t)(((int64_t)dlon * cos_lat) / 10000); // Ось Y направлена на Восток
+    int64_t x = dlat; // Ось X направлена на Север
+    int64_t y = (dlon * cos_lat) / 10000; // Ось Y направлена на Восток
 
-    int32_t abs_x = x < 0 ? -x : x;
-    int32_t abs_y = y < 0 ? -y : y;
+    int64_t abs_x = x < 0 ? -x : x;
+    int64_t abs_y = y < 0 ? -y : y;
     
     if (abs_x == 0 && abs_y == 0) return 0; // Точки совпадают
 
-    int32_t min = abs_x < abs_y ? abs_x : abs_y;
-    int32_t max = abs_x > abs_y ? abs_x : abs_y;
+    int64_t min = abs_x < abs_y ? abs_x : abs_y;
+    int64_t max = abs_x > abs_y ? abs_x : abs_y;
 
-    // Нормализация аргумента (0..100) для Look-up table
-    int32_t a = (min * 100) / max;
+    // Нормализация аргумента (0..100) для Look-up table. Safe 64-bit multiplication to avoid overflow.
+    int32_t a = (int32_t)((min * 100LL) / max);
     
     // Линейная интерполяция арктангенса базового угла
     int32_t a_idx = a / 10;
