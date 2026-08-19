@@ -16,14 +16,14 @@ typedef struct {
 } ButtonState;
 
 ButtonState buttons[] = {
-    {{10, DISPLAY_HEIGHT * PIXEL_SCALE + 15, 50, 30}, "UP", 0},
-    {{10, DISPLAY_HEIGHT * PIXEL_SCALE + 55, 50, 30}, "DOWN", 1},
-    {{72, DISPLAY_HEIGHT * PIXEL_SCALE + 15, 50, 30}, "LEFT", 2},
-    {{72, DISPLAY_HEIGHT * PIXEL_SCALE + 55, 50, 30}, "RIGHT", 3},
-    {{134, DISPLAY_HEIGHT * PIXEL_SCALE + 15, 50, 30}, "PLUS", 4},
-    {{134, DISPLAY_HEIGHT * PIXEL_SCALE + 55, 50, 30}, "MINUS", 5},
-    {{196, DISPLAY_HEIGHT * PIXEL_SCALE + 15, 50, 30}, "MENU", 6},
-    {{196, DISPLAY_HEIGHT * PIXEL_SCALE + 55, 50, 30}, "OK", 7}
+    {{50, DISPLAY_HEIGHT * PIXEL_SCALE + 5, 40, 30}, "UP", 0},
+    {{50, DISPLAY_HEIGHT * PIXEL_SCALE + 65, 40, 30}, "DOWN", 1},
+    {{5, DISPLAY_HEIGHT * PIXEL_SCALE + 35, 40, 30}, "LEFT", 2},
+    {{95, DISPLAY_HEIGHT * PIXEL_SCALE + 35, 40, 30}, "RIGHT", 3},
+    {{160, DISPLAY_HEIGHT * PIXEL_SCALE + 15, 40, 30}, "PLUS", 4},
+    {{160, DISPLAY_HEIGHT * PIXEL_SCALE + 55, 40, 30}, "MINUS", 5},
+    {{210, DISPLAY_HEIGHT * PIXEL_SCALE + 15, 40, 30}, "MENU", 6},
+    {{210, DISPLAY_HEIGHT * PIXEL_SCALE + 55, 40, 30}, "OK", 7}
 };
 #define NUM_BUTTONS (sizeof(buttons)/sizeof(buttons[0]))
 
@@ -49,43 +49,29 @@ void render_fb_to_texture(SDL_Texture* texture) {
 }
 
 void draw_text(SDL_Renderer* renderer, int x, int y, const char* text) {
-    // A simple text renderer for button labels could be implemented here
-    // but for now, we'll just draw rectangles to indicate buttons
     // Since SDL doesn't have built-in text rendering without SDL_ttf,
-    // we use our 8x8 font just by drawing points on renderer directly!
-    extern char font8x8_basic[128][8];
+    // we use our 5x7 font just by drawing points on renderer directly!
+    extern const unsigned char font5x7[256][5];
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
 
     int cur_x = x;
     while (*text) {
-        char c = *text;
-        if (c >= 0 && c < 128) {
-            const char* bitmap = font8x8_basic[(int)c];
+        unsigned char c = (unsigned char)*text;
+        const unsigned char* bitmap = font5x7[c];
+        for (int col = 0; col < 5; col++) {
             for (int row = 0; row < 8; row++) {
-                for (int col = 0; col < 8; col++) {
-                    if ((bitmap[row] >> col) & 1) {
-                        SDL_RenderDrawPoint(renderer, cur_x + col, y + row);
-                    }
+                if ((bitmap[col] >> row) & 1) {
+                    SDL_RenderDrawPoint(renderer, cur_x + col, y + row);
                 }
             }
         }
-        cur_x += 8;
+        cur_x += 6;
         text++;
     }
 }
 
 void handle_button_press(const char* btn_name) {
     printf("Button pressed: %s\n", btn_name);
-    // Print to NMEA log as requested
-    char msg[32];
-    snprintf(msg, sizeof(msg), "BTN: %s\n", btn_name);
-    static int log_y = 0;
-    display_draw_string(0, log_y, msg, COLOR_BLACK, COLOR_WHITE);
-    log_y += 8;
-    if (log_y >= DISPLAY_HEIGHT) {
-        log_y = 0;
-        display_clear(COLOR_WHITE);
-    }
 }
 
 int main(int argc, char* argv[]) {
@@ -252,7 +238,7 @@ int main(int argc, char* argv[]) {
             SDL_RenderDrawRect(renderer, &buttons[i].rect);
 
             int text_len = strlen(buttons[i].label);
-            int text_w = text_len * 8;
+            int text_w = text_len * 6;
             int text_h = 8;
             int text_x = buttons[i].rect.x + (buttons[i].rect.w - text_w) / 2;
             int text_y = buttons[i].rect.y + (buttons[i].rect.h - text_h) / 2;

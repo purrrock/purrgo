@@ -2,7 +2,7 @@
 #include <string.h>
 
 // Included relative to apps/emulator/
-#include "../font8x8_basic.h"
+#include "../font5x7.h"
 
 static uint8_t framebuffer[DISPLAY_FB_SIZE];
 
@@ -33,19 +33,21 @@ void display_set_pixel(int x, int y, uint8_t color) {
 }
 
 void display_draw_char(int x, int y, char c, uint8_t color, uint8_t bg_color) {
-    if (c < 0 || c >= 128) {
-        c = '?';
-    }
+    unsigned char uc = (unsigned char)c;
 
-    const char* bitmap = font8x8_basic[(int)c];
-    for (int row = 0; row < 8; row++) {
-        for (int col = 0; col < 8; col++) {
-            if ((bitmap[row] >> col) & 1) {
+    const unsigned char* bitmap = font5x7[uc];
+    for (int col = 0; col < 5; col++) {
+        for (int row = 0; row < 8; row++) {
+            if ((bitmap[col] >> row) & 1) {
                 display_set_pixel(x + col, y + row, color);
             } else {
                 display_set_pixel(x + col, y + row, bg_color);
             }
         }
+    }
+    // Draw the 6th spacing column
+    for (int row = 0; row < 8; row++) {
+        display_set_pixel(x + 5, y + row, bg_color);
     }
 }
 
@@ -58,8 +60,8 @@ void display_draw_string(int x, int y, const char* str, uint8_t color, uint8_t b
             cur_y += 8;
         } else {
             display_draw_char(cur_x, cur_y, *str, color, bg_color);
-            cur_x += 8;
-            if (cur_x + 8 > DISPLAY_WIDTH) {
+            cur_x += 6;
+            if (cur_x + 6 > DISPLAY_WIDTH) {
                 cur_x = 0;
                 cur_y += 8;
             }
