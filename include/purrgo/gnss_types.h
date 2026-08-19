@@ -19,6 +19,14 @@ typedef struct {
     uint8_t day;          // Дата UTC
     uint8_t month;
     uint8_t year;
+
+    // Новые поля для навигации
+    int32_t course_deg_100; // Истинный курс (Course over ground) в градусах * 100
+    int32_t hdop_100;       // Horizontal Dilution of Precision * 100
+    int32_t vdop_100;       // Vertical Dilution of Precision * 100
+    int32_t pdop_100;       // Position Dilution of Precision * 100
+    uint8_t fix_quality;    // Качество фикса (из $GPGGA)
+    uint8_t fix_type;       // Тип фикса (из $GPGSA: 1=Нет, 2=2D, 3=3D)
 } purrgo_gnss_solution_t;
 
 #endif // PURRGO_GNSS_TYPES_H
