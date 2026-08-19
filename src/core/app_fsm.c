@@ -5,7 +5,6 @@
 purrgo_config_t app_config;
 
 static purrgo_state_t current_state;
-static purrgo_state_t previous_state; // Для возврата из меню при отмене
 
 // Черновые (несохраненные) настройки
 static int16_t draft_tz_offset_minutes;
@@ -19,7 +18,6 @@ void purrgo_config_init(void) {
 void purrgo_app_init(void) {
     purrgo_config_init();
     current_state = APP_STATE_SATELLITES;
-    previous_state = APP_STATE_SATELLITES;
     draft_tz_offset_minutes = app_config.tz_offset_minutes;
 }
 
@@ -32,20 +30,6 @@ int16_t purrgo_app_get_draft_tz_offset(void) {
 }
 
 void purrgo_app_handle_button(purrgo_btn_t button) {
-    // Нажатие кнопки MENU в любом основном режиме переключает в меню CONFIG
-    if (button == PURRGO_BTN_MENU) {
-        if (current_state != APP_STATE_MENU_CONFIG) {
-            // Вход в меню: сохраняем предыдущий экран и копируем активные настройки во временный черновик
-            previous_state = current_state;
-            current_state = APP_STATE_MENU_CONFIG;
-            draft_tz_offset_minutes = app_config.tz_offset_minutes;
-        } else {
-            // Выход из меню без сохранения: отбрасываем draft и возвращаем прежний экран
-            current_state = previous_state;
-        }
-        return;
-    }
-
     // Обработка ввода внутри полноэкранного меню CONFIG
     if (current_state == APP_STATE_MENU_CONFIG) {
         switch (button) {
@@ -64,9 +48,14 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
                 break;
 
             case PURRGO_BTN_OK:
-                // Применение и сохранение настроек
+                // Применение и сохранение настроек, возврат на стартовый экран
                 app_config.tz_offset_minutes = draft_tz_offset_minutes;
-                current_state = previous_state;
+                current_state = APP_STATE_SATELLITES;
+                break;
+
+            case PURRGO_BTN_MENU:
+                // Отмена (выход без сохранения) и переход к следующему экрану по циклу
+                current_state = APP_STATE_SATELLITES;
                 break;
 
             default:
@@ -75,8 +64,8 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
         return;
     }
 
-    // Переключение основных навигационных экранов кнопкой OK
-    if (button == PURRGO_BTN_OK) {
+    // Циклическое переключение основных экранов
+    if (button == PURRGO_BTN_MENU) {
         switch (current_state) {
             case APP_STATE_SATELLITES:
                 current_state = APP_STATE_MAP;
@@ -88,14 +77,16 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
                 current_state = APP_STATE_TRIP_COMPUTER;
                 break;
             case APP_STATE_TRIP_COMPUTER:
-                current_state = APP_STATE_SATELLITES;
+                // Вход в меню: переход состояния и копирование активных настроек в черновик
+                current_state = APP_STATE_MENU_CONFIG;
+                draft_tz_offset_minutes = app_config.tz_offset_minutes;
                 break;
             default:
+                current_state = APP_STATE_SATELLITES;
                 break;
         }
     }
 }
-
 static bool is_leap_year(uint8_t year) {
     // В рамках проекта используется двухзначный год 2000-2099.
     // Год является високосным, если его двухзначное значение делится на 4 без остатка.
