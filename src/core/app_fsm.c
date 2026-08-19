@@ -75,26 +75,30 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
         return;
     }
 
-    // Логика переключения основных экранов
-    switch (current_state) {
-        case APP_STATE_SATELLITES:
-            if (button == PURRGO_BTN_OK) current_state = APP_STATE_MAP;
-            break;
-        case APP_STATE_MAP:
-            if (button == PURRGO_BTN_OK) current_state = APP_STATE_TRIP_COMPUTER;
-            break;
-        case APP_STATE_TRIP_COMPUTER:
-            if (button == PURRGO_BTN_OK) current_state = APP_STATE_SATELLITES;
-            break;
-        default:
-            break;
+    // Переключение основных навигационных экранов кнопкой OK
+    if (button == PURRGO_BTN_OK) {
+        switch (current_state) {
+            case APP_STATE_SATELLITES:
+                current_state = APP_STATE_MAP;
+                break;
+            case APP_STATE_MAP:
+                current_state = APP_STATE_COMPASS;
+                break;
+            case APP_STATE_COMPASS:
+                current_state = APP_STATE_TRIP_COMPUTER;
+                break;
+            case APP_STATE_TRIP_COMPUTER:
+                current_state = APP_STATE_SATELLITES;
+                break;
+            default:
+                break;
+        }
     }
 }
 
 static bool is_leap_year(uint8_t year) {
-    // The project explicitly uses a 2-digit representation of the year 2000-2099.
-    // For years in the range 2000-2099, the year is a leap year if the 2-digit
-    // representation is divisible by 4. (Year 2000 is divisible by 400).
+    // В рамках проекта используется двухзначный год 2000-2099.
+    // Год является високосным, если его двухзначное значение делится на 4 без остатка.
     return (year % 4 == 0);
 }
 
@@ -108,7 +112,7 @@ static uint8_t days_in_month(uint8_t month, uint8_t year) {
     return 31;
 }
 
-// Перевод UTC времени в локальное с учетом минутного смещения
+// Перевод UTC времени в локальное с учетом минутного смещения и полной календарной математикой
 void purrgo_app_apply_timezone(const purrgo_gnss_solution_t* utc, purrgo_gnss_solution_t* local, int16_t tz_offset_minutes) {
     *local = *utc;
 
@@ -117,7 +121,7 @@ void purrgo_app_apply_timezone(const purrgo_gnss_solution_t* utc, purrgo_gnss_so
     // Переводим часы и минуты фикса в общее количество минут от начала суток
     int32_t total_mins = (int32_t)local->hours * 60 + (int32_t)local->minutes + tz_offset_minutes;
 
-    // Коррекция перехода через полночь
+    // Коррекция перехода через полночь назад
     while (total_mins < 0) {
         total_mins += 1440;
 
@@ -131,13 +135,14 @@ void purrgo_app_apply_timezone(const purrgo_gnss_solution_t* utc, purrgo_gnss_so
                 if (local->year > 0) {
                     local->year--;
                 } else {
-                    local->year = 99; // Wrap 00 to 99 within 2000-2099 semantics
+                    local->year = 99; // Заворот с 2000 на 2099 год
                 }
             }
             local->day = days_in_month(local->month, local->year);
         }
     }
 
+    // Коррекция перехода через полночь вперед
     while (total_mins >= 1440) {
         total_mins -= 1440;
 
@@ -153,7 +158,7 @@ void purrgo_app_apply_timezone(const purrgo_gnss_solution_t* utc, purrgo_gnss_so
                 if (local->year < 99) {
                     local->year++;
                 } else {
-                    local->year = 0; // Wrap to 00
+                    local->year = 0; // Заворот с 2099 на 2000 год
                 }
             }
         }
@@ -171,6 +176,8 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
         case APP_STATE_SATELLITES:
             break;
         case APP_STATE_MAP:
+            break;
+        case APP_STATE_COMPASS:
             break;
         case APP_STATE_TRIP_COMPUTER:
             break;
