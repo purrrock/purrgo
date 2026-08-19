@@ -39,7 +39,12 @@ void purrgo_gnss_process_nmea(const char *nmea_line, purrgo_gnss_solution_t *sol
                     
                     // Масштабирование скорости (узлы * 100)
                     if (frame.speed.scale != 0) {
-                        solution->speed_knots = (frame.speed.value * 100) / frame.speed.scale;
+                        solution->speed_knots = (int32_t)(((int64_t)frame.speed.value * 100) / frame.speed.scale);
+                    }
+
+                    // Масштабирование курса (градусы * 100)
+                    if (frame.course.scale != 0) {
+                        solution->course_deg_100 = (int32_t)(((int64_t)frame.course.value * 100) / frame.course.scale);
                     }
                     
                     solution->hours = frame.time.hours;
@@ -59,11 +64,31 @@ void purrgo_gnss_process_nmea(const char *nmea_line, purrgo_gnss_solution_t *sol
                 if (frame.altitude.scale != 0) {
                     solution->alt_m = frame.altitude.value / frame.altitude.scale;
                 }
+                solution->fix_quality = frame.fix_quality;
+                if (frame.hdop.scale != 0) {
+                    solution->hdop_100 = (int32_t)(((int64_t)frame.hdop.value * 100) / frame.hdop.scale);
+                }
+            }
+            break;
+        }
+        case MINMEA_SENTENCE_GSA: {
+            struct minmea_sentence_gsa frame;
+            if (minmea_parse_gsa(&frame, nmea_line)) {
+                solution->fix_type = frame.fix_type;
+                if (frame.hdop.scale != 0) {
+                    solution->hdop_100 = (int32_t)(((int64_t)frame.hdop.value * 100) / frame.hdop.scale);
+                }
+                if (frame.vdop.scale != 0) {
+                    solution->vdop_100 = (int32_t)(((int64_t)frame.vdop.value * 100) / frame.vdop.scale);
+                }
+                if (frame.pdop.scale != 0) {
+                    solution->pdop_100 = (int32_t)(((int64_t)frame.pdop.value * 100) / frame.pdop.scale);
+                }
             }
             break;
         }
         default:
-            // Игнорируем $GPVTG, $GPGSA, $GPGSV, $GPGLL и проприетарные $GPTXT от u-blox
+            // Игнорируем $GPVTG, $GPGSV, $GPGLL и проприетарные $GPTXT от u-blox
             break;
     }
 }
