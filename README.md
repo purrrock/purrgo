@@ -44,7 +44,6 @@ The planned navigator provides:
 - latitude and longitude;
 - altitude;
 - speed;
-- course over ground;
 - UTC time;
 - satellite/fix information;
 - track recording;
