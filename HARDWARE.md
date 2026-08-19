@@ -152,7 +152,7 @@ The release firmware may additionally use u-blox UBX protocol where it provides 
 
 # 3. Development Display
 
-The first development display may be a small E-Ink display.
+The first development display may be a E-Ink 296X128, 4 grey levels display.
 
 The development display is not required to have the same technology or resolution as the final display.
 
