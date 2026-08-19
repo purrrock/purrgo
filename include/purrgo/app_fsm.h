@@ -40,6 +40,6 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix);
 purrgo_state_t purrgo_app_get_state(void);
 
 // Применение смещения часового пояса к фиксу
-void purrgo_app_apply_timezone(purrgo_gnss_solution_t* fix, int16_t tz_offset_minutes);
+void purrgo_app_apply_timezone(const purrgo_gnss_solution_t* utc, purrgo_gnss_solution_t* local, int16_t tz_offset_minutes);
 
 #endif // PURRGO_APP_FSM_H

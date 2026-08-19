@@ -11,6 +11,11 @@ bool purrgo_gnss_parser_feed(purrgo_gnss_parser_t *parser, uint8_t byte)
         return true;
     }
 
+    if (byte == '\r') {
+        // Silently consume CR characters to transparently support CRLF
+        return false;
+    }
+
     if (parser->length + 1U >= sizeof(parser->line)) {
         /* Reset on overflow; the caller can count malformed sentences. */
         parser->length = 0U;
