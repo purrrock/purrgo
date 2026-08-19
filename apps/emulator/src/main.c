@@ -167,7 +167,7 @@ int main(int argc, char* argv[]) {
             last_eink_refresh = current_time;
             display_clear(COLOR_WHITE);
 
-            char buf[32];
+            char buf[64];
 
             switch (purrgo_app_get_state()) {
                 case APP_STATE_MENU_CONFIG: {
@@ -238,21 +238,39 @@ int main(int argc, char* argv[]) {
                     y_pos += 12;
 
                     if (sun_initialized) {
-                        snprintf(buf, sizeof(buf), "SR: %02d:%02d SS: %02d:%02d",
-                                 sun_info.sunrise_hour, sun_info.sunrise_minute,
-                                 sun_info.sunset_hour, sun_info.sunset_minute);
-                        display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
-                        y_pos += 12;
-
                         if (sun_info.status == SUN_STATUS_NORMAL) {
-                            int hours = sun_info.time_to_event_min / 60;
-                            int mins = sun_info.time_to_event_min % 60;
+                            snprintf(buf, sizeof(buf), "SUN UP: %02d:%02d SUN DWN: %02d:%02d",
+                                     sun_info.sunrise_hour, sun_info.sunrise_minute,
+                                     sun_info.sunset_hour, sun_info.sunset_minute);
+                            display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
+                            y_pos += 12;
+
+                            int remain_h = sun_info.time_to_event_min / 60;
+                            int remain_m = sun_info.time_to_event_min % 60;
                             if (sun_info.is_daytime) {
-                                snprintf(buf, sizeof(buf), "Sunset in: %02dh %02dm", hours, mins);
+                                snprintf(buf, sizeof(buf), "TO SUNSET: %02dh %02dm", remain_h, remain_m);
                             } else {
-                                snprintf(buf, sizeof(buf), "Sunrise in: %02dh %02dm", hours, mins);
+                                snprintf(buf, sizeof(buf), "TO SUNRISE: %02dh %02dm", remain_h, remain_m);
                             }
                             display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
+                            y_pos += 12;
+
+                            int start_min = sun_info.sunrise_hour * 60 + sun_info.sunrise_minute;
+                            int end_min = sun_info.sunset_hour * 60 + sun_info.sunset_minute;
+                            int total_day_min = end_min - start_min;
+                            if (total_day_min < 0) total_day_min += 1440;
+                            snprintf(buf, sizeof(buf), "DAY: %02dh %02dm", total_day_min / 60, total_day_min % 60);
+                            display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
+                            y_pos += 12;
+                        } else if (sun_info.status == SUN_STATUS_POLAR_DAY) {
+                            display_draw_string(10, y_pos, "POLAR DAY", COLOR_BLACK, COLOR_WHITE);
+                            y_pos += 12;
+                            display_draw_string(10, y_pos, "NO SUNSET DAY: 24h 00m", COLOR_BLACK, COLOR_WHITE);
+                            y_pos += 12;
+                        } else if (sun_info.status == SUN_STATUS_POLAR_NIGHT) {
+                            display_draw_string(10, y_pos, "POLAR NIGHT", COLOR_BLACK, COLOR_WHITE);
+                            y_pos += 12;
+                            display_draw_string(10, y_pos, "NO SUNRISE DAY: 00h 00m", COLOR_BLACK, COLOR_WHITE);
                             y_pos += 12;
                         }
                     }
