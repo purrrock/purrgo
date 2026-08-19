@@ -75,5 +75,23 @@ int main(void) {
     // Since 2 degrees is 222390m, we ensure dist is approx around 222390m
     assert(dist_across_wrap > 222000U && dist_across_wrap < 223000U);
 
+    // Large longitude differences where direct subtraction of 1e7 int32_t would overflow
+    // Example: 150 East and -150 West. Difference is 300 degrees.
+    // In 1e7: 1500000000 - (-1500000000) = 3000000000, which overflows int32_t (max ~2.14B)
+    int32_t large_lon1 = 1500000000;
+    int32_t large_lon2 = -1500000000;
+
+    // A direct int32_t subtraction would overflow, but widened int64_t handles it perfectly.
+    // From 150E to 150W going East (shortest path) is 60 degrees.
+    uint32_t dist_large_wrap = purrgo_geo_distance_m(0, large_lon1, 0, large_lon2);
+    // 60 degrees * 111195m = ~6,671,700m
+    assert(dist_large_wrap > 6670000U && dist_large_wrap < 6672000U);
+    assert(purrgo_geo_azimuth_deg(0, large_lon1, 0, large_lon2) == 90U);
+
+    // From 150W to 150E going West (shortest path) is 60 degrees.
+    uint32_t dist_large_wrap2 = purrgo_geo_distance_m(0, large_lon2, 0, large_lon1);
+    assert(dist_large_wrap2 > 6670000U && dist_large_wrap2 < 6672000U);
+    assert(purrgo_geo_azimuth_deg(0, large_lon2, 0, large_lon1) == 270U);
+
     return 0;
 }
