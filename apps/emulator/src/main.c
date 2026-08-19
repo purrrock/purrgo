@@ -146,7 +146,7 @@ int main(int argc, char* argv[]) {
             int mins = abs_tz % 60;
 
             snprintf(buf, sizeof(buf), "TZ: UTC%c%02d:%02d", sign, hours, mins);
-            display_draw_string(10, 40, buf, COLOR_BLACK, COLOR_WHITE);
+            display_draw_string(10, 40, buf, COLOR_WHITE, COLOR_BLACK);
 
             display_draw_string(10, 60, "+/- : Change", COLOR_BLACK, COLOR_WHITE);
             display_draw_string(10, 80, "OK : Save", COLOR_BLACK, COLOR_WHITE);
