@@ -3,13 +3,15 @@
 
 #include "purrgo/gnss_types.h"
 #include <stdbool.h>
+#include <stdint.h>
 
 // Экраны (состояния) приложения
 typedef enum {
-    APP_STATE_MAP,
-    APP_STATE_TRIP_COMPUTER,
-    APP_STATE_SATELLITES,
-    APP_STATE_MENU_CONFIG // Полноэкранный режим настройки
+    APP_STATE_SATELLITES,    // Спутники, координаты, качество фикса
+    APP_STATE_MAP,           // Векторная карта и трек
+    APP_STATE_COMPASS,       // Навигационный компас и курс
+    APP_STATE_TRIP_COMPUTER, // Путевой компьютер: одометр, скорость
+    APP_STATE_MENU_CONFIG    // Полноэкранные настройки (Часовой пояс)
 } purrgo_state_t;
 
 // Аппаратные кнопки устройства
@@ -27,19 +29,19 @@ typedef enum {
 // Инициализация конечного автомата
 void purrgo_app_init(void);
 
-// Получить текущее черновое значение смещения часового пояса (для отображения в меню до нажатия OK)
-int16_t purrgo_app_get_draft_tz_offset(void);
-
-// Обработчик нажатий кнопок (вызывается из прерываний или поллинга)
+// Обработчик нажатий кнопок
 void purrgo_app_handle_button(purrgo_btn_t button);
 
-// Основной цикл обновления логики (вызывается периодически)
+// Основной цикл обновления логики
 void purrgo_app_update(const purrgo_gnss_solution_t* current_fix);
 
-// Получение текущего состояния для слоя отрисовки (Renderer)
+// Получение текущего состояния для слоя отрисовки
 purrgo_state_t purrgo_app_get_state(void);
 
-// Применение смещения часового пояса к фиксу
+// Получение черновика часового пояса для экрана настроек
+int16_t purrgo_app_get_draft_tz_offset(void);
+
+// Функция применения часового пояса с календарным пересчетом
 void purrgo_app_apply_timezone(const purrgo_gnss_solution_t* utc, purrgo_gnss_solution_t* local, int16_t tz_offset_minutes);
 
 #endif // PURRGO_APP_FSM_H
