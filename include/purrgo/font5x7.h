@@ -1,5 +1,6 @@
-#ifndef FONT5X7_H
-#define FONT5X7_H
+#ifndef PURRGO_FONT5X7_H
+#define PURRGO_FONT5X7_H
+
 
 const unsigned char font5x7[256][5] = {
     {0x00, 0x00, 0x00, 0x00, 0x00},
@@ -260,4 +261,4 @@ const unsigned char font5x7[256][5] = {
     {0x00, 0x00, 0x00, 0x00, 0x00},
 };
 
-#endif // FONT5X7_H
+#endif // PURRGO_FONT5X7_H
