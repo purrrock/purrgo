@@ -33,11 +33,11 @@ static void project_to_screen(
 ) {
     int64_t dx = (int64_t)(lon - cam->min_x) * vp->width;
     int64_t w = (int64_t)(cam->max_x - cam->min_x);
-    *sx = (int16_t)(w > 0 ? (dx / w) : 0);
+    *sx = (int16_t)(w > 0 ? (dx / w) : 0) + vp->offset_x;
 
     int64_t dy = (int64_t)(lat - cam->min_y) * vp->height;
     int64_t h = (int64_t)(cam->max_y - cam->min_y);
-    *sy = (int16_t)(vp->height - (h > 0 ? (dy / h) : 0)); // Инверсия оси Y для графики
+    *sy = (int16_t)(vp->height - (h > 0 ? (dy / h) : 0)) + vp->offset_y; // Инверсия оси Y для графики
 }
 
 /* Потоковый парсинг геометрии с передачей параметров Viewport */
