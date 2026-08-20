@@ -25,6 +25,8 @@ typedef struct {
 typedef struct {
     uint16_t width;
     uint16_t height;
+    int16_t offset_x;
+    int16_t offset_y;
 } purrgo_viewport_t;
 
 void purrgo_map_render_layer(

@@ -20,6 +20,8 @@
 #include "purrgo/gfx_renderer.h"
 
 #include <purrgo/sun.h>
+#include <purrgo/map.h>
+#include <purrgo/fs_hal.h>
 
 #define PIXEL_SCALE 2
 #define WINDOW_WIDTH (DISPLAY_WIDTH * PIXEL_SCALE)
@@ -74,6 +76,14 @@ void render_fb_to_texture(SDL_Texture* texture) {
     }
 
     SDL_UpdateTexture(texture, NULL, pixels, DISPLAY_WIDTH * sizeof(uint32_t));
+}
+
+static uint32_t emu_fs_read(void* handle, void* buffer, uint32_t size) {
+    return purrgo_fs_read((purrgo_file_t*)handle, (uint8_t*)buffer, size);
+}
+
+static bool emu_fs_seek(void* handle, uint32_t offset) {
+    return purrgo_fs_seek((purrgo_file_t*)handle, offset);
 }
 
 void sdl_draw_text(SDL_Renderer* renderer, int x, int y, const char* text) {
@@ -155,6 +165,19 @@ int main(int argc, char* argv[]) {
 
     purrgo_app_init();
     gfx_init(&global_gfx_ctx, DISPLAY_WIDTH, DISPLAY_HEIGHT, (void*)1, emulator_draw_pixel_cb);
+
+    purrgo_bbox_t fixed_cam = {
+        .min_x = 284084800 - 15000,
+        .min_y = 535235140 - 20000,
+        .max_x = 284084800 + 15000,
+        .max_y = 535235140 + 20000
+    };
+    purrgo_viewport_t map_vp = {
+        .width = DISPLAY_WIDTH - 10,
+        .height = DISPLAY_HEIGHT - 30,
+        .offset_x = 5,
+        .offset_y = 15
+    };
 
     purrgo_sun_info_t sun_info;
     memset(&sun_info, 0, sizeof(sun_info));
@@ -355,7 +378,7 @@ int main(int argc, char* argv[]) {
                     break;
                 }
 
-                case APP_STATE_MAP:
+                case APP_STATE_MAP: {
                     // Top status bar placeholder
                     gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_WHITE);
                     gfx_draw_string(&global_gfx_ctx, 5, 5, "TOP STATUS AREA");
@@ -363,9 +386,32 @@ int main(int argc, char* argv[]) {
                     // Bottom status bar placeholder
                     gfx_draw_string(&global_gfx_ctx, 5, 285, "BOTTOM STATUS");
 
-                    // Central map viewport tests
+                    const char* layers[] = {"water", "landuse", "roads"};
+                    gfx_color_t layer_colors[] = {COLOR_LIGHT_GRAY, COLOR_DARK_GRAY, COLOR_BLACK};
 
+                    for (int i = 0; i < 3; i++) {
+                        char idx_path[256];
+                        char mlp_path[256];
+                        snprintf(idx_path, sizeof(idx_path), "tests/data/maps/%s.idx", layers[i]);
+                        snprintf(mlp_path, sizeof(mlp_path), "tests/data/maps/%s.mlp", layers[i]);
+
+                        purrgo_file_t* idx_file = purrgo_fs_open(idx_path, FS_READ);
+                        purrgo_file_t* mlp_file = purrgo_fs_open(mlp_path, FS_READ);
+
+                        if (idx_file && mlp_file) {
+                            purrgo_fs_t idx_fs = { .handle = idx_file, .read = emu_fs_read, .seek = emu_fs_seek };
+                            purrgo_fs_t mlp_fs = { .handle = mlp_file, .read = emu_fs_read, .seek = emu_fs_seek };
+
+                            gfx_set_color(&global_gfx_ctx, layer_colors[i], COLOR_WHITE);
+                            purrgo_map_render_layer(&idx_fs, &mlp_fs, &global_gfx_ctx, &fixed_cam, &map_vp);
+                        }
+
+                        if (idx_file) purrgo_fs_close(idx_file);
+                        if (mlp_file) purrgo_fs_close(mlp_file);
+                    }
+                    gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_WHITE); // Reset
                     break;
+                }
 
                 case APP_STATE_COMPASS:
                     gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_WHITE);
