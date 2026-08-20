@@ -1,4 +1,14 @@
-#include <SDL2/SDL.h>
+import re
+
+with open("apps/emulator/src/main.c", "r") as f:
+    data = f.read()
+
+# main.c needs to be rewritten correctly to remove extracted stuff.
+# We wrote a minimal main.c before but it seems it got overwritten when we git restored it. Let's rewrite it.
+
+start_main = data.find("int main(int argc, char* argv[]) {")
+
+imports = """#include <SDL2/SDL.h>
 #include <stdio.h>
 #include <stdbool.h>
 #include <string.h>
@@ -54,12 +64,14 @@ static void emulator_draw_pixel_cb(
     (void)fb;
     display_set_pixel(x, y, color);
 }
+"""
 
+main_body = """
 int main(int argc, char* argv[]) {
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) < 0) {
         fprintf(
             stderr,
-            "SDL could not initialize! SDL_Error: %s\n",
+            "SDL could not initialize! SDL_Error: %s\\n",
             SDL_GetError()
         );
         return 1;
@@ -94,7 +106,7 @@ int main(int argc, char* argv[]) {
         if (!serial_hal_open(argv[1], 9600)) {
             fprintf(
                 stderr,
-                "Failed to open serial port: %s\n",
+                "Failed to open serial port: %s\\n",
                 argv[1]
             );
             return 1;
@@ -102,7 +114,7 @@ int main(int argc, char* argv[]) {
     } else {
         fprintf(
             stderr,
-            "Usage: %s <COM_PORT>\n",
+            "Usage: %s <COM_PORT>\\n",
             argv[0]
         );
         return 1;
@@ -154,8 +166,8 @@ int main(int argc, char* argv[]) {
                     line_pos = 0;
                 }
 
-                if (rx_byte == '\n') {
-                    line_buffer[line_pos] = '\0';
+                if (rx_byte == '\\n') {
+                    line_buffer[line_pos] = '\\0';
 
                     purrgo_gnss_process_nmea(
                         line_buffer,
@@ -252,3 +264,7 @@ int main(int argc, char* argv[]) {
 
     return 0;
 }
+"""
+
+with open("apps/emulator/src/main.c", "w") as f:
+    f.write(imports + main_body)
