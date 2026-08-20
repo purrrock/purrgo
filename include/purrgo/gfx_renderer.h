@@ -83,13 +83,15 @@ void gfx_draw_pixel(gfx_context_t *ctx, int16_t x, int16_t y);
 void gfx_clear(gfx_context_t *ctx);
 
 /*
- * Отрисовка горизонтальной линии.
+ * Отрисовка горизонтальной линии с аппаратным отсечением.
+ * Оптимизирована для алгоритмов заливки.
  */
 void gfx_draw_hline(gfx_context_t *ctx, int16_t x_start, int16_t x_end, int16_t y);
 
 /*
- * Отрисовка вертикальной линии.
+ * Отрисовка вертикальной линии с аппаратным отсечением.
  */
 void gfx_draw_vline(gfx_context_t *ctx, int16_t x, int16_t y_start, int16_t y_end);
+
 
 #endif /* GFX_RENDERER_H */

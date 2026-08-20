@@ -10,7 +10,6 @@
 
 // Побитовая оптимизация модуля без ветвления для архитектуры ARM Cortex
 static inline int16_t gfx_abs(int16_t a) {
-    // Арифметический сдвиг вправо на 15 бит даст -1 (0xFFFF) для отрицательных, и 0 для положительных
     int16_t mask = a >> 15;
     return (a + mask) ^ mask;
 }
@@ -43,19 +42,14 @@ void gfx_draw_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1, int16
 
     while (true) {
         if (!(outcode0 | outcode1)) {
-            // Побитовое ИЛИ равно 0: обе точки внутри экрана
             accept = true;
             break;
         } else if (outcode0 & outcode1) {
-            // Побитовое И не равно 0: обе точки находятся в одной невидимой зоне
             break;
         } else {
-            // Линия пересекает границу экрана. Вычисляем точку пересечения.
             int16_t x, y;
             uint8_t outcodeOut = outcode0 ? outcode0 : outcode1;
 
-            // Использование 32-битной арифметики для предотвращения переполнения
-            // при умножении (координаты до умножения int16_t)
             int32_t dx = x1 - x0;
             int32_t dy = y1 - y0;
 
@@ -73,7 +67,6 @@ void gfx_draw_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1, int16
                 x = 0;
             }
 
-            // Заменяем точку вне экрана на точку пересечения и обновляем код
             if (outcodeOut == outcode0) {
                 x0 = x;
                 y0 = y;
@@ -87,16 +80,15 @@ void gfx_draw_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1, int16
     }
 
     if (!accept) {
-        return; // Линия полностью вне экрана
+        return; 
     }
 
     // 2. Отрисовка видимой части (Bresenham optimized)
     int16_t dx = gfx_abs(x1 - x0);
     int16_t sx = x0 < x1 ? 1 : -1;
-    int16_t dy = -gfx_abs(y1 - y0); // Храним dy как отрицательное значение
+    int16_t dy = -gfx_abs(y1 - y0);
     int16_t sy = y0 < y1 ? 1 : -1;
     
-    // Инициализация ошибки без деления
     int16_t err = dx + dy; 
     int16_t e2;
 
@@ -107,7 +99,6 @@ void gfx_draw_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1, int16
             break;
         }
 
-        // Вычисление смещения через побитовый сдвиг (умножение на 2)
         e2 = err << 1; 
         
         if (e2 >= dy) {
@@ -130,9 +121,7 @@ void gfx_draw_thick_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1,
         return;
     }
 
-    // Быстрое отсечение по Bounding Box с учетом толщины линии.
-    // Предотвращает бесполезные циклы алгоритма Брезенхема для линий,
-    // полностью лежащих за границами экрана.
+    // Быстрое отсечение по Bounding Box с учетом толщины
     int16_t min_x = (x0 < x1 ? x0 : x1) - thickness;
     int16_t max_x = (x0 > x1 ? x0 : x1) + thickness;
     int16_t min_y = (y0 < y1 ? y0 : y1) - thickness;
@@ -144,30 +133,27 @@ void gfx_draw_thick_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1,
 
     int16_t dx = gfx_abs(x1 - x0);
     int16_t sx = (x0 < x1) ? 1 : -1;
-    int16_t dy = -gfx_abs(y1 - y0); // Сохраняем dy как отрицательное значение
+    int16_t dy = -gfx_abs(y1 - y0); 
     int16_t sy = (y0 < y1) ? 1 : -1;
     
-    // Инициализация ошибки без деления
     int16_t err = dx + dy; 
     int16_t e2;
 
-    // Смещение для дублирования пикселей: деление на 2 заменено битовым сдвигом вправо
     int16_t half_thick = thickness >> 1;
     int16_t start_offset = -half_thick;
     int16_t end_offset = start_offset + thickness - 1;
 
-    // Флаг: если dx > abs(dy) (в нашем случае dy отрицательный, поэтому dx > -dy),
-    // линия более горизонтальная, дублируем пиксели по перпендикуляру — оси Y.
-    bool steep = (dx > -dy);
+    // Флаг ориентации линии: если dx больше абсолютного dy, линия пологая
+    bool is_horizontal = (dx > -dy);
 
     while (true) {
-        // Отрисовка утолщения для текущей точки.
-        // Используется gfx_draw_pixel с программным отсечением, так как из-за смещения
-        // краевые пиксели толстой линии могут выйти за пределы экрана.
+        // Отрисовка с программным отсечением (gfx_draw_pixel)
         for (int16_t offset = start_offset; offset <= end_offset; ++offset) {
-            if (steep) {
+            if (is_horizontal) {
+                // Для пологих линий утолщение идет по оси Y
                 gfx_draw_pixel(ctx, x0, y0 + offset);
             } else {
+                // Для крутых линий утолщение идет по оси X
                 gfx_draw_pixel(ctx, x0 + offset, y0);
             }
         }
@@ -176,7 +162,6 @@ void gfx_draw_thick_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1,
             break;
         }
 
-        // Вычисление смещения через побитовый сдвиг (умножение на 2)
         e2 = err << 1;
         
         if (e2 >= dy) {
