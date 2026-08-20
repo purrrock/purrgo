@@ -6,6 +6,10 @@
 #include <purrgo/gnss_types.h>
 #include <purrgo/gnss_mock.h>
 #include <purrgo/app_fsm.h>
+#include <purrgo/gfx_line.h>
+#include <purrgo/gfx_rect.h>
+#include <purrgo/gfx_circle.h>
+#include <purrgo/gfx_text.h>
 #include <purrgo/config.h>
 #include "purrgo/gfx_text.h"
 #include "purrgo/gfx_renderer.h"
@@ -309,12 +313,68 @@ int main(int argc, char* argv[]) {
                 }
 
                 case APP_STATE_MAP:
+                    // Top status bar placeholder
                     gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_WHITE);
-                    gfx_draw_string(&global_gfx_ctx, 10, 10, "=== MAP ===");
-                    gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_WHITE);
-                    gfx_draw_string(&global_gfx_ctx, 10, 50, "[ Render Engine ]");
-                    gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_WHITE);
-                    gfx_draw_string(&global_gfx_ctx, 10, 65, "[  Placeholder  ]");
+                    gfx_draw_string(&global_gfx_ctx, 5, 5, "TOP STATUS AREA");
+
+                    // Bottom status bar placeholder
+                    gfx_draw_string(&global_gfx_ctx, 5, 285, "BOTTOM STATUS");
+
+                    // Central map viewport tests
+                    // 1. Lines (thin and thick)
+                    gfx_draw_string(&global_gfx_ctx, 5, 25, "LINE");
+                    gfx_draw_line(&global_gfx_ctx, 40, 25, 120, 25);     // Horizontal
+                    gfx_draw_line(&global_gfx_ctx, 40, 30, 40, 40);      // Vertical
+                    gfx_draw_line(&global_gfx_ctx, 50, 30, 120, 40);     // Diagonal
+
+                    gfx_draw_string(&global_gfx_ctx, 5, 45, "THICK");
+                    gfx_draw_thick_line(&global_gfx_ctx, 45, 45, 120, 45, 3);
+                    gfx_draw_thick_line(&global_gfx_ctx, 45, 50, 120, 60, 2);
+
+                    // 2. Rectangles (colors)
+                    gfx_draw_string(&global_gfx_ctx, 5, 70, "RECT");
+
+                    gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_WHITE); // 0
+                    gfx_draw_rect(&global_gfx_ctx, 40, 70, 15, 15);
+
+                    gfx_set_color(&global_gfx_ctx, COLOR_DARK_GRAY, COLOR_WHITE); // 1
+                    gfx_fill_rect(&global_gfx_ctx, 60, 70, 15, 15);
+
+                    gfx_set_color(&global_gfx_ctx, COLOR_LIGHT_GRAY, COLOR_WHITE); // 2
+                    gfx_fill_rect(&global_gfx_ctx, 80, 70, 15, 15);
+
+                    gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_DARK_GRAY); // 3 (fill)
+                    gfx_fill_rect(&global_gfx_ctx, 100, 70, 15, 15);
+                    gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_WHITE); // Reset
+
+                    // 3. Circles (clipping and fill)
+                    gfx_draw_string(&global_gfx_ctx, 5, 95, "CIRC");
+                    gfx_draw_circle(&global_gfx_ctx, 60, 105, 10);
+                    gfx_fill_circle(&global_gfx_ctx, 90, 105, 10);
+                    // Circle near edge to test clipping
+                    gfx_fill_circle(&global_gfx_ctx, 0, 105, 15);
+                    gfx_fill_circle(&global_gfx_ctx, 128, 105, 15);
+
+                    // 4. Text (Latin, Cyrillic, digits, colors)
+                    gfx_draw_string(&global_gfx_ctx, 5, 130, "TXT:");
+                    gfx_draw_string(&global_gfx_ctx, 40, 130, "A-Z 0-9");
+
+                    // Cyrillic "Тест" -> Т=0xd2, е=0xe5, с=0xf1, т=0xf2
+                    gfx_draw_string(&global_gfx_ctx, 5, 145, "CYR: \xd2\xe5\xf1\xf2");
+
+                    // Color text
+                    gfx_set_color(&global_gfx_ctx, COLOR_DARK_GRAY, COLOR_WHITE);
+                    gfx_draw_string(&global_gfx_ctx, 5, 160, "DARK GRAY TEXT");
+
+                    gfx_set_color(&global_gfx_ctx, COLOR_LIGHT_GRAY, COLOR_WHITE);
+                    gfx_draw_string(&global_gfx_ctx, 5, 175, "LIGHT GRAY TXT");
+
+                    gfx_set_color(&global_gfx_ctx, COLOR_WHITE, COLOR_BLACK); // White on black
+                    gfx_fill_rect(&global_gfx_ctx, 5, 190, 100, 15);
+                    gfx_draw_string(&global_gfx_ctx, 10, 194, "INV COLOR");
+
+                    gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_WHITE); // Reset
+
                     break;
 
                 case APP_STATE_COMPASS:
