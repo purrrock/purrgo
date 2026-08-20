@@ -106,9 +106,15 @@ void sdl_draw_text(SDL_Renderer* renderer, int x, int y, const char* text) {
     }
 }
 
-void handle_button_press(purrgo_btn_t btn_val) {
-    purrgo_app_handle_button(btn_val);
-}
+ void handle_button_press(purrgo_btn_t btn_val) {
+    fprintf(stderr, "EMU: button=%d state_before=%d\n",
+            (int)btn_val, (int)purrgo_app_get_state());
+    fflush(stderr);
+     purrgo_app_handle_button(btn_val);
+    fprintf(stderr, "EMU: state_after=%d\n",
+            (int)purrgo_app_get_state());
+    fflush(stderr);
+ }
 
 int main(int argc, char* argv[]) {
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) < 0) {
@@ -178,6 +184,15 @@ int main(int argc, char* argv[]) {
         .offset_x = 5,
         .offset_y = 15
     };
+
+    fprintf(stderr,
+            "EMU: map camera min=(%ld,%ld) max=(%ld,%ld), "
+            "viewport=(%d,%d,%u,%u)\n",
+            (long)fixed_cam.min_x, (long)fixed_cam.min_y,
+            (long)fixed_cam.max_x, (long)fixed_cam.max_y,
+            map_vp.offset_x, map_vp.offset_y,
+            map_vp.width, map_vp.height);
+    fflush(stderr);
 
     purrgo_sun_info_t sun_info;
     memset(&sun_info, 0, sizeof(sun_info));
@@ -379,39 +394,77 @@ int main(int argc, char* argv[]) {
                 }
 
                 case APP_STATE_MAP: {
+                    static bool map_screen_logged = false;
+                    if (!map_screen_logged) {
+                        fprintf(stderr, "EMU: APP_STATE_MAP rendering started\n");
+                        fflush(stderr);
+                        map_screen_logged = true;
+                    }
+					
+					
                     // Top status bar placeholder
                     gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_WHITE);
                     gfx_draw_string(&global_gfx_ctx, 5, 5, "TOP STATUS AREA");
 
-                    // Bottom status bar placeholder
-                    gfx_draw_string(&global_gfx_ctx, 5, 285, "BOTTOM STATUS");
+                    const char* idx_path = "tests/data/maps/roads.idx";
+                    const char* mlp_path = "tests/data/maps/roads.mlp";
+                    const char* name_path = "tests/data/maps/map.name";
 
-                    const char* layers[] = {"water", "landuse", "roads"};
-                    gfx_color_t layer_colors[] = {COLOR_LIGHT_GRAY, COLOR_DARK_GRAY, COLOR_BLACK};
+                    fprintf(stderr, "EMU: MAP roads idx=%s mlp=%s\n", idx_path, mlp_path);
+                    fflush(stderr);
 
-                    for (int i = 0; i < 3; i++) {
-                        char idx_path[256];
-                        char mlp_path[256];
-                        snprintf(idx_path, sizeof(idx_path), "tests/data/maps/%s.idx", layers[i]);
-                        snprintf(mlp_path, sizeof(mlp_path), "tests/data/maps/%s.mlp", layers[i]);
+                    purrgo_file_t* idx_file = purrgo_fs_open(idx_path, FS_READ);
+                    purrgo_file_t* mlp_file = purrgo_fs_open(mlp_path, FS_READ);
 
-                        purrgo_file_t* idx_file = purrgo_fs_open(idx_path, FS_READ);
-                        purrgo_file_t* mlp_file = purrgo_fs_open(mlp_path, FS_READ);
+                    fprintf(stderr, "EMU: roads.idx %s, roads.mlp %s\n",
+                            idx_file ? "OPEN" : "FAILED",
+                            mlp_file ? "OPEN" : "FAILED");
+                    fflush(stderr);
 
-                        if (idx_file && mlp_file) {
-                            purrgo_fs_t idx_fs = { .handle = idx_file, .read = emu_fs_read, .seek = emu_fs_seek };
-                            purrgo_fs_t mlp_fs = { .handle = mlp_file, .read = emu_fs_read, .seek = emu_fs_seek };
+                    if (idx_file && mlp_file) {
+                        purrgo_fs_t idx_fs = {
+                            .handle = idx_file,
+                            .read = emu_fs_read,
+                            .seek = emu_fs_seek
+                        };
+                        purrgo_fs_t mlp_fs = {
+                            .handle = mlp_file,
+                            .read = emu_fs_read,
+                            .seek = emu_fs_seek
+                        };
 
-                            gfx_set_color(&global_gfx_ctx, layer_colors[i], COLOR_WHITE);
-                            purrgo_map_render_layer(&idx_fs, &mlp_fs, &global_gfx_ctx, &fixed_cam, &map_vp);
-                        }
-
-                        if (idx_file) purrgo_fs_close(idx_file);
-                        if (mlp_file) purrgo_fs_close(mlp_file);
+                        gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_WHITE);
+                        fprintf(stderr, "EMU: calling purrgo_map_render_layer()\n");
+                        fflush(stderr);
+                        purrgo_map_render_layer(
+                            &idx_fs, &mlp_fs, &global_gfx_ctx,
+                            &fixed_cam, &map_vp);
+                        fprintf(stderr, "EMU: purrgo_map_render_layer() returned\n");
+                        fflush(stderr);
                     }
-                    gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_WHITE); // Reset
-                    break;
-                }
+
+                    if (idx_file) purrgo_fs_close(idx_file);
+                    if (mlp_file) purrgo_fs_close(mlp_file);
+
+                    purrgo_file_t* name_file = purrgo_fs_open(name_path, FS_READ);
+                    if (name_file) {
+                        char name_buf[65];
+                        uint32_t n = purrgo_fs_read(name_file,
+                                                    (uint8_t*)name_buf, 64);
+                        if (n > 64) n = 64;
+                        name_buf[n] = '\0';
+                        fprintf(stderr, "EMU: map.name='%s'\n", name_buf);
+                        fflush(stderr);
+                        purrgo_fs_close(name_file);
+                    } else {
+                        fprintf(stderr, "EMU: map.name FAILED\n");
+                        fflush(stderr);
+                    }
+
+                     gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_WHITE); // Reset
+                     break;
+                 }
+
 
                 case APP_STATE_COMPASS:
                     gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_WHITE);
