@@ -1,3 +1,4 @@
+// file: apps/emulator/src/main.c
 #include <SDL2/SDL.h>
 #include <stdio.h>
 #include <stdbool.h>
@@ -35,24 +36,10 @@
  * Период обновления E-Ink framebuffer.
  *
  * В emulator это только частота обновления изображения на экране.
- * Сам map rendering ниже выполняется один раз при входе в APP_STATE_MAP,
- * а не при каждом refresh.
  */
 #define EINK_REFRESH_PERIOD_MS 333
 
 static gfx_context_t global_gfx_ctx;
-
-/*
- * Указывает, был ли уже выполнен map rendering для текущего входа
- * в APP_STATE_MAP.
- *
- * Это диагностический режим: пока мы исследуем map pipeline, нет смысла
- * повторно открывать IDX/MLP и полностью обходить SQT на каждом кадре.
- *
- * При выходе из APP_STATE_MAP флаг сбрасывается, поэтому при следующем
- * входе карта будет построена заново.
- */
-static bool map_rendered = false;
 
 /*
  * Callback GFX -> framebuffer emulator.
@@ -94,10 +81,10 @@ ButtonState buttons[] = {
  *
  * framebuffer хранит четыре значения цвета:
  *
- *     0 = black
- *     1 = dark gray
- *     2 = light gray
- *     3 = white
+ * 0 = black
+ * 1 = dark gray
+ * 2 = light gray
+ * 3 = white
  *
  * Emulator переводит их в ARGB8888 для SDL texture.
  */
@@ -343,20 +330,15 @@ int main(int argc, char* argv[]) {
     );
 
     /*
-     * Фиксированная camera для текущего теста roads.
-     *
-     * Центр соответствует map.name:
-     *
-     *     lon = 28.40848
-     *     lat = 53.523514
-     *
+     * Координаты из эталонного map.name, расширенные до BBox 5x5 км.
+     * Отступы рассчитаны с учетом проекции (1 град ~ 111 км).
      * Внутренний масштаб координат = 10^7.
      */
     purrgo_bbox_t fixed_cam = {
-        .min_x = 284084800 - 15000,
-        .min_y = 535235140 - 20000,
-        .max_x = 284084800 + 15000,
-        .max_y = 535235140 + 20000
+        .min_x = 283706420,
+        .min_y = 535010200,
+        .max_x = 284463180,
+        .max_y = 535460080
     };
 
     /*
@@ -404,8 +386,6 @@ int main(int argc, char* argv[]) {
 
         /*
          * 1. Обновление GNSS.
-         *
-         * Этот участок Stage 1 не изменяется.
          */
 #ifndef USE_MOCK_GNSS
         {
@@ -491,19 +471,9 @@ int main(int argc, char* argv[]) {
         /*
          * 2. Отрисовка framebuffer с частотой 3 FPS.
          *
-         * ВАЖНО:
-         *
          * display_clear() выполняется каждый refresh.
-         * Поэтому если карта была нарисована только один раз, её нельзя
-         * просто оставить во framebuffer: следующий display_clear()
-         * сотрёт её.
-         *
-         * Поэтому map_rendered означает не "карта больше никогда не
-         * рисуется", а "не нужно повторно парсить карту на каждом кадре".
-         *
-         * Для корректного сохранения изображения карту нужно рисовать
-         * после очистки framebuffer при каждом кадре. На данном этапе
-         * оставляем render-once только как диагностический режим.
+         * Парсинг и отрисовка карты должны выполняться в каждом
+         * кадре, где активно состояние APP_STATE_MAP.
          */
         if (
             current_time - last_eink_refresh >=
@@ -907,10 +877,6 @@ int main(int argc, char* argv[]) {
                 }
 
                 case APP_STATE_MAP: {
-                    /*
-                     * Этот лог показывает только первый вход/render.
-                     * Он не должен печататься на каждом 3 FPS refresh.
-                     */
                     static bool map_screen_logged = false;
 
                     if (!map_screen_logged) {
@@ -939,16 +905,6 @@ int main(int argc, char* argv[]) {
                         "TOP STATUS AREA"
                     );
 
-                    /*
-                     * Пока используется только roads layer.
-                     *
-                     * Пути вычислены относительно текущего working
-                     * directory:
-                     *
-                     *     build/apps/emulator
-                     *
-                     * поэтому четыре ".." приводят в корень repository.
-                     */
                     const char* idx_path =
                         "../../../tests/data/maps/roads.idx";
 
@@ -958,147 +914,61 @@ int main(int argc, char* argv[]) {
                     const char* name_path =
                         "../../../tests/data/maps/map.name";
 
-                    /*
-                     * Парсить карту нужно только один раз после входа
-                     * в APP_STATE_MAP.
-                     *
-                     * ВАЖНО: display_clear() всё равно очищает framebuffer
-                     * перед каждым refresh. Поэтому этот флаг сейчас
-                     * используется именно для диагностики количества
-                     * parser calls. Для постоянного отображения карты
-                     * render-once недостаточно — карту потребуется
-                     * повторно рисовать после каждого framebuffer clear
-                     * либо изменить lifecycle framebuffer.
-                     */
-                    if (!map_rendered) {
-                        fprintf(
-                            stderr,
-                            "EMU: MAP roads idx=%s mlp=%s\n",
-                            idx_path,
-                            mlp_path
+                    purrgo_file_t* idx_file = purrgo_fs_open(idx_path, FS_READ);
+                    purrgo_file_t* mlp_file = purrgo_fs_open(mlp_path, FS_READ);
+
+                    if (idx_file && mlp_file) {
+                        purrgo_fs_t idx_fs = {
+                            .handle = idx_file,
+                            .read = emu_fs_read,
+                            .seek = emu_fs_seek
+                        };
+
+                        purrgo_fs_t mlp_fs = {
+                            .handle = mlp_file,
+                            .read = emu_fs_read,
+                            .seek = emu_fs_seek
+                        };
+
+                        gfx_set_color(
+                            &global_gfx_ctx,
+                            COLOR_BLACK,
+                            COLOR_WHITE
                         );
-                        fflush(stderr);
 
-                        purrgo_file_t* idx_file =
-                            purrgo_fs_open(
-                                idx_path,
-                                FS_READ
-                            );
-
-                        purrgo_file_t* mlp_file =
-                            purrgo_fs_open(
-                                mlp_path,
-                                FS_READ
-                            );
-
-                        fprintf(
-                            stderr,
-                            "EMU: roads.idx %s, roads.mlp %s\n",
-                            idx_file ? "OPEN" : "FAILED",
-                            mlp_file ? "OPEN" : "FAILED"
+                        purrgo_map_render_layer(
+                            &idx_fs,
+                            &mlp_fs,
+                            &global_gfx_ctx,
+                            &fixed_cam,
+                            &map_vp
                         );
-                        fflush(stderr);
 
-                        if (idx_file && mlp_file) {
-                            purrgo_fs_t idx_fs = {
-                                .handle = idx_file,
-                                .read = emu_fs_read,
-                                .seek = emu_fs_seek
-                            };
-
-                            purrgo_fs_t mlp_fs = {
-                                .handle = mlp_file,
-                                .read = emu_fs_read,
-                                .seek = emu_fs_seek
-                            };
-
-                            gfx_set_color(
-                                &global_gfx_ctx,
-                                COLOR_BLACK,
-                                COLOR_WHITE
-                            );
-
-                            fprintf(
-                                stderr,
-                                "EMU: calling "
-                                "purrgo_map_render_layer()\n"
-                            );
-                            fflush(stderr);
-
-                            purrgo_map_render_layer(
-                                &idx_fs,
-                                &mlp_fs,
-                                &global_gfx_ctx,
-                                &fixed_cam,
-                                &map_vp
-                            );
-
-                            fprintf(
-                                stderr,
-                                "EMU: purrgo_map_render_layer() returned\n"
-                            );
-                            fflush(stderr);
-
-                            /*
-                             * Файл больше не нужен после полного
-                             * прохождения map parser.
-                             */
-                            purrgo_fs_close(idx_file);
-                            purrgo_fs_close(mlp_file);
-
-                            map_rendered = true;
-                        } else {
-                            if (idx_file) {
-                                purrgo_fs_close(idx_file);
-                            }
-
-                            if (mlp_file) {
-                                purrgo_fs_close(mlp_file);
-                            }
-                        }
+                        purrgo_fs_close(idx_file);
+                        purrgo_fs_close(mlp_file);
+                    } else {
+                        if (idx_file) purrgo_fs_close(idx_file);
+                        if (mlp_file) purrgo_fs_close(mlp_file);
                     }
 
-                    /*
-                     * map.name нужен только для диагностики текущей
-                     * тестовой карты.
-                     */
-                    if (!map_rendered) {
-                        purrgo_file_t* name_file =
-                            purrgo_fs_open(
-                                name_path,
-                                FS_READ
+                    purrgo_file_t* name_file = purrgo_fs_open(name_path, FS_READ);
+                    
+                    if (name_file) {
+                        char name_buf[65];
+
+                        uint32_t n =
+                            purrgo_fs_read(
+                                name_file,
+                                (uint8_t*)name_buf,
+                                64
                             );
 
-                        if (name_file) {
-                            char name_buf[65];
+                        if (n > 64)
+                            n = 64;
 
-                            uint32_t n =
-                                purrgo_fs_read(
-                                    name_file,
-                                    (uint8_t*)name_buf,
-                                    64
-                                );
+                        name_buf[n] = '\0';
 
-                            if (n > 64)
-                                n = 64;
-
-                            name_buf[n] = '\0';
-
-                            fprintf(
-                                stderr,
-                                "EMU: map.name='%s'\n",
-                                name_buf
-                            );
-                            fflush(stderr);
-
-                            purrgo_fs_close(name_file);
-                        } else {
-                            fprintf(
-                                stderr,
-                                "EMU: map.name FAILED\n"
-                            );
-                            fflush(stderr);
-                        }
+                        purrgo_fs_close(name_file);
                     }
 
                     gfx_set_color(
@@ -1172,9 +1042,6 @@ int main(int argc, char* argv[]) {
 
         /*
          * 3. Обработка SDL events.
-         *
-         * Все нажатия проходят через handle_button_press(), где
-         * дополнительно логируются state_before/state_after.
          */
         while (SDL_PollEvent(&e) != 0) {
             if (e.type == SDL_QUIT) {
@@ -1240,9 +1107,6 @@ int main(int argc, char* argv[]) {
 
         /*
          * 4. Отрисовка самого окна emulator.
-         *
-         * Здесь SDL только показывает уже готовый PurrGo framebuffer.
-         * Карта не рисуется напрямую через SDL.
          */
         SDL_SetRenderDrawColor(
             renderer,

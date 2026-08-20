@@ -11,7 +11,7 @@
  *
  * Эти значения нужны только для отладки parser/render pipeline:
  *
- *   IDX -> SQT -> NAV -> DATA -> AABB -> MLP -> projection -> GFX
+ * IDX -> SQT -> NAV -> DATA -> AABB -> MLP -> projection -> GFX
  *
  * Они позволяют определить, на каком именно этапе исчезает геометрия.
  */
@@ -71,8 +71,8 @@ static inline float unpack_float_le(const uint8_t* buf) {
  *
  * Внутренние координаты карты имеют масштаб 10^7:
  *
- *     longitude = integer / 10^7
- *     latitude  = integer / 10^7
+ * longitude = integer / 10^7
+ * latitude  = integer / 10^7
  *
  * Camera задаёт прямоугольник карты, а viewport — прямоугольник
  * дисплея, куда этот прямоугольник должен быть спроецирован.
@@ -82,8 +82,8 @@ static inline float unpack_float_le(const uint8_t* buf) {
  *
  * Ось Y framebuffer инвертируется:
  *
- *     map min_y -> нижняя граница viewport
- *     map max_y -> верхняя граница viewport
+ * map min_y -> нижняя граница viewport
+ * map max_y -> верхняя граница viewport
  */
 static void project_to_screen(
     int32_t lon,
@@ -114,7 +114,7 @@ static void project_to_screen(
  * Для диагностики дополнительно выводится первая реально построенная
  * линия каждого render-вызова. Это позволяет проверить:
  *
- *     MLP coordinates -> project_to_screen() -> screen coordinates
+ * MLP coordinates -> project_to_screen() -> screen coordinates
  *
  * и отделить проблему projection от проблемы framebuffer/SDL.
  */
@@ -207,10 +207,28 @@ static void parse_geometry_mlp(
         );
 
         /*
-         * Диагностируем только первую линию, которая действительно
-         * передаётся в GFX. Это не изменяет rendering behaviour.
+         * Сначала проверяем переход к новой части геометрии
          */
-        if (i > parts[current_part_idx]) {
+        if (i == next_part_start) {
+            current_part_idx++;
+
+            next_part_start =
+                (current_part_idx + 1 < (uint32_t)num_parts)
+                    ? parts[current_part_idx + 1]
+                    : (uint32_t)num_points;
+        }
+
+        uint32_t current_part_offset = (num_parts > 0) ? parts[current_part_idx] : 0;
+
+        /*
+         * Линия отрисовывается ТОЛЬКО если текущая точка i не является первой
+         * точкой внутри текущей части массива геометрии.
+         */
+        if (i > current_part_offset) {
+            /*
+             * Диагностируем только первую линию, которая действительно
+             * передаётся в GFX. Это не изменяет rendering behaviour.
+             */
             if (diag && diag->lines_drawn == 0) {
                 fprintf(
                     stderr,
@@ -236,19 +254,6 @@ static void parse_geometry_mlp(
             if (diag) {
                 diag->lines_drawn++;
             }
-        }
-
-        /*
-         * Начало следующей части polyline не соединяется линией
-         * с последней точкой предыдущей части.
-         */
-        if (i == next_part_start) {
-            current_part_idx++;
-
-            next_part_start =
-                (current_part_idx + 1 < (uint32_t)num_parts)
-                    ? parts[current_part_idx + 1]
-                    : (uint32_t)num_points;
         }
 
         prev_sx = sx;
@@ -401,7 +406,7 @@ static void parse_node(
         return;
     }
 
-    bool child_is_nav = (nav_level > 0);
+bool child_is_nav = (nav_level > 0);
     uint32_t child_level =
         (nav_level > 0) ? (nav_level - 1) : 0;
 
