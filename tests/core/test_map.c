@@ -75,7 +75,7 @@ void test_sqt_parsing() {
     gfx_init(&gfx, 100, 100, NULL, dummy_draw_pixel);
 
     purrgo_bbox_t cam = { .min_x = 0, .min_y = 0, .max_x = 100000000, .max_y = 100000000 };
-    purrgo_viewport_t vp = { .width = 100, .height = 100 };
+    purrgo_viewport_t vp = { .width = 100, .height = 100, .offset_x = 0, .offset_y = 0 };
 
     memcpy(&idx_mock.buffer[0], "YZL\0", 4);
 
@@ -114,7 +114,7 @@ int main(void) {
     gfx_init(&gfx, 100, 100, NULL, dummy_draw_pixel);
 
     purrgo_bbox_t cam = { .min_x = 0, .min_y = 0, .max_x = 100000000, .max_y = 100000000 };
-    purrgo_viewport_t vp = { .width = 100, .height = 100 };
+    purrgo_viewport_t vp = { .width = 100, .height = 100, .offset_x = 0, .offset_y = 0 };
 
     // Test 1: Empty YZL and SQT
     memcpy(&idx_mock.buffer[0], "YZL\0", 4);
