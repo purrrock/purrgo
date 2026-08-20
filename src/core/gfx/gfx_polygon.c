@@ -14,23 +14,6 @@ void gfx_draw_polygon(gfx_context_t *ctx, const gfx_point_t *points, uint16_t co
     gfx_draw_line(ctx, points[count - 1].x, points[count - 1].y, points[0].x, points[0].y);
 }
 
-static inline void draw_horizontal_line(gfx_context_t *ctx, int16_t x_start, int16_t x_end, int16_t y) {
-    if (y < 0 || y >= ctx->height) return;
-
-    if (x_start > x_end) {
-        int16_t tmp = x_start;
-        x_start = x_end;
-        x_end = tmp;
-    }
-
-    if (x_start < 0) x_start = 0;
-    if (x_end >= ctx->width) x_end = ctx->width - 1;
-
-    for (int16_t x = x_start; x <= x_end; x++) {
-        ctx->draw_pixel(ctx->framebuffer, x, y, ctx->color_bg);
-    }
-}
-
 void gfx_fill_polygon(gfx_context_t *ctx, const gfx_point_t *points, uint16_t count) {
     if (!ctx || !points || count < 3) {
         return;
@@ -83,7 +66,7 @@ void gfx_fill_polygon(gfx_context_t *ctx, const gfx_point_t *points, uint16_t co
         // Отрисовка попарных интервалов
         for (uint16_t i = 0; i < nodes; i += 2) {
             if (i + 1 < nodes) {
-                draw_horizontal_line(ctx, nodeX[i], nodeX[i+1], y);
+                gfx_draw_hline(ctx, nodeX[i], nodeX[i+1], y);
             }
         }
     }
