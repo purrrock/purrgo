@@ -406,9 +406,9 @@ int main(int argc, char* argv[]) {
                     gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_WHITE);
                     gfx_draw_string(&global_gfx_ctx, 5, 5, "TOP STATUS AREA");
 
-                    const char* idx_path = "tests/data/maps/roads.idx";
-                    const char* mlp_path = "tests/data/maps/roads.mlp";
-                    const char* name_path = "tests/data/maps/map.name";
+const char* idx_path = "../../../../tests/data/maps/roads.idx";
+const char* mlp_path = "../../../../tests/data/maps/roads.mlp";
+const char* name_path = "../../../../tests/data/maps/map.name";
 
                     fprintf(stderr, "EMU: MAP roads idx=%s mlp=%s\n", idx_path, mlp_path);
                     fflush(stderr);
