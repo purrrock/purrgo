@@ -16,6 +16,11 @@ endif()
 # Инициализация опции с динамическим значением по умолчанию
 option(BUILD_EMULATOR "Build hardware-in-the-loop PC emulator" ${DEFAULT_BUILD_EMULATOR})
 
+option(USE_MOCK_GNSS "Enable mock GNSS data generator" ON)
+if(USE_MOCK_GNSS)
+    add_compile_definitions(USE_MOCK_GNSS)
+endif()
+
 add_subdirectory(third_party)
 
 # Автоматический рекурсивный поиск всех .c файлов в директории src/core/.

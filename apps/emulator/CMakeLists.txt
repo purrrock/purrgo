@@ -8,7 +8,7 @@ add_executable(purrgo_emulator ${EMULATOR_SOURCES})
 target_include_directories(purrgo_emulator PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 # Линковка с ядром проекта и импортированными целями SDL2
-target_link_libraries(purrgo_emulator PRIVATE purrgo_core SDL2::SDL2main SDL2::SDL2)
+target_link_libraries(purrgo_emulator PRIVATE purrgo_core purrgo_platform_pc SDL2::SDL2main SDL2::SDL2)
 
 if(WIN32)
     # Автоматическое копирование SDL2.dll в директорию сборки эмулятора
