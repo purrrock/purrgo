@@ -1,6 +1,8 @@
 #include "serial_hal.h"
-#include <windows.h>
 #include <stdio.h>
+
+#ifdef _WIN32
+#include <windows.h>
 
 static HANDLE hComm = INVALID_HANDLE_VALUE;
 
@@ -66,3 +68,19 @@ void serial_hal_close(void) {
         hComm = INVALID_HANDLE_VALUE;
     }
 }
+#else
+
+bool serial_hal_open(const char *port_name, uint32_t baud_rate) {
+    (void)port_name;
+    (void)baud_rate;
+    return false;
+}
+
+int serial_hal_read_byte(uint8_t *byte) {
+    (void)byte;
+    return -1;
+}
+
+void serial_hal_close(void) {}
+
+#endif
