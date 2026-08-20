@@ -57,3 +57,53 @@ void gfx_clear(gfx_context_t *ctx)
     // Restore foreground color
     ctx->color_fg = old_fg;
 }
+
+void gfx_draw_hline(gfx_context_t *ctx, int16_t x_start, int16_t x_end, int16_t y)
+{
+    if (ctx == NULL || ctx->draw_pixel == NULL) return;
+
+    // Отсечение невидимых строк по оси Y
+    if (y < 0 || y >= ctx->height) return;
+
+    if (x_start > x_end) {
+        int16_t temp = x_start;
+        x_start = x_end;
+        x_end = temp;
+    }
+
+    // Отсечение невидимых отрезков по оси X
+    if (x_end < 0 || x_start >= ctx->width) return;
+
+    if (x_start < 0) x_start = 0;
+    if (x_end >= ctx->width) x_end = ctx->width - 1;
+
+    // Прямой вызов платформенного коллбэка без проверок внутри цикла
+    for (int16_t x = x_start; x <= x_end; x++) {
+        ctx->draw_pixel(ctx->framebuffer, x, y, ctx->color_bg);
+    }
+}
+
+void gfx_draw_vline(gfx_context_t *ctx, int16_t x, int16_t y_start, int16_t y_end)
+{
+    if (ctx == NULL || ctx->draw_pixel == NULL) return;
+
+    // Отсечение невидимых столбцов по оси X
+    if (x < 0 || x >= ctx->width) return;
+
+    if (y_start > y_end) {
+        int16_t temp = y_start;
+        y_start = y_end;
+        y_end = temp;
+    }
+
+    // Отсечение невидимых отрезков по оси Y
+    if (y_end < 0 || y_start >= ctx->height) return;
+
+    if (y_start < 0) y_start = 0;
+    if (y_end >= ctx->height) y_end = ctx->height - 1;
+
+    // Прямой вызов платформенного коллбэка без проверок внутри цикла
+    for (int16_t y = y_start; y <= y_end; y++) {
+        ctx->draw_pixel(ctx->framebuffer, x, y, ctx->color_bg);
+    }
+}
