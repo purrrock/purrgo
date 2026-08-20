@@ -23,7 +23,7 @@
 #include <purrgo/map.h>
 #include <purrgo/fs_hal.h>
 
-#define PIXEL_SCALE 1
+#define PIXEL_SCALE 2
 #define WINDOW_WIDTH (DISPLAY_WIDTH * PIXEL_SCALE)
 #define UI_AREA_HEIGHT 100
 #define WINDOW_HEIGHT (DISPLAY_HEIGHT * PIXEL_SCALE + UI_AREA_HEIGHT)
