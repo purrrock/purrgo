@@ -1,7 +1,18 @@
 // file: src/core/map.c
 #include "purrgo/map.h"
+#include <stdio.h>
 
 #define PURRGO_MAP_MAX_PARTS 32
+
+typedef struct {
+    uint32_t sqt_blocks;
+    uint32_t nav_visited;
+    uint32_t data_visited;
+    uint32_t data_passed;
+    uint32_t data_culled;
+    uint32_t lines_drawn;
+    uint32_t nodes_logged;
+} map_diag_t;
 
 /* Безопасное чтение Little-Endian int32_t */
 static inline int32_t unpack_i32_le(const uint8_t* buf) {
@@ -48,7 +59,8 @@ static void parse_geometry_mlp(
     uint32_t v1_offset, 
     const purrgo_bbox_t* cam, 
     const purrgo_viewport_t* vp,
-    gfx_context_t* gfx
+    gfx_context_t* gfx,
+    map_diag_t* diag
 ) {
     if (!mlp_fs->seek(mlp_fs->handle, 32 + v1_offset)) return;
 
@@ -90,6 +102,7 @@ static void parse_geometry_mlp(
             next_part_start = (current_part_idx + 1 < (uint32_t)num_parts) ? parts[current_part_idx + 1] : (uint32_t)num_points;
         } else if (i > parts[current_part_idx]) {
             gfx_draw_line(gfx, prev_sx, prev_sy, sx, sy);
+            if (diag) { diag->lines_drawn++; }
         }
 
         prev_sx = sx;
@@ -106,13 +119,16 @@ static void parse_node(
     uint32_t level, 
     const purrgo_bbox_t* cam, 
     const purrgo_viewport_t* vp,
-    gfx_context_t* gfx
+    gfx_context_t* gfx,
+    map_diag_t* diag
 ) {
     uint8_t node_buf[28];
     if (idx_fs->read(idx_fs->handle, node_buf, 28) != 28) return;
     *current_idx_offset += 28;
 
     if (!is_nav_node) {
+        if (diag) { diag->data_visited++; }
+
         float f_xmin = unpack_float_le(&node_buf[0]);
         float f_ymin = unpack_float_le(&node_buf[4]);
         float f_xmax = unpack_float_le(&node_buf[8]);
@@ -123,15 +139,31 @@ static void parse_node(
         int32_t xmax = (int32_t)(f_xmax * 10000000.0f);
         int32_t ymax = (int32_t)(f_ymax * 10000000.0f);
 
-        if (xmax >= cam->min_x && xmin <= cam->max_x && ymax >= cam->min_y && ymin <= cam->max_y) {
+        bool passes = (xmax >= cam->min_x && xmin <= cam->max_x && ymax >= cam->min_y && ymin <= cam->max_y);
+
+        if (diag) {
+            if (passes) { diag->data_passed++; } else { diag->data_culled++; }
+            if (diag->nodes_logged < 10) {
+                printf("MAP: DATA raw=(%08x,%08x,%08x,%08x) flt=(%f,%f,%f,%f) int=(%d,%d,%d,%d) %s\n",
+                    unpack_u32_le(&node_buf[0]), unpack_u32_le(&node_buf[4]), unpack_u32_le(&node_buf[8]), unpack_u32_le(&node_buf[12]),
+                    f_xmin, f_ymin, f_xmax, f_ymax,
+                    xmin, ymin, xmax, ymax,
+                    passes ? "PASS" : "CULL"
+                );
+                diag->nodes_logged++;
+            }
+        }
+
+        if (passes) {
             uint32_t v1 = unpack_u32_le(&node_buf[20]);
             if (v1 > 0) {
-                parse_geometry_mlp(mlp_fs, v1, cam, vp, gfx);
+                parse_geometry_mlp(mlp_fs, v1, cam, vp, gfx, diag);
             }
         }
         return;
     }
 
+    if (diag) { diag->nav_visited++; }
     uint32_t v3_jump = unpack_u32_le(&node_buf[0]);
     
     float f_c_xmin = unpack_float_le(&node_buf[4]);
@@ -143,6 +175,15 @@ static void parse_node(
     int32_t c_ymin = (int32_t)(f_c_ymin * 10000000.0f);
     int32_t c_xmax = (int32_t)(f_c_xmax * 10000000.0f);
     int32_t c_ymax = (int32_t)(f_c_ymax * 10000000.0f);
+
+    if (diag && diag->nodes_logged < 10) {
+        printf("MAP: NAV raw=(%08x,%08x,%08x,%08x) flt=(%f,%f,%f,%f) int=(%d,%d,%d,%d)\n",
+            unpack_u32_le(&node_buf[4]), unpack_u32_le(&node_buf[8]), unpack_u32_le(&node_buf[12]), unpack_u32_le(&node_buf[16]),
+            f_c_xmin, f_c_ymin, f_c_xmax, f_c_ymax,
+            c_xmin, c_ymin, c_xmax, c_ymax
+        );
+        diag->nodes_logged++;
+    }
 
     uint32_t nav_level = unpack_u32_le(&node_buf[20]);
     uint32_t obj_count = unpack_u32_le(&node_buf[24]);
@@ -162,7 +203,7 @@ static void parse_node(
     uint32_t child_level = (nav_level > 0) ? (nav_level - 1) : 0;
 
     for (uint32_t i = 0; i < obj_count; i++) {
-        parse_node(idx_fs, current_idx_offset, mlp_fs, child_is_nav, child_level, cam, vp, gfx);
+        parse_node(idx_fs, current_idx_offset, mlp_fs, child_is_nav, child_level, cam, vp, gfx, diag);
     }
 }
 
@@ -173,6 +214,13 @@ void purrgo_map_render_layer(
     const purrgo_bbox_t* camera,
     const purrgo_viewport_t* viewport
 ) {
+    printf("MAP: IDX opened\n");
+    printf("MAP: CAMERA min=(%ld,%ld) max=(%ld,%ld)\n",
+           (long)camera->min_x, (long)camera->min_y,
+           (long)camera->max_x, (long)camera->max_y);
+
+    map_diag_t diag = {0};
+
     uint32_t current_idx_offset = 0;
 
     // Read YZL Header (32 bytes)
@@ -196,6 +244,8 @@ void purrgo_map_render_layer(
             break; // Invalid SQT signature
         }
 
+        diag.sqt_blocks++;
+
         uint32_t mode = unpack_u32_le(&sqt_header[8]);
         uint32_t count = unpack_u32_le(&sqt_header[12]);
 
@@ -207,7 +257,11 @@ void purrgo_map_render_layer(
         uint32_t level = (mode > 0) ? (mode - 1) : 0;
 
         for (uint32_t i = 0; i < count; i++) {
-            parse_node(idx_fs, &current_idx_offset, mlp_fs, is_nav, level, camera, viewport, gfx);
+            parse_node(idx_fs, &current_idx_offset, mlp_fs, is_nav, level, camera, viewport, gfx, &diag);
         }
     }
+
+    printf("MAP: SQT=%u NAV=%u DATA=%u PASS=%u CULL=%u LINES=%u\n",
+           diag.sqt_blocks, diag.nav_visited, diag.data_visited,
+           diag.data_passed, diag.data_culled, diag.lines_drawn);
 }
