@@ -1,0 +1,15 @@
+--- src/core/CMakeLists.txt.old	2024-05-18 12:00:00.000000000 +0000
++++ src/core/CMakeLists.txt	2024-05-18 12:00:00.000000000 +0000
+@@ -10,6 +10,7 @@
+     gnss.c
+     gnss_adapter.c
+     gnss_mock.c
+     gpx_parser.c
+     map.c
+     navigation.c
+     sun.c
+     sun_tables.c
+     track_logger.c
+     ubx.c
++    app_ui.c
+ )
