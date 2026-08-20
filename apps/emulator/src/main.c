@@ -7,6 +7,9 @@
 #include <purrgo/gnss_mock.h>
 #include <purrgo/app_fsm.h>
 #include <purrgo/config.h>
+#include "purrgo/gfx_text.h"
+#include "purrgo/gfx_renderer.h"
+
 #include <purrgo/sun.h>
 
 #define PIXEL_SCALE 2
@@ -14,8 +17,16 @@
 #define UI_AREA_HEIGHT 100
 #define WINDOW_HEIGHT (DISPLAY_HEIGHT * PIXEL_SCALE + UI_AREA_HEIGHT)
 
+
 // Период обновления E-Ink дисплея: ~3 FPS (333 мс)
 #define EINK_REFRESH_PERIOD_MS 333
+
+static gfx_context_t global_gfx_ctx;
+
+static void emulator_draw_pixel_cb(void *fb, int16_t x, int16_t y, gfx_color_t color) {
+    (void)fb; // display_set_pixel manages its own fb
+    display_set_pixel(x, y, color);
+}
 
 typedef struct {
     SDL_Rect rect;
@@ -56,7 +67,7 @@ void render_fb_to_texture(SDL_Texture* texture) {
     SDL_UpdateTexture(texture, NULL, pixels, DISPLAY_WIDTH * sizeof(uint32_t));
 }
 
-void draw_text(SDL_Renderer* renderer, int x, int y, const char* text) {
+void sdl_draw_text(SDL_Renderer* renderer, int x, int y, const char* text) {
     extern const unsigned char font5x7[256][5];
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
 
@@ -121,6 +132,7 @@ int main(int argc, char* argv[]) {
     purrgo_gnss_mock_init(&mock_gnss);
 
     purrgo_app_init();
+    gfx_init(&global_gfx_ctx, DISPLAY_WIDTH, DISPLAY_HEIGHT, (void*)1, emulator_draw_pixel_cb);
 
     purrgo_sun_info_t sun_info;
     memset(&sun_info, 0, sizeof(sun_info));
@@ -171,20 +183,25 @@ int main(int argc, char* argv[]) {
 
             switch (purrgo_app_get_state()) {
                 case APP_STATE_MENU_CONFIG: {
-                    display_draw_string(10, 10, "=== CONFIG ===", COLOR_BLACK, COLOR_WHITE);
+                    gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_WHITE);
 
                     int16_t draft_tz = purrgo_app_get_draft_tz_offset();
+                    gfx_draw_string(&global_gfx_ctx, 10, 10, "=== CONFIG ===");
                     char sign = (draft_tz >= 0) ? '+' : '-';
                     int16_t abs_tz = (draft_tz >= 0) ? draft_tz : -draft_tz;
                     int hours = abs_tz / 60;
                     int mins = abs_tz % 60;
 
                     snprintf(buf, sizeof(buf), "TZ: UTC%c%02d:%02d", sign, hours, mins);
-                    display_draw_string(10, 25, buf, COLOR_WHITE, COLOR_BLACK);
+                    gfx_set_color(&global_gfx_ctx, COLOR_WHITE, COLOR_BLACK);
+                    gfx_draw_string(&global_gfx_ctx, 10, 25, buf);
 
-                    display_draw_string(10, 45, "+/- : Change", COLOR_BLACK, COLOR_WHITE);
-                    display_draw_string(10, 60, "OK  : Save", COLOR_BLACK, COLOR_WHITE);
-                    display_draw_string(10, 75, "MENU: Cancel", COLOR_BLACK, COLOR_WHITE);
+                    gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_WHITE);
+                    gfx_draw_string(&global_gfx_ctx, 10, 45, "+/- : Change");
+                    gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_WHITE);
+                    gfx_draw_string(&global_gfx_ctx, 10, 60, "OK  : Save");
+                    gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_WHITE);
+                    gfx_draw_string(&global_gfx_ctx, 10, 75, "MENU: Cancel");
                     break;
                 }
 
@@ -193,7 +210,7 @@ int main(int argc, char* argv[]) {
 
                     // UTC TIME
                     snprintf(buf, sizeof(buf), "UTC: %02d:%02d:%02d", mock_gnss.hours, mock_gnss.minutes, mock_gnss.seconds);
-                    display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
+                    gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_WHITE);
                     y_pos += 12;
 
                     // LOCAL TIME
@@ -202,39 +219,46 @@ int main(int argc, char* argv[]) {
                     while (total_mins >= 1440) total_mins -= 1440;
                     uint8_t loc_hours = (uint8_t)(total_mins / 60);
                     uint8_t loc_minutes = (uint8_t)(total_mins % 60);
+                    gfx_draw_string(&global_gfx_ctx, 10, y_pos, buf);
 
                     snprintf(buf, sizeof(buf), "LOC: %02d:%02d:%02d", loc_hours, loc_minutes, mock_gnss.seconds);
-                    display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
+                    gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_WHITE);
+                    gfx_draw_string(&global_gfx_ctx, 10, y_pos, buf);
                     y_pos += 12;
 
                     // FIX & SAT
                     snprintf(buf, sizeof(buf), "FIX: %s   SAT: %d", mock_gnss.valid ? "3D" : "NO", mock_gnss.satellites_tracked);
-                    display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
+                    gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_WHITE);
+                    gfx_draw_string(&global_gfx_ctx, 10, y_pos, buf);
                     y_pos += 12;
 
                     // LAT
                     int lat_deg = mock_gnss.lat_1e7 / 10000000;
                     int lat_frac = (mock_gnss.lat_1e7 > 0 ? mock_gnss.lat_1e7 : -mock_gnss.lat_1e7) % 10000000;
                     snprintf(buf, sizeof(buf), "LAT: %d.%07d", lat_deg, lat_frac);
-                    display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
+                    gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_WHITE);
+                    gfx_draw_string(&global_gfx_ctx, 10, y_pos, buf);
                     y_pos += 12;
 
                     // LON
                     int lon_deg = mock_gnss.lon_1e7 / 10000000;
                     int lon_frac = (mock_gnss.lon_1e7 > 0 ? mock_gnss.lon_1e7 : -mock_gnss.lon_1e7) % 10000000;
                     snprintf(buf, sizeof(buf), "LON: %d.%07d", lon_deg, lon_frac);
-                    display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
+                    gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_WHITE);
+                    gfx_draw_string(&global_gfx_ctx, 10, y_pos, buf);
                     y_pos += 12;
 
                     // ALT
                     snprintf(buf, sizeof(buf), "ALT: %d m", mock_gnss.alt_m);
-                    display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
+                    gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_WHITE);
+                    gfx_draw_string(&global_gfx_ctx, 10, y_pos, buf);
                     y_pos += 12;
 
                     // SPD
                     int speed_kmh = (mock_gnss.speed_knots * 1852) / 100000;
                     snprintf(buf, sizeof(buf), "SPD: %d km/h", speed_kmh);
-                    display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
+                    gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_WHITE);
+                    gfx_draw_string(&global_gfx_ctx, 10, y_pos, buf);
                     y_pos += 12;
 
                     if (sun_initialized) {
@@ -242,7 +266,8 @@ int main(int argc, char* argv[]) {
                             snprintf(buf, sizeof(buf), "SUN %02d:%02d-%02d:%02d",
                                      sun_info.sunrise_hour, sun_info.sunrise_minute,
                                      sun_info.sunset_hour, sun_info.sunset_minute);
-                            display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
+                            gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_WHITE);
+                    gfx_draw_string(&global_gfx_ctx, 10, y_pos, buf);
                             y_pos += 12;
 
                             int remain_h = sun_info.time_to_event_min / 60;
@@ -252,7 +277,8 @@ int main(int argc, char* argv[]) {
                             } else {
                                 snprintf(buf, sizeof(buf), "TO SUNRISE: %02dh %02dm", remain_h, remain_m);
                             }
-                            display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
+                            gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_WHITE);
+                    gfx_draw_string(&global_gfx_ctx, 10, y_pos, buf);
                             y_pos += 12;
 
                             int start_min = sun_info.sunrise_hour * 60 + sun_info.sunrise_minute;
@@ -260,17 +286,22 @@ int main(int argc, char* argv[]) {
                             int total_day_min = end_min - start_min;
                             if (total_day_min < 0) total_day_min += 1440;
                             snprintf(buf, sizeof(buf), "DAY: %02dh %02dm", total_day_min / 60, total_day_min % 60);
-                            display_draw_string(10, y_pos, buf, COLOR_BLACK, COLOR_WHITE);
+                            gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_WHITE);
+                    gfx_draw_string(&global_gfx_ctx, 10, y_pos, buf);
                             y_pos += 12;
                         } else if (sun_info.status == SUN_STATUS_POLAR_DAY) {
-                            display_draw_string(10, y_pos, "POLAR DAY", COLOR_BLACK, COLOR_WHITE);
+                            gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_WHITE);
+                    gfx_draw_string(&global_gfx_ctx, 10, y_pos, "POLAR DAY");
                             y_pos += 12;
-                            display_draw_string(10, y_pos, "NO SUNSET DAY: 24h 00m", COLOR_BLACK, COLOR_WHITE);
+                            gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_WHITE);
+                    gfx_draw_string(&global_gfx_ctx, 10, y_pos, "NO SUNSET DAY: 24h 00m");
                             y_pos += 12;
                         } else if (sun_info.status == SUN_STATUS_POLAR_NIGHT) {
-                            display_draw_string(10, y_pos, "POLAR NIGHT", COLOR_BLACK, COLOR_WHITE);
+                            gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_WHITE);
+                    gfx_draw_string(&global_gfx_ctx, 10, y_pos, "POLAR NIGHT");
                             y_pos += 12;
-                            display_draw_string(10, y_pos, "NO SUNRISE DAY: 00h 00m", COLOR_BLACK, COLOR_WHITE);
+                            gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_WHITE);
+                    gfx_draw_string(&global_gfx_ctx, 10, y_pos, "NO SUNRISE DAY: 00h 00m");
                             y_pos += 12;
                         }
                     }
@@ -278,21 +309,29 @@ int main(int argc, char* argv[]) {
                 }
 
                 case APP_STATE_MAP:
-                    display_draw_string(10, 10, "=== MAP ===", COLOR_BLACK, COLOR_WHITE);
-                    display_draw_string(10, 50, "[ Render Engine ]", COLOR_BLACK, COLOR_WHITE);
-                    display_draw_string(10, 65, "[  Placeholder  ]", COLOR_BLACK, COLOR_WHITE);
+                    gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_WHITE);
+                    gfx_draw_string(&global_gfx_ctx, 10, 10, "=== MAP ===");
+                    gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_WHITE);
+                    gfx_draw_string(&global_gfx_ctx, 10, 50, "[ Render Engine ]");
+                    gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_WHITE);
+                    gfx_draw_string(&global_gfx_ctx, 10, 65, "[  Placeholder  ]");
                     break;
 
                 case APP_STATE_COMPASS:
-                    display_draw_string(10, 10, "=== COMPASS ===", COLOR_BLACK, COLOR_WHITE);
-                    display_draw_string(10, 50, "[ Bearing Pointer ]", COLOR_BLACK, COLOR_WHITE);
-                    display_draw_string(10, 65, "[   Placeholder   ]", COLOR_BLACK, COLOR_WHITE);
+                    gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_WHITE);
+                    gfx_draw_string(&global_gfx_ctx, 10, 10, "=== COMPASS ===");
+                    gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_WHITE);
+                    gfx_draw_string(&global_gfx_ctx, 10, 50, "[ Bearing Pointer ]");
+                    gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_WHITE);
+                    gfx_draw_string(&global_gfx_ctx, 10, 65, "[   Placeholder   ]");
                     break;
 
                 case APP_STATE_TRIP_COMPUTER:
-                    display_draw_string(10, 10, "=== TRIP COMP ===", COLOR_BLACK, COLOR_WHITE);
-                    display_draw_string(10, 50, "[ Odometer Stats ]", COLOR_BLACK, COLOR_WHITE);
-                    display_draw_string(10, 65, "[   Placeholder  ]", COLOR_BLACK, COLOR_WHITE);
+                    gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_WHITE);
+                    gfx_draw_string(&global_gfx_ctx, 10, 10, "=== TRIP COMP ===");
+                    gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_WHITE);
+                    gfx_draw_string(&global_gfx_ctx, 10, 50, "[ Odometer Stats ]");
+                    gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_WHITE);
                     break;
 
                 default:
@@ -328,6 +367,7 @@ int main(int argc, char* argv[]) {
                     if (x >= buttons[i].rect.x && x <= buttons[i].rect.x + buttons[i].rect.w &&
                         y >= buttons[i].rect.y && y <= buttons[i].rect.y + buttons[i].rect.h) {
                         handle_button_press(buttons[i].btn_val);
+                    gfx_draw_string(&global_gfx_ctx, 10, 65, "[   Placeholder  ]");
                         break;
                     }
                 }
@@ -352,7 +392,7 @@ int main(int argc, char* argv[]) {
             int text_h = 8;
             int text_x = buttons[i].rect.x + (buttons[i].rect.w - text_w) / 2;
             int text_y = buttons[i].rect.y + (buttons[i].rect.h - text_h) / 2;
-            draw_text(renderer, text_x, text_y, buttons[i].label);
+            sdl_draw_text(renderer, text_x, text_y, buttons[i].label);
         }
 
         SDL_RenderPresent(renderer);

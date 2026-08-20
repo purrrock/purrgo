@@ -17,8 +17,6 @@
 void display_init(void);
 void display_clear(uint8_t color);
 void display_set_pixel(int x, int y, uint8_t color);
-void display_draw_char(int x, int y, char c, uint8_t color, uint8_t bg_color);
-void display_draw_string(int x, int y, const char* str, uint8_t color, uint8_t bg_color);
 const uint8_t* display_get_framebuffer(void);
 
 #endif // EMULATOR_DISPLAY_H

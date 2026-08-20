@@ -5,7 +5,18 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-/* * Цветовая абстракция. 
+/*
+ * Характеристики целевого дисплея и Layout PurrGo:
+ * - Портретная ориентация (Portrait orientation).
+ * - Физическое разрешение: 296x128 (В x Ш).
+ * - На экране APP_STATE_MAP (карта) карта занимает центральную область.
+ * - Сверху и снизу находятся служебные status regions (строки состояния).
+ * - Размеры и координаты status regions не должны хардкодиться в map.c.
+ * - Map renderer НЕ должен владеть всем framebuffer'ом,
+ *   projection/rendering карты должны работать относительно отдельного map viewport
+ *   (передаваться через размеры ctx или заданные границы).
+ *
+ * Цветовая абстракция.
  * Для 1-bit: 0 (Black), 1 (White).
  * Для 2-bit E-Ink: 0 (Black), 1 (Dark Gray), 2 (Light Gray), 3 (White).
  */
