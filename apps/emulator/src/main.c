@@ -86,23 +86,11 @@ static bool emu_fs_seek(void* handle, uint32_t offset) {
     return purrgo_fs_seek((purrgo_file_t*)handle, offset);
 }
 
-void sdl_draw_text(SDL_Renderer* renderer, int x, int y, const char* text) {
-    extern const unsigned char font5x7[256][5];
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-
-    int cur_x = x;
-    while (*text) {
-        unsigned char c = (unsigned char)*text;
-        const unsigned char* bitmap = font5x7[c];
-        for (int col = 0; col < 5; col++) {
-            for (int row = 0; row < 8; row++) {
-                if ((bitmap[col] >> row) & 1) {
-                    SDL_RenderDrawPoint(renderer, cur_x + col, y + row);
-                }
-            }
-        }
-        cur_x += 6;
-        text++;
+static void emulator_sdl_draw_pixel_cb(void *fb, int16_t x, int16_t y, gfx_color_t color) {
+    SDL_Renderer* renderer = (SDL_Renderer*)fb;
+    if (color == COLOR_BLACK) {
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+        SDL_RenderDrawPoint(renderer, x, y);
     }
 }
 
@@ -133,6 +121,9 @@ int main(int argc, char* argv[]) {
         SDL_Quit();
         return 1;
     }
+
+    gfx_context_t sdl_gfx_ctx;
+    gfx_init(&sdl_gfx_ctx, WINDOW_WIDTH, WINDOW_HEIGHT, renderer, emulator_sdl_draw_pixel_cb);
 
     SDL_Texture* fb_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888,
                                                 SDL_TEXTUREACCESS_STREAMING,
@@ -488,7 +479,8 @@ int main(int argc, char* argv[]) {
             int text_h = 8;
             int text_x = buttons[i].rect.x + (buttons[i].rect.w - text_w) / 2;
             int text_y = buttons[i].rect.y + (buttons[i].rect.h - text_h) / 2;
-            sdl_draw_text(renderer, text_x, text_y, buttons[i].label);
+            gfx_set_color(&sdl_gfx_ctx, COLOR_BLACK, COLOR_WHITE);
+            gfx_draw_string(&sdl_gfx_ctx, text_x, text_y, buttons[i].label);
         }
 
         SDL_RenderPresent(renderer);
