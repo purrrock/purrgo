@@ -33,30 +33,6 @@ void gfx_draw_circle(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t r)
     }
 }
 
-// Inline-функция для исключения накладных расходов на вызов
-static inline void draw_horizontal_line(gfx_context_t *ctx, int16_t x_start, int16_t x_end, int16_t y)
-{
-    // Отсечение невидимых строк по оси Y
-    if (y < 0 || y >= ctx->height) return;
-
-    if (x_start > x_end) {
-        int16_t temp = x_start;
-        x_start = x_end;
-        x_end = temp;
-    }
-
-    // Отсечение невидимых отрезков по оси X
-    if (x_end < 0 || x_start >= ctx->width) return;
-
-    if (x_start < 0) x_start = 0;
-    if (x_end >= ctx->width) x_end = ctx->width - 1;
-
-    // Прямой вызов платформенного коллбэка без проверок внутри цикла
-    for (int16_t x = x_start; x <= x_end; x++) {
-        ctx->draw_pixel(ctx->framebuffer, x, y, ctx->color_bg);
-    }
-}
-
 void gfx_fill_circle(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t r)
 {
     if (ctx == NULL || ctx->draw_pixel == NULL || r < 0) return;
@@ -66,12 +42,12 @@ void gfx_fill_circle(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t r)
     int16_t err = 1 - r;
 
     while (x >= y) {
-        draw_horizontal_line(ctx, x0 - x, x0 + x, y0 + y);
-        draw_horizontal_line(ctx, x0 - x, x0 + x, y0 - y);
+        gfx_draw_hline(ctx, x0 - x, x0 + x, y0 + y);
+        gfx_draw_hline(ctx, x0 - x, x0 + x, y0 - y);
 
         if (x != y) {
-            draw_horizontal_line(ctx, x0 - y, x0 + y, y0 + x);
-            draw_horizontal_line(ctx, x0 - y, x0 + y, y0 - x);
+            gfx_draw_hline(ctx, x0 - y, x0 + y, y0 + x);
+            gfx_draw_hline(ctx, x0 - y, x0 + y, y0 - x);
         }
 
         y++;
