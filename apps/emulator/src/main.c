@@ -4,7 +4,12 @@
 #include <string.h>
 #include "display.h"
 #include <purrgo/gnss_types.h>
+#ifdef USE_MOCK_GNSS
 #include <purrgo/gnss_mock.h>
+#else
+#include "purrgo/gnss_adapter.h"
+#include "serial_hal.h"
+#endif
 #include <purrgo/app_fsm.h>
 #include <purrgo/gfx_line.h>
 #include <purrgo/gfx_rect.h>
@@ -132,8 +137,21 @@ int main(int argc, char* argv[]) {
 
     display_init();
 
-    purrgo_gnss_solution_t mock_gnss;
-    purrgo_gnss_mock_init(&mock_gnss);
+    purrgo_gnss_solution_t gnss_solution;
+#ifdef USE_MOCK_GNSS
+    purrgo_gnss_mock_init(&gnss_solution);
+#else
+    memset(&gnss_solution, 0, sizeof(gnss_solution));
+    if (argc > 1) {
+        if (!serial_hal_open(argv[1], 9600)) {
+            fprintf(stderr, "Failed to open serial port: %s\n", argv[1]);
+            return 1;
+        }
+    } else {
+        fprintf(stderr, "Usage: %s <COM_PORT>\n", argv[0]);
+        return 1;
+    }
+#endif
 
     purrgo_app_init();
     gfx_init(&global_gfx_ctx, DISPLAY_WIDTH, DISPLAY_HEIGHT, (void*)1, emulator_draw_pixel_cb);
@@ -153,25 +171,50 @@ int main(int argc, char* argv[]) {
     while (!quit) {
         uint32_t current_time = SDL_GetTicks();
 
-        // 1. Обновление GNSS данных раз в секунду (1 Гц)
+        // 1. Обновление GNSS данных
+#ifndef USE_MOCK_GNSS
+        {
+            static char line_buffer[128];
+            static uint16_t line_pos = 0;
+            uint8_t rx_byte;
+            int bytes_processed = 0;
+            while (serial_hal_read_byte(&rx_byte) == 1 && bytes_processed < 256) {
+                if (line_pos < sizeof(line_buffer) - 1) {
+                    line_buffer[line_pos++] = (char)rx_byte;
+                } else {
+                    line_pos = 0;
+                }
+
+                if (rx_byte == '\n') {
+                    line_buffer[line_pos] = '\0';
+                    purrgo_gnss_process_nmea(line_buffer, &gnss_solution);
+                    line_pos = 0;
+                }
+                bytes_processed++;
+            }
+        }
+#endif
+
         if (current_time - last_gnss_time >= 1000) {
             last_gnss_time = current_time;
-            purrgo_gnss_mock_update(&mock_gnss);
-            purrgo_app_update(&mock_gnss);
+#ifdef USE_MOCK_GNSS
+            purrgo_gnss_mock_update(&gnss_solution);
+#endif
+            purrgo_app_update(&gnss_solution);
 
-            if (mock_gnss.valid) {
+            if (gnss_solution.valid) {
                 if (!first_fix_obtained) {
                     first_fix_obtained = true;
-                    purrgo_sun_calc(mock_gnss.lat_1e7, mock_gnss.lon_1e7,
-                                    mock_gnss.year % 100, mock_gnss.month, mock_gnss.day,
-                                    mock_gnss.hours, mock_gnss.minutes,
+                    purrgo_sun_calc(gnss_solution.lat_1e7, gnss_solution.lon_1e7,
+                                    gnss_solution.year % 100, gnss_solution.month, gnss_solution.day,
+                                    gnss_solution.hours, gnss_solution.minutes,
                                     app_config.tz_offset_minutes, &sun_info);
                     sun_initialized = true;
                     last_sun_update = current_time;
                 } else if (current_time - last_sun_update >= 60000) {
-                    purrgo_sun_calc(mock_gnss.lat_1e7, mock_gnss.lon_1e7,
-                                    mock_gnss.year % 100, mock_gnss.month, mock_gnss.day,
-                                    mock_gnss.hours, mock_gnss.minutes,
+                    purrgo_sun_calc(gnss_solution.lat_1e7, gnss_solution.lon_1e7,
+                                    gnss_solution.year % 100, gnss_solution.month, gnss_solution.day,
+                                    gnss_solution.hours, gnss_solution.minutes,
                                     app_config.tz_offset_minutes, &sun_info);
                     last_sun_update = current_time;
                 }
@@ -213,53 +256,53 @@ int main(int argc, char* argv[]) {
                     int y_pos = 10;
 
                     // UTC TIME
-                    snprintf(buf, sizeof(buf), "UTC: %02d:%02d:%02d", mock_gnss.hours, mock_gnss.minutes, mock_gnss.seconds);
+                    snprintf(buf, sizeof(buf), "UTC: %02d:%02d:%02d", gnss_solution.hours, gnss_solution.minutes, gnss_solution.seconds);
                     gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_WHITE);
                     y_pos += 12;
 
                     // LOCAL TIME
-                    int32_t total_mins = (int32_t)mock_gnss.hours * 60 + (int32_t)mock_gnss.minutes + app_config.tz_offset_minutes;
+                    int32_t total_mins = (int32_t)gnss_solution.hours * 60 + (int32_t)gnss_solution.minutes + app_config.tz_offset_minutes;
                     while (total_mins < 0) total_mins += 1440;
                     while (total_mins >= 1440) total_mins -= 1440;
                     uint8_t loc_hours = (uint8_t)(total_mins / 60);
                     uint8_t loc_minutes = (uint8_t)(total_mins % 60);
                     gfx_draw_string(&global_gfx_ctx, 10, y_pos, buf);
 
-                    snprintf(buf, sizeof(buf), "LOC: %02d:%02d:%02d", loc_hours, loc_minutes, mock_gnss.seconds);
+                    snprintf(buf, sizeof(buf), "LOC: %02d:%02d:%02d", loc_hours, loc_minutes, gnss_solution.seconds);
                     gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_WHITE);
                     gfx_draw_string(&global_gfx_ctx, 10, y_pos, buf);
                     y_pos += 12;
 
                     // FIX & SAT
-                    snprintf(buf, sizeof(buf), "FIX: %s   SAT: %d", mock_gnss.valid ? "3D" : "NO", mock_gnss.satellites_tracked);
+                    snprintf(buf, sizeof(buf), "FIX: %s   SAT: %d", gnss_solution.valid ? "3D" : "NO", gnss_solution.satellites_tracked);
                     gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_WHITE);
                     gfx_draw_string(&global_gfx_ctx, 10, y_pos, buf);
                     y_pos += 12;
 
                     // LAT
-                    int lat_deg = mock_gnss.lat_1e7 / 10000000;
-                    int lat_frac = (mock_gnss.lat_1e7 > 0 ? mock_gnss.lat_1e7 : -mock_gnss.lat_1e7) % 10000000;
+                    int lat_deg = gnss_solution.lat_1e7 / 10000000;
+                    int lat_frac = (gnss_solution.lat_1e7 > 0 ? gnss_solution.lat_1e7 : -gnss_solution.lat_1e7) % 10000000;
                     snprintf(buf, sizeof(buf), "LAT: %d.%07d", lat_deg, lat_frac);
                     gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_WHITE);
                     gfx_draw_string(&global_gfx_ctx, 10, y_pos, buf);
                     y_pos += 12;
 
                     // LON
-                    int lon_deg = mock_gnss.lon_1e7 / 10000000;
-                    int lon_frac = (mock_gnss.lon_1e7 > 0 ? mock_gnss.lon_1e7 : -mock_gnss.lon_1e7) % 10000000;
+                    int lon_deg = gnss_solution.lon_1e7 / 10000000;
+                    int lon_frac = (gnss_solution.lon_1e7 > 0 ? gnss_solution.lon_1e7 : -gnss_solution.lon_1e7) % 10000000;
                     snprintf(buf, sizeof(buf), "LON: %d.%07d", lon_deg, lon_frac);
                     gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_WHITE);
                     gfx_draw_string(&global_gfx_ctx, 10, y_pos, buf);
                     y_pos += 12;
 
                     // ALT
-                    snprintf(buf, sizeof(buf), "ALT: %d m", mock_gnss.alt_m);
+                    snprintf(buf, sizeof(buf), "ALT: %d m", gnss_solution.alt_m);
                     gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_WHITE);
                     gfx_draw_string(&global_gfx_ctx, 10, y_pos, buf);
                     y_pos += 12;
 
                     // SPD
-                    int speed_kmh = (mock_gnss.speed_knots * 1852) / 100000;
+                    int speed_kmh = (gnss_solution.speed_knots * 1852) / 100000;
                     snprintf(buf, sizeof(buf), "SPD: %d km/h", speed_kmh);
                     gfx_set_color(&global_gfx_ctx, COLOR_BLACK, COLOR_WHITE);
                     gfx_draw_string(&global_gfx_ctx, 10, y_pos, buf);
