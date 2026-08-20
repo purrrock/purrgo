@@ -23,7 +23,7 @@ def load_camera_bbox(map_name_path, size_km=5.0):
     """
     if not os.path.exists(map_name_path):
         print(f"[ERROR] Файл {map_name_path} не найден! Проверьте путь.")
-        # Дефолтные координаты (Москва) в случае отсутствия файла
+        # Дефолтные координаты в случае отсутствия файла
         center_lat, center_lon = 55.7558, 37.6173
     else:
         with open(map_name_path, "r", encoding="utf-8") as f:
@@ -252,8 +252,8 @@ def render_map(idx_path, mlp_path, map_name_path):
 
 if __name__ == "__main__":
     # Укажите путь к Вашим файлам слоя и конфигурации
-    IDX_FILE = "landuse.idx"
-    MLP_FILE = "landuse.mlp"
+    IDX_FILE = "roads.idx"
+    MLP_FILE = "roads.mlp"
     MAP_NAME = "map.name"
     
     render_map(IDX_FILE, MLP_FILE, MAP_NAME)
