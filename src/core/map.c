@@ -144,7 +144,7 @@ static void parse_node(
         if (diag) {
             if (passes) { diag->data_passed++; } else { diag->data_culled++; }
             if (diag->nodes_logged < 10) {
-                printf("MAP: DATA raw=(%08x,%08x,%08x,%08x) flt=(%f,%f,%f,%f) int=(%d,%d,%d,%d) %s\n",
+                fprintf(stderr, "MAP: DATA raw=(%08x,%08x,%08x,%08x) flt=(%f,%f,%f,%f) int=(%d,%d,%d,%d) %s\n",
                     unpack_u32_le(&node_buf[0]), unpack_u32_le(&node_buf[4]), unpack_u32_le(&node_buf[8]), unpack_u32_le(&node_buf[12]),
                     f_xmin, f_ymin, f_xmax, f_ymax,
                     xmin, ymin, xmax, ymax,
@@ -177,7 +177,7 @@ static void parse_node(
     int32_t c_ymax = (int32_t)(f_c_ymax * 10000000.0f);
 
     if (diag && diag->nodes_logged < 10) {
-        printf("MAP: NAV raw=(%08x,%08x,%08x,%08x) flt=(%f,%f,%f,%f) int=(%d,%d,%d,%d)\n",
+        fprintf(stderr, "MAP: NAV raw=(%08x,%08x,%08x,%08x) flt=(%f,%f,%f,%f) int=(%d,%d,%d,%d)\n",
             unpack_u32_le(&node_buf[4]), unpack_u32_le(&node_buf[8]), unpack_u32_le(&node_buf[12]), unpack_u32_le(&node_buf[16]),
             f_c_xmin, f_c_ymin, f_c_xmax, f_c_ymax,
             c_xmin, c_ymin, c_xmax, c_ymax
@@ -214,8 +214,8 @@ void purrgo_map_render_layer(
     const purrgo_bbox_t* camera,
     const purrgo_viewport_t* viewport
 ) {
-    printf("MAP: IDX opened\n");
-    printf("MAP: CAMERA min=(%ld,%ld) max=(%ld,%ld)\n",
+    fprintf(stderr, "MAP: IDX opened\n");
+    fprintf(stderr, "MAP: CAMERA min=(%ld,%ld) max=(%ld,%ld)\n",
            (long)camera->min_x, (long)camera->min_y,
            (long)camera->max_x, (long)camera->max_y);
 
@@ -261,7 +261,8 @@ void purrgo_map_render_layer(
         }
     }
 
-    printf("MAP: SQT=%u NAV=%u DATA=%u PASS=%u CULL=%u LINES=%u\n",
+    fprintf(stderr, "MAP: SQT=%u NAV=%u DATA=%u PASS=%u CULL=%u LINES=%u\n",
            diag.sqt_blocks, diag.nav_visited, diag.data_visited,
            diag.data_passed, diag.data_culled, diag.lines_drawn);
+	fflush(stderr);
 }
