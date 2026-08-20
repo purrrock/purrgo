@@ -1,4 +1,5 @@
 #include "purrgo/gfx_circle.h"
+#include "purrgo/gfx_renderer.h"
 #include <stddef.h>
 
 void gfx_draw_circle(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t r)
@@ -41,6 +42,10 @@ void gfx_fill_circle(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t r)
     int16_t y = 0;
     int16_t err = 1 - r;
 
+    // Временная подмена цвета для заливки цветом фона
+    gfx_color_t old_fg = ctx->color_fg;
+    ctx->color_fg = ctx->color_bg;
+
     while (x >= y) {
         gfx_draw_hline(ctx, x0 - x, x0 + x, y0 + y);
         gfx_draw_hline(ctx, x0 - x, x0 + x, y0 - y);
@@ -60,4 +65,7 @@ void gfx_fill_circle(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t r)
             err += ((y - x) << 1) + 1;
         }
     }
+
+    // Восстановление исходного цвета переднего плана
+    ctx->color_fg = old_fg;
 }

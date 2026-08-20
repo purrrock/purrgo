@@ -1,5 +1,6 @@
 #include "purrgo/gfx_polygon.h"
 #include "purrgo/gfx_line.h"
+#include "purrgo/gfx_renderer.h"
 
 void gfx_draw_polygon(gfx_context_t *ctx, const gfx_point_t *points, uint16_t count) {
     if (!ctx || !points || count < 2) {
@@ -29,6 +30,10 @@ void gfx_fill_polygon(gfx_context_t *ctx, const gfx_point_t *points, uint16_t co
 
     if (min_y < 0) min_y = 0;
     if (max_y >= ctx->height) max_y = ctx->height - 1;
+
+    // Временная подмена цвета для заливки цветом фона
+    gfx_color_t old_fg = ctx->color_fg;
+    ctx->color_fg = ctx->color_bg;
 
     for (int16_t y = min_y; y <= max_y; y++) {
         int16_t nodeX[32];
@@ -63,11 +68,14 @@ void gfx_fill_polygon(gfx_context_t *ctx, const gfx_point_t *points, uint16_t co
             }
         }
 
-        // Отрисовка попарных интервалов
+        // Отрисовка попарных интервалов с использованием gfx_draw_hline (которая теперь берет подмененный color_fg)
         for (uint16_t i = 0; i < nodes; i += 2) {
             if (i + 1 < nodes) {
                 gfx_draw_hline(ctx, nodeX[i], nodeX[i+1], y);
             }
         }
     }
+
+    // Восстановление исходного цвета переднего плана
+    ctx->color_fg = old_fg;
 }

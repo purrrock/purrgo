@@ -77,9 +77,9 @@ void gfx_draw_hline(gfx_context_t *ctx, int16_t x_start, int16_t x_end, int16_t 
     if (x_start < 0) x_start = 0;
     if (x_end >= ctx->width) x_end = ctx->width - 1;
 
-    // Прямой вызов платформенного коллбэка без проверок внутри цикла
+    // Прямой вызов платформенного коллбэка. Используется цвет переднего плана (color_fg)
     for (int16_t x = x_start; x <= x_end; x++) {
-        ctx->draw_pixel(ctx->framebuffer, x, y, ctx->color_bg);
+        ctx->draw_pixel(ctx->framebuffer, x, y, ctx->color_fg);
     }
 }
 
@@ -102,8 +102,8 @@ void gfx_draw_vline(gfx_context_t *ctx, int16_t x, int16_t y_start, int16_t y_en
     if (y_start < 0) y_start = 0;
     if (y_end >= ctx->height) y_end = ctx->height - 1;
 
-    // Прямой вызов платформенного коллбэка без проверок внутри цикла
+    // Прямой вызов платформенного коллбэка. Используется цвет переднего плана (color_fg)
     for (int16_t y = y_start; y <= y_end; y++) {
-        ctx->draw_pixel(ctx->framebuffer, x, y, ctx->color_bg);
+        ctx->draw_pixel(ctx->framebuffer, x, y, ctx->color_fg);
     }
 }
