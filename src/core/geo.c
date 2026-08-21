@@ -54,18 +54,9 @@ uint32_t purrgo_geo_distance_m(int32_t lat1, int32_t lon1, int32_t lat2, int32_t
     // Избегает вычислительно затратных операций, требуемых формулой гаверсинуса (Haversine).
     
     int32_t mean_lat = (lat1 / 2) + (lat2 / 2); // Средняя широта для масштабирования долготы
-    int32_t mean_lat_abs = mean_lat < 0 ? -mean_lat : mean_lat;
-    int32_t mean_lat_deg = mean_lat_abs / 10000000;
-
-    if (mean_lat_deg > 90) mean_lat_deg = 90;
 
     // Линейная интерполяция косинуса
-    int32_t idx = mean_lat_deg / 10;
-    int32_t frac = mean_lat_deg % 10;
-    int32_t cos_lat = cos_lut[idx];
-    if (idx < 9) {
-        cos_lat -= ((cos_lut[idx] - cos_lut[idx+1]) * frac) / 10;
-    }
+    int32_t cos_lat = purrgo_geo_cos_10k(mean_lat);
 
     // Масштабирование оси X (долгота сжимается при приближении к полюсам).
     // Используется int64_t, что транслируется в инструкции UMULL/SMULL на Cortex-M3 (3-5 тактов).
@@ -95,16 +86,8 @@ uint16_t purrgo_geo_azimuth_deg(int32_t lat1, int32_t lon1, int32_t lat2, int32_
     }
 
     int32_t mean_lat = (lat1 / 2) + (lat2 / 2);
-    int32_t mean_lat_abs = mean_lat < 0 ? -mean_lat : mean_lat;
-    int32_t mean_lat_deg = mean_lat_abs / 10000000;
-    if (mean_lat_deg > 90) mean_lat_deg = 90;
 
-    int32_t idx = mean_lat_deg / 10;
-    int32_t frac = mean_lat_deg % 10;
-    int32_t cos_lat = cos_lut[idx];
-    if (idx < 9) {
-        cos_lat -= ((cos_lut[idx] - cos_lut[idx+1]) * frac) / 10;
-    }
+    int32_t cos_lat = purrgo_geo_cos_10k(mean_lat);
 
     // Вычисление векторов в проекционной сетке
     int64_t x = dlat; // Ось X направлена на Север
@@ -142,4 +125,19 @@ uint16_t purrgo_geo_azimuth_deg(int32_t lat1, int32_t lon1, int32_t lat2, int32_
     }
 
     return (uint16_t)(angle == 360 ? 0 : angle);
+}
+
+int32_t purrgo_geo_cos_10k(int32_t lat_1e7) {
+    int32_t lat_abs = lat_1e7 < 0 ? -lat_1e7 : lat_1e7;
+    int32_t lat_deg = lat_abs / 10000000;
+    if (lat_deg > 90) lat_deg = 90;
+
+    int32_t idx = lat_deg / 10;
+    int32_t frac = lat_deg % 10;
+    int32_t cos_lat = cos_lut[idx];
+    if (idx < 9) {
+        cos_lat -= ((cos_lut[idx] - cos_lut[idx+1]) * frac) / 10;
+    }
+
+    return cos_lat;
 }
