@@ -15,7 +15,7 @@ void display_clear(uint8_t color) {
     }
 }
 
-void display_set_pixel(int x, int y, uint8_t color) {
+void  display_set_pixel(int16_t x, int16_t y, uint8_t color) {
     if (x < 0 || x >= DISPLAY_WIDTH || y < 0 || y >= DISPLAY_HEIGHT) {
         return;
     }
