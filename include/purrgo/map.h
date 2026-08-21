@@ -30,11 +30,11 @@ typedef struct {
 } purrgo_viewport_t;
 
 void purrgo_map_render_layer(
-    purrgo_fs_t* idx_fs, 
-    purrgo_fs_t* mlp_fs, 
-    gfx_context_t* gfx,
-    const purrgo_bbox_t* camera,
-    const purrgo_viewport_t* viewport,
+    purrgo_fs_t *idx_fs,
+    purrgo_fs_t *mlp_fs,
+    gfx_context_t *gfx,
+    const purrgo_bbox_t *camera,
+    const purrgo_viewport_t *viewport,
     bool is_polygon_layer
 );
 
