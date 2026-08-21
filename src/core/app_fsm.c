@@ -2,7 +2,6 @@
 #include "purrgo/app_fsm.h"
 #include "purrgo/config.h"
 #include "purrgo/purrgo_time.h"
-#include <stdio.h>
 
 // Глобальный экземпляр конфигурации устройства
 purrgo_config_t app_config;

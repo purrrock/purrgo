@@ -1,8 +1,11 @@
 #include "purrgo/track_logger.h"
 #include "purrgo/geo.h"
 #include "purrgo/config.h" // Подключаем доступ к app_config.timezone_offset_h
-#include <stdio.h>
 #include <string.h>
+
+#include "purrgo/logger.h"
+
+
 
 #define GPX_BUFFER_SIZE 512
 
