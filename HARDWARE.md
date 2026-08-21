@@ -308,13 +308,11 @@ The release display is intentionally not fixed to a conventional TFT or OLED.
 
 Two technologies are currently preferred:
 
-1. **Memory LCD**
-2. **Black/white electrophoretic display (E-Ink / e-paper)**
+**Black/white electrophoretic display (E-Ink / e-paper)**
 
 The final choice shall be based on actual measurements and usability tests.
 
 
-Memory LCD is currently the preferred choice if smooth map interaction is required.
 
 Desired characteristics:
 
@@ -324,16 +322,6 @@ Desired characteristics:
 - very low static power;
 - fast enough update rate for navigation UI;
 - SPI or similar serial interface.
-
-Advantages:
-
-- extremely low power;
-- no conventional backlight required for reflective operation;
-- image remains visible without continuous framebuffer refresh;
-- substantially faster refresh than electrophoretic displays;
-- well suited to a moving map.
-
-Memory LCD is particularly attractive for a Garmin-like user interface.
 
 ---
 
@@ -655,7 +643,7 @@ A convenient test connector or test pads should be provided.
 | MCU | STM32F446RE / NUCLEO-F446RE | STM32U5 family |
 | Debugger | Integrated ST-LINK | External SWD during development |
 | GNSS | GY-NEO6MV2 | Modern u-blox M10-class |
-| Display | OLED/TFT | Memory LCD or B/W E-Ink |
+| Display | OLED/TFT |  B/W E-Ink |
 | Storage | microSD | microSD |
 | Controls | Buttons / TM1638 | Physical buttons |
 | Battery | USB / bench supply | 1 × 18650 |
@@ -780,16 +768,13 @@ RELEASE
        │  │
        │  └─────── microSD
        │
-       ├────────── Memory LCD
-       │             OR
-       │        B/W E-Ink
+       ├───────   B/W E-Ink
        │
        └────────── u-blox M10
 ```
 
 The final display technology remains an engineering decision between:
 
-- **Memory LCD** — preferred for fast map interaction;
 - **black/white E-Ink** — preferred for maximum sunlight readability and potentially lower average display power.
 
 The final choice shall be made after testing actual display modules with the PurrGo map renderer.
@@ -847,9 +832,7 @@ physical controls
 Evaluate:
 
 ```text
-Memory LCD
-vs.
-B/W/R E-Ink
+B/W E-Ink
 ```
 
 with actual power measurements.

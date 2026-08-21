@@ -34,7 +34,8 @@ void purrgo_map_render_layer(
     purrgo_fs_t* mlp_fs, 
     gfx_context_t* gfx,
     const purrgo_bbox_t* camera,
-    const purrgo_viewport_t* viewport
+    const purrgo_viewport_t* viewport,
+    bool is_polygon_layer
 );
 
 #endif // PURRGO_MAP_H

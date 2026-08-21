@@ -36,13 +36,9 @@ void purrgo_config_init(void) {
     // Базовые значения карт и координат (Минск)
    /*
      * Default map directory for the PC emulator.
-     *
      * The emulator is normally launched from:
-     *
      *     <repository>/build/apps/emulator/
-     *
      * and test map data is located under:
-     *
      *     <repository>/tests/data/maps/
      */
     strncpy(
@@ -66,7 +62,7 @@ bool purrgo_config_load(void) {
         return false;
     }
 
-    // Стековый буфер. 256 байт достаточно для базовой конфигурации.
+    // Стековый буфер. 512 байт достаточно для базовой конфигурации.
     char buf[CONFIG_MAX_SIZE];
     memset(buf, 0, sizeof(buf));
     
@@ -99,10 +95,13 @@ bool purrgo_config_load(void) {
             char* key = line;
             char* val = delim + 1;
             
-            // Маппинг строковых ключей на поля структуры
+		// Маппинг строковых ключей на поля структуры
             if (strcmp(key, "TZ") == 0) {
-                // Пользователь задает TZ в часах (например, TZ=+3). Конвертируем в минуты.
+                // Обратная совместимость для старых файлов
                 app_config.tz_offset_minutes = (int16_t)(parse_int32(val) * 60);
+            } else if (strcmp(key, "TZ_MIN") == 0) {
+                // Прямое чтение в минутах
+                app_config.tz_offset_minutes = (int16_t)parse_int32(val);
             } else if (strcmp(key, "MAP_DIR") == 0) {
                 strncpy(app_config.map_dir, val, sizeof(app_config.map_dir) - 1);
                 app_config.map_dir[sizeof(app_config.map_dir) - 1] = '\0';
@@ -138,13 +137,12 @@ bool purrgo_config_save(void) {
     int16_t tz_h = app_config.tz_offset_minutes / 60;
 
     // Формирование текстового блока настроек. 
-    // Применение (int) каста гарантирует совместимость %d с 32-битными типами.
     int len = snprintf(buf, sizeof(buf), 
-        "TZ=%+d\n"
+        "TZ_MIN=%d\n"
         "MAP_DIR=%s\n"
         "LAST_LAT_1E7=%d\n"
         "LAST_LON_1E7=%d\n",
-        tz_h,
+        (int)app_config.tz_offset_minutes,
         app_config.map_dir,
         (int)app_config.last_lat_1e7,
         (int)app_config.last_lon_1e7

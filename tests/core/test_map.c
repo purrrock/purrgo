@@ -96,7 +96,7 @@ void test_sqt_parsing() {
     idx_mock.size = 32 + 16 + 28;
     idx_mock.offset = 0;
 
-    purrgo_map_render_layer(&idx_fs, &mlp_fs, &gfx, &cam, &vp);
+    purrgo_map_render_layer(&idx_fs, &mlp_fs, &gfx, &cam, &vp, false);
     assert(idx_mock.offset == 32 + 16 + 28);
 }
 
@@ -126,7 +126,7 @@ int main(void) {
     pack_u32_le(&idx_mock.buffer[32 + 8], 0); // Mode
     pack_u32_le(&idx_mock.buffer[32 + 12], 0); // Count = 0
 
-    purrgo_map_render_layer(&idx_fs, &mlp_fs, &gfx, &cam, &vp);
+    purrgo_map_render_layer(&idx_fs, &mlp_fs, &gfx, &cam, &vp, false);
     assert(idx_mock.offset == 48);
 
     // Test 2: Nav Node Culling (v3_jump)
@@ -148,7 +148,7 @@ int main(void) {
     pack_u32_le(&idx_mock.buffer[48 + 20], 1); // nav_level
     pack_u32_le(&idx_mock.buffer[48 + 24], 5); // obj_count
 
-    purrgo_map_render_layer(&idx_fs, &mlp_fs, &gfx, &cam, &vp);
+    purrgo_map_render_layer(&idx_fs, &mlp_fs, &gfx, &cam, &vp, false);
     assert(idx_mock.seek_called == true);
     assert(idx_mock.last_seek_offset == (48 + 28) + (100 - 8)); // current offset after read + jump
 

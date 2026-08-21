@@ -4,10 +4,10 @@ from pathlib import Path
 
 def dump_project(source_directory: str, output_filename: str) -> None:
     # Множество расширений для фильтрации исходного кода и документации проекта
-    valid_extensions = {'.c', '.h', '.cpp', '.hpp', '.py', '.md', '.txt', '.cmake', '.S', '.ld'}
+    valid_extensions = {'.c', '.h', '.cpp', '.hpp', '.py', '.md', '.S', '.ld'} # '.txt', '.cmake',
     
     # Точные имена файлов, не имеющих стандартных расширений, но требующих выгрузки
-    valid_filenames = {'CMakeLists.txt', 'Makefile'}
+    valid_filenames = {} # {'CMakeLists.txt', 'Makefile'} 
     
     # Директории, исключаемые из обхода. Добавлен third_party для игнорирования стороннего кода.
     ignored_dirs = {'.git', 'build', 'out', '__pycache__', '.vscode', '.idea', 'Release', 'Debug', 'third_party'}

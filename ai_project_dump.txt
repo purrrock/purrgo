@@ -1,103 +1,3 @@
---- FILE: CMakeLists.txt ---
-```txt
-cmake_minimum_required(VERSION 3.20)
-project(purrgo C)
-
-set(CMAKE_C_STANDARD 11)
-set(CMAKE_C_STANDARD_REQUIRED ON)
-set(CMAKE_C_EXTENSIONS OFF)
-
-# Определение значения по умолчанию в зависимости от целевой ОС
-if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
-    set(DEFAULT_BUILD_EMULATOR ON)
-else()
-    # Для кросс-компиляции (CMAKE_SYSTEM_NAME = "Generic" или "Linux")
-    set(DEFAULT_BUILD_EMULATOR OFF)
-endif()
-
-# Инициализация опции с динамическим значением по умолчанию
-option(BUILD_EMULATOR "Build hardware-in-the-loop PC emulator" ${DEFAULT_BUILD_EMULATOR})
-
-option(USE_MOCK_GNSS "Enable mock GNSS data generator" ON)
-if(USE_MOCK_GNSS)
-    add_compile_definitions(USE_MOCK_GNSS)
-endif()
-
-add_subdirectory(third_party)
-
-# Автоматический рекурсивный поиск всех .c файлов в директории src/core/.
-file(GLOB_RECURSE CORE_SOURCES CONFIGURE_DEPENDS "src/core/*.c")
-
-add_library(purrgo_core
-    ${CORE_SOURCES}
-)
-
-target_include_directories(purrgo_core
-    PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
-
-target_link_libraries(purrgo_core PRIVATE minmea)
-
-file(GLOB_RECURSE UBLOX_SOURCES CONFIGURE_DEPENDS "src/platform/ublox/*.c")
-add_library(purrgo_ublox7
-    ${UBLOX_SOURCES}
-)
-
-target_include_directories(purrgo_ublox7 PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/platform/ublox
-)
-
-target_link_libraries(purrgo_ublox7 PUBLIC purrgo_core)
-
-if (WIN32 OR UNIX)
-    file(GLOB_RECURSE PC_PLATFORM_SOURCES CONFIGURE_DEPENDS "src/platform/pc/*.c")
-    
-    add_library(purrgo_platform_pc
-        ${PC_PLATFORM_SOURCES}
-    )
-    
-target_include_directories(purrgo_platform_pc
-    PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/platform/pc
-)
-
-    file(GLOB PC_APP_SOURCES CONFIGURE_DEPENDS "apps/pc/*.c")
-    add_executable(purrgo_pc
-        ${PC_APP_SOURCES}
-    )
-    target_link_libraries(purrgo_pc PRIVATE purrgo_core purrgo_platform_pc)
-
-    file(GLOB_RECURSE LOGGER_APP_SOURCES CONFIGURE_DEPENDS "apps/pc/pc_realtime_logger/*.c")
-    add_executable(pc_realtime_logger
-        ${LOGGER_APP_SOURCES}
-    )
-    target_link_libraries(pc_realtime_logger PRIVATE purrgo_core purrgo_platform_pc)
-
-    enable_testing()
-
-    add_executable(test_geo tests/core/test_geo.c)
-    target_link_libraries(test_geo PRIVATE purrgo_core)
-    add_test(NAME test_geo COMMAND test_geo)
-
-    add_executable(test_gnss tests/core/test_gnss.c)
-    target_link_libraries(test_gnss PRIVATE purrgo_core)
-    add_test(NAME test_gnss COMMAND test_gnss)
-
-    add_executable(test_map tests/core/test_map.c)
-    target_link_libraries(test_map PRIVATE purrgo_core)
-    add_test(NAME test_map COMMAND test_map)
-endif()
-
-# Подключение директории эмулятора перенесено в конец дерева сборки, 
-# чтобы цель purrgo_core уже существовала в контексте CMake на момент вызова.
-if(BUILD_EMULATOR)
-    add_subdirectory(apps/emulator)
-endif()
-```
-
 --- FILE: HARDWARE.md ---
 ```md
 # PurrGo — Hardware Architecture
@@ -410,13 +310,11 @@ The release display is intentionally not fixed to a conventional TFT or OLED.
 
 Two technologies are currently preferred:
 
-1. **Memory LCD**
-2. **Black/white electrophoretic display (E-Ink / e-paper)**
+**Black/white electrophoretic display (E-Ink / e-paper)**
 
 The final choice shall be based on actual measurements and usability tests.
 
 
-Memory LCD is currently the preferred choice if smooth map interaction is required.
 
 Desired characteristics:
 
@@ -426,16 +324,6 @@ Desired characteristics:
 - very low static power;
 - fast enough update rate for navigation UI;
 - SPI or similar serial interface.
-
-Advantages:
-
-- extremely low power;
-- no conventional backlight required for reflective operation;
-- image remains visible without continuous framebuffer refresh;
-- substantially faster refresh than electrophoretic displays;
-- well suited to a moving map.
-
-Memory LCD is particularly attractive for a Garmin-like user interface.
 
 ---
 
@@ -757,7 +645,7 @@ A convenient test connector or test pads should be provided.
 | MCU | STM32F446RE / NUCLEO-F446RE | STM32U5 family |
 | Debugger | Integrated ST-LINK | External SWD during development |
 | GNSS | GY-NEO6MV2 | Modern u-blox M10-class |
-| Display | OLED/TFT | Memory LCD or B/W E-Ink |
+| Display | OLED/TFT |  B/W E-Ink |
 | Storage | microSD | microSD |
 | Controls | Buttons / TM1638 | Physical buttons |
 | Battery | USB / bench supply | 1 × 18650 |
@@ -882,16 +770,13 @@ RELEASE
        │  │
        │  └─────── microSD
        │
-       ├────────── Memory LCD
-       │             OR
-       │        B/W E-Ink
+       ├───────   B/W E-Ink
        │
        └────────── u-blox M10
 ```
 
 The final display technology remains an engineering decision between:
 
-- **Memory LCD** — preferred for fast map interaction;
 - **black/white E-Ink** — preferred for maximum sunlight readability and potentially lower average display power.
 
 The final choice shall be made after testing actual display modules with the PurrGo map renderer.
@@ -949,9 +834,7 @@ physical controls
 Evaluate:
 
 ```text
-Memory LCD
-vs.
-B/W/R E-Ink
+B/W E-Ink
 ```
 
 with actual power measurements.
@@ -986,8 +869,8 @@ Integrate:
 The release PCB shall be designed only after the major components have been experimentally validated.
 ```
 
---- FILE: purrgo_file_descriptions.txt ---
-```txt
+--- FILE: purrgo_file_descriptions.md ---
+```md
 # PurrGo — описание файлов и каталогов
 
 purrgo_file_descriptions.txt этот файл
@@ -1757,30 +1640,6 @@ PurrGo is distributed under the license included in [`LICENSE`](LICENSE).
    }
    ```
 4. Сохраните файл и запустите сессию отладки кнопкой `F5`.
-```
-
---- FILE: apps\emulator\CMakeLists.txt ---
-```txt
-# Поиск установленной в MSYS2/MinGW библиотеки SDL2
-find_package(SDL2 REQUIRED)
-
-file(GLOB EMULATOR_SOURCES CONFIGURE_DEPENDS "src/*.c")
-
-add_executable(purrgo_emulator ${EMULATOR_SOURCES})
-
-target_include_directories(purrgo_emulator PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
-
-# Линковка с ядром проекта и импортированными целями SDL2
-target_link_libraries(purrgo_emulator PRIVATE purrgo_core purrgo_platform_pc SDL2::SDL2main SDL2::SDL2)
-
-if(WIN32)
-    # Автоматическое копирование SDL2.dll в директорию сборки эмулятора
-    add_custom_command(TARGET purrgo_emulator POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "C:/msys64/ucrt64/bin/SDL2.dll"
-        $<TARGET_FILE_DIR:purrgo_emulator>
-    )
-endif()
 ```
 
 --- FILE: apps\emulator\include\display.h ---
@@ -5308,8 +5167,8 @@ https://github.com/purrrock/purrgo
 
 ```
 
---- FILE: docs\USB-UART adapter.txt ---
-```txt
+--- FILE: docs\USB-UART adapter.md ---
+```md
 Преобразователь USB - UART PL2303TA (с кабелем)
 USB к UART TTL кабель PL2303 TA RS232 передаёт информацию со скоростью от 75 до 128 000 Кбит/с. Кабель может работать с 3.3 В или 5 В выходным напряжением, которое чаще всего имеют микроконтроллеры. Поддерживает USB 1.1 и 2.0.
 
@@ -5415,7 +5274,7 @@ typedef struct {
     bool backlight_on;            // Состояние подсветки дисплея[cite: 3]
     
     // Новые параметры навигатора
-    char map_dir[32];             // Директория выбранной карты
+    char map_dir[128];             // Директория выбранной карты
     int32_t last_lat_1e7;         // Последняя широта для центрирования при холодном старте
     int32_t last_lon_1e7;         // Последняя долгота для центрирования при холодном старте
 } purrgo_config_t;
@@ -6644,23 +6503,21 @@ static void load_directory_list(void) {
     dir_list_count = 0;
     dir_cursor_idx = 0;
 
-    // Открываем базовую директорию карт (например, /MAPS)
-    // В данном случае читаем из корня, либо относительно текущей,
-    // но в задании требуется искать папки для map_dir.
-    // Будем читать из родительской директории карт, либо из корня приложения.
-    // Пусть базовая папка будет "MAPS" или просто читаем тесты.
-    // Если app_config.map_dir == "/MAPS/BY", то ищем в "/MAPS"
-    // Но для простоты прочитаем "../../../tests/data/maps"
-    // или вообще корневую папку "/". Для эмулятора используем "./"
-    // В реальном устройстве это будет корень SD карты "/"
-#ifdef _WIN32
-    const char* base_path = "./";
-#else
-    const char* base_path = "../../../tests/data/maps"; // for emulator tests, or just "/"
-#endif
+/*
+     * PC emulator map data is stored in:
+     *     <repository>/tests/data/maps/
+     *
+     * The emulator executable is normally run from:
+     *     <repository>/build/apps/emulator/
+     * Therefore the relative path from the emulator working directory
+     * to the map root is:
+     *     ../../../tests/data/maps
+     * Use the same path on Windows and other PC platforms.
+     */
+    const char* base_path = "../../../tests/data/maps";
 
-    purrgo_dir_t* dir = purrgo_fs_opendir(base_path);
-    if (!dir) return;
+     purrgo_dir_t* dir = purrgo_fs_opendir(base_path);
+     if (!dir) return;
 
     purrgo_fs_dirent_t entry;
     while (purrgo_fs_readdir(dir, &entry) && dir_list_count < MAX_DIRS_COUNT) {
@@ -6679,8 +6536,18 @@ static void load_directory_list(void) {
 // void purrgo_config_init(void) is in config.c
 
 void purrgo_app_init(void) {
-    purrgo_config_init();
-    // Стартовый экран согласно новой концепции UI — Карта
+    /*
+     * First try to load the persistent configuration.
+     *
+     * purrgo_config_load() initializes default values and creates
+     * PURRGO.CFG when the file does not exist.
+     *
+     * Therefore the application should NOT call purrgo_config_init()
+     * unconditionally here: doing so would overwrite the values
+     * loaded from PURRGO.CFG.
+     */
+    purrgo_config_load();
+
     current_state = APP_STATE_MAP;
     draft_tz_offset_minutes = app_config.tz_offset_minutes;
 }
@@ -6738,16 +6605,27 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
                 }
                 break;
 
-            case PURRGO_BTN_OK:
-                if (config_cursor_idx == 0) {
-                    // Сохранение часового пояса и возврат на главный экран (Карта)
-                    app_config.tz_offset_minutes = draft_tz_offset_minutes;
-                    current_state = APP_STATE_MAP;
-                } else if (config_cursor_idx == 1) {
-                    current_state = APP_STATE_MENU_DIR_SELECT;
-                    load_directory_list();
-                }
-                break;
+	case PURRGO_BTN_OK:
+    if (config_cursor_idx == 0) {
+        /*
+         * Commit the edited timezone to the active configuration.
+         */
+        app_config.tz_offset_minutes = draft_tz_offset_minutes;
+
+        /*
+         * Persist the complete configuration to PURRGO.CFG.
+         *
+         * This is required because changing the timezone must survive
+         * the next application restart.
+         */
+        purrgo_config_save();
+
+        current_state = APP_STATE_MAP;
+    } else if (config_cursor_idx == 1) {
+        current_state = APP_STATE_MENU_DIR_SELECT;
+        load_directory_list();
+    }
+    break;
 
             case PURRGO_BTN_MENU:
                 // Отмена изменений и возврат на главный экран по зацикливанию
@@ -6771,16 +6649,27 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
                 break;
             case PURRGO_BTN_OK:
                 if (dir_list_count > 0) {
-                    // Сохраняем выбранную директорию (с формированием полного пути)
-                    // Для простоты подставляем выбранную папку
-#ifdef _WIN32
-                    snprintf(app_config.map_dir, sizeof(app_config.map_dir), "./%s", dir_list[dir_cursor_idx].name);
-#else
-                    snprintf(app_config.map_dir, sizeof(app_config.map_dir), "../../../tests/data/maps/%s", dir_list[dir_cursor_idx].name);
-#endif
-                    purrgo_config_save();
-                    current_state = APP_STATE_MENU_CONFIG;
-                }
+                    /*
+                     * Save the path relative to the emulator working
+                     * directory.
+                     *
+                     * Example:
+                     *
+                     *     ../../../tests/data/maps/roads
+                     *
+                     * This is the same path used by load_directory_list()
+                     * and therefore points to the actual test map data.
+                     */
+                    snprintf(
+                        app_config.map_dir,
+                        sizeof(app_config.map_dir),
+                        "../../../tests/data/maps/%s",
+                        dir_list[dir_cursor_idx].name
+                    );
+
+                     purrgo_config_save();
+                     current_state = APP_STATE_MENU_CONFIG;
+                 }
                 break;
             case PURRGO_BTN_MENU:
                 // Кнопка MENU выполняет роль "Назад" для возврата в меню настроек
@@ -7511,7 +7400,7 @@ void purrgo_app_ui_render(
 #include <string.h>
 
 #define CONFIG_FILENAME "PURRGO.CFG"
-#define CONFIG_MAX_SIZE 256
+#define CONFIG_MAX_SIZE 512
 
 purrgo_config_t app_config;
 
@@ -7541,11 +7430,27 @@ void purrgo_config_init(void) {
     app_config.backlight_on = true; //[cite: 3]
     
     // Базовые значения карт и координат (Минск)
-    strncpy(app_config.map_dir, "/MAPS/BY", sizeof(app_config.map_dir) - 1);
-    app_config.map_dir[sizeof(app_config.map_dir) - 1] = '\0';
-    app_config.last_lat_1e7 = 537135000;
-    app_config.last_lon_1e7 = 284199000;
-}
+   /*
+     * Default map directory for the PC emulator.
+     *
+     * The emulator is normally launched from:
+     *
+     *     <repository>/build/apps/emulator/
+     *
+     * and test map data is located under:
+     *
+     *     <repository>/tests/data/maps/
+     */
+    strncpy(
+        app_config.map_dir,
+        "../../../tests/data/maps",
+        sizeof(app_config.map_dir) - 1
+    );
+     app_config.map_dir[sizeof(app_config.map_dir) - 1] = '\0';
+
+     app_config.last_lat_1e7 = 537135000;
+     app_config.last_lon_1e7 = 284199000;
+ }
 
 bool purrgo_config_load(void) {
     purrgo_file_t* file = purrgo_fs_open(CONFIG_FILENAME, FS_READ);
@@ -7561,10 +7466,18 @@ bool purrgo_config_load(void) {
     char buf[CONFIG_MAX_SIZE];
     memset(buf, 0, sizeof(buf));
     
-    size_t bytes_read = purrgo_fs_read(file, (uint8_t*)buf, sizeof(buf) - 1);
-    purrgo_fs_close(file);
+    uint32_t bytes_read = purrgo_fs_read(
+        file,
+        (uint8_t*)buf,
+        (uint32_t)(sizeof(buf) - 1)
+    );
+
+     purrgo_fs_close(file);
     
-    if (bytes_read == 0) return false;
+    if (bytes_read == 0) {
+        purrgo_config_init();
+        return false;
+    }
 
     char* line = buf;
     while (*line) {
@@ -7606,8 +7519,13 @@ bool purrgo_config_load(void) {
 }
 
 bool purrgo_config_save(void) {
+	fprintf(stderr, "Saving configuration to: %s\n", CONFIG_FILENAME);
     purrgo_file_t* file = purrgo_fs_open(CONFIG_FILENAME, FS_WRITE_CREATE);
-    if (!file) return false;
+	
+    if (!file) {
+    perror("purrgo_config_save: fopen");
+    return false;
+}
     
     char buf[CONFIG_MAX_SIZE];
     
@@ -7628,14 +7546,42 @@ bool purrgo_config_save(void) {
         (int)app_config.last_lon_1e7
     );
     
-    if (len > 0) {
-        purrgo_fs_write(file, (uint8_t*)buf, len);
-        purrgo_fs_sync(file);
+    /*
+     * snprintf() returns the number of characters that would have
+     * been written, excluding the terminating NUL.
+     *
+     * Therefore len >= sizeof(buf) means that the configuration
+     * was truncated and must not be written.
+     */
+    if (len < 0 || (size_t)len >= sizeof(buf)) {
+        purrgo_fs_close(file);
+        return false;
+     }
+
+    /*
+     * Verify that the complete configuration was actually written.
+     *
+     * purrgo_fs_write() returns the number of bytes written.
+     * Previously this result was ignored, so purrgo_config_save()
+     * reported success even when the filesystem write failed.
+     */
+    uint32_t written = purrgo_fs_write(
+        file,
+        (const uint8_t*)buf,
+        (uint32_t)len
+    );
+
+    if (written != (uint32_t)len) {
+        purrgo_fs_close(file);
+        return false;
     }
-    
-    purrgo_fs_close(file);
-    return true;
-}
+
+    purrgo_fs_sync(file);
+     
+     purrgo_fs_close(file);
+
+     return true;
+ }
 ```
 
 --- FILE: src\core\geo.c ---
@@ -10071,87 +10017,300 @@ void gfx_draw_string(gfx_context_t *ctx, int16_t x, int16_t y, const char *str)
 --- FILE: src\platform\pc\fs_hal.c ---
 ```c
 #include "purrgo/fs_hal.h"
+
 #include <stdio.h>
 #include <dirent.h>
 #include <string.h>
+#include <stdlib.h>
+#include <sys/stat.h>
+
+/*
+ * PC-specific implementation of the opaque purrgo_dir_t object.
+ *
+ * The portable HAL exposes purrgo_dir_t without defining its contents.
+ * On the PC we need to keep both:
+ *
+ *   1. DIR*  - native directory handle used by readdir()/closedir()
+ *   2. path  - path of the opened directory
+ *
+ * The path is required because we do not rely on struct dirent::d_type.
+ * Instead, stat() is used to determine whether an entry is a directory.
+ */
+struct purrgo_dir_s {
+    DIR* dir;
+    char path[PURRGO_FS_MAX_PATH];
+};
+
 
 purrgo_file_t* purrgo_fs_open(const char* filepath, fs_mode_t mode) {
     const char* c_mode = "wb";
+
     if (mode == FS_READ) {
         c_mode = "rb";
     } else if (mode == FS_WRITE_APPEND) {
         c_mode = "ab";
     }
-    // Приведение типа указателя FILE* ОС к платформонезависимому purrgo_file_t*
+
+    /*
+     * FILE* is an operating-system/CRT-specific type.
+     * The portable HAL exposes it as purrgo_file_t*.
+     */
     return (purrgo_file_t*)fopen(filepath, c_mode);
 }
 
-uint32_t purrgo_fs_read(purrgo_file_t* file, uint8_t* buffer, uint32_t size) {
-    if (!file || !buffer) return 0;
+
+uint32_t purrgo_fs_read(
+    purrgo_file_t* file,
+    uint8_t* buffer,
+    uint32_t size
+) {
+    if (!file || !buffer) {
+        return 0;
+    }
+
     /*
-     * Явное приведение аргументов и возвращаемого значения (size_t <-> uint32_t).
-     * Стандартные функции fread/fwrite возвращают size_t (64-бит на x64).
-     * На платформе STM32 FatFs оперирует типом UINT (32-бит).
-     * Приведение типов гарантирует идентичное поведение кода на ПК и микроконтроллере.
+     * fread() uses size_t, while the PurrGo HAL uses uint32_t.
+     *
+     * The explicit casts keep the HAL interface independent of the
+     * host architecture. On a 64-bit PC size_t is typically 64-bit,
+     * while the PurrGo HAL intentionally uses uint32_t.
      */
-    return (uint32_t)fread(buffer, 1, (size_t)size, (FILE*)file);
+    return (uint32_t)fread(
+        buffer,
+        1,
+        (size_t)size,
+        (FILE*)file
+    );
 }
 
-uint32_t purrgo_fs_write(purrgo_file_t* file, const uint8_t* data, uint32_t size) {
-    if (!file || !data) return 0;
-    return (uint32_t)fwrite(data, 1, (size_t)size, (FILE*)file);
+
+uint32_t purrgo_fs_write(
+    purrgo_file_t* file,
+    const uint8_t* data,
+    uint32_t size
+) {
+    if (!file || !data) {
+        return 0;
+    }
+
+    return (uint32_t)fwrite(
+        data,
+        1,
+        (size_t)size,
+        (FILE*)file
+    );
 }
 
-bool purrgo_fs_seek(purrgo_file_t* file, uint32_t offset) {
-    if (!file) return false;
-    return fseek((FILE*)file, (long)offset, SEEK_SET) == 0;
+
+bool purrgo_fs_seek(
+    purrgo_file_t* file,
+    uint32_t offset
+) {
+    if (!file) {
+        return false;
+    }
+
+    return fseek(
+        (FILE*)file,
+        (long)offset,
+        SEEK_SET
+    ) == 0;
 }
+
 
 void purrgo_fs_sync(purrgo_file_t* file) {
-    if (file) fflush((FILE*)file);
+    if (file) {
+        fflush((FILE*)file);
+    }
 }
+
 
 void purrgo_fs_close(purrgo_file_t* file) {
-    if (file) fclose((FILE*)file);
+    if (file) {
+        fclose((FILE*)file);
+    }
 }
 
+
+/*
+ * Open a directory.
+ *
+ * Unlike the previous implementation, we cannot simply cast DIR*
+ * to purrgo_dir_t* because the PC implementation also needs to retain
+ * the directory path for stat().
+ */
 purrgo_dir_t* purrgo_fs_opendir(const char* path) {
-    // Приведение системного указателя DIR* к платформонезависимому purrgo_dir_t*
-    return (purrgo_dir_t*)opendir(path);
-}
-bool purrgo_fs_readdir(purrgo_dir_t* dir, purrgo_fs_dirent_t* dirent) {
-    if (!dir || !dirent) return false;
+    if (!path) {
+        return NULL;
+    }
 
-    struct dirent* ep = readdir((DIR*)dir);
-    if (!ep) return false;
+    DIR* system_dir = opendir(path);
+
+    if (!system_dir) {
+        return NULL;
+    }
 
     /*
-     * Использование sizeof защищает от переполнения и устраняет
-     * зависимость от внешних необъявленных макросов длины пути.
+     * purrgo_dir_t is opaque in the public HAL.
+     * Its actual definition is private to this PC implementation.
      */
-    strncpy(dirent->name, ep->d_name, sizeof(dirent->name) - 1);
+    purrgo_dir_t* dir =
+        (purrgo_dir_t*)malloc(sizeof(purrgo_dir_t));
+
+    if (!dir) {
+        closedir(system_dir);
+        return NULL;
+    }
+
+    dir->dir = system_dir;
+
+    /*
+     * Store the directory path.
+     *
+     * This path will later be combined with the entry name and passed
+     * to stat().
+     */
+    int written = snprintf(
+        dir->path,
+        sizeof(dir->path),
+        "%s",
+        path
+    );
+
+    /*
+     * Do not keep a truncated path.
+     */
+    if (written < 0 ||
+        (size_t)written >= sizeof(dir->path)) {
+
+        closedir(system_dir);
+        free(dir);
+
+        return NULL;
+    }
+
+    return dir;
+}
+
+
+/*
+ * Read one directory entry.
+ *
+ * IMPORTANT:
+ *
+ * We deliberately do NOT use:
+ *
+ *     ep->d_type
+ *
+ * because d_type is not guaranteed to be present in struct dirent
+ * provided by every platform/toolchain.
+ *
+ * Instead, the complete path is constructed and stat() is used to
+ * determine the actual filesystem object type.
+ */
+bool purrgo_fs_readdir(
+    purrgo_dir_t* dir,
+    purrgo_fs_dirent_t* dirent
+) {
+    if (!dir || !dir->dir || !dirent) {
+        return false;
+    }
+
+    struct dirent* ep = readdir(dir->dir);
+
+    /*
+     * readdir() returns NULL when there are no more entries.
+     */
+    if (!ep) {
+        return false;
+    }
+
+    /*
+     * Copy the filesystem entry name into the platform-independent
+     * PurrGo directory entry structure.
+     *
+     * The destination buffer has a fixed size, so the copy is explicitly
+     * bounded and always terminated with '\0'.
+     */
+    strncpy(
+        dirent->name,
+        ep->d_name,
+        sizeof(dirent->name) - 1
+    );
+
     dirent->name[sizeof(dirent->name) - 1] = '\0';
 
-#if defined(_DIRENT_HAVE_D_TYPE) || defined(__MINGW32__)
+
     /*
-     * В MinGW-w64 поле d_type присутствует. 
-     * Использование константы DT_DIR (обычно 4) безопаснее "магического числа".
+     * Build the complete path:
+     *
+     *     <opened directory>/<entry name>
+     *
+     * Example:
+     *
+     *     ./maps/frankfurt
      */
-    dirent->is_directory = (ep->d_type == DT_DIR);
-#else
+    char full_path[PURRGO_FS_MAX_PATH];
+
+    int written = snprintf(
+        full_path,
+        sizeof(full_path),
+        "%s/%s",
+        dir->path,
+        dirent->name
+    );
+
     /*
-     * Фолбэк для систем без поля d_type в структуре dirent.
-     * Реальное определение требует вызова stat(), которому нужен полный путь к файлу.
-     * Если полный путь не кэшируется в purrgo_dir_t, безопаснее установить флаг в false.
+     * If the complete path does not fit into the HAL buffer,
+     * we cannot reliably determine its type.
+     *
+     * The entry itself is still returned to the caller, but it is
+     * explicitly classified as not being a directory.
      */
-    dirent->is_directory = false;
-#endif
+    if (written < 0 ||
+        (size_t)written >= sizeof(full_path)) {
+
+        dirent->is_directory = false;
+
+        return true;
+    }
+
+
+    /*
+     * Determine the filesystem object type using stat().
+     *
+     * This replaces the non-portable ep->d_type access.
+     */
+    struct stat st;
+
+    if (stat(full_path, &st) == 0) {
+        dirent->is_directory = S_ISDIR(st.st_mode);
+    } else {
+        /*
+         * stat() failed, so the object type could not be determined.
+         *
+         * Do not guess that it is a directory.
+         */
+        dirent->is_directory = false;
+    }
 
     return true;
 }
 
+
+/*
+ * Close a directory opened by purrgo_fs_opendir().
+ */
 void purrgo_fs_closedir(purrgo_dir_t* dir) {
-    if (dir) closedir((DIR*)dir);
+    if (!dir) {
+        return;
+    }
+
+    if (dir->dir) {
+        closedir(dir->dir);
+    }
+
+    free(dir);
 }
 ```
 
