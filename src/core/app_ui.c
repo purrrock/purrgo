@@ -53,6 +53,8 @@ void purrgo_app_ui_render(
             int16_t draft_tz =
                 purrgo_app_get_draft_tz_offset();
 
+            int cursor = purrgo_app_get_config_cursor();
+
             gfx_draw_string(
                 gfx,
                 10,
@@ -80,16 +82,31 @@ void purrgo_app_ui_render(
                 mins
             );
 
-            gfx_set_color(
-                gfx,
-                3,
-                0
-            );
+            if (cursor == 0) {
+                gfx_set_color(gfx, 3, 0); // Invert
+            } else {
+                gfx_set_color(gfx, 0, 3);
+            }
 
             gfx_draw_string(
                 gfx,
                 10,
                 25,
+                buf
+            );
+
+            if (cursor == 1) {
+                gfx_set_color(gfx, 3, 0); // Invert
+            } else {
+                gfx_set_color(gfx, 0, 3);
+            }
+
+            snprintf(buf, sizeof(buf), "DIR: %s", app_config.map_dir);
+
+            gfx_draw_string(
+                gfx,
+                10,
+                40,
                 buf
             );
 
@@ -102,21 +119,28 @@ void purrgo_app_ui_render(
             gfx_draw_string(
                 gfx,
                 10,
-                45,
-                "+/- : Change"
-            );
-
-            gfx_draw_string(
-                gfx,
-                10,
                 60,
-                "OK  : Save"
+                "UP/DN : Select"
             );
 
             gfx_draw_string(
                 gfx,
                 10,
                 75,
+                "+/- : Change"
+            );
+
+            gfx_draw_string(
+                gfx,
+                10,
+                90,
+                "OK  : Apply/Open"
+            );
+
+            gfx_draw_string(
+                gfx,
+                10,
+                105,
                 "MENU: Cancel"
             );
 
@@ -470,14 +494,19 @@ void purrgo_app_ui_render(
                 "TOP STATUS AREA"
             );
 
-            const char* idx_path =
-                "../../../tests/data/maps/roads.idx";
+            /*
+             * Динамическое формирование путей к файлам карт на основе app_config.map_dir.
+             * Используется snprintf для предотвращения переполнения буфера (buffer overflow prevention).
+             * Размер буфера 64 байта достаточен для путей, состоящих из базовой директории
+             * и стандартного имени файла.
+             */
+            char idx_path[64];
+            char mlp_path[64];
+            char name_path[64];
 
-            const char* mlp_path =
-                "../../../tests/data/maps/roads.mlp";
-
-            const char* name_path =
-                "../../../tests/data/maps/map.name";
+            snprintf(idx_path, sizeof(idx_path), "%s/roads.idx", app_config.map_dir);
+            snprintf(mlp_path, sizeof(mlp_path), "%s/roads.mlp", app_config.map_dir);
+            snprintf(name_path, sizeof(name_path), "%s/map.name", app_config.map_dir);
 
             purrgo_file_t* idx_file = purrgo_fs_open(idx_path, FS_READ);
             purrgo_file_t* mlp_file = purrgo_fs_open(mlp_path, FS_READ);
@@ -541,6 +570,46 @@ void purrgo_app_ui_render(
                 0,
                 3
             );
+
+            break;
+        }
+
+        case APP_STATE_MENU_DIR_SELECT: {
+            gfx_set_color(gfx, 0, 3);
+            gfx_draw_string(gfx, 10, 10, "=== SELECT DIR ===");
+
+            purrgo_fs_dirent_t* dir_list;
+            int count = purrgo_app_get_dir_list(&dir_list);
+            int cursor = purrgo_app_get_dir_cursor();
+            int y_pos = 25;
+
+            // Логика ограничения вывода элементов (clipping/scrolling).
+            // Экран вмещает около 15 строк (при высоте 296 и шаге 12).
+            // Ограничиваем вывод списка для наглядности (например, 10 элементов).
+            int display_start = 0;
+            if (cursor > 5) {
+                display_start = cursor - 5;
+            }
+            if (display_start + 10 > count && count > 10) {
+                display_start = count - 10;
+            }
+
+            for (int i = display_start; i < count && i < display_start + 10; i++) {
+                if (i == cursor) {
+                    gfx_set_color(gfx, 3, 0); // Invert
+                } else {
+                    gfx_set_color(gfx, 0, 3);
+                }
+
+                snprintf(buf, sizeof(buf), "[%s]", dir_list[i].name);
+                gfx_draw_string(gfx, 10, y_pos, buf);
+                y_pos += 12;
+            }
+
+            if (count == 0) {
+                gfx_set_color(gfx, 0, 3);
+                gfx_draw_string(gfx, 10, y_pos, "(No directories)");
+            }
 
             break;
         }
