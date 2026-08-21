@@ -4,7 +4,7 @@
 #include <string.h>
 
 #define CONFIG_FILENAME "PURRGO.CFG"
-#define CONFIG_MAX_SIZE 256
+#define CONFIG_MAX_SIZE 512
 
 purrgo_config_t app_config;
 
