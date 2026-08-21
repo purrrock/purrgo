@@ -24,19 +24,13 @@ void purrgo_app_ui_render(
     const purrgo_gnss_solution_t* gnss,
     const purrgo_sun_info_t* sun
 ) {
-    purrgo_bbox_t fixed_cam = {
-        .min_x = 283706420,
-        .min_y = 535010200,
-        .max_x = 284463180,
-        .max_y = 535460080
-    };
 
-    purrgo_viewport_t map_vp = {
-        .width = 128 - 0,
-        .height = 296 - 16,
-        .offset_x = 5,
-        .offset_y = 15
-    };
+	purrgo_viewport_t map_vp = {
+    .width = PURRGO_HW_DISPLAY_WIDTH_PX,        /* Отрисовка на всю физическую ширину экрана */
+    .height = PURRGO_HW_DISPLAY_HEIGHT_PX - 18, /* Полная высота дисплея минус 18 пикселей (9px сверху + 9px снизу) */
+    .offset_x = 0,                              /* Нулевой отступ от левого края (координата X = 0) */
+    .offset_y = 9                               /* Смещение начала отрисовки Viewport на 9 пикселей вниз по оси Y */
+	};
 
     char buf[64];
     purrgo_gnss_solution_t gnss_solution = *gnss;
