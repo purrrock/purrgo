@@ -7342,13 +7342,54 @@ void purrgo_app_ui_render(
              * Размер буфера 64 байта достаточен для путей, состоящих из базовой директории
              * и стандартного имени файла.
              */
+            char landuse_idx_path[64];
+            char landuse_mlp_path[64];
             char idx_path[64];
             char mlp_path[64];
             char name_path[64];
 
+            snprintf(landuse_idx_path, sizeof(landuse_idx_path), "%s/landuse.idx", app_config.map_dir);
+            snprintf(landuse_mlp_path, sizeof(landuse_mlp_path), "%s/landuse.mlp", app_config.map_dir);
             snprintf(idx_path, sizeof(idx_path), "%s/roads.idx", app_config.map_dir);
             snprintf(mlp_path, sizeof(mlp_path), "%s/roads.mlp", app_config.map_dir);
             snprintf(name_path, sizeof(name_path), "%s/map.name", app_config.map_dir);
+
+            purrgo_file_t* landuse_idx_file = purrgo_fs_open(landuse_idx_path, FS_READ);
+            purrgo_file_t* landuse_mlp_file = purrgo_fs_open(landuse_mlp_path, FS_READ);
+
+            if (landuse_idx_file && landuse_mlp_file) {
+                purrgo_fs_t landuse_idx_fs = {
+                    .handle = landuse_idx_file,
+                    .read = core_fs_read_wrapper,
+                    .seek = core_fs_seek_wrapper
+                };
+
+                purrgo_fs_t landuse_mlp_fs = {
+                    .handle = landuse_mlp_file,
+                    .read = core_fs_read_wrapper,
+                    .seek = core_fs_seek_wrapper
+                };
+
+                gfx_set_color(
+                    gfx,
+                    2,
+                    3
+                );
+
+                purrgo_map_render_layer(
+                    &landuse_idx_fs,
+                    &landuse_mlp_fs,
+                    gfx,
+                    &fixed_cam,
+                    &map_vp
+                );
+
+                purrgo_fs_close(landuse_idx_file);
+                purrgo_fs_close(landuse_mlp_file);
+            } else {
+                if (landuse_idx_file) purrgo_fs_close(landuse_idx_file);
+                if (landuse_mlp_file) purrgo_fs_close(landuse_mlp_file);
+            }
 
             purrgo_file_t* idx_file = purrgo_fs_open(idx_path, FS_READ);
             purrgo_file_t* mlp_file = purrgo_fs_open(mlp_path, FS_READ);
@@ -7368,7 +7409,7 @@ void purrgo_app_ui_render(
 
                 gfx_set_color(
                     gfx,
-                    0,
+                    1,
                     3
                 );
 
@@ -10899,476 +10940,6 @@ int main(void) {
     return 0;
 }
 
-```
-
---- FILE: tests\data\maps\roads\dtmap-parser.py ---
-```py
-import struct
-import os
-import json
-import math
-import pygame
-
-# --- Настройки экрана ---
-WIDTH, HEIGHT = 600, 600
-
-# Глобальные счетчики для диагностики
-stats = {
-    "nav_visited": 0,
-    "nav_culled": 0,
-    "data_visited": 0,
-    "data_drawn": 0,
-    "lines_drawn": 0,
-    "polygons_drawn": 0
-}
-
-def load_camera_bbox(map_name_path, size_km=5.0):
-    """
-    Загрузка центра из map.name и расчет BBox размером size_km x size_km в градусах.
-    """
-    if not os.path.exists(map_name_path):
-        print(f"[ERROR] Файл {map_name_path} не найден! Проверьте путь.")
-        # Дефолтные координаты (Москва) в случае отсутствия файла
-        center_lat, center_lon = 55.7558, 37.6173
-    else:
-        with open(map_name_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            center_lat = float(data["centerLat"])
-            center_lon = float(data["centerLon"])
-            print(f"[INFO] Прочитан {map_name_path}: centerLat={center_lat}, centerLon={center_lon}")
-
-    # Половина ширины/высоты области в километрах
-    half_km = size_km / 2.0
-    
-    # 1 градус широты ≈ 111.139 км
-    d_lat = half_km / 111.139
-    
-    # 1 градус долготы ≈ 111.139 * cos(lat) км
-    d_lon = half_km / (111.139 * math.cos(math.radians(center_lat)))
-
-    min_x = center_lon - d_lon
-    max_x = center_lon + d_lon
-    min_y = center_lat - d_lat
-    max_y = center_lat + d_lat
-
-    print(f"[INFO] BBox камеры (5х5 км):")
-    print(f"       Lon (X): min={min_x:.6f}, max={max_x:.6f}")
-    print(f"       Lat (Y): min={min_y:.6f}, max={max_y:.6f}")
-    
-    return min_x, min_y, max_x, max_y
-
-def world_to_screen(x, y, camera_bbox):
-    """
-    Проекция географических координат в пиксели окна 600x600.
-    """
-    cam_min_x, cam_min_y, cam_max_x, cam_max_y = camera_bbox
-    screen_x = int((x - cam_min_x) / (cam_max_x - cam_min_x) * WIDTH)
-    # Инверсия оси Y (в графических системах 0 вверху)
-    screen_y = HEIGHT - int((y - cam_min_y) / (cam_max_y - cam_min_y) * HEIGHT)
-    return screen_x, screen_y
-
-def is_in_screen(xmin, ymin, xmax, ymax, camera_bbox):
-    """
-    Проверка пересечения BBox узла с BBox камеры (AABB Culling).
-    """
-    cam_min_x, cam_min_y, cam_max_x, cam_max_y = camera_bbox
-    if xmax < cam_min_x or xmin > cam_max_x: return False
-    if ymax < cam_min_y or ymin > cam_max_y: return False
-    return True
-
-def read_yzl_header(file):
-    """
-    Чтение и валидация 32-байтного глобального заголовка YZL.
-    """
-    header_data = file.read(32)
-    if len(header_data) < 32:
-        print("[ERROR] Недостаточно байт для YZL заголовка.")
-        return False
-    
-    magic = header_data[0:3]
-    if magic != b'YZL':
-        print(f"[ERROR] Неверная сигнатура YZL: {magic}")
-        return False
-        
-    payload_size = struct.unpack("<I", header_data[4:8])[0]
-    print(f"[INFO] Заголовок YZL корректен. Payload Size: {payload_size} байт.")
-    return True
-
-def parse_geometry_mlp(mlp_file, v1_offset, camera_bbox, screen_surface):
-    """
-    Чтение геометрии по смещению из R-дерева.
-    v1_offset - относительное смещение от конца глобального заголовка (32 байта).
-    v1 указывает сразу на тело записи (пропуская 8 байт локального заголовка).
-    """
-    # Вычисление абсолютного адреса поля minx
-    absolute_body_offset = 32 + v1_offset
-    mlp_file.seek(absolute_body_offset)
-    
-    # 1. Читаем 24 байта фиксированной части:
-    # bbox_int (int32 * 4) + num_parts (int32) + num_points (int32)
-    head_data = mlp_file.read(24)
-    if len(head_data) < 24:
-        return
-        
-    minx, miny, maxx, maxy, num_parts, num_points = struct.unpack("<iiiiii", head_data)
-    
-    # Аппаратная защита от поврежденных указателей или мусорных данных
-    if num_parts < 0 or num_points < 0 or num_points > 50000:
-        return
-        
-    # 2. Динамическое вычисление размера Payload
-    # Индексы частей: num_parts * 4 байта (uint32)
-    # Координаты: num_points * 8 байт (int32 * 2)
-    remaining_size = (num_parts * 4) + (num_points * 8)
-    
-    if remaining_size <= 0:
-        return
-        
-    body_data = mlp_file.read(remaining_size)
-    if len(body_data) < remaining_size:
-        return
-        
-    # 3. Распаковка массивов
-    parts = struct.unpack_from(f"<{num_parts}I", body_data, 0)
-    points_offset = num_parts * 4
-    raw_points = struct.unpack_from(f"<{num_points * 2}i", body_data, points_offset)
-    
-    # 4. Проекция
-    screen_points = []
-    for i in range(num_points):
-        lon = raw_points[i * 2] / 1000000.0
-        lat = raw_points[i * 2 + 1] / 1000000.0
-        screen_points.append(world_to_screen(lon, lat, camera_bbox))
-    
-    # 5. Отрисовка
-    if len(screen_points) >= 2:
-        # Если num_parts > 1, это мультиполигон с дырами. 
-        # В базовом рендере отрисовываем только внешний контур (от parts[0] до parts[1])
-        end_idx = parts[1] if num_parts > 1 else num_points
-        contour = screen_points[0:end_idx]
-        
-        if len(contour) > 2 and contour[0] == contour[-1] and parts[0] == 0:
-            # Замкнутый полигон
-            pygame.draw.polygon(screen_surface, (80, 140, 80), contour, 1)
-            stats["polygons_drawn"] += 1
-        else:
-            # Линия
-            pygame.draw.lines(screen_surface, (220, 220, 220), False, screen_points, 2)
-            stats["lines_drawn"] += 1
-
-def parse_node(idx_file, mlp_file, is_nav_node, current_level, camera_bbox, screen_surface):
-    """
-    Разбор 28-байтного узла с логированием операций.
-    """
-    node_data = idx_file.read(28)
-    if len(node_data) < 28:
-        return
-
-    if not is_nav_node:
-        stats["data_visited"] += 1
-        xmin, ymin, xmax, ymax, obj_type, v1, v2 = struct.unpack("<ffffIII", node_data)
-        
-        if is_in_screen(xmin, ymin, xmax, ymax, camera_bbox):
-            stats["data_drawn"] += 1
-            if v1 > 0:
-                parse_geometry_mlp(mlp_file, v1, camera_bbox, screen_surface)
-        return
-
-    stats["nav_visited"] += 1
-    v3_jump, c_xmin, c_ymin, c_xmax, c_ymax, nav_level, obj_count = struct.unpack("<IffffII", node_data)
-
-    if not is_in_screen(c_xmin, c_ymin, c_xmax, c_ymax, camera_bbox):
-        stats["nav_culled"] += 1
-        # Аппаратный пропуск дочернего поддерева (компенсация префетча -8 байт)
-        idx_file.seek(v3_jump - 8, os.SEEK_CUR)
-        return
-
-    child_is_nav = nav_level > 0
-    child_level = nav_level - 1 if nav_level > 0 else 0
-    
-    for _ in range(obj_count):
-        parse_node(idx_file, mlp_file, child_is_nav, child_level, camera_bbox, screen_surface)
-
-def render_map(idx_path, mlp_path, map_name_path):
-    print("=== ЗАПУСК РЕНДЕРА DT G1 MAP ===")
-    
-    # 1. Расчет камеры по map.name
-    camera_bbox = load_camera_bbox(map_name_path, size_km=5.0)
-
-    pygame.init()
-    screen = pygame.display.set_mode((WIDTH, HEIGHT))
-    pygame.display.set_caption("DT G1 Vector Renderer (600x600)")
-    screen.fill((20, 20, 20)) # Темно-серый фон
-
-    if not os.path.exists(idx_path) or not os.path.exists(mlp_path):
-        print(f"[ERROR] Не найдены файлы карт: {idx_path} или {mlp_path}")
-        return
-
-    # 2. Обход файла слоев
-    with open(idx_path, "rb") as idx_file, open(mlp_path, "rb") as mlp_file:
-        print(f"[INFO] Открытие слоя: {idx_path}")
-        if not read_yzl_header(idx_file):
-            return
-
-        sqt_index = 0
-        while True:
-            sqt_header = idx_file.read(16)
-            if not sqt_header or len(sqt_header) < 16:
-                break
-            
-            magic, topo_marker, mode, count = struct.unpack("<4sIII", sqt_header)
-            
-            if magic != b'SQT\x01':
-                print(f"[WARN] Некорректный заголовок SQT: {magic}")
-                break
-            
-            print(f"[INFO] Найдена секция SQT #{sqt_index}: Mode={mode}, Root Nodes Count={count}")
-            sqt_index += 1
-            
-            if count == 0:
-                continue
-            
-            is_nav = mode > 0
-            level = mode - 1 if mode > 0 else 0
-            
-            for _ in range(count):
-                parse_node(idx_file, mlp_file, is_nav, level, camera_bbox, screen)
-
-    # 3. Вывод итоговой статистики в консоль
-    print("=== СТАТИСТИКА РЕНДЕРИНГА ===")
-    print(f"Nav Nodes обработано:  {stats['nav_visited']}")
-    print(f"Nav Nodes отброшено:   {stats['nav_culled']} (Z-Culling)")
-    print(f"Data Nodes проверено:  {stats['data_visited']}")
-    print(f"Data Nodes видимы:     {stats['data_drawn']}")
-    print(f"Отрисовано линий:      {stats['lines_drawn']}")
-    print(f"Отрисовано полигонов:  {stats['polygons_drawn']}")
-    print("=============================")
-
-    # Отображение кадра
-    pygame.display.flip()
-
-    # Главный цикл Pygame
-    running = True
-    while running:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-    pygame.quit()
-
-if __name__ == "__main__":
-    # Укажите путь к Вашим файлам слоя и конфигурации
-    IDX_FILE = "landuse.idx"
-    MLP_FILE = "landuse.mlp"
-    MAP_NAME = "map.name"
-    
-    render_map(IDX_FILE, MLP_FILE, MAP_NAME)
-```
-
---- FILE: tests\data\maps\roads\idx_mlp_visualizer.py ---
-```py
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
-import os
-import argparse
-import mmap
-import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.collections import LineCollection
-from concurrent.futures import ThreadPoolExecutor
-
-def parse_mlp_pointers(mlp_path: str):
-    if not os.path.exists(mlp_path):
-        return [], None, None
-        
-    with open(mlp_path, "rb") as f:
-        with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
-            size = mm.size()
-
-            aligned_size = size - (size % 4)
-            data_i32 = np.frombuffer(mm[:aligned_size], dtype=np.int32)
-            data_u32 = data_i32.view(np.uint32)
-
-            p = 32 // 4
-            end_p = aligned_size // 4
-            
-            line_segments = []
-            point_list = []
-            global_bbox = [float('inf'), float('inf'), float('-inf'), float('-inf')]
-            
-            while p < end_p:
-
-                content_len_bytes = data_u32[p + 1]
-                if content_len_bytes == 0: 
-                    break
-
-                record_len_32 = (8 + content_len_bytes) // 4
-                
-                if p + record_len_32 > end_p or content_len_bytes < 24:
-                    p += record_len_32
-                    continue
-
-                minx = data_i32[p + 2] / 1_000_000.0
-                miny = data_i32[p + 3] / 1_000_000.0
-                maxx = data_i32[p + 4] / 1_000_000.0
-                maxy = data_i32[p + 5] / 1_000_000.0
-
-                if minx < global_bbox[0]: global_bbox[0] = minx
-                if miny < global_bbox[1]: global_bbox[1] = miny
-                if maxx > global_bbox[2]: global_bbox[2] = maxx
-                if maxy > global_bbox[3]: global_bbox[3] = maxy
-                
-                num_parts = data_i32[p + 6]
-                num_points = data_i32[p + 7]
-
-                pts_start = p + 8 + num_parts
-                pts_end = pts_start + (num_points * 2)
-                
-                if pts_end <= p + record_len_32:
-
-                    points = data_i32[pts_start:pts_end].reshape(-1, 2) / 1_000_000.0
-                    
-                    if num_points >= 2:
-                        if num_parts > 1:
-                            parts = data_u32[p + 8 : p + 8 + num_parts]
-                            line_segments.extend(np.split(points, parts[1:]))
-                        else:
-                            line_segments.append(points)
-                    elif num_points == 1:
-                        point_list.append(points[0])
-
-                p += record_len_32
-                
-    return line_segments, np.array(point_list, dtype=np.float32) if point_list else None, global_bbox
-
-def parse_idx_vectorized(idx_path: str):
-    if not os.path.exists(idx_path):
-        return None, None, None, None
-        
-    dt_nav = np.dtype([('v3', '<u4'), ('minx', '<f4'), ('miny', '<f4'), ('maxx', '<f4'), ('maxy', '<f4'), ('v1', '<u4'), ('cnt', '<u4')])
-    dt_data = np.dtype([('minx', '<f4'), ('miny', '<f4'), ('maxx', '<f4'), ('maxy', '<f4'), ('code', '<u4'), ('v1', '<u4'), ('v2', '<u4')])
-
-    nav_nodes, data_nodes = [], []
-
-    with open(idx_path, "rb") as f:
-        with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
-            size = mm.size()
-            aligned_size = size - (size % 4)
-            data_u32 = np.frombuffer(mm[:aligned_size], dtype=np.uint32)
-
-            sqt_pointers = np.where(data_u32 == 22303059)[0]
-            
-            for ptr in sqt_pointers:
-
-                mode = data_u32[ptr + 2]
-                count = data_u32[ptr + 3]
-                
-                if count == 0: continue
-
-                byte_offset = (ptr + 4) * 4 
-                
-                if mode == 1: # Clustered
-                    for _ in range(count):
-                        if byte_offset + 28 > size: break
-                        nav = np.frombuffer(mm[byte_offset:byte_offset+28], dtype=dt_nav, count=1)
-                        nav_nodes.append(nav)
-                        byte_offset += 28
-                        
-                        d_count = nav[0]['cnt']
-                        if d_count > 0 and byte_offset + (28 * d_count) <= size:
-                            data_nodes.append(np.frombuffer(mm[byte_offset:byte_offset+28*d_count], dtype=dt_data))
-                            byte_offset += 28 * d_count
-                            
-                elif mode == 0: # Flat
-                    if byte_offset + (28 * count) <= size:
-                        data_nodes.append(np.frombuffer(mm[byte_offset:byte_offset+28*count], dtype=dt_data))
-
-    def build_nan_separated_lines(nodes_list):
-        if not nodes_list: return None, None
-        arr = np.concatenate(nodes_list)
-        valid = (arr['maxx'] > arr['minx']) & (arr['maxy'] > arr['miny'])
-        arr = arr[valid]
-        N = len(arr)
-        if N == 0: return None, None
-        
-        X, Y = np.empty(N * 6, dtype=np.float32), np.empty(N * 6, dtype=np.float32)
-        X[0::6] = arr['minx']; Y[0::6] = arr['miny']
-        X[1::6] = arr['maxx']; Y[1::6] = arr['miny']
-        X[2::6] = arr['maxx']; Y[2::6] = arr['maxy']
-        X[3::6] = arr['minx']; Y[3::6] = arr['maxy']
-        X[4::6] = arr['minx']; Y[4::6] = arr['miny']
-        X[5::6] = np.nan;      Y[5::6] = np.nan      
-        return X, Y
-
-    nav_X, nav_Y = build_nan_separated_lines(nav_nodes)
-    data_X, data_Y = build_nan_separated_lines(data_nodes)
-                
-    return nav_X, nav_Y, data_X, data_Y
-
-def visualize(idx_path=None, mlp_path=None):
-    plt.style.use('fast')
-    fig, ax = plt.subplots(figsize=(14, 14))
-    global_minx, global_miny, global_maxx, global_maxy = float('inf'), float('inf'), float('-inf'), float('-inf')
-
-    print("[*] Launching Multi-threaded Parsers...")
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        future_idx = executor.submit(parse_idx_vectorized, idx_path) if idx_path else None
-        future_mlp = executor.submit(parse_mlp_pointers, mlp_path) if mlp_path else None
-
-        if future_idx:
-            nav_X, nav_Y, data_X, data_Y = future_idx.result()
-            if data_X is not None:
-                ax.plot(data_X, data_Y, color='blue', linewidth=0.8, alpha=0.4, rasterized=True)
-                print(f"[+] IDX Data Nodes loaded: {len(data_X)//6}")
-                global_minx, global_miny = np.nanmin(data_X), np.nanmin(data_Y)
-                global_maxx, global_maxy = np.nanmax(data_X), np.nanmax(data_Y)
-            if nav_X is not None:
-                ax.plot(nav_X, nav_Y, color='red', linewidth=1.5, alpha=0.5, rasterized=True)
-                print(f"[+] IDX Nav Nodes loaded: {len(nav_X)//6}")
-                
-        if future_mlp:
-            mlp_segments, mlp_points, bbox = future_mlp.result()
-            if mlp_segments:
-                lc = LineCollection(mlp_segments, colors='black', linewidths=1.0, alpha=0.8, rasterized=True)
-                ax.add_collection(lc)
-                print(f"[+] MLP Lines loaded: {len(mlp_segments)}")
-                if bbox[0] != float('inf'):
-                    global_minx, global_miny = min(global_minx, bbox[0]), min(global_miny, bbox[1])
-                    global_maxx, global_maxy = max(global_maxx, bbox[2]), max(global_maxy, bbox[3])
-            if mlp_points is not None:
-                ax.scatter(mlp_points[:, 0], mlp_points[:, 1], c='green', s=3, rasterized=True)
-
-    if global_minx != float('inf'):
-        ax.set_xlim(global_minx, global_maxx)
-        ax.set_ylim(global_miny, global_maxy)
-
-    ax.set_aspect('equal', adjustable='datalim')
-    ax.set_xlabel("Longitude")
-    ax.set_ylabel("Latitude")
-    ax.set_title("DT G1 Absolute Limit Visualizer (Pointers + Async Threads)")
-    ax.grid(True, linestyle='--', alpha=0.3)
-    
-    from matplotlib.lines import Line2D
-    legend_elements = [
-        Line2D([0], [0], color='black', lw=2, label='MLP Geometry'),
-        Line2D([0], [0], color='red', lw=2, label='IDX Nav Cluster'),
-        Line2D([0], [0], color='blue', lw=2, label='IDX Data Object')
-    ]
-    ax.legend(handles=legend_elements, loc='upper right')
-    
-    plt.tight_layout()
-    plt.show()
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="DT G1 Ultimate Visualizer")
-    parser.add_argument("--idx", default=None, help="Path to the .idx file")
-    parser.add_argument("--mlp", default=None, help="Path to the .mlp file")
-    args = parser.parse_args()
-    
-    if not args.idx and not args.mlp:
-        print("[-] Error: Please provide at least one file using --idx or --mlp")
-    else:
-        visualize(args.idx, args.mlp)
 ```
 
 --- FILE: tools\generate_sun_tables.py ---

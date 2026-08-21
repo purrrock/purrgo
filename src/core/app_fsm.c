@@ -60,8 +60,18 @@ static void load_directory_list(void) {
 // void purrgo_config_init(void) is in config.c
 
 void purrgo_app_init(void) {
-    purrgo_config_init();
-    // Стартовый экран согласно новой концепции UI — Карта
+    /*
+     * First try to load the persistent configuration.
+     *
+     * purrgo_config_load() initializes default values and creates
+     * PURRGO.CFG when the file does not exist.
+     *
+     * Therefore the application should NOT call purrgo_config_init()
+     * unconditionally here: doing so would overwrite the values
+     * loaded from PURRGO.CFG.
+     */
+    purrgo_config_load();
+
     current_state = APP_STATE_MAP;
     draft_tz_offset_minutes = app_config.tz_offset_minutes;
 }
@@ -119,16 +129,27 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
                 }
                 break;
 
-            case PURRGO_BTN_OK:
-                if (config_cursor_idx == 0) {
-                    // Сохранение часового пояса и возврат на главный экран (Карта)
-                    app_config.tz_offset_minutes = draft_tz_offset_minutes;
-                    current_state = APP_STATE_MAP;
-                } else if (config_cursor_idx == 1) {
-                    current_state = APP_STATE_MENU_DIR_SELECT;
-                    load_directory_list();
-                }
-                break;
+	case PURRGO_BTN_OK:
+    if (config_cursor_idx == 0) {
+        /*
+         * Commit the edited timezone to the active configuration.
+         */
+        app_config.tz_offset_minutes = draft_tz_offset_minutes;
+
+        /*
+         * Persist the complete configuration to PURRGO.CFG.
+         *
+         * This is required because changing the timezone must survive
+         * the next application restart.
+         */
+        purrgo_config_save();
+
+        current_state = APP_STATE_MAP;
+    } else if (config_cursor_idx == 1) {
+        current_state = APP_STATE_MENU_DIR_SELECT;
+        load_directory_list();
+    }
+    break;
 
             case PURRGO_BTN_MENU:
                 // Отмена изменений и возврат на главный экран по зацикливанию
