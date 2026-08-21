@@ -47,7 +47,6 @@ purrgo_dir_t* purrgo_fs_opendir(const char* path) {
     // Приведение системного указателя DIR* к платформонезависимому purrgo_dir_t*
     return (purrgo_dir_t*)opendir(path);
 }
-
 bool purrgo_fs_readdir(purrgo_dir_t* dir, purrgo_fs_dirent_t* dirent) {
     if (!dir || !dirent) return false;
 
@@ -55,22 +54,25 @@ bool purrgo_fs_readdir(purrgo_dir_t* dir, purrgo_fs_dirent_t* dirent) {
     if (!ep) return false;
 
     /*
-     * Преобразование системной структуры dirent (специфичной для ПК/POSIX)
-     * в платформонезависимый тип purrgo_fs_dirent_t.
-     * Копируем имя файла с контролем размера буфера,
-     * и проверяем флаг типа d_type (DT_DIR) для установки флага директории.
-     * На платформе STM32 данная логика будет транслироваться в работу со структурой FILINFO из FatFs.
+     * Использование sizeof защищает от переполнения и устраняет
+     * зависимость от внешних необъявленных макросов длины пути.
      */
-    strncpy(dirent->name, ep->d_name, PURRGO_FS_MAX_PATH - 1);
-    dirent->name[PURRGO_FS_MAX_PATH - 1] = '\0';
+    strncpy(dirent->name, ep->d_name, sizeof(dirent->name) - 1);
+    dirent->name[sizeof(dirent->name) - 1] = '\0';
 
-#ifdef _DIRENT_HAVE_D_TYPE
-    dirent->is_directory = (ep->d_type == 4); // DT_DIR in dirent.h is usually 4
+#if defined(_DIRENT_HAVE_D_TYPE) || defined(__MINGW32__)
+    /*
+     * В MinGW-w64 поле d_type присутствует. 
+     * Использование константы DT_DIR (обычно 4) безопаснее "магического числа".
+     */
+    dirent->is_directory = (ep->d_type == DT_DIR);
 #else
-    // Фолбэк, если макрос не определен.
-    // DT_DIR is an enum/macro that might not be available depending on feature test macros like _DEFAULT_SOURCE.
-    // In Linux / glibc, DT_DIR is 4.
-    dirent->is_directory = (ep->d_type == 4);
+    /*
+     * Фолбэк для систем без поля d_type в структуре dirent.
+     * Реальное определение требует вызова stat(), которому нужен полный путь к файлу.
+     * Если полный путь не кэшируется в purrgo_dir_t, безопаснее установить флаг в false.
+     */
+    dirent->is_directory = false;
 #endif
 
     return true;
