@@ -41,4 +41,24 @@ venv/
 Thumbs.db
  
  *.exe
- 
+ build/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+CTestTestfile.cmake
+third_party/CMakeFiles/
+third_party/Makefile
+third_party/cmake_install.cmake
+apps/emulator/CMakeFiles/
+apps/emulator/Makefile
+apps/emulator/cmake_install.cmake
+libpurrgo_core.a
+libpurrgo_platform_pc.a
+purrgo_pc
+pc_realtime_logger
+test_gnss
+test_map
+test_geo
+third_party/libminmea.a
+apps/emulator/purrgo_emulator
