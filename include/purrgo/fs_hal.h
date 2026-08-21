@@ -14,9 +14,10 @@ typedef enum {
 } fs_mode_t;
 
 purrgo_file_t* purrgo_fs_open(const char* filepath, fs_mode_t mode);
-size_t purrgo_fs_write(purrgo_file_t* file, const uint8_t* data, size_t size);
+uint32_t purrgo_fs_write(purrgo_file_t* file, const uint8_t* data, uint32_t size);
 // Добавлена функция чтения (уже использовалась в прототипе gpx_parser)
-size_t purrgo_fs_read(purrgo_file_t* file, uint8_t* buffer, size_t size); 
+uint32_t purrgo_fs_read(purrgo_file_t* file, uint8_t* buffer, uint32_t size);
+bool purrgo_fs_seek(purrgo_file_t* file, uint32_t offset);
 void purrgo_fs_sync(purrgo_file_t* file);
 void purrgo_fs_close(purrgo_file_t* file);
 

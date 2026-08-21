@@ -12,14 +12,20 @@ purrgo_file_t* purrgo_fs_open(const char* filepath, fs_mode_t mode) {
     return (purrgo_file_t*)fopen(filepath, c_mode);
 }
 
-size_t purrgo_fs_read(purrgo_file_t* file, uint8_t* buffer, size_t size) {
+uint32_t purrgo_fs_read(purrgo_file_t* file, uint8_t* buffer, uint32_t size) {
     if (!file || !buffer) return 0;
-    return fread(buffer, 1, size, (FILE*)file);
+    /*
+     * Явное приведение аргументов и возвращаемого значения (size_t <-> uint32_t).
+     * Стандартные функции fread/fwrite возвращают size_t (64-бит на x64).
+     * На платформе STM32 FatFs оперирует типом UINT (32-бит).
+     * Приведение типов гарантирует идентичное поведение кода на ПК и микроконтроллере.
+     */
+    return (uint32_t)fread(buffer, 1, (size_t)size, (FILE*)file);
 }
 
-size_t purrgo_fs_write(purrgo_file_t* file, const uint8_t* data, size_t size) {
+uint32_t purrgo_fs_write(purrgo_file_t* file, const uint8_t* data, uint32_t size) {
     if (!file || !data) return 0;
-    return fwrite(data, 1, size, (FILE*)file);
+    return (uint32_t)fwrite(data, 1, (size_t)size, (FILE*)file);
 }
 
 bool purrgo_fs_seek(purrgo_file_t* file, uint32_t offset) {
