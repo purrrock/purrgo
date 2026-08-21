@@ -8,12 +8,11 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>
-#include <stdlib.h>
 
 #define PURRGO_MAP_MAX_PARTS 32
 
 /*
- * Текущий parser Python использует 50000 как защитное ограничение
+ * Текущий parser Python использует 2048 как защитное ограничение
  * количества точек одной MLP geometry.
  *
  * Это НЕ ограничение бинарного формата MLP.
@@ -22,7 +21,14 @@
  * Для текущего этапа он нужен потому, что polygon renderer должен
  * временно разместить projected points в памяти.
  */
-#define PURRGO_MAP_MAX_POINTS 50000
+#define PURRGO_MAP_MAX_POINTS 2048
+
+/*
+ * Статический буфер для рендеринга полигонов, чтобы избежать malloc.
+ * 2048 точек достаточно для большинства объектов landuse на дисплее 128x296.
+ */
+static gfx_point_t s_polygon_buffer[PURRGO_MAP_MAX_POINTS];
+
 
 /*
  * Диагностические счётчики map subsystem.
@@ -523,43 +529,19 @@ static void parse_geometry_mlp(
     gfx_point_t *screen_points = NULL;
 
     if (is_polygon_layer) {
-        size_t point_count =
-            (size_t)num_points;
-
-        /*
-         * Проверка overflow перед malloc().
-         */
-        if (
-            point_count >
-            SIZE_MAX / sizeof(gfx_point_t)
-        ) {
+        if ((size_t)num_points > PURRGO_MAP_MAX_POINTS) {
             PURRGO_LOG(
-                "MAP: polygon point buffer size overflow\n"
-            );
-
-            return;
-        }
-
-
-        screen_points =
-            (gfx_point_t *)malloc(
-                point_count * sizeof(gfx_point_t)
-            );
-
-
-        if (screen_points == NULL) {
-            PURRGO_LOG(
-                "MAP: cannot allocate polygon buffer "
-                "points=%ld bytes=%ld\n",
+                "MAP: polygon points %ld exceed static buffer size %d, skipping\n",
                 (long)num_points,
-                (long)(
-                    point_count *
-                    sizeof(gfx_point_t)
-                )
+                PURRGO_MAP_MAX_POINTS
             );
-
+            if (diag != NULL) {
+                diag->polygons_skipped++;
+            }
             return;
         }
+
+        screen_points = s_polygon_buffer;
     }
 
 
@@ -601,7 +583,6 @@ static void parse_geometry_mlp(
              * При ошибке чтения geometry нельзя использовать
              * частично заполненный polygon.
              */
-            free(screen_points);
 
             return;
         }
@@ -761,7 +742,6 @@ static void parse_geometry_mlp(
                 (long)num_points
             );
 
-            free(screen_points);
 
             return;
         }
@@ -892,7 +872,6 @@ static void parse_geometry_mlp(
     }
 
 
-    free(screen_points);
 }
 
 
