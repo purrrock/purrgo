@@ -46,6 +46,14 @@ purrgo_state_t purrgo_app_get_state(void);
 // Получение черновика часового пояса для режима редактирования в APP_STATE_MENU_CONFIG
 int16_t purrgo_app_get_draft_tz_offset(void);
 
+// Получение индекса курсора в меню настроек
+int purrgo_app_get_config_cursor(void);
+
+// Получение списка директорий и их количества для APP_STATE_MENU_DIR_SELECT
+#include "purrgo/fs_hal.h"
+int purrgo_app_get_dir_list(purrgo_fs_dirent_t** list_out);
+int purrgo_app_get_dir_cursor(void);
+
 // Функция применения часового пояса с календарным пересчетом (влияет на локальное время и расчет восхода/заката)
 void purrgo_app_apply_timezone(const purrgo_gnss_solution_t* utc, purrgo_gnss_solution_t* local, int16_t tz_offset_minutes);
 
