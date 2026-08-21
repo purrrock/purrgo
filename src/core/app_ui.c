@@ -500,13 +500,54 @@ void purrgo_app_ui_render(
              * Размер буфера 64 байта достаточен для путей, состоящих из базовой директории
              * и стандартного имени файла.
              */
+            char landuse_idx_path[64];
+            char landuse_mlp_path[64];
             char idx_path[64];
             char mlp_path[64];
             char name_path[64];
 
+            snprintf(landuse_idx_path, sizeof(landuse_idx_path), "%s/landuse.idx", app_config.map_dir);
+            snprintf(landuse_mlp_path, sizeof(landuse_mlp_path), "%s/landuse.mlp", app_config.map_dir);
             snprintf(idx_path, sizeof(idx_path), "%s/roads.idx", app_config.map_dir);
             snprintf(mlp_path, sizeof(mlp_path), "%s/roads.mlp", app_config.map_dir);
             snprintf(name_path, sizeof(name_path), "%s/map.name", app_config.map_dir);
+
+            purrgo_file_t* landuse_idx_file = purrgo_fs_open(landuse_idx_path, FS_READ);
+            purrgo_file_t* landuse_mlp_file = purrgo_fs_open(landuse_mlp_path, FS_READ);
+
+            if (landuse_idx_file && landuse_mlp_file) {
+                purrgo_fs_t landuse_idx_fs = {
+                    .handle = landuse_idx_file,
+                    .read = core_fs_read_wrapper,
+                    .seek = core_fs_seek_wrapper
+                };
+
+                purrgo_fs_t landuse_mlp_fs = {
+                    .handle = landuse_mlp_file,
+                    .read = core_fs_read_wrapper,
+                    .seek = core_fs_seek_wrapper
+                };
+
+                gfx_set_color(
+                    gfx,
+                    2,
+                    3
+                );
+
+                purrgo_map_render_layer(
+                    &landuse_idx_fs,
+                    &landuse_mlp_fs,
+                    gfx,
+                    &fixed_cam,
+                    &map_vp
+                );
+
+                purrgo_fs_close(landuse_idx_file);
+                purrgo_fs_close(landuse_mlp_file);
+            } else {
+                if (landuse_idx_file) purrgo_fs_close(landuse_idx_file);
+                if (landuse_mlp_file) purrgo_fs_close(landuse_mlp_file);
+            }
 
             purrgo_file_t* idx_file = purrgo_fs_open(idx_path, FS_READ);
             purrgo_file_t* mlp_file = purrgo_fs_open(mlp_path, FS_READ);
@@ -526,7 +567,7 @@ void purrgo_app_ui_render(
 
                 gfx_set_color(
                     gfx,
-                    0,
+                    1,
                     3
                 );
 
