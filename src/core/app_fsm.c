@@ -2,6 +2,7 @@
 #include "purrgo/app_fsm.h"
 #include "purrgo/config.h"
 #include "purrgo/purrgo_time.h"
+#include "purrgo/geo.h"
 #include <stdio.h>
 
 // Глобальный экземпляр конфигурации устройства
@@ -9,6 +10,15 @@
 
 // Текущее состояние конечного автомата
 static purrgo_state_t current_state;
+
+// Состояние окна просмотра карты (Map Viewport)
+static int32_t map_center_lat_1e7;
+static int32_t map_center_lon_1e7;
+static uint8_t map_zoom_level;
+static bool manual_pan_active;
+
+// Массив радиусов обзора для масштабирования (по оси Y в единицах 10^7)
+static const int32_t zoom_radius_y_1e7[] = { 2500, 5000, 10000, 25000, 50000, 100000 };
 
 // Черновые (несохраненные) настройки времени для режима редактирования в меню
 static int16_t draft_tz_offset_minutes;
@@ -72,6 +82,12 @@ void purrgo_app_init(void) {
 
     current_state = APP_STATE_MAP;
     draft_tz_offset_minutes = app_config.tz_offset_minutes;
+
+    // Инициализация состояния карты
+    map_center_lat_1e7 = app_config.last_lat_1e7;
+    map_center_lon_1e7 = app_config.last_lon_1e7;
+    map_zoom_level = 2; // Начальный зум (середина)
+    manual_pan_active = false;
 }
 
 purrgo_state_t purrgo_app_get_state(void) {
@@ -93,6 +109,26 @@ int purrgo_app_get_dir_list(purrgo_fs_dirent_t** list_out) {
 
 int purrgo_app_get_dir_cursor(void) {
     return dir_cursor_idx;
+}
+
+int32_t purrgo_app_get_map_center_lat(void) {
+    return map_center_lat_1e7;
+}
+
+int32_t purrgo_app_get_map_center_lon(void) {
+    return map_center_lon_1e7;
+}
+
+uint8_t purrgo_app_get_map_zoom_level(void) {
+    return map_zoom_level;
+}
+
+bool purrgo_app_is_manual_pan_active(void) {
+    return manual_pan_active;
+}
+
+int32_t purrgo_app_get_zoom_radius_y(void) {
+    return zoom_radius_y_1e7[map_zoom_level];
 }
 
 void purrgo_app_handle_button(purrgo_btn_t button) {
@@ -203,6 +239,47 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
         return;
     }
 
+    // Обработка ввода на карте
+    if (current_state == APP_STATE_MAP) {
+        if (button == PURRGO_BTN_PLUS) {
+            if (map_zoom_level > 0) map_zoom_level--;
+            return;
+        }
+        if (button == PURRGO_BTN_MINUS) {
+            if (map_zoom_level < 5) map_zoom_level++;
+            return;
+        }
+
+        int32_t step_y = purrgo_app_get_zoom_radius_y() >> 2;
+        int32_t step_x = (step_y * 10000) / purrgo_geo_cos_10k(map_center_lat_1e7);
+
+        if (button == PURRGO_BTN_UP) {
+            map_center_lat_1e7 += step_y;
+            manual_pan_active = true;
+            return;
+        }
+        if (button == PURRGO_BTN_DOWN) {
+            map_center_lat_1e7 -= step_y;
+            manual_pan_active = true;
+            return;
+        }
+        if (button == PURRGO_BTN_RIGHT) {
+            map_center_lon_1e7 += step_x;
+            manual_pan_active = true;
+            return;
+        }
+        if (button == PURRGO_BTN_LEFT) {
+            map_center_lon_1e7 -= step_x;
+            manual_pan_active = true;
+            return;
+        }
+
+        if (button == PURRGO_BTN_OK) {
+            manual_pan_active = false;
+            return;
+        }
+    }
+
     // 3. Циклическое переключение основных экранов (Garmin eTrex Page Loop)
     if (button == PURRGO_BTN_MENU) {
         switch (current_state) {
@@ -234,6 +311,10 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
     switch (current_state) {
         case APP_STATE_MAP:
             // Фоновые расчеты для карты (панорамирование, проверке BBox, подгрузка кластеров)
+            if (current_fix->valid && !manual_pan_active) {
+                map_center_lat_1e7 = current_fix->lat_1e7;
+                map_center_lon_1e7 = current_fix->lon_1e7;
+            }
             break;
 
         case APP_STATE_TRIP_COMPUTER:

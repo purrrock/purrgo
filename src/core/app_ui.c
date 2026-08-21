@@ -3,6 +3,7 @@
 #include <purrgo/app_ui.h>
 #include <purrgo/app_fsm.h>
 #include <purrgo/gfx_text.h>
+#include <purrgo/geo.h>
 #include <purrgo/map.h>
 #include <purrgo/fs_hal.h>
 #include <purrgo/config.h>
@@ -479,6 +480,19 @@ void purrgo_app_ui_render(
                 map_screen_logged = true;
             }
 
+            int32_t center_lat = purrgo_app_get_map_center_lat();
+            int32_t center_lon = purrgo_app_get_map_center_lon();
+
+            int32_t rad_y = purrgo_app_get_zoom_radius_y();
+            int32_t rad_x = (rad_y * 10000) / purrgo_geo_cos_10k(center_lat);
+
+            purrgo_bbox_t dynamic_cam = {
+                .min_x = center_lon - rad_x,
+                .min_y = center_lat - rad_y,
+                .max_x = center_lon + rad_x,
+                .max_y = center_lat + rad_y
+            };
+
             /*
              * Верхняя служебная строка.
              */
@@ -539,7 +553,7 @@ void purrgo_app_ui_render(
                     &landuse_idx_fs,
                     &landuse_mlp_fs,
                     gfx,
-                    &fixed_cam,
+                    &dynamic_cam,
                     &map_vp,
 					true // Слой landuse состоит из полигонов
                 );
@@ -577,7 +591,7 @@ void purrgo_app_ui_render(
                     &idx_fs,
                     &mlp_fs,
                     gfx,
-                    &fixed_cam,
+                    &dynamic_cam,
                     &map_vp,
 					false // Слой дорог состоит из линий
                 );
