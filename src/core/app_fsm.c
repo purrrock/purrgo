@@ -4,6 +4,7 @@
 #include "purrgo/purrgo_time.h"
 #include "purrgo/geo.h"
 #include <stdio.h>
+#include "purrgo/hardware_config.h"
 
 // Глобальный экземпляр конфигурации устройства
 // purrgo_config_t app_config; // declared in config.c
@@ -253,7 +254,8 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
 int32_t step_y = purrgo_app_get_zoom_radius_y() >> 2;
 int32_t cos_val = purrgo_geo_cos_10k(map_center_lat_1e7);
 if (cos_val == 0) cos_val = 1;
-int32_t step_x = (step_y * 10000) / cos_val;
+int32_t step_x_base = (int32_t)(((int64_t)step_y * PURRGO_HW_DISPLAY_WIDTH_PX) / PURRGO_HW_DISPLAY_HEIGHT_PX);
+int32_t step_x = (step_x_base * 10000) / cos_val;
 
         if (button == PURRGO_BTN_UP) {
             map_center_lat_1e7 += step_y;
