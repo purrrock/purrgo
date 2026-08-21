@@ -5308,6 +5308,14 @@ https://github.com/purrrock/purrgo
 
 ```
 
+--- FILE: docs\USB-UART adapter.txt ---
+```txt
+Преобразователь USB - UART PL2303TA (с кабелем)
+USB к UART TTL кабель PL2303 TA RS232 передаёт информацию со скоростью от 75 до 128 000 Кбит/с. Кабель может работать с 3.3 В или 5 В выходным напряжением, которое чаще всего имеют микроконтроллеры. Поддерживает USB 1.1 и 2.0.
+
+На одном конце имеется USB разъём, а на другом – 4 разъёма-вывода «мама», которые удобно подсоединяются к любой плате с UART интерфейсом. Красный провод – Vcc c +5 В, белый – RXD, зелёный – TXD, чёрный – GND.
+```
+
 --- FILE: include\purrgo\app_fsm.h ---
 ```h
 //file: include/purrgo/app_fsm.h
@@ -5357,6 +5365,14 @@ purrgo_state_t purrgo_app_get_state(void);
 
 // Получение черновика часового пояса для режима редактирования в APP_STATE_MENU_CONFIG
 int16_t purrgo_app_get_draft_tz_offset(void);
+
+// Получение индекса курсора в меню настроек
+int purrgo_app_get_config_cursor(void);
+
+// Получение списка директорий и их количества для APP_STATE_MENU_DIR_SELECT
+#include "purrgo/fs_hal.h"
+int purrgo_app_get_dir_list(purrgo_fs_dirent_t** list_out);
+int purrgo_app_get_dir_cursor(void);
 
 // Функция применения часового пояса с календарным пересчетом (влияет на локальное время и расчет восхода/заката)
 void purrgo_app_apply_timezone(const purrgo_gnss_solution_t* utc, purrgo_gnss_solution_t* local, int16_t tz_offset_minutes);
@@ -5694,6 +5710,14 @@ const unsigned char font5x7[256][5] = {
 #include <stddef.h>
 
 typedef struct purrgo_file_s purrgo_file_t;
+typedef struct purrgo_dir_s purrgo_dir_t;
+
+#define PURRGO_FS_MAX_PATH 256
+
+typedef struct {
+    char name[PURRGO_FS_MAX_PATH];
+    bool is_directory;
+} purrgo_fs_dirent_t;
 
 typedef enum {
     FS_READ,            // Добавлен режим чтения
@@ -5702,11 +5726,16 @@ typedef enum {
 } fs_mode_t;
 
 purrgo_file_t* purrgo_fs_open(const char* filepath, fs_mode_t mode);
-size_t purrgo_fs_write(purrgo_file_t* file, const uint8_t* data, size_t size);
+uint32_t purrgo_fs_write(purrgo_file_t* file, const uint8_t* data, uint32_t size);
 // Добавлена функция чтения (уже использовалась в прототипе gpx_parser)
-size_t purrgo_fs_read(purrgo_file_t* file, uint8_t* buffer, size_t size); 
+uint32_t purrgo_fs_read(purrgo_file_t* file, uint8_t* buffer, uint32_t size);
+bool purrgo_fs_seek(purrgo_file_t* file, uint32_t offset);
 void purrgo_fs_sync(purrgo_file_t* file);
 void purrgo_fs_close(purrgo_file_t* file);
+
+purrgo_dir_t* purrgo_fs_opendir(const char* path);
+bool purrgo_fs_readdir(purrgo_dir_t* dir, purrgo_fs_dirent_t* dirent);
+void purrgo_fs_closedir(purrgo_dir_t* dir);
 
 #endif // PURRGO_FS_HAL_H
 ```
@@ -6592,21 +6621,62 @@ size_t purrgo_ubx_build(
 #include "purrgo/app_fsm.h"
 #include "purrgo/config.h"
 #include "purrgo/purrgo_time.h"
+#include <stdio.h>
 
 // Глобальный экземпляр конфигурации устройства
-purrgo_config_t app_config;
+// purrgo_config_t app_config; // declared in config.c
 
 // Текущее состояние конечного автомата
 static purrgo_state_t current_state;
 
 // Черновые (несохраненные) настройки времени для режима редактирования в меню
 static int16_t draft_tz_offset_minutes;
+// Индекс курсора в меню настроек (0 - Timezone, 1 - Map Dir)
+static int config_cursor_idx = 0;
 
-void purrgo_config_init(void) {
-    app_config.tz_offset_minutes = 180; // UTC+3:00 по умолчанию (Москва/Минск)
-    app_config.log_mode = 0;
-    app_config.backlight_on = true;     // Флаг активности подсветки
+// Состояние файлового браузера
+#define MAX_DIRS_COUNT 16
+static purrgo_fs_dirent_t dir_list[MAX_DIRS_COUNT];
+static int dir_list_count = 0;
+static int dir_cursor_idx = 0;
+
+static void load_directory_list(void) {
+    dir_list_count = 0;
+    dir_cursor_idx = 0;
+
+    // Открываем базовую директорию карт (например, /MAPS)
+    // В данном случае читаем из корня, либо относительно текущей,
+    // но в задании требуется искать папки для map_dir.
+    // Будем читать из родительской директории карт, либо из корня приложения.
+    // Пусть базовая папка будет "MAPS" или просто читаем тесты.
+    // Если app_config.map_dir == "/MAPS/BY", то ищем в "/MAPS"
+    // Но для простоты прочитаем "../../../tests/data/maps"
+    // или вообще корневую папку "/". Для эмулятора используем "./"
+    // В реальном устройстве это будет корень SD карты "/"
+#ifdef _WIN32
+    const char* base_path = "./";
+#else
+    const char* base_path = "../../../tests/data/maps"; // for emulator tests, or just "/"
+#endif
+
+    purrgo_dir_t* dir = purrgo_fs_opendir(base_path);
+    if (!dir) return;
+
+    purrgo_fs_dirent_t entry;
+    while (purrgo_fs_readdir(dir, &entry) && dir_list_count < MAX_DIRS_COUNT) {
+        if (entry.is_directory) {
+            // Пропускаем "." и ".."
+            if (entry.name[0] == '.' && (entry.name[1] == '\0' || (entry.name[1] == '.' && entry.name[2] == '\0'))) {
+                continue;
+            }
+            dir_list[dir_list_count] = entry;
+            dir_list_count++;
+        }
+    }
+    purrgo_fs_closedir(dir);
 }
+
+// void purrgo_config_init(void) is in config.c
 
 void purrgo_app_init(void) {
     purrgo_config_init();
@@ -6623,30 +6693,60 @@ int16_t purrgo_app_get_draft_tz_offset(void) {
     return draft_tz_offset_minutes;
 }
 
+int purrgo_app_get_config_cursor(void) {
+    return config_cursor_idx;
+}
+
+int purrgo_app_get_dir_list(purrgo_fs_dirent_t** list_out) {
+    *list_out = dir_list;
+    return dir_list_count;
+}
+
+int purrgo_app_get_dir_cursor(void) {
+    return dir_cursor_idx;
+}
+
 void purrgo_app_handle_button(purrgo_btn_t button) {
     // 1. Обработка ввода в режиме редактирования настроек
     if (current_state == APP_STATE_MENU_CONFIG) {
         switch (button) {
+            case PURRGO_BTN_UP:
+                if (config_cursor_idx > 0) config_cursor_idx--;
+                break;
+
+            case PURRGO_BTN_DOWN:
+                if (config_cursor_idx < 1) config_cursor_idx++;
+                break;
+
             case PURRGO_BTN_PLUS:
             case PURRGO_BTN_RIGHT:
-                // Увеличение часового пояса шагом в 15 минут (максимум UTC+14:00 = 840 минут)
-                if (draft_tz_offset_minutes + 15 <= 840) {
-                    draft_tz_offset_minutes += 15;
+                if (config_cursor_idx == 0) {
+                    // Увеличение часового пояса шагом в 15 минут (максимум UTC+14:00 = 840 минут)
+                    if (draft_tz_offset_minutes + 15 <= 840) {
+                        draft_tz_offset_minutes += 15;
+                    }
                 }
                 break;
 
             case PURRGO_BTN_MINUS:
             case PURRGO_BTN_LEFT:
-                // Уменьшение часового пояса шагом в 15 минут (минимум UTC-12:00 = -720 минут)
-                if (draft_tz_offset_minutes - 15 >= -720) {
-                    draft_tz_offset_minutes -= 15;
+                if (config_cursor_idx == 0) {
+                    // Уменьшение часового пояса шагом в 15 минут (минимум UTC-12:00 = -720 минут)
+                    if (draft_tz_offset_minutes - 15 >= -720) {
+                        draft_tz_offset_minutes -= 15;
+                    }
                 }
                 break;
 
             case PURRGO_BTN_OK:
-                // Сохранение часового пояса и возврат на главный экран (Карта)
-                app_config.tz_offset_minutes = draft_tz_offset_minutes;
-                current_state = APP_STATE_MAP;
+                if (config_cursor_idx == 0) {
+                    // Сохранение часового пояса и возврат на главный экран (Карта)
+                    app_config.tz_offset_minutes = draft_tz_offset_minutes;
+                    current_state = APP_STATE_MAP;
+                } else if (config_cursor_idx == 1) {
+                    current_state = APP_STATE_MENU_DIR_SELECT;
+                    load_directory_list();
+                }
                 break;
 
             case PURRGO_BTN_MENU:
@@ -6662,9 +6762,32 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
 
     // 2. Обработка ввода в подменю выбора директории карт
     if (current_state == APP_STATE_MENU_DIR_SELECT) {
-        if (button == PURRGO_BTN_MENU) {
-            // Кнопка MENU выполняет роль "Назад" для возврата в меню настроек
-            current_state = APP_STATE_MENU_CONFIG;
+        switch (button) {
+            case PURRGO_BTN_UP:
+                if (dir_cursor_idx > 0) dir_cursor_idx--;
+                break;
+            case PURRGO_BTN_DOWN:
+                if (dir_cursor_idx < dir_list_count - 1) dir_cursor_idx++;
+                break;
+            case PURRGO_BTN_OK:
+                if (dir_list_count > 0) {
+                    // Сохраняем выбранную директорию (с формированием полного пути)
+                    // Для простоты подставляем выбранную папку
+#ifdef _WIN32
+                    snprintf(app_config.map_dir, sizeof(app_config.map_dir), "./%s", dir_list[dir_cursor_idx].name);
+#else
+                    snprintf(app_config.map_dir, sizeof(app_config.map_dir), "../../../tests/data/maps/%s", dir_list[dir_cursor_idx].name);
+#endif
+                    purrgo_config_save();
+                    current_state = APP_STATE_MENU_CONFIG;
+                }
+                break;
+            case PURRGO_BTN_MENU:
+                // Кнопка MENU выполняет роль "Назад" для возврата в меню настроек
+                current_state = APP_STATE_MENU_CONFIG;
+                break;
+            default:
+                break;
         }
         return;
     }
@@ -6678,8 +6801,9 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
 
             case APP_STATE_TRIP_COMPUTER:
                 current_state = APP_STATE_MENU_CONFIG;
-                // При входе в меню сбрасываем черновик на текущее сохраненное значение
+                // При входе в меню сбрасываем черновик на текущее сохраненное значение и курсор
                 draft_tz_offset_minutes = app_config.tz_offset_minutes;
+                config_cursor_idx = 0;
                 break;
 
             default:
@@ -6771,6 +6895,8 @@ void purrgo_app_ui_render(
             int16_t draft_tz =
                 purrgo_app_get_draft_tz_offset();
 
+            int cursor = purrgo_app_get_config_cursor();
+
             gfx_draw_string(
                 gfx,
                 10,
@@ -6798,16 +6924,31 @@ void purrgo_app_ui_render(
                 mins
             );
 
-            gfx_set_color(
-                gfx,
-                3,
-                0
-            );
+            if (cursor == 0) {
+                gfx_set_color(gfx, 3, 0); // Invert
+            } else {
+                gfx_set_color(gfx, 0, 3);
+            }
 
             gfx_draw_string(
                 gfx,
                 10,
                 25,
+                buf
+            );
+
+            if (cursor == 1) {
+                gfx_set_color(gfx, 3, 0); // Invert
+            } else {
+                gfx_set_color(gfx, 0, 3);
+            }
+
+            snprintf(buf, sizeof(buf), "DIR: %s", app_config.map_dir);
+
+            gfx_draw_string(
+                gfx,
+                10,
+                40,
                 buf
             );
 
@@ -6820,21 +6961,28 @@ void purrgo_app_ui_render(
             gfx_draw_string(
                 gfx,
                 10,
-                45,
-                "+/- : Change"
-            );
-
-            gfx_draw_string(
-                gfx,
-                10,
                 60,
-                "OK  : Save"
+                "UP/DN : Select"
             );
 
             gfx_draw_string(
                 gfx,
                 10,
                 75,
+                "+/- : Change"
+            );
+
+            gfx_draw_string(
+                gfx,
+                10,
+                90,
+                "OK  : Apply/Open"
+            );
+
+            gfx_draw_string(
+                gfx,
+                10,
+                105,
                 "MENU: Cancel"
             );
 
@@ -7188,14 +7336,19 @@ void purrgo_app_ui_render(
                 "TOP STATUS AREA"
             );
 
-            const char* idx_path =
-                "../../../tests/data/maps/roads.idx";
+            /*
+             * Динамическое формирование путей к файлам карт на основе app_config.map_dir.
+             * Используется snprintf для предотвращения переполнения буфера (buffer overflow prevention).
+             * Размер буфера 64 байта достаточен для путей, состоящих из базовой директории
+             * и стандартного имени файла.
+             */
+            char idx_path[64];
+            char mlp_path[64];
+            char name_path[64];
 
-            const char* mlp_path =
-                "../../../tests/data/maps/roads.mlp";
-
-            const char* name_path =
-                "../../../tests/data/maps/map.name";
+            snprintf(idx_path, sizeof(idx_path), "%s/roads.idx", app_config.map_dir);
+            snprintf(mlp_path, sizeof(mlp_path), "%s/roads.mlp", app_config.map_dir);
+            snprintf(name_path, sizeof(name_path), "%s/map.name", app_config.map_dir);
 
             purrgo_file_t* idx_file = purrgo_fs_open(idx_path, FS_READ);
             purrgo_file_t* mlp_file = purrgo_fs_open(mlp_path, FS_READ);
@@ -7259,6 +7412,46 @@ void purrgo_app_ui_render(
                 0,
                 3
             );
+
+            break;
+        }
+
+        case APP_STATE_MENU_DIR_SELECT: {
+            gfx_set_color(gfx, 0, 3);
+            gfx_draw_string(gfx, 10, 10, "=== SELECT DIR ===");
+
+            purrgo_fs_dirent_t* dir_list;
+            int count = purrgo_app_get_dir_list(&dir_list);
+            int cursor = purrgo_app_get_dir_cursor();
+            int y_pos = 25;
+
+            // Логика ограничения вывода элементов (clipping/scrolling).
+            // Экран вмещает около 15 строк (при высоте 296 и шаге 12).
+            // Ограничиваем вывод списка для наглядности (например, 10 элементов).
+            int display_start = 0;
+            if (cursor > 5) {
+                display_start = cursor - 5;
+            }
+            if (display_start + 10 > count && count > 10) {
+                display_start = count - 10;
+            }
+
+            for (int i = display_start; i < count && i < display_start + 10; i++) {
+                if (i == cursor) {
+                    gfx_set_color(gfx, 3, 0); // Invert
+                } else {
+                    gfx_set_color(gfx, 0, 3);
+                }
+
+                snprintf(buf, sizeof(buf), "[%s]", dir_list[i].name);
+                gfx_draw_string(gfx, 10, y_pos, buf);
+                y_pos += 12;
+            }
+
+            if (count == 0) {
+                gfx_set_color(gfx, 0, 3);
+                gfx_draw_string(gfx, 10, y_pos, "(No directories)");
+            }
 
             break;
         }
@@ -9838,6 +10031,8 @@ void gfx_draw_string(gfx_context_t *ctx, int16_t x, int16_t y, const char *str)
 ```c
 #include "purrgo/fs_hal.h"
 #include <stdio.h>
+#include <dirent.h>
+#include <string.h>
 
 purrgo_file_t* purrgo_fs_open(const char* filepath, fs_mode_t mode) {
     const char* c_mode = "wb";
@@ -9850,14 +10045,20 @@ purrgo_file_t* purrgo_fs_open(const char* filepath, fs_mode_t mode) {
     return (purrgo_file_t*)fopen(filepath, c_mode);
 }
 
-size_t purrgo_fs_read(purrgo_file_t* file, uint8_t* buffer, size_t size) {
+uint32_t purrgo_fs_read(purrgo_file_t* file, uint8_t* buffer, uint32_t size) {
     if (!file || !buffer) return 0;
-    return fread(buffer, 1, size, (FILE*)file);
+    /*
+     * Явное приведение аргументов и возвращаемого значения (size_t <-> uint32_t).
+     * Стандартные функции fread/fwrite возвращают size_t (64-бит на x64).
+     * На платформе STM32 FatFs оперирует типом UINT (32-бит).
+     * Приведение типов гарантирует идентичное поведение кода на ПК и микроконтроллере.
+     */
+    return (uint32_t)fread(buffer, 1, (size_t)size, (FILE*)file);
 }
 
-size_t purrgo_fs_write(purrgo_file_t* file, const uint8_t* data, size_t size) {
+uint32_t purrgo_fs_write(purrgo_file_t* file, const uint8_t* data, uint32_t size) {
     if (!file || !data) return 0;
-    return fwrite(data, 1, size, (FILE*)file);
+    return (uint32_t)fwrite(data, 1, (size_t)size, (FILE*)file);
 }
 
 bool purrgo_fs_seek(purrgo_file_t* file, uint32_t offset) {
@@ -9871,6 +10072,45 @@ void purrgo_fs_sync(purrgo_file_t* file) {
 
 void purrgo_fs_close(purrgo_file_t* file) {
     if (file) fclose((FILE*)file);
+}
+
+purrgo_dir_t* purrgo_fs_opendir(const char* path) {
+    // Приведение системного указателя DIR* к платформонезависимому purrgo_dir_t*
+    return (purrgo_dir_t*)opendir(path);
+}
+bool purrgo_fs_readdir(purrgo_dir_t* dir, purrgo_fs_dirent_t* dirent) {
+    if (!dir || !dirent) return false;
+
+    struct dirent* ep = readdir((DIR*)dir);
+    if (!ep) return false;
+
+    /*
+     * Использование sizeof защищает от переполнения и устраняет
+     * зависимость от внешних необъявленных макросов длины пути.
+     */
+    strncpy(dirent->name, ep->d_name, sizeof(dirent->name) - 1);
+    dirent->name[sizeof(dirent->name) - 1] = '\0';
+
+#if defined(_DIRENT_HAVE_D_TYPE) || defined(__MINGW32__)
+    /*
+     * В MinGW-w64 поле d_type присутствует. 
+     * Использование константы DT_DIR (обычно 4) безопаснее "магического числа".
+     */
+    dirent->is_directory = (ep->d_type == DT_DIR);
+#else
+    /*
+     * Фолбэк для систем без поля d_type в структуре dirent.
+     * Реальное определение требует вызова stat(), которому нужен полный путь к файлу.
+     * Если полный путь не кэшируется в purrgo_dir_t, безопаснее установить флаг в false.
+     */
+    dirent->is_directory = false;
+#endif
+
+    return true;
+}
+
+void purrgo_fs_closedir(purrgo_dir_t* dir) {
+    if (dir) closedir((DIR*)dir);
 }
 ```
 
@@ -10659,6 +10899,476 @@ int main(void) {
     return 0;
 }
 
+```
+
+--- FILE: tests\data\maps\roads\dtmap-parser.py ---
+```py
+import struct
+import os
+import json
+import math
+import pygame
+
+# --- Настройки экрана ---
+WIDTH, HEIGHT = 600, 600
+
+# Глобальные счетчики для диагностики
+stats = {
+    "nav_visited": 0,
+    "nav_culled": 0,
+    "data_visited": 0,
+    "data_drawn": 0,
+    "lines_drawn": 0,
+    "polygons_drawn": 0
+}
+
+def load_camera_bbox(map_name_path, size_km=5.0):
+    """
+    Загрузка центра из map.name и расчет BBox размером size_km x size_km в градусах.
+    """
+    if not os.path.exists(map_name_path):
+        print(f"[ERROR] Файл {map_name_path} не найден! Проверьте путь.")
+        # Дефолтные координаты (Москва) в случае отсутствия файла
+        center_lat, center_lon = 55.7558, 37.6173
+    else:
+        with open(map_name_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            center_lat = float(data["centerLat"])
+            center_lon = float(data["centerLon"])
+            print(f"[INFO] Прочитан {map_name_path}: centerLat={center_lat}, centerLon={center_lon}")
+
+    # Половина ширины/высоты области в километрах
+    half_km = size_km / 2.0
+    
+    # 1 градус широты ≈ 111.139 км
+    d_lat = half_km / 111.139
+    
+    # 1 градус долготы ≈ 111.139 * cos(lat) км
+    d_lon = half_km / (111.139 * math.cos(math.radians(center_lat)))
+
+    min_x = center_lon - d_lon
+    max_x = center_lon + d_lon
+    min_y = center_lat - d_lat
+    max_y = center_lat + d_lat
+
+    print(f"[INFO] BBox камеры (5х5 км):")
+    print(f"       Lon (X): min={min_x:.6f}, max={max_x:.6f}")
+    print(f"       Lat (Y): min={min_y:.6f}, max={max_y:.6f}")
+    
+    return min_x, min_y, max_x, max_y
+
+def world_to_screen(x, y, camera_bbox):
+    """
+    Проекция географических координат в пиксели окна 600x600.
+    """
+    cam_min_x, cam_min_y, cam_max_x, cam_max_y = camera_bbox
+    screen_x = int((x - cam_min_x) / (cam_max_x - cam_min_x) * WIDTH)
+    # Инверсия оси Y (в графических системах 0 вверху)
+    screen_y = HEIGHT - int((y - cam_min_y) / (cam_max_y - cam_min_y) * HEIGHT)
+    return screen_x, screen_y
+
+def is_in_screen(xmin, ymin, xmax, ymax, camera_bbox):
+    """
+    Проверка пересечения BBox узла с BBox камеры (AABB Culling).
+    """
+    cam_min_x, cam_min_y, cam_max_x, cam_max_y = camera_bbox
+    if xmax < cam_min_x or xmin > cam_max_x: return False
+    if ymax < cam_min_y or ymin > cam_max_y: return False
+    return True
+
+def read_yzl_header(file):
+    """
+    Чтение и валидация 32-байтного глобального заголовка YZL.
+    """
+    header_data = file.read(32)
+    if len(header_data) < 32:
+        print("[ERROR] Недостаточно байт для YZL заголовка.")
+        return False
+    
+    magic = header_data[0:3]
+    if magic != b'YZL':
+        print(f"[ERROR] Неверная сигнатура YZL: {magic}")
+        return False
+        
+    payload_size = struct.unpack("<I", header_data[4:8])[0]
+    print(f"[INFO] Заголовок YZL корректен. Payload Size: {payload_size} байт.")
+    return True
+
+def parse_geometry_mlp(mlp_file, v1_offset, camera_bbox, screen_surface):
+    """
+    Чтение геометрии по смещению из R-дерева.
+    v1_offset - относительное смещение от конца глобального заголовка (32 байта).
+    v1 указывает сразу на тело записи (пропуская 8 байт локального заголовка).
+    """
+    # Вычисление абсолютного адреса поля minx
+    absolute_body_offset = 32 + v1_offset
+    mlp_file.seek(absolute_body_offset)
+    
+    # 1. Читаем 24 байта фиксированной части:
+    # bbox_int (int32 * 4) + num_parts (int32) + num_points (int32)
+    head_data = mlp_file.read(24)
+    if len(head_data) < 24:
+        return
+        
+    minx, miny, maxx, maxy, num_parts, num_points = struct.unpack("<iiiiii", head_data)
+    
+    # Аппаратная защита от поврежденных указателей или мусорных данных
+    if num_parts < 0 or num_points < 0 or num_points > 50000:
+        return
+        
+    # 2. Динамическое вычисление размера Payload
+    # Индексы частей: num_parts * 4 байта (uint32)
+    # Координаты: num_points * 8 байт (int32 * 2)
+    remaining_size = (num_parts * 4) + (num_points * 8)
+    
+    if remaining_size <= 0:
+        return
+        
+    body_data = mlp_file.read(remaining_size)
+    if len(body_data) < remaining_size:
+        return
+        
+    # 3. Распаковка массивов
+    parts = struct.unpack_from(f"<{num_parts}I", body_data, 0)
+    points_offset = num_parts * 4
+    raw_points = struct.unpack_from(f"<{num_points * 2}i", body_data, points_offset)
+    
+    # 4. Проекция
+    screen_points = []
+    for i in range(num_points):
+        lon = raw_points[i * 2] / 1000000.0
+        lat = raw_points[i * 2 + 1] / 1000000.0
+        screen_points.append(world_to_screen(lon, lat, camera_bbox))
+    
+    # 5. Отрисовка
+    if len(screen_points) >= 2:
+        # Если num_parts > 1, это мультиполигон с дырами. 
+        # В базовом рендере отрисовываем только внешний контур (от parts[0] до parts[1])
+        end_idx = parts[1] if num_parts > 1 else num_points
+        contour = screen_points[0:end_idx]
+        
+        if len(contour) > 2 and contour[0] == contour[-1] and parts[0] == 0:
+            # Замкнутый полигон
+            pygame.draw.polygon(screen_surface, (80, 140, 80), contour, 1)
+            stats["polygons_drawn"] += 1
+        else:
+            # Линия
+            pygame.draw.lines(screen_surface, (220, 220, 220), False, screen_points, 2)
+            stats["lines_drawn"] += 1
+
+def parse_node(idx_file, mlp_file, is_nav_node, current_level, camera_bbox, screen_surface):
+    """
+    Разбор 28-байтного узла с логированием операций.
+    """
+    node_data = idx_file.read(28)
+    if len(node_data) < 28:
+        return
+
+    if not is_nav_node:
+        stats["data_visited"] += 1
+        xmin, ymin, xmax, ymax, obj_type, v1, v2 = struct.unpack("<ffffIII", node_data)
+        
+        if is_in_screen(xmin, ymin, xmax, ymax, camera_bbox):
+            stats["data_drawn"] += 1
+            if v1 > 0:
+                parse_geometry_mlp(mlp_file, v1, camera_bbox, screen_surface)
+        return
+
+    stats["nav_visited"] += 1
+    v3_jump, c_xmin, c_ymin, c_xmax, c_ymax, nav_level, obj_count = struct.unpack("<IffffII", node_data)
+
+    if not is_in_screen(c_xmin, c_ymin, c_xmax, c_ymax, camera_bbox):
+        stats["nav_culled"] += 1
+        # Аппаратный пропуск дочернего поддерева (компенсация префетча -8 байт)
+        idx_file.seek(v3_jump - 8, os.SEEK_CUR)
+        return
+
+    child_is_nav = nav_level > 0
+    child_level = nav_level - 1 if nav_level > 0 else 0
+    
+    for _ in range(obj_count):
+        parse_node(idx_file, mlp_file, child_is_nav, child_level, camera_bbox, screen_surface)
+
+def render_map(idx_path, mlp_path, map_name_path):
+    print("=== ЗАПУСК РЕНДЕРА DT G1 MAP ===")
+    
+    # 1. Расчет камеры по map.name
+    camera_bbox = load_camera_bbox(map_name_path, size_km=5.0)
+
+    pygame.init()
+    screen = pygame.display.set_mode((WIDTH, HEIGHT))
+    pygame.display.set_caption("DT G1 Vector Renderer (600x600)")
+    screen.fill((20, 20, 20)) # Темно-серый фон
+
+    if not os.path.exists(idx_path) or not os.path.exists(mlp_path):
+        print(f"[ERROR] Не найдены файлы карт: {idx_path} или {mlp_path}")
+        return
+
+    # 2. Обход файла слоев
+    with open(idx_path, "rb") as idx_file, open(mlp_path, "rb") as mlp_file:
+        print(f"[INFO] Открытие слоя: {idx_path}")
+        if not read_yzl_header(idx_file):
+            return
+
+        sqt_index = 0
+        while True:
+            sqt_header = idx_file.read(16)
+            if not sqt_header or len(sqt_header) < 16:
+                break
+            
+            magic, topo_marker, mode, count = struct.unpack("<4sIII", sqt_header)
+            
+            if magic != b'SQT\x01':
+                print(f"[WARN] Некорректный заголовок SQT: {magic}")
+                break
+            
+            print(f"[INFO] Найдена секция SQT #{sqt_index}: Mode={mode}, Root Nodes Count={count}")
+            sqt_index += 1
+            
+            if count == 0:
+                continue
+            
+            is_nav = mode > 0
+            level = mode - 1 if mode > 0 else 0
+            
+            for _ in range(count):
+                parse_node(idx_file, mlp_file, is_nav, level, camera_bbox, screen)
+
+    # 3. Вывод итоговой статистики в консоль
+    print("=== СТАТИСТИКА РЕНДЕРИНГА ===")
+    print(f"Nav Nodes обработано:  {stats['nav_visited']}")
+    print(f"Nav Nodes отброшено:   {stats['nav_culled']} (Z-Culling)")
+    print(f"Data Nodes проверено:  {stats['data_visited']}")
+    print(f"Data Nodes видимы:     {stats['data_drawn']}")
+    print(f"Отрисовано линий:      {stats['lines_drawn']}")
+    print(f"Отрисовано полигонов:  {stats['polygons_drawn']}")
+    print("=============================")
+
+    # Отображение кадра
+    pygame.display.flip()
+
+    # Главный цикл Pygame
+    running = True
+    while running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+    pygame.quit()
+
+if __name__ == "__main__":
+    # Укажите путь к Вашим файлам слоя и конфигурации
+    IDX_FILE = "landuse.idx"
+    MLP_FILE = "landuse.mlp"
+    MAP_NAME = "map.name"
+    
+    render_map(IDX_FILE, MLP_FILE, MAP_NAME)
+```
+
+--- FILE: tests\data\maps\roads\idx_mlp_visualizer.py ---
+```py
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+import os
+import argparse
+import mmap
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.collections import LineCollection
+from concurrent.futures import ThreadPoolExecutor
+
+def parse_mlp_pointers(mlp_path: str):
+    if not os.path.exists(mlp_path):
+        return [], None, None
+        
+    with open(mlp_path, "rb") as f:
+        with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
+            size = mm.size()
+
+            aligned_size = size - (size % 4)
+            data_i32 = np.frombuffer(mm[:aligned_size], dtype=np.int32)
+            data_u32 = data_i32.view(np.uint32)
+
+            p = 32 // 4
+            end_p = aligned_size // 4
+            
+            line_segments = []
+            point_list = []
+            global_bbox = [float('inf'), float('inf'), float('-inf'), float('-inf')]
+            
+            while p < end_p:
+
+                content_len_bytes = data_u32[p + 1]
+                if content_len_bytes == 0: 
+                    break
+
+                record_len_32 = (8 + content_len_bytes) // 4
+                
+                if p + record_len_32 > end_p or content_len_bytes < 24:
+                    p += record_len_32
+                    continue
+
+                minx = data_i32[p + 2] / 1_000_000.0
+                miny = data_i32[p + 3] / 1_000_000.0
+                maxx = data_i32[p + 4] / 1_000_000.0
+                maxy = data_i32[p + 5] / 1_000_000.0
+
+                if minx < global_bbox[0]: global_bbox[0] = minx
+                if miny < global_bbox[1]: global_bbox[1] = miny
+                if maxx > global_bbox[2]: global_bbox[2] = maxx
+                if maxy > global_bbox[3]: global_bbox[3] = maxy
+                
+                num_parts = data_i32[p + 6]
+                num_points = data_i32[p + 7]
+
+                pts_start = p + 8 + num_parts
+                pts_end = pts_start + (num_points * 2)
+                
+                if pts_end <= p + record_len_32:
+
+                    points = data_i32[pts_start:pts_end].reshape(-1, 2) / 1_000_000.0
+                    
+                    if num_points >= 2:
+                        if num_parts > 1:
+                            parts = data_u32[p + 8 : p + 8 + num_parts]
+                            line_segments.extend(np.split(points, parts[1:]))
+                        else:
+                            line_segments.append(points)
+                    elif num_points == 1:
+                        point_list.append(points[0])
+
+                p += record_len_32
+                
+    return line_segments, np.array(point_list, dtype=np.float32) if point_list else None, global_bbox
+
+def parse_idx_vectorized(idx_path: str):
+    if not os.path.exists(idx_path):
+        return None, None, None, None
+        
+    dt_nav = np.dtype([('v3', '<u4'), ('minx', '<f4'), ('miny', '<f4'), ('maxx', '<f4'), ('maxy', '<f4'), ('v1', '<u4'), ('cnt', '<u4')])
+    dt_data = np.dtype([('minx', '<f4'), ('miny', '<f4'), ('maxx', '<f4'), ('maxy', '<f4'), ('code', '<u4'), ('v1', '<u4'), ('v2', '<u4')])
+
+    nav_nodes, data_nodes = [], []
+
+    with open(idx_path, "rb") as f:
+        with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
+            size = mm.size()
+            aligned_size = size - (size % 4)
+            data_u32 = np.frombuffer(mm[:aligned_size], dtype=np.uint32)
+
+            sqt_pointers = np.where(data_u32 == 22303059)[0]
+            
+            for ptr in sqt_pointers:
+
+                mode = data_u32[ptr + 2]
+                count = data_u32[ptr + 3]
+                
+                if count == 0: continue
+
+                byte_offset = (ptr + 4) * 4 
+                
+                if mode == 1: # Clustered
+                    for _ in range(count):
+                        if byte_offset + 28 > size: break
+                        nav = np.frombuffer(mm[byte_offset:byte_offset+28], dtype=dt_nav, count=1)
+                        nav_nodes.append(nav)
+                        byte_offset += 28
+                        
+                        d_count = nav[0]['cnt']
+                        if d_count > 0 and byte_offset + (28 * d_count) <= size:
+                            data_nodes.append(np.frombuffer(mm[byte_offset:byte_offset+28*d_count], dtype=dt_data))
+                            byte_offset += 28 * d_count
+                            
+                elif mode == 0: # Flat
+                    if byte_offset + (28 * count) <= size:
+                        data_nodes.append(np.frombuffer(mm[byte_offset:byte_offset+28*count], dtype=dt_data))
+
+    def build_nan_separated_lines(nodes_list):
+        if not nodes_list: return None, None
+        arr = np.concatenate(nodes_list)
+        valid = (arr['maxx'] > arr['minx']) & (arr['maxy'] > arr['miny'])
+        arr = arr[valid]
+        N = len(arr)
+        if N == 0: return None, None
+        
+        X, Y = np.empty(N * 6, dtype=np.float32), np.empty(N * 6, dtype=np.float32)
+        X[0::6] = arr['minx']; Y[0::6] = arr['miny']
+        X[1::6] = arr['maxx']; Y[1::6] = arr['miny']
+        X[2::6] = arr['maxx']; Y[2::6] = arr['maxy']
+        X[3::6] = arr['minx']; Y[3::6] = arr['maxy']
+        X[4::6] = arr['minx']; Y[4::6] = arr['miny']
+        X[5::6] = np.nan;      Y[5::6] = np.nan      
+        return X, Y
+
+    nav_X, nav_Y = build_nan_separated_lines(nav_nodes)
+    data_X, data_Y = build_nan_separated_lines(data_nodes)
+                
+    return nav_X, nav_Y, data_X, data_Y
+
+def visualize(idx_path=None, mlp_path=None):
+    plt.style.use('fast')
+    fig, ax = plt.subplots(figsize=(14, 14))
+    global_minx, global_miny, global_maxx, global_maxy = float('inf'), float('inf'), float('-inf'), float('-inf')
+
+    print("[*] Launching Multi-threaded Parsers...")
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        future_idx = executor.submit(parse_idx_vectorized, idx_path) if idx_path else None
+        future_mlp = executor.submit(parse_mlp_pointers, mlp_path) if mlp_path else None
+
+        if future_idx:
+            nav_X, nav_Y, data_X, data_Y = future_idx.result()
+            if data_X is not None:
+                ax.plot(data_X, data_Y, color='blue', linewidth=0.8, alpha=0.4, rasterized=True)
+                print(f"[+] IDX Data Nodes loaded: {len(data_X)//6}")
+                global_minx, global_miny = np.nanmin(data_X), np.nanmin(data_Y)
+                global_maxx, global_maxy = np.nanmax(data_X), np.nanmax(data_Y)
+            if nav_X is not None:
+                ax.plot(nav_X, nav_Y, color='red', linewidth=1.5, alpha=0.5, rasterized=True)
+                print(f"[+] IDX Nav Nodes loaded: {len(nav_X)//6}")
+                
+        if future_mlp:
+            mlp_segments, mlp_points, bbox = future_mlp.result()
+            if mlp_segments:
+                lc = LineCollection(mlp_segments, colors='black', linewidths=1.0, alpha=0.8, rasterized=True)
+                ax.add_collection(lc)
+                print(f"[+] MLP Lines loaded: {len(mlp_segments)}")
+                if bbox[0] != float('inf'):
+                    global_minx, global_miny = min(global_minx, bbox[0]), min(global_miny, bbox[1])
+                    global_maxx, global_maxy = max(global_maxx, bbox[2]), max(global_maxy, bbox[3])
+            if mlp_points is not None:
+                ax.scatter(mlp_points[:, 0], mlp_points[:, 1], c='green', s=3, rasterized=True)
+
+    if global_minx != float('inf'):
+        ax.set_xlim(global_minx, global_maxx)
+        ax.set_ylim(global_miny, global_maxy)
+
+    ax.set_aspect('equal', adjustable='datalim')
+    ax.set_xlabel("Longitude")
+    ax.set_ylabel("Latitude")
+    ax.set_title("DT G1 Absolute Limit Visualizer (Pointers + Async Threads)")
+    ax.grid(True, linestyle='--', alpha=0.3)
+    
+    from matplotlib.lines import Line2D
+    legend_elements = [
+        Line2D([0], [0], color='black', lw=2, label='MLP Geometry'),
+        Line2D([0], [0], color='red', lw=2, label='IDX Nav Cluster'),
+        Line2D([0], [0], color='blue', lw=2, label='IDX Data Object')
+    ]
+    ax.legend(handles=legend_elements, loc='upper right')
+    
+    plt.tight_layout()
+    plt.show()
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="DT G1 Ultimate Visualizer")
+    parser.add_argument("--idx", default=None, help="Path to the .idx file")
+    parser.add_argument("--mlp", default=None, help="Path to the .mlp file")
+    args = parser.parse_args()
+    
+    if not args.idx and not args.mlp:
+        print("[-] Error: Please provide at least one file using --idx or --mlp")
+    else:
+        visualize(args.idx, args.mlp)
 ```
 
 --- FILE: tools\generate_sun_tables.py ---
