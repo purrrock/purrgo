@@ -1,4 +1,5 @@
 // file: src/core/app_ui.c
+// file: src/core/app_ui.c
 #include <purrgo/app_ui.h>
 #include <purrgo/app_fsm.h>
 #include <purrgo/gfx_text.h>
@@ -539,7 +540,8 @@ void purrgo_app_ui_render(
                     &landuse_mlp_fs,
                     gfx,
                     &fixed_cam,
-                    &map_vp
+                    &map_vp,
+					true // Слой landuse состоит из полигонов
                 );
 
                 purrgo_fs_close(landuse_idx_file);
@@ -576,7 +578,8 @@ void purrgo_app_ui_render(
                     &mlp_fs,
                     gfx,
                     &fixed_cam,
-                    &map_vp
+                    &map_vp,
+					false // Слой дорог состоит из линий
                 );
 
                 purrgo_fs_close(idx_file);
