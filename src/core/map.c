@@ -1,6 +1,6 @@
 // file: src/core/map.c
 #include "purrgo/map.h"
-#include <stdio.h>
+#include "purrgo/logger.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -230,8 +230,8 @@ static void parse_geometry_mlp(
              * передаётся в GFX. Это не изменяет rendering behaviour.
              */
             if (diag && diag->lines_drawn == 0) {
-                fprintf(
-                    stderr,
+                PURRGO_LOG(
+
                     "MAP: FIRST LINE "
                     "map=(%ld,%ld)->(%ld,%ld) "
                     "screen=(%d,%d)->(%d,%d) "
@@ -246,7 +246,7 @@ static void parse_geometry_mlp(
                     (long)cam->min_x, (long)cam->min_y,
                     (long)cam->max_x, (long)cam->max_y
                 );
-                fflush(stderr);
+
             }
 
             gfx_draw_line(gfx, prev_sx, prev_sy, sx, sy);
@@ -310,8 +310,8 @@ static void parse_node(
             }
 
             if (diag->nodes_logged < 10) {
-                fprintf(
-                    stderr,
+                PURRGO_LOG(
+
                     "MAP: DATA "
                     "raw=(%08x,%08x,%08x,%08x) "
                     "flt=(%f,%f,%f,%f) "
@@ -364,8 +364,8 @@ static void parse_node(
     int32_t c_ymax = (int32_t)(f_c_ymax * 10000000.0f);
 
     if (diag && diag->nodes_logged < 10) {
-        fprintf(
-            stderr,
+        PURRGO_LOG(
+
             "MAP: NAV "
             "raw=(%08x,%08x,%08x,%08x) "
             "flt=(%f,%f,%f,%f) "
@@ -432,10 +432,10 @@ void purrgo_map_render_layer(
     const purrgo_bbox_t* camera,
     const purrgo_viewport_t* viewport
 ) {
-    fprintf(stderr, "MAP: IDX opened\n");
+    PURRGO_LOG("MAP: IDX opened\n");
 
-    fprintf(
-        stderr,
+    PURRGO_LOG(
+
         "MAP: CAMERA min=(%ld,%ld) max=(%ld,%ld)\n",
         (long)camera->min_x,
         (long)camera->min_y,
@@ -443,8 +443,8 @@ void purrgo_map_render_layer(
         (long)camera->max_y
     );
 
-    fprintf(
-        stderr,
+    PURRGO_LOG(
+
         "MAP: VIEWPORT offset=(%d,%d) size=(%u,%u)\n",
         (int)viewport->offset_x,
         (int)viewport->offset_y,
@@ -465,8 +465,8 @@ void purrgo_map_render_layer(
             idx_fs->handle,
             yzl_header,
             32) != 32) {
-        fprintf(stderr, "MAP: ERROR reading YZL header\n");
-        fflush(stderr);
+        PURRGO_LOG("MAP: ERROR reading YZL header\n");
+
         return;
     }
 
@@ -475,8 +475,8 @@ void purrgo_map_render_layer(
     if (yzl_header[0] != 'Y' ||
         yzl_header[1] != 'Z' ||
         yzl_header[2] != 'L') {
-        fprintf(stderr, "MAP: ERROR invalid YZL header\n");
-        fflush(stderr);
+        PURRGO_LOG("MAP: ERROR invalid YZL header\n");
+
         return;
     }
 
@@ -530,8 +530,8 @@ void purrgo_map_render_layer(
         }
     }
 
-    fprintf(
-        stderr,
+    PURRGO_LOG(
+
         "MAP: SQT=%u NAV=%u DATA=%u PASS=%u CULL=%u LINES=%u\n",
         diag.sqt_blocks,
         diag.nav_visited,
@@ -541,5 +541,5 @@ void purrgo_map_render_layer(
         diag.lines_drawn
     );
 
-    fflush(stderr);
+
 }

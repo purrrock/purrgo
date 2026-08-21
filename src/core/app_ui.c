@@ -5,7 +5,7 @@
 #include <purrgo/map.h>
 #include <purrgo/fs_hal.h>
 #include <purrgo/config.h>
-#include <stdio.h>
+#include "purrgo/logger.h"
 #include <string.h>
 
 // Локальные обертки для согласования сигнатур fs_hal.h и purrgo_fs_t
@@ -445,11 +445,11 @@ void purrgo_app_ui_render(
             static bool map_screen_logged = false;
 
             if (!map_screen_logged) {
-                fprintf(
-                    stderr,
+                PURRGO_LOG(
+
                     "EMU: APP_STATE_MAP rendering started\n"
                 );
-                fflush(stderr);
+
 
                 map_screen_logged = true;
             }
