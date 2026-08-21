@@ -32,8 +32,8 @@ void purrgo_app_ui_render(
     };
 
     purrgo_viewport_t map_vp = {
-        .width = 128 - 10,
-        .height = 296 - 30,
+        .width = 128 - 0,
+        .height = 296 - 16,
         .offset_x = 5,
         .offset_y = 15
     };

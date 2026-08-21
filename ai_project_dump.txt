@@ -4471,6 +4471,13 @@ int purrgo_app_get_config_cursor(void);
 int purrgo_app_get_dir_list(purrgo_fs_dirent_t** list_out);
 int purrgo_app_get_dir_cursor(void);
 
+// Геттеры для состояния карты (Map Viewport)
+int32_t purrgo_app_get_map_center_lat(void);
+int32_t purrgo_app_get_map_center_lon(void);
+uint8_t purrgo_app_get_map_zoom_level(void);
+bool purrgo_app_is_manual_pan_active(void);
+int32_t purrgo_app_get_zoom_radius_y(void);
+
 // Функция применения часового пояса с календарным пересчетом (влияет на локальное время и расчет восхода/заката)
 void purrgo_app_apply_timezone(const purrgo_gnss_solution_t* utc, purrgo_gnss_solution_t* local, int16_t tz_offset_minutes);
 
@@ -4850,6 +4857,9 @@ uint32_t purrgo_geo_distance_m(int32_t lat1_1e7, int32_t lon1_1e7, int32_t lat2_
 
 // Вычисление истинного азимута от первой точки ко второй (в градусах от 0 до 359)
 uint16_t purrgo_geo_azimuth_deg(int32_t lat1_1e7, int32_t lon1_1e7, int32_t lat2_1e7, int32_t lon2_1e7);
+
+// Вычисление косинуса широты, возвращает значение масштабированное на 10000
+int32_t purrgo_geo_cos_10k(int32_t lat_1e7);
 
 #endif // PURRGO_GEO_H
 ```
@@ -5719,6 +5729,7 @@ size_t purrgo_ubx_build(
 #include "purrgo/app_fsm.h"
 #include "purrgo/config.h"
 #include "purrgo/purrgo_time.h"
+#include "purrgo/geo.h"
 #include <stdio.h>
 
 // Глобальный экземпляр конфигурации устройства
@@ -5726,6 +5737,15 @@ size_t purrgo_ubx_build(
 
 // Текущее состояние конечного автомата
 static purrgo_state_t current_state;
+
+// Состояние окна просмотра карты (Map Viewport)
+static int32_t map_center_lat_1e7;
+static int32_t map_center_lon_1e7;
+static uint8_t map_zoom_level;
+static bool manual_pan_active;
+
+// Массив радиусов обзора для масштабирования (по оси Y в единицах 10^7)
+static const int32_t zoom_radius_y_1e7[] = { 2500, 5000, 10000, 25000, 50000, 100000 };
 
 // Черновые (несохраненные) настройки времени для режима редактирования в меню
 static int16_t draft_tz_offset_minutes;
@@ -5789,6 +5809,12 @@ void purrgo_app_init(void) {
 
     current_state = APP_STATE_MAP;
     draft_tz_offset_minutes = app_config.tz_offset_minutes;
+
+    // Инициализация состояния карты
+    map_center_lat_1e7 = app_config.last_lat_1e7;
+    map_center_lon_1e7 = app_config.last_lon_1e7;
+    map_zoom_level = 2; // Начальный зум (середина)
+    manual_pan_active = false;
 }
 
 purrgo_state_t purrgo_app_get_state(void) {
@@ -5810,6 +5836,26 @@ int purrgo_app_get_dir_list(purrgo_fs_dirent_t** list_out) {
 
 int purrgo_app_get_dir_cursor(void) {
     return dir_cursor_idx;
+}
+
+int32_t purrgo_app_get_map_center_lat(void) {
+    return map_center_lat_1e7;
+}
+
+int32_t purrgo_app_get_map_center_lon(void) {
+    return map_center_lon_1e7;
+}
+
+uint8_t purrgo_app_get_map_zoom_level(void) {
+    return map_zoom_level;
+}
+
+bool purrgo_app_is_manual_pan_active(void) {
+    return manual_pan_active;
+}
+
+int32_t purrgo_app_get_zoom_radius_y(void) {
+    return zoom_radius_y_1e7[map_zoom_level];
 }
 
 void purrgo_app_handle_button(purrgo_btn_t button) {
@@ -5920,6 +5966,49 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
         return;
     }
 
+    // Обработка ввода на карте
+    if (current_state == APP_STATE_MAP) {
+        if (button == PURRGO_BTN_PLUS) {
+            if (map_zoom_level > 0) map_zoom_level--;
+            return;
+        }
+        if (button == PURRGO_BTN_MINUS) {
+            if (map_zoom_level < 5) map_zoom_level++;
+            return;
+        }
+
+int32_t step_y = purrgo_app_get_zoom_radius_y() >> 2;
+int32_t cos_val = purrgo_geo_cos_10k(map_center_lat_1e7);
+if (cos_val == 0) cos_val = 1;
+int32_t step_x = (step_y * 10000) / cos_val;
+
+        if (button == PURRGO_BTN_UP) {
+            map_center_lat_1e7 += step_y;
+            manual_pan_active = true;
+            return;
+        }
+        if (button == PURRGO_BTN_DOWN) {
+            map_center_lat_1e7 -= step_y;
+            manual_pan_active = true;
+            return;
+        }
+        if (button == PURRGO_BTN_RIGHT) {
+            map_center_lon_1e7 += step_x;
+            manual_pan_active = true;
+            return;
+        }
+        if (button == PURRGO_BTN_LEFT) {
+            map_center_lon_1e7 -= step_x;
+            manual_pan_active = true;
+            return;
+        }
+
+        if (button == PURRGO_BTN_OK) {
+            manual_pan_active = false;
+            return;
+        }
+    }
+
     // 3. Циклическое переключение основных экранов (Garmin eTrex Page Loop)
     if (button == PURRGO_BTN_MENU) {
         switch (current_state) {
@@ -5951,6 +6040,10 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
     switch (current_state) {
         case APP_STATE_MAP:
             // Фоновые расчеты для карты (панорамирование, проверке BBox, подгрузка кластеров)
+            if (current_fix->valid && !manual_pan_active) {
+                map_center_lat_1e7 = current_fix->lat_1e7;
+                map_center_lon_1e7 = current_fix->lon_1e7;
+            }
             break;
 
         case APP_STATE_TRIP_COMPUTER:
@@ -5973,6 +6066,7 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
 #include <purrgo/app_ui.h>
 #include <purrgo/app_fsm.h>
 #include <purrgo/gfx_text.h>
+#include <purrgo/geo.h>
 #include <purrgo/map.h>
 #include <purrgo/fs_hal.h>
 #include <purrgo/config.h>
@@ -6449,6 +6543,21 @@ void purrgo_app_ui_render(
                 map_screen_logged = true;
             }
 
+            int32_t center_lat = purrgo_app_get_map_center_lat();
+            int32_t center_lon = purrgo_app_get_map_center_lon();
+
+int32_t rad_y = purrgo_app_get_zoom_radius_y();
+int32_t cos_val = purrgo_geo_cos_10k(center_lat);
+if (cos_val == 0) cos_val = 1;
+int32_t rad_x = (rad_y * 10000) / cos_val;
+
+            purrgo_bbox_t dynamic_cam = {
+                .min_x = center_lon - rad_x,
+                .min_y = center_lat - rad_y,
+                .max_x = center_lon + rad_x,
+                .max_y = center_lat + rad_y
+            };
+
             /*
              * Верхняя служебная строка.
              */
@@ -6509,7 +6618,7 @@ void purrgo_app_ui_render(
                     &landuse_idx_fs,
                     &landuse_mlp_fs,
                     gfx,
-                    &fixed_cam,
+                    &dynamic_cam,
                     &map_vp,
 					true // Слой landuse состоит из полигонов
                 );
@@ -6547,7 +6656,7 @@ void purrgo_app_ui_render(
                     &idx_fs,
                     &mlp_fs,
                     gfx,
-                    &fixed_cam,
+                    &dynamic_cam,
                     &map_vp,
 					false // Слой дорог состоит из линий
                 );
@@ -6882,18 +6991,9 @@ uint32_t purrgo_geo_distance_m(int32_t lat1, int32_t lon1, int32_t lat2, int32_t
     // Избегает вычислительно затратных операций, требуемых формулой гаверсинуса (Haversine).
     
     int32_t mean_lat = (lat1 / 2) + (lat2 / 2); // Средняя широта для масштабирования долготы
-    int32_t mean_lat_abs = mean_lat < 0 ? -mean_lat : mean_lat;
-    int32_t mean_lat_deg = mean_lat_abs / 10000000;
-
-    if (mean_lat_deg > 90) mean_lat_deg = 90;
 
     // Линейная интерполяция косинуса
-    int32_t idx = mean_lat_deg / 10;
-    int32_t frac = mean_lat_deg % 10;
-    int32_t cos_lat = cos_lut[idx];
-    if (idx < 9) {
-        cos_lat -= ((cos_lut[idx] - cos_lut[idx+1]) * frac) / 10;
-    }
+    int32_t cos_lat = purrgo_geo_cos_10k(mean_lat);
 
     // Масштабирование оси X (долгота сжимается при приближении к полюсам).
     // Используется int64_t, что транслируется в инструкции UMULL/SMULL на Cortex-M3 (3-5 тактов).
@@ -6923,16 +7023,8 @@ uint16_t purrgo_geo_azimuth_deg(int32_t lat1, int32_t lon1, int32_t lat2, int32_
     }
 
     int32_t mean_lat = (lat1 / 2) + (lat2 / 2);
-    int32_t mean_lat_abs = mean_lat < 0 ? -mean_lat : mean_lat;
-    int32_t mean_lat_deg = mean_lat_abs / 10000000;
-    if (mean_lat_deg > 90) mean_lat_deg = 90;
 
-    int32_t idx = mean_lat_deg / 10;
-    int32_t frac = mean_lat_deg % 10;
-    int32_t cos_lat = cos_lut[idx];
-    if (idx < 9) {
-        cos_lat -= ((cos_lut[idx] - cos_lut[idx+1]) * frac) / 10;
-    }
+    int32_t cos_lat = purrgo_geo_cos_10k(mean_lat);
 
     // Вычисление векторов в проекционной сетке
     int64_t x = dlat; // Ось X направлена на Север
@@ -6970,6 +7062,21 @@ uint16_t purrgo_geo_azimuth_deg(int32_t lat1, int32_t lon1, int32_t lat2, int32_
     }
 
     return (uint16_t)(angle == 360 ? 0 : angle);
+}
+
+int32_t purrgo_geo_cos_10k(int32_t lat_1e7) {
+    int32_t lat_abs = lat_1e7 < 0 ? -lat_1e7 : lat_1e7;
+    int32_t lat_deg = lat_abs / 10000000;
+    if (lat_deg > 90) lat_deg = 90;
+
+    int32_t idx = lat_deg / 10;
+    int32_t frac = lat_deg % 10;
+    int32_t cos_lat = cos_lut[idx];
+    if (idx < 9) {
+        cos_lat -= ((cos_lut[idx] - cos_lut[idx+1]) * frac) / 10;
+    }
+
+    return cos_lat;
 }
 ```
 
