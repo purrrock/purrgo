@@ -116,6 +116,10 @@ void gfx_draw_dashed_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1
 {
     if (ctx == NULL || ctx->draw_pixel == NULL) return;
 
+    // Сохраняем геометрическое начало линии для синхронизации фазы штрихов
+    int16_t orig_x0 = x0;
+    int16_t orig_y0 = y0;
+
     // 1. Отсечение отрезка (Cohen-Sutherland)
     uint8_t outcode0 = compute_outcode(ctx, x0, y0);
     uint8_t outcode1 = compute_outcode(ctx, x1, y1);
@@ -123,42 +127,31 @@ void gfx_draw_dashed_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1
 
     while (true) {
         if (!(outcode0 | outcode1)) {
-            // Линия полностью внутри экрана
             accept = true;
             break;
         } else if (outcode0 & outcode1) {
-            // Линия полностью вне экрана (по одну сторону от границы)
             break;
         } else {
-            // Линия пересекает границу экрана
             int16_t x, y;
             uint8_t outcodeOut = outcode0 ? outcode0 : outcode1;
 
-            // Вычисление точки пересечения
-            // Использование int32_t для dx и dy предотвращает переполнение
-            // при умножении на координаты экрана.
             int32_t dx = x1 - x0;
             int32_t dy = y1 - y0;
 
             if (outcodeOut & TOP) {
-                // y = height - 1 (верхняя граница экрана)
                 x = x0 + dx * (ctx->height - 1 - y0) / dy;
                 y = ctx->height - 1;
             } else if (outcodeOut & BOTTOM) {
-                // y = 0 (нижняя граница экрана)
                 x = x0 + dx * (0 - y0) / dy;
                 y = 0;
             } else if (outcodeOut & RIGHT) {
-                // x = width - 1 (правая граница экрана)
                 y = y0 + dy * (ctx->width - 1 - x0) / dx;
                 x = ctx->width - 1;
             } else if (outcodeOut & LEFT) {
-                // x = 0 (левая граница экрана)
                 y = y0 + dy * (0 - x0) / dx;
                 x = 0;
             }
 
-            // Обновляем координаты точки, которая находилась вне экрана
             if (outcodeOut == outcode0) {
                 x0 = x;
                 y0 = y;
@@ -175,6 +168,21 @@ void gfx_draw_dashed_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1
         return;
     }
 
+    // Параметры паттерна штриха
+    const int16_t dash_len = 4;
+    const int16_t gap_len = 4;
+    const int16_t pattern_len = dash_len + gap_len; // 8 пикселей
+
+    // Вычисляем количество пропущенных пикселей (Chebyshev distance)
+    int16_t dx_clip = gfx_abs(x0 - orig_x0);
+    int16_t dy_clip = gfx_abs(y0 - orig_y0);
+    int16_t clipped_steps = (dx_clip > dy_clip) ? dx_clip : dy_clip;
+    
+    // Инициализируем счетчик с учетом отсеченной части.
+    // Так как pattern_len = 8 (степень двойки), компилятор оптимизирует 
+    // операцию деления с остатком (%) в побитовое И (& 7).
+    int16_t dash_counter = clipped_steps % pattern_len;
+
     // 2. Отрисовка видимой части (Bresenham optimized)
     int16_t dx = gfx_abs(x1 - x0);
     int16_t sx = x0 < x1 ? 1 : -1;
@@ -184,19 +192,13 @@ void gfx_draw_dashed_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1
     int16_t err = dx + dy;
     int16_t e2;
 
-    // Параметры паттерна штриха (длина штриха 4, длина пробела 4)
-    const int16_t dash_len = 4;
-    const int16_t gap_len = 4;
-    int16_t dash_counter = 0;
-
     while (true) {
-        // Отрисовка пикселя только если счетчик меньше длины штриха
         if (dash_counter < dash_len) {
             ctx->draw_pixel(ctx->framebuffer, x0, y0, ctx->color_fg);
         }
 
         dash_counter++;
-        if (dash_counter >= dash_len + gap_len) {
+        if (dash_counter >= pattern_len) {
             dash_counter = 0;
         }
 
