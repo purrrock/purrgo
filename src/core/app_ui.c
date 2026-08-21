@@ -5,10 +5,17 @@
 #include <purrgo/map.h>
 #include <purrgo/fs_hal.h>
 #include <purrgo/config.h>
-extern uint32_t emu_fs_read(void* handle, void* buffer, uint32_t size);
-extern bool emu_fs_seek(void* handle, uint32_t offset);
 #include <stdio.h>
 #include <string.h>
+
+// Локальные обертки для согласования сигнатур fs_hal.h и purrgo_fs_t
+static uint32_t core_fs_read_wrapper(void* handle, void* buffer, uint32_t size) {
+    return (uint32_t)purrgo_fs_read((purrgo_file_t*)handle, (uint8_t*)buffer, (size_t)size);
+}
+
+static bool core_fs_seek_wrapper(void* handle, uint32_t offset) {
+    return purrgo_fs_seek((purrgo_file_t*)handle, offset);
+}
 
 void purrgo_app_ui_render(
     gfx_context_t* gfx,
@@ -478,14 +485,14 @@ void purrgo_app_ui_render(
             if (idx_file && mlp_file) {
                 purrgo_fs_t idx_fs = {
                     .handle = idx_file,
-                    .read = emu_fs_read,
-                    .seek = emu_fs_seek
+                    .read = core_fs_read_wrapper,
+                    .seek = core_fs_seek_wrapper
                 };
 
                 purrgo_fs_t mlp_fs = {
                     .handle = mlp_file,
-                    .read = emu_fs_read,
-                    .seek = emu_fs_seek
+                    .read = core_fs_read_wrapper,
+                    .seek = core_fs_seek_wrapper
                 };
 
                 gfx_set_color(
