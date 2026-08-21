@@ -34,11 +34,27 @@ void purrgo_config_init(void) {
     app_config.backlight_on = true; //[cite: 3]
     
     // Базовые значения карт и координат (Минск)
-    strncpy(app_config.map_dir, "/MAPS/BY", sizeof(app_config.map_dir) - 1);
-    app_config.map_dir[sizeof(app_config.map_dir) - 1] = '\0';
-    app_config.last_lat_1e7 = 537135000;
-    app_config.last_lon_1e7 = 284199000;
-}
+   /*
+     * Default map directory for the PC emulator.
+     *
+     * The emulator is normally launched from:
+     *
+     *     <repository>/build/apps/emulator/
+     *
+     * and test map data is located under:
+     *
+     *     <repository>/tests/data/maps/
+     */
+    strncpy(
+        app_config.map_dir,
+        "../../../tests/data/maps",
+        sizeof(app_config.map_dir) - 1
+    );
+     app_config.map_dir[sizeof(app_config.map_dir) - 1] = '\0';
+
+     app_config.last_lat_1e7 = 537135000;
+     app_config.last_lon_1e7 = 284199000;
+ }
 
 bool purrgo_config_load(void) {
     purrgo_file_t* file = purrgo_fs_open(CONFIG_FILENAME, FS_READ);
@@ -54,10 +70,18 @@ bool purrgo_config_load(void) {
     char buf[CONFIG_MAX_SIZE];
     memset(buf, 0, sizeof(buf));
     
-    size_t bytes_read = purrgo_fs_read(file, (uint8_t*)buf, sizeof(buf) - 1);
-    purrgo_fs_close(file);
+    uint32_t bytes_read = purrgo_fs_read(
+        file,
+        (uint8_t*)buf,
+        (uint32_t)(sizeof(buf) - 1)
+    );
+
+     purrgo_fs_close(file);
     
-    if (bytes_read == 0) return false;
+    if (bytes_read == 0) {
+        purrgo_config_init();
+        return false;
+    }
 
     char* line = buf;
     while (*line) {
@@ -99,8 +123,13 @@ bool purrgo_config_load(void) {
 }
 
 bool purrgo_config_save(void) {
+	fprintf(stderr, "Saving configuration to: %s\n", CONFIG_FILENAME);
     purrgo_file_t* file = purrgo_fs_open(CONFIG_FILENAME, FS_WRITE_CREATE);
-    if (!file) return false;
+	
+    if (!file) {
+    perror("purrgo_config_save: fopen");
+    return false;
+}
     
     char buf[CONFIG_MAX_SIZE];
     
@@ -121,11 +150,39 @@ bool purrgo_config_save(void) {
         (int)app_config.last_lon_1e7
     );
     
-    if (len > 0) {
-        purrgo_fs_write(file, (uint8_t*)buf, len);
-        purrgo_fs_sync(file);
+    /*
+     * snprintf() returns the number of characters that would have
+     * been written, excluding the terminating NUL.
+     *
+     * Therefore len >= sizeof(buf) means that the configuration
+     * was truncated and must not be written.
+     */
+    if (len < 0 || (size_t)len >= sizeof(buf)) {
+        purrgo_fs_close(file);
+        return false;
+     }
+
+    /*
+     * Verify that the complete configuration was actually written.
+     *
+     * purrgo_fs_write() returns the number of bytes written.
+     * Previously this result was ignored, so purrgo_config_save()
+     * reported success even when the filesystem write failed.
+     */
+    uint32_t written = purrgo_fs_write(
+        file,
+        (const uint8_t*)buf,
+        (uint32_t)len
+    );
+
+    if (written != (uint32_t)len) {
+        purrgo_fs_close(file);
+        return false;
     }
-    
-    purrgo_fs_close(file);
-    return true;
-}
+
+    purrgo_fs_sync(file);
+     
+     purrgo_fs_close(file);
+
+     return true;
+ }
