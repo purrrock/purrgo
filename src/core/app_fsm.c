@@ -25,23 +25,21 @@ static void load_directory_list(void) {
     dir_list_count = 0;
     dir_cursor_idx = 0;
 
-    // Открываем базовую директорию карт (например, /MAPS)
-    // В данном случае читаем из корня, либо относительно текущей,
-    // но в задании требуется искать папки для map_dir.
-    // Будем читать из родительской директории карт, либо из корня приложения.
-    // Пусть базовая папка будет "MAPS" или просто читаем тесты.
-    // Если app_config.map_dir == "/MAPS/BY", то ищем в "/MAPS"
-    // Но для простоты прочитаем "../../../tests/data/maps"
-    // или вообще корневую папку "/". Для эмулятора используем "./"
-    // В реальном устройстве это будет корень SD карты "/"
-#ifdef _WIN32
-    const char* base_path = "./";
-#else
-    const char* base_path = "../../../tests/data/maps"; // for emulator tests, or just "/"
-#endif
+/*
+     * PC emulator map data is stored in:
+     *     <repository>/tests/data/maps/
+     *
+     * The emulator executable is normally run from:
+     *     <repository>/build/apps/emulator/
+     * Therefore the relative path from the emulator working directory
+     * to the map root is:
+     *     ../../../tests/data/maps
+     * Use the same path on Windows and other PC platforms.
+     */
+    const char* base_path = "../../../tests/data/maps";
 
-    purrgo_dir_t* dir = purrgo_fs_opendir(base_path);
-    if (!dir) return;
+     purrgo_dir_t* dir = purrgo_fs_opendir(base_path);
+     if (!dir) return;
 
     purrgo_fs_dirent_t entry;
     while (purrgo_fs_readdir(dir, &entry) && dir_list_count < MAX_DIRS_COUNT) {
@@ -173,16 +171,27 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
                 break;
             case PURRGO_BTN_OK:
                 if (dir_list_count > 0) {
-                    // Сохраняем выбранную директорию (с формированием полного пути)
-                    // Для простоты подставляем выбранную папку
-#ifdef _WIN32
-                    snprintf(app_config.map_dir, sizeof(app_config.map_dir), "./%s", dir_list[dir_cursor_idx].name);
-#else
-                    snprintf(app_config.map_dir, sizeof(app_config.map_dir), "../../../tests/data/maps/%s", dir_list[dir_cursor_idx].name);
-#endif
-                    purrgo_config_save();
-                    current_state = APP_STATE_MENU_CONFIG;
-                }
+                    /*
+                     * Save the path relative to the emulator working
+                     * directory.
+                     *
+                     * Example:
+                     *
+                     *     ../../../tests/data/maps/roads
+                     *
+                     * This is the same path used by load_directory_list()
+                     * and therefore points to the actual test map data.
+                     */
+                    snprintf(
+                        app_config.map_dir,
+                        sizeof(app_config.map_dir),
+                        "../../../tests/data/maps/%s",
+                        dir_list[dir_cursor_idx].name
+                    );
+
+                     purrgo_config_save();
+                     current_state = APP_STATE_MENU_CONFIG;
+                 }
                 break;
             case PURRGO_BTN_MENU:
                 // Кнопка MENU выполняет роль "Назад" для возврата в меню настроек
