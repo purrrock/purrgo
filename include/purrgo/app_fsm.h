@@ -54,6 +54,13 @@ int purrgo_app_get_config_cursor(void);
 int purrgo_app_get_dir_list(purrgo_fs_dirent_t** list_out);
 int purrgo_app_get_dir_cursor(void);
 
+// Геттеры для состояния карты (Map Viewport)
+int32_t purrgo_app_get_map_center_lat(void);
+int32_t purrgo_app_get_map_center_lon(void);
+uint8_t purrgo_app_get_map_zoom_level(void);
+bool purrgo_app_is_manual_pan_active(void);
+int32_t purrgo_app_get_zoom_radius_y(void);
+
 // Функция применения часового пояса с календарным пересчетом (влияет на локальное время и расчет восхода/заката)
 void purrgo_app_apply_timezone(const purrgo_gnss_solution_t* utc, purrgo_gnss_solution_t* local, int16_t tz_offset_minutes);
 
