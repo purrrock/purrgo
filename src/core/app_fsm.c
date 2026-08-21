@@ -250,8 +250,10 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
             return;
         }
 
-        int32_t step_y = purrgo_app_get_zoom_radius_y() >> 2;
-        int32_t step_x = (step_y * 10000) / purrgo_geo_cos_10k(map_center_lat_1e7);
+int32_t step_y = purrgo_app_get_zoom_radius_y() >> 2;
+int32_t cos_val = purrgo_geo_cos_10k(map_center_lat_1e7);
+if (cos_val == 0) cos_val = 1;
+int32_t step_x = (step_y * 10000) / cos_val;
 
         if (button == PURRGO_BTN_UP) {
             map_center_lat_1e7 += step_y;

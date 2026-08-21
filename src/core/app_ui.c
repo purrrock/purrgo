@@ -483,8 +483,10 @@ void purrgo_app_ui_render(
             int32_t center_lat = purrgo_app_get_map_center_lat();
             int32_t center_lon = purrgo_app_get_map_center_lon();
 
-            int32_t rad_y = purrgo_app_get_zoom_radius_y();
-            int32_t rad_x = (rad_y * 10000) / purrgo_geo_cos_10k(center_lat);
+int32_t rad_y = purrgo_app_get_zoom_radius_y();
+int32_t cos_val = purrgo_geo_cos_10k(center_lat);
+if (cos_val == 0) cos_val = 1;
+int32_t rad_x = (rad_y * 10000) / cos_val;
 
             purrgo_bbox_t dynamic_cam = {
                 .min_x = center_lon - rad_x,
