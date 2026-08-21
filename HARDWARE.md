@@ -1,867 +1,105 @@
-# PurrGo — Hardware Architecture
+# PurrGo — Аппаратная архитектура (hardware.md)
 
-This document defines the hardware platforms for the PurrGo GNSS navigator/logger.
+Документ определяет требования к аппаратной части и конфигурации платформ автономного GNSS-навигатора/логгера **PurrGo** (без функции расчета маршрутов).
 
-The project has two hardware targets:
-
-1. **Development / Debug Platform** — selected for maximum convenience during firmware development, testing and debugging.
-2. **Release Platform** — selected for minimum power consumption, compact size and long battery life.
-
-The PurrGo device is a GNSS navigator/logger **without route calculation**.
-
-The primary design goal of the release hardware is:
-
-> Garmin-like functionality and usability with very low power consumption and long operation time from a single 18650 Li-ion cell.
+Основная цель целевого устройства — энергоэффективная автономная навигация с отображением предкомпилированных векторных карт и записью трека.
 
 ---
 
-## 1. Functional Requirements
+## 1. Функциональные требования
 
-The final device shall provide:
+### Реализуемый функционал:
+- Прием данных GNSS (координаты, высота, скорость, курс, время UTC, статус фикса/спутники).
+- Запись трека в формате GPX на карту памяти microSD.
+- Отображение предкомпилированных векторных карт (масштабирование, сдвиг, маркер позиции, маршрут, линия трека).
+- Базовая навигация на путевую точку (дистанция, азимут).
+- Физическое кнопочное управление.
+- Полная автономность: работа без подключения к сети Интернет, сотовой связи, Wi-Fi и Bluetooth.
 
-- GNSS positioning;
-- current coordinates;
-- speed;
-- altitude;
-- UTC time;
-- satellite/fix information;
-- track recording;
-- waypoint management;
-- GPX import/export;
-- map display;
-- map zoom and pan;
-- current-position marker;
-- track display;
-- basic navigation to a waypoint;
-- physical user controls;
-- operation without an Internet connection;
-- operation without a mobile network;
-- operation without Wi-Fi or Bluetooth;
-- long battery life.
-
-The project does **not** require:
-
-- turn-by-turn route calculation;
-- road routing;
-- online maps;
-- cloud services;
-- permanent wireless connectivity.
+### Исключено из требований:
+- Поворотная маршрутизация (turn-by-turn routing).
+- Прокладка маршрутов на устройстве.
+- Загрузка онлайн-карт и облачные сервисы.
 
 ---
 
-# 2. Development / Debug Hardware
+## 2. Аппаратные профили (`hardware_config.h`)
 
-The development hardware is intentionally different from the final hardware.
+В проекте зафиксированы три профиля конфигурации оборудования:
 
-Its purpose is to make firmware development, debugging and experimentation as easy as possible.
-
-## 2.1 MCU Development Board
-
-### NUCLEO-F446RE
-
-The initial development platform is:
-
-**STMicroelectronics NUCLEO-F446RE**
-
-MCU:
-
-- STM32F446RE
-- ARM Cortex-M4F
-- up to 180 MHz
-- hardware floating-point unit
-- integrated ST-LINK debugger/programmer
-
-The NUCLEO-F446RE is a development platform, not the intended final PCB.
-
-Advantages:
-
-- integrated ST-LINK;
-- USB connection to the PC;
-- easy firmware flashing;
-- convenient debugging with STM32CubeIDE;
-- large number of GPIO pins;
-- hardware UART/SPI/I²C interfaces;
-- sufficient performance for GNSS parsing, logging and initial map rendering.
-
-The F446RE is deliberately retained for development even though the release MCU is expected to be more power-efficient.
+| Параметр | 1. DEVELOPMENT | 2. PROTOTYPE | 3. RELEASE |
+|---|---|---|---|
+| **Назначение** | Отладка логики на ПК | Отладка периферии и драйверов | Финальное устройство |
+| **Платформа / MCU** | PC (`PURRGO_PLATFORM_PC`) | STM32F446RE (NUCLEO) | STM32U5 (`PURRGO_MCU_STM32U5`) |
+| **GNSS-приемник** | MOCK (`PURRGO_GNSS_MOCK`) | GY-NEO6MV2 (u-blox NEO-6M) | u-blox серии M10 (MAX-M10S) |
+| **Дисплей** | Эмулятор E-Ink | TFT 2.4" ST7789 (GMT024-08-SPI8P_LCM) | E-Ink 2.9" SPI |
+| **Разрешение** | 128 × 296 px | 240 × 320 px | 128 × 296 px |
+| **Диагональ** | 74 мм (~2.9") | 61 мм (2.4") | 74 мм (2.9") |
+| **Глубина цвета** | $\ge 2$ bpp (4 оттенка) | $\ge 2$ bpp (4 оттенка) | 2 bpp (4 градации серого) |
+| **Хранилище** | Файловая система ПК | microSD (SPI) | microSD (SPI / SDMMC) |
+| **Питание** | Питание ПК | USB / отладочная плата | 1 × 18650 Li-ion |
+| **Интерфейс ввода** | Клавиатура ПК | Кнопки / TM1638 | 5–8 аппаратных кнопок |
 
 ---
 
-## 2.2 Development GNSS Receiver
+## 3. Детализация профилей
 
-### GY-NEO6MV2 / u-blox NEO-6M
+### 3.1. Профиль Development (`PURRGO_HW_PROFILE_DEVELOPMENT`)
+- **Назначение:** Разработка алгоритмов ядра (`src/core/`), математики проекций, парсеров GPX/NMEA и эмуляции UI без физического микроконтроллера.
+- **GNSS:** Программный генератор фиктивных данных (MOCK) или USB-адаптер u-blox 7.
+- **Дисплей:** Окно эмулятора с геометрией целевого экрана (128 × 296 px, 74 мм).
 
-The existing **GY-NEO6MV2** module is used for initial development.
+### 3.2. Профиль Prototype (`PURRGO_HW_PROFILE_PROTOTYPE`)
+- **MCU:** STMicroelectronics NUCLEO-F446RE (ARM Cortex-M4F, до 180 МГц, FPU, встроенный программатор ST-LINK).
+- **GNSS:** Модуль GY-NEO6MV2 на базе u-blox NEO-6M (интерфейс UART, протокол NMEA 0183 через `minmea`).
+- **Дисплей:** TFT 2.4" 240 × 320 px, контроллер ST7789 (модуль GMT024-08-SPI8P_LCM), интерфейс SPI.
+- **Хранилище:** Внешний SPI-модуль microSD.
 
-Typical interface:
-
-- UART;
-- NMEA output;
-- configurable GNSS receiver settings;
-- external active/passive antenna depending on module variant.
-
-The module is suitable for:
-
-- UART driver development;
-- NMEA parser testing;
-- position acquisition;
-- track logging;
-- waypoint testing;
-- testing the `minmea` library;
-- initial map rendering.
-
-The GY-NEO6MV2 is considered a **development component**, not the preferred final GNSS solution.
-
-The exact electrical characteristics of a particular GY-NEO6MV2 board must be verified against the actual board before connecting it to the final power system. GY-NEO6MV2 boards available on the market are not necessarily electrically identical.
+### 3.3. Профиль Release (`PURRGO_HW_PROFILE_RELEASE`)
+- **MCU:** Семейство STM32U5 (STM32U575-класс, Cortex-M33, оптимизированное энергопотребление в режимах Stop/Standby, LP-таймеры, DMA).
+- **GNSS:** Модуль класса u-blox MAX-M10S (мультисистемный: GPS, Galileo, GLONASS, BeiDou; протоколы UBX/NMEA, аппаратно отключаемое питание).
+- **Дисплей:** Электрофоретический дисплей (E-Ink) 2.9", 128 × 296 px, 4 градации серого (2 bpp), интерфейс SPI. Читаемость на прямом солнечном свете, нулевое статическое потребление.
+- **Хранилище:** Карта памяти microSD. Предусматривается аппаратное управление питанием слота (Load switch) для устранения тока утечки карты в режиме ожидания.
+- **Питание:** 1 × 18650 Li-ion (3.6–3.7 В, 3000–3500 мА·ч). Архитектура питания с ультранизким током собственного потребления ($I_q$).
 
 ---
 
-## 2.3 GNSS Protocol
+## 4. Конфигурация графической подсистемы
 
-The firmware shall initially support NMEA messages through the `minmea` library.
+В соответствии с `hardware_config.h`:
 
-The architecture shall keep the GNSS interface independent from the parser.
+- **Минимальная глубина цвета:** `PURRGO_HW_DISPLAY_BPP = 2` (4 логических уровня серого/цвета).
+- **Поддерживаемые ориентации экрана:**
+  - `PURRGO_DISPLAY_ORIENTATION_0` (0°)
+  - `PURRGO_DISPLAY_ORIENTATION_90` (90°)
+  - `PURRGO_DISPLAY_ORIENTATION_180` (180°)
+  - `PURRGO_DISPLAY_ORIENTATION_270` (270°)
+- **Стратегия обновления:** Частота обновления дисплея отделена от частоты опроса GNSS (1 Гц). Перерисовка E-Ink выполняется по событию (смещение на порог дистанции, ввод пользователя, смена карты), исключая холостые циклы обновления.
 
-Conceptually:
+---
+
+## 5. Структура хранения данных на microSD
 
 ```text
-GNSS UART
-    │
-    ▼
-GNSS transport layer
-    │
-    ▼
-NMEA parser / minmea
-    │
-    ▼
-PurrGo navigation data
+/maps/          # Бинарные файлы предкомпилированных векторных карт
+/tracks/        # Записанные треки в формате YYMMDD-HHMMSS.gpx
+/waypoints/     # Пользовательские точки (GPX/WPT)
+/config/        # Настройки устройства
 ```
 
-This allows the development receiver and the final u-blox receiver to be changed without rewriting the navigation subsystem.
+---
 
-The release firmware may additionally use u-blox UBX protocol where it provides a significant benefit, especially for:
+## 6. Принципы управления питанием (Release)
 
-- receiver configuration;
-- power management;
-- update rate configuration;
-- GNSS constellation configuration;
-- receiver status;
-- proprietary high-precision data not available through standard NMEA.
+1. **Буферизация записи:** Накопление точек трека в RAM-буфере (кратно 512 байт / размер сектора) для минимизации сессий обращения к microSD.
+2. **Фильтрация точек:** Адаптивное прореживание трека (Standard: от 5 м или 5 мин; Expedition: от 100 м или 15 мин).
+3. **Режимы MCU:** Максимальное нахождение ядра STM32U5 в энергосберегающих режимах (Stop) между эпохами обработки GNSS UART DMA и событиями кнопок.
+4. **Физический интерфейс:** Полный отказ от тачскрина в пользу аппаратных кнопок.
 
 ---
 
-# 3. Development Display
-
-The first development display may be a E-Ink 296X128, 4 grey levels display.
-
-The development display is not required to have the same technology or resolution as the final display.
-
-Its purpose is to make firmware debugging convenient.
-
-The development UI shall initially expose:
-
-```text
-LAT
-LON
-ALT
-SPD
-SAT
-FIX
-TIME
-```
-
-A simple graphical map/track view shall also be implemented when the display hardware permits it.
-
----
-
-# 4. Development Storage
-
-A microSD card module shall be used during development.
-
-The microSD card provides:
-
-- track storage;
-- GPX files;
-- test maps;
-- map tiles;
-- configuration files;
-- test data.
-
-The storage interface should use SPI initially because it is simple to debug.
-
-If required by the final hardware, the release design may use SDMMC instead of SPI.
-
-The firmware shall keep the filesystem/storage layer independent from the physical SD interface.
-
----
-
-# 5. Development User Interface
-
-The development setup may use:
-
-- push buttons;
-- rotary encoder;
-- existing TM1638 module where useful;
-- USB serial console.
-
-The TM1638 module is useful for low-level experiments because it provides:
-
-- buttons;
-- seven-segment displays;
-- LEDs;
-- a simple serial interface.
-
-It is not intended for the final navigator UI.
-
----
-
-# 6. Release Hardware Architecture
-
-The final hardware shall be optimized for:
-
-- low average current;
-- low quiescent current;
-- long battery life;
-- outdoor readability;
-- simple physical controls;
-- autonomous operation;
-- compact PCB;
-- serviceability.
-
-The target battery is:
-
-**one 18650 Li-ion cell**
-
-Nominal voltage:
-
-```text
-3.6–3.7 V
-```
-
-Typical target capacity:
-
-```text
-3000–3500 mAh
-```
-
-The actual battery capacity shall be selected after power measurements.
-
----
-
-# 7. Release MCU
-
-## 7.1 STM32U5 Family
-
-The preferred release MCU family is:
-
-**STM32U5**
-
-An STM32U575-class device is the current primary candidate.
-
-The final exact package and part number shall be selected after the RAM, Flash, GPIO and peripheral requirements are established.
-
-The reasons for selecting STM32U5 include:
-
-- low-power operating modes;
-- substantially better energy efficiency than the development F446 platform;
-- sufficient CPU performance for map rendering;
-- large RAM/Flash options;
-- DMA;
-- SPI;
-- I²C;
-- UART;
-- RTC;
-- low-power timers;
-- flexible power-management capabilities.
-
-The release firmware shall be designed so that most of the application logic is not dependent on STM32F446-specific features.
-
----
-
-# 8. Release GNSS Receiver
-
-The preferred release GNSS receiver is a modern u-blox M10-family module.
-
-A **u-blox MAX-M10S-class receiver** is the current candidate.
-
-The final GNSS module shall preferably provide:
-
-- multi-GNSS operation;
-- GPS;
-- Galileo;
-- GLONASS and/or BeiDou where supported by the selected device/configuration;
-- UART;
-- low-power tracking modes;
-- configurable update rate;
-- external antenna support;
-- configurable receiver parameters.
-
-The final GNSS module shall be connected directly to the main PCB.
-
-The development GY-NEO6MV2 module shall not dictate the final PCB design.
-
----
-
-# 9. Release Display
-
-The release display is intentionally not fixed to a conventional TFT or OLED.
-
-Two technologies are currently preferred:
-
-**Black/white electrophoretic display (E-Ink / e-paper)**
-
-The final choice shall be based on actual measurements and usability tests.
-
-
-
-Desired characteristics:
-
-- approximately 296X128 or higher;
-- gray-levels or limited colour;
-- sunlight-readable;
-- very low static power;
-- fast enough update rate for navigation UI;
-- SPI or similar serial interface.
-
----
-
-# 10. Display Strategy
-
-The navigation system shall separate:
-
-```text
-GNSS update rate
-```
-
-from:
-
-```text
-display update rate
-```
-
-For example:
-
-```text
-GNSS                  1 Hz
-Track recording       1 Hz
-Navigation calculation 1 Hz
-Display                variable
-```
-
-The display may be updated:
-
-- immediately after a significant position change;
-- periodically;
-- after user input;
-- after map movement;
-- after zoom;
-- after entering a new map tile.
-
-This is particularly important for E-Ink.
-
-The firmware shall avoid unnecessary display updates.
-
----
-
-# 11. Map Storage
-
-The release device shall use removable or replaceable non-volatile storage.
-
-Preferred medium:
-
-**microSD**
-
-The SD card shall contain:
-
-```text
-/maps
-/tracks
-/routes
-/waypoints
-/config
-```
-
-The exact filesystem and file format are to be defined separately.
-
-Maps shall be preprocessed on a PC.
-
-The STM32 shall not perform full OpenStreetMap processing or route calculation.
-
----
-
-# 12. Map Architecture
-
-The map system shall use pre-generated map data.
-
-Conceptually:
-
-```text
-OpenStreetMap / other source
-             │
-             ▼
-       PC preprocessing
-             │
-             ▼
-       PurrGo map data
-             │
-             ▼
-           microSD
-             │
-             ▼
-         STM32U5
-             │
-             ▼
-          Display
-```
-
-The release device is therefore a **map renderer**, not a map-generation system.
-
-This significantly reduces:
-
-- CPU requirements;
-- RAM requirements;
-- storage requirements;
-- software complexity;
-- energy consumption.
-
----
-
-# 13. Battery
-
-The primary release battery is:
-
-**1 × 18650 Li-ion**
-
-Target:
-
-```text
-3000–3500 mAh
-```
-
-The final battery shall be selected based on:
-
-- measured capacity;
-- discharge characteristics;
-- physical size;
-- temperature range;
-- protection requirements;
-- availability.
-
-The firmware shall monitor battery voltage.
-
-Battery percentage shall not be calculated from voltage alone unless a suitable battery model is implemented.
-
----
-
-# 14. Power Management
-
-The release device shall use a dedicated low-quiescent-current power-management solution.
-
-The design shall minimize:
-
-- regulator quiescent current;
-- LED current;
-- leakage through GPIO;
-- inactive peripheral current;
-- SD card idle current;
-- display driver idle current.
-
-The power tree shall be designed around the actual Li-ion discharge curve.
-
-Potential architecture:
-
-```text
-             18650
-               │
-               ▼
-       Protection / Power
-          management
-               │
-       ┌───────┴────────┐
-       │                │
-      3.3 V            other
-       │              supplies
-       │
- ┌─────┼─────────┬──────────┐
- │     │         │          │
-MCU   GNSS      SD       Display
-```
-
-The exact regulator topology shall be selected after measuring the current requirements of the final components.
-
----
-
-# 15. Power Modes
-
-The firmware shall explicitly define power modes.
-
-At minimum:
-
-### Active
-
-All required peripherals are active.
-
-Used for:
-
-- user interaction;
-- map movement;
-- display updates;
-- GNSS processing.
-
-### Navigation
-
-GNSS operates continuously while the MCU performs only required processing.
-
-The display is updated according to the selected display technology.
-
-### Logging
-
-GNSS remains active.
-
-Track data is buffered in RAM and periodically written to storage.
-
-### Idle
-
-The MCU enters a low-power mode while waiting for:
-
-- GNSS UART activity;
-- timer;
-- button;
-- RTC;
-- required peripheral event.
-
-### Deep Sleep
-
-Used when the navigator is not actively being used.
-
-The device may:
-
-- disable display activity;
-- reduce GNSS activity;
-- stop unnecessary peripherals;
-- wake on button/RTC/GNSS event.
-
----
-
-# 16. SD Card Power Control
-
-The release hardware should provide the possibility of switching SD card power.
-
-The purpose is to avoid unnecessary SD-card idle consumption.
-
-Possible architecture:
-
-```text
-3.3 V
- │
- ├── MCU
- ├── GNSS
- │
- └── Load switch
-       │
-       ▼
-      SD
-```
-
-The SD card shall be powered only when required where practical.
-
-The firmware shall also minimize filesystem activity by buffering track records in RAM.
-
----
-
-# 17. User Controls
-
-The release device shall use physical controls rather than a touchscreen.
-
-Target:
-
-- 5–8 buttons;
-- optional rotary encoder or directional control;
-- dedicated power/wake button.
-
-A possible layout:
-
-```text
-       UP
-       ▲
- LEFT ◄ ● ► RIGHT
-       ▼
-      DOWN
-
-   MENU     BACK
-```
-
-The final mechanical arrangement is not yet fixed.
-
-Physical controls are preferred because they:
-
-- consume essentially no power when idle;
-- work with gloves;
-- work in rain;
-- work without looking at the controls;
-- fit the Garmin-like design goal.
-
----
-
-# 18. USB
-
-USB shall be provided primarily for:
-
-- firmware update;
-- debugging during development;
-- GPX transfer;
-- map transfer;
-- configuration.
-
-The release device does not require USB to remain active during normal navigation.
-
-USB power consumption shall therefore be excluded from the normal operating power budget.
-
----
-
-# 19. Debug Interfaces
-
-The release PCB should expose test/debug connections for:
-
-- SWD;
-- UART;
-- power measurement;
-- GNSS UART;
-- SPI;
-- I²C where used.
-
-At minimum, SWD shall remain accessible on engineering samples.
-
-A convenient test connector or test pads should be provided.
-
----
-
-# 20. Development vs Release Hardware
-
-| Component | Development | Release |
-|---|---|---|
-| MCU | STM32F446RE / NUCLEO-F446RE | STM32U5 family |
-| Debugger | Integrated ST-LINK | External SWD during development |
-| GNSS | GY-NEO6MV2 | Modern u-blox M10-class |
-| Display | OLED/TFT |  B/W E-Ink |
-| Storage | microSD | microSD |
-| Controls | Buttons / TM1638 | Physical buttons |
-| Battery | USB / bench supply | 1 × 18650 |
-| Power | NUCLEO power system | Low-Iq power architecture |
-| USB | Always available | Service/data interface |
-| PCB | Development boards/modules | Custom PCB |
-
----
-
-# 21. Initial Development Hardware
-
-The minimum hardware required to start the project is:
-
-- NUCLEO-F446RE;
-- GY-NEO6MV2 GNSS module;
-- USB cable;
-- small display;
-- microSD module;
-- microSD card;
-- breadboard and jumper wires;
-- push buttons.
-
-The existing TM1638 module may be used for additional low-level UI experiments.
-
----
-
-# 22. Release Target
-
-The release hardware shall target:
-
-### Primary goal
-
-**24 hours of continuous navigation from one 18650 battery.**
-
-### Design goal
-
-**36+ hours under typical navigation conditions.**
-
-### Low-power goal
-
-**48 hours or more in an optimized logging/navigation mode**, subject to actual measurements.
-
-These are engineering targets, not guaranteed specifications.
-
-Actual battery life shall be determined from measurements of the completed hardware.
-
----
-
-# 23. Energy Budget
-
-The project shall use measured power consumption rather than estimates wherever possible.
-
-Power measurements shall be made separately for:
-
-1. MCU;
-2. GNSS receiver;
-3. display;
-4. SD card;
-5. power converter;
-6. buttons/LEDs;
-7. complete device.
-
-The final battery-life calculation shall use:
-
-```text
-Operating time ≈ usable battery energy / average system power
-```
-
-The usable battery energy shall account for:
-
-- regulator efficiency;
-- battery discharge curve;
-- minimum operating voltage;
-- temperature;
-- battery ageing.
-
----
-
-# 24. Hardware Design Principles
-
-The following principles are mandatory for the release design:
-
-1. **No unnecessary peripherals.**
-2. **No Wi-Fi unless a future requirement explicitly justifies it.**
-3. **No Bluetooth unless a future requirement explicitly justifies it.**
-4. **No cellular modem.**
-5. **No route-calculation hardware/software requirement.**
-6. **GNSS and display shall be independently power-manageable where practical.**
-7. **SD card activity shall be minimized.**
-8. **The display shall not be refreshed unnecessarily.**
-9. **The MCU shall spend as much time as practical in low-power modes.**
-10. **All important power-consumption figures shall eventually be measured on real hardware.**
-
----
-
-# 25. Current Hardware Decision
-
-The current project direction is:
-
-```text
-DEVELOPMENT
-
-NUCLEO-F446RE
-      │
-      ├── GY-NEO6MV2
-      ├── OLED/TFT
-      ├── microSD
-      └── buttons/TM1638
-
-
-RELEASE
-
-       18650
-          │
-          ▼
-    Low-Iq power system
-          │
-          ▼
-      STM32U5
-       │  │  │
-       │  │  └──── Physical buttons
-       │  │
-       │  └─────── microSD
-       │
-       ├───────   B/W E-Ink
-       │
-       └────────── u-blox M10
-```
-
-The final display technology remains an engineering decision between:
-
-- **black/white E-Ink** — preferred for maximum sunlight readability and potentially lower average display power.
-
-The final choice shall be made after testing actual display modules with the PurrGo map renderer.
-
----
-
-# 26. Hardware Roadmap
-
-### Prototype 1
-
-```text
-STM32F446RE
-+
-GY-NEO6MV2
-+
-simple display
-```
-
-Goal:
-
-- UART;
-- GNSS;
-- NMEA/minmea;
-- position;
-- speed;
-- altitude;
-- time.
-
-### Prototype 2
-
-Add:
-
-```text
-microSD
-+
-track logging
-+
-GPX
-```
-
-### Prototype 3
-
-Add:
-
-```text
-map renderer
-+
-waypoints
-+
-physical controls
-```
-
-### Prototype 4
-
-Evaluate:
-
-```text
-B/W E-Ink
-```
-
-with actual power measurements.
-
-### Prototype 5
-
-Move firmware to:
-
-```text
-STM32U5
-+
-modern u-blox GNSS
-```
-
-and measure the complete power budget.
-
-### Release PCB
-
-Integrate:
-
-- STM32U5;
-- GNSS;
-- display;
-- SD;
-- buttons;
-- battery;
-- power management;
-- SWD;
-- USB;
-- test points.
-
-The release PCB shall be designed only after the major components have been experimentally validated.
+## 7. Целевой энергетический бюджет (Release)
+
+- **Основная цель:** $\ge 24$ часов непрерывной навигации от одного элемента 18650.
+- **Типовой режим:** $36+$ часов работы.
+- **Экспедиционный режим:** $48+$ часов с периодическим пробуждением и фиксацией точек.

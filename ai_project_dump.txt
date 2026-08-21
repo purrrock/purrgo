@@ -1,872 +1,110 @@
 --- FILE: HARDWARE.md ---
 ```md
-# PurrGo — Hardware Architecture
+# PurrGo — Аппаратная архитектура (hardware.md)
 
-This document defines the hardware platforms for the PurrGo GNSS navigator/logger.
+Документ определяет требования к аппаратной части и конфигурации платформ автономного GNSS-навигатора/логгера **PurrGo** (без функции расчета маршрутов).
 
-The project has two hardware targets:
-
-1. **Development / Debug Platform** — selected for maximum convenience during firmware development, testing and debugging.
-2. **Release Platform** — selected for minimum power consumption, compact size and long battery life.
-
-The PurrGo device is a GNSS navigator/logger **without route calculation**.
-
-The primary design goal of the release hardware is:
-
-> Garmin-like functionality and usability with very low power consumption and long operation time from a single 18650 Li-ion cell.
+Основная цель целевого устройства — энергоэффективная автономная навигация с отображением предкомпилированных векторных карт и записью трека.
 
 ---
 
-## 1. Functional Requirements
+## 1. Функциональные требования
 
-The final device shall provide:
+### Реализуемый функционал:
+- Прием данных GNSS (координаты, высота, скорость, курс, время UTC, статус фикса/спутники).
+- Запись трека в формате GPX на карту памяти microSD.
+- Отображение предкомпилированных векторных карт (масштабирование, сдвиг, маркер позиции, маршрут, линия трека).
+- Базовая навигация на путевую точку (дистанция, азимут).
+- Физическое кнопочное управление.
+- Полная автономность: работа без подключения к сети Интернет, сотовой связи, Wi-Fi и Bluetooth.
 
-- GNSS positioning;
-- current coordinates;
-- speed;
-- altitude;
-- UTC time;
-- satellite/fix information;
-- track recording;
-- waypoint management;
-- GPX import/export;
-- map display;
-- map zoom and pan;
-- current-position marker;
-- track display;
-- basic navigation to a waypoint;
-- physical user controls;
-- operation without an Internet connection;
-- operation without a mobile network;
-- operation without Wi-Fi or Bluetooth;
-- long battery life.
-
-The project does **not** require:
-
-- turn-by-turn route calculation;
-- road routing;
-- online maps;
-- cloud services;
-- permanent wireless connectivity.
+### Исключено из требований:
+- Поворотная маршрутизация (turn-by-turn routing).
+- Прокладка маршрутов на устройстве.
+- Загрузка онлайн-карт и облачные сервисы.
 
 ---
 
-# 2. Development / Debug Hardware
+## 2. Аппаратные профили (`hardware_config.h`)
 
-The development hardware is intentionally different from the final hardware.
+В проекте зафиксированы три профиля конфигурации оборудования:
 
-Its purpose is to make firmware development, debugging and experimentation as easy as possible.
-
-## 2.1 MCU Development Board
-
-### NUCLEO-F446RE
-
-The initial development platform is:
-
-**STMicroelectronics NUCLEO-F446RE**
-
-MCU:
-
-- STM32F446RE
-- ARM Cortex-M4F
-- up to 180 MHz
-- hardware floating-point unit
-- integrated ST-LINK debugger/programmer
-
-The NUCLEO-F446RE is a development platform, not the intended final PCB.
-
-Advantages:
-
-- integrated ST-LINK;
-- USB connection to the PC;
-- easy firmware flashing;
-- convenient debugging with STM32CubeIDE;
-- large number of GPIO pins;
-- hardware UART/SPI/I²C interfaces;
-- sufficient performance for GNSS parsing, logging and initial map rendering.
-
-The F446RE is deliberately retained for development even though the release MCU is expected to be more power-efficient.
+| Параметр | 1. DEVELOPMENT | 2. PROTOTYPE | 3. RELEASE |
+|---|---|---|---|
+| **Назначение** | Отладка логики на ПК | Отладка периферии и драйверов | Финальное устройство |
+| **Платформа / MCU** | PC (`PURRGO_PLATFORM_PC`) | STM32F446RE (NUCLEO) | STM32U5 (`PURRGO_MCU_STM32U5`) |
+| **GNSS-приемник** | MOCK (`PURRGO_GNSS_MOCK`) | GY-NEO6MV2 (u-blox NEO-6M) | u-blox серии M10 (MAX-M10S) |
+| **Дисплей** | Эмулятор E-Ink | TFT 2.4" ST7789 (GMT024-08-SPI8P_LCM) | E-Ink 2.9" SPI |
+| **Разрешение** | 128 × 296 px | 240 × 320 px | 128 × 296 px |
+| **Диагональ** | 74 мм (~2.9") | 61 мм (2.4") | 74 мм (2.9") |
+| **Глубина цвета** | $\ge 2$ bpp (4 оттенка) | $\ge 2$ bpp (4 оттенка) | 2 bpp (4 градации серого) |
+| **Хранилище** | Файловая система ПК | microSD (SPI) | microSD (SPI / SDMMC) |
+| **Питание** | Питание ПК | USB / отладочная плата | 1 × 18650 Li-ion |
+| **Интерфейс ввода** | Клавиатура ПК | Кнопки / TM1638 | 5–8 аппаратных кнопок |
 
 ---
 
-## 2.2 Development GNSS Receiver
+## 3. Детализация профилей
 
-### GY-NEO6MV2 / u-blox NEO-6M
+### 3.1. Профиль Development (`PURRGO_HW_PROFILE_DEVELOPMENT`)
+- **Назначение:** Разработка алгоритмов ядра (`src/core/`), математики проекций, парсеров GPX/NMEA и эмуляции UI без физического микроконтроллера.
+- **GNSS:** Программный генератор фиктивных данных (MOCK) или USB-адаптер u-blox 7.
+- **Дисплей:** Окно эмулятора с геометрией целевого экрана (128 × 296 px, 74 мм).
 
-The existing **GY-NEO6MV2** module is used for initial development.
+### 3.2. Профиль Prototype (`PURRGO_HW_PROFILE_PROTOTYPE`)
+- **MCU:** STMicroelectronics NUCLEO-F446RE (ARM Cortex-M4F, до 180 МГц, FPU, встроенный программатор ST-LINK).
+- **GNSS:** Модуль GY-NEO6MV2 на базе u-blox NEO-6M (интерфейс UART, протокол NMEA 0183 через `minmea`).
+- **Дисплей:** TFT 2.4" 240 × 320 px, контроллер ST7789 (модуль GMT024-08-SPI8P_LCM), интерфейс SPI.
+- **Хранилище:** Внешний SPI-модуль microSD.
 
-Typical interface:
-
-- UART;
-- NMEA output;
-- configurable GNSS receiver settings;
-- external active/passive antenna depending on module variant.
-
-The module is suitable for:
-
-- UART driver development;
-- NMEA parser testing;
-- position acquisition;
-- track logging;
-- waypoint testing;
-- testing the `minmea` library;
-- initial map rendering.
-
-The GY-NEO6MV2 is considered a **development component**, not the preferred final GNSS solution.
-
-The exact electrical characteristics of a particular GY-NEO6MV2 board must be verified against the actual board before connecting it to the final power system. GY-NEO6MV2 boards available on the market are not necessarily electrically identical.
+### 3.3. Профиль Release (`PURRGO_HW_PROFILE_RELEASE`)
+- **MCU:** Семейство STM32U5 (STM32U575-класс, Cortex-M33, оптимизированное энергопотребление в режимах Stop/Standby, LP-таймеры, DMA).
+- **GNSS:** Модуль класса u-blox MAX-M10S (мультисистемный: GPS, Galileo, GLONASS, BeiDou; протоколы UBX/NMEA, аппаратно отключаемое питание).
+- **Дисплей:** Электрофоретический дисплей (E-Ink) 2.9", 128 × 296 px, 4 градации серого (2 bpp), интерфейс SPI. Читаемость на прямом солнечном свете, нулевое статическое потребление.
+- **Хранилище:** Карта памяти microSD. Предусматривается аппаратное управление питанием слота (Load switch) для устранения тока утечки карты в режиме ожидания.
+- **Питание:** 1 × 18650 Li-ion (3.6–3.7 В, 3000–3500 мА·ч). Архитектура питания с ультранизким током собственного потребления ($I_q$).
 
 ---
 
-## 2.3 GNSS Protocol
+## 4. Конфигурация графической подсистемы
 
-The firmware shall initially support NMEA messages through the `minmea` library.
+В соответствии с `hardware_config.h`:
 
-The architecture shall keep the GNSS interface independent from the parser.
+- **Минимальная глубина цвета:** `PURRGO_HW_DISPLAY_BPP = 2` (4 логических уровня серого/цвета).
+- **Поддерживаемые ориентации экрана:**
+  - `PURRGO_DISPLAY_ORIENTATION_0` (0°)
+  - `PURRGO_DISPLAY_ORIENTATION_90` (90°)
+  - `PURRGO_DISPLAY_ORIENTATION_180` (180°)
+  - `PURRGO_DISPLAY_ORIENTATION_270` (270°)
+- **Стратегия обновления:** Частота обновления дисплея отделена от частоты опроса GNSS (1 Гц). Перерисовка E-Ink выполняется по событию (смещение на порог дистанции, ввод пользователя, смена карты), исключая холостые циклы обновления.
 
-Conceptually:
+---
+
+## 5. Структура хранения данных на microSD
 
 ```text
-GNSS UART
-    │
-    ▼
-GNSS transport layer
-    │
-    ▼
-NMEA parser / minmea
-    │
-    ▼
-PurrGo navigation data
+/maps/          # Бинарные файлы предкомпилированных векторных карт
+/tracks/        # Записанные треки в формате YYMMDD-HHMMSS.gpx
+/waypoints/     # Пользовательские точки (GPX/WPT)
+/config/        # Настройки устройства
 ```
 
-This allows the development receiver and the final u-blox receiver to be changed without rewriting the navigation subsystem.
+---
 
-The release firmware may additionally use u-blox UBX protocol where it provides a significant benefit, especially for:
+## 6. Принципы управления питанием (Release)
 
-- receiver configuration;
-- power management;
-- update rate configuration;
-- GNSS constellation configuration;
-- receiver status;
-- proprietary high-precision data not available through standard NMEA.
+1. **Буферизация записи:** Накопление точек трека в RAM-буфере (кратно 512 байт / размер сектора) для минимизации сессий обращения к microSD.
+2. **Фильтрация точек:** Адаптивное прореживание трека (Standard: от 5 м или 5 мин; Expedition: от 100 м или 15 мин).
+3. **Режимы MCU:** Максимальное нахождение ядра STM32U5 в энергосберегающих режимах (Stop) между эпохами обработки GNSS UART DMA и событиями кнопок.
+4. **Физический интерфейс:** Полный отказ от тачскрина в пользу аппаратных кнопок.
 
 ---
 
-# 3. Development Display
-
-The first development display may be a E-Ink 296X128, 4 grey levels display.
-
-The development display is not required to have the same technology or resolution as the final display.
-
-Its purpose is to make firmware debugging convenient.
-
-The development UI shall initially expose:
-
-```text
-LAT
-LON
-ALT
-SPD
-SAT
-FIX
-TIME
-```
-
-A simple graphical map/track view shall also be implemented when the display hardware permits it.
-
----
-
-# 4. Development Storage
-
-A microSD card module shall be used during development.
-
-The microSD card provides:
-
-- track storage;
-- GPX files;
-- test maps;
-- map tiles;
-- configuration files;
-- test data.
-
-The storage interface should use SPI initially because it is simple to debug.
-
-If required by the final hardware, the release design may use SDMMC instead of SPI.
-
-The firmware shall keep the filesystem/storage layer independent from the physical SD interface.
-
----
-
-# 5. Development User Interface
-
-The development setup may use:
-
-- push buttons;
-- rotary encoder;
-- existing TM1638 module where useful;
-- USB serial console.
-
-The TM1638 module is useful for low-level experiments because it provides:
-
-- buttons;
-- seven-segment displays;
-- LEDs;
-- a simple serial interface.
-
-It is not intended for the final navigator UI.
-
----
-
-# 6. Release Hardware Architecture
-
-The final hardware shall be optimized for:
-
-- low average current;
-- low quiescent current;
-- long battery life;
-- outdoor readability;
-- simple physical controls;
-- autonomous operation;
-- compact PCB;
-- serviceability.
-
-The target battery is:
-
-**one 18650 Li-ion cell**
-
-Nominal voltage:
-
-```text
-3.6–3.7 V
-```
-
-Typical target capacity:
-
-```text
-3000–3500 mAh
-```
-
-The actual battery capacity shall be selected after power measurements.
-
----
-
-# 7. Release MCU
-
-## 7.1 STM32U5 Family
-
-The preferred release MCU family is:
-
-**STM32U5**
-
-An STM32U575-class device is the current primary candidate.
-
-The final exact package and part number shall be selected after the RAM, Flash, GPIO and peripheral requirements are established.
-
-The reasons for selecting STM32U5 include:
-
-- low-power operating modes;
-- substantially better energy efficiency than the development F446 platform;
-- sufficient CPU performance for map rendering;
-- large RAM/Flash options;
-- DMA;
-- SPI;
-- I²C;
-- UART;
-- RTC;
-- low-power timers;
-- flexible power-management capabilities.
-
-The release firmware shall be designed so that most of the application logic is not dependent on STM32F446-specific features.
-
----
-
-# 8. Release GNSS Receiver
-
-The preferred release GNSS receiver is a modern u-blox M10-family module.
-
-A **u-blox MAX-M10S-class receiver** is the current candidate.
-
-The final GNSS module shall preferably provide:
-
-- multi-GNSS operation;
-- GPS;
-- Galileo;
-- GLONASS and/or BeiDou where supported by the selected device/configuration;
-- UART;
-- low-power tracking modes;
-- configurable update rate;
-- external antenna support;
-- configurable receiver parameters.
-
-The final GNSS module shall be connected directly to the main PCB.
-
-The development GY-NEO6MV2 module shall not dictate the final PCB design.
-
----
-
-# 9. Release Display
-
-The release display is intentionally not fixed to a conventional TFT or OLED.
-
-Two technologies are currently preferred:
-
-**Black/white electrophoretic display (E-Ink / e-paper)**
-
-The final choice shall be based on actual measurements and usability tests.
-
-
-
-Desired characteristics:
-
-- approximately 296X128 or higher;
-- gray-levels or limited colour;
-- sunlight-readable;
-- very low static power;
-- fast enough update rate for navigation UI;
-- SPI or similar serial interface.
-
----
-
-# 10. Display Strategy
-
-The navigation system shall separate:
-
-```text
-GNSS update rate
-```
-
-from:
-
-```text
-display update rate
-```
-
-For example:
-
-```text
-GNSS                  1 Hz
-Track recording       1 Hz
-Navigation calculation 1 Hz
-Display                variable
-```
-
-The display may be updated:
-
-- immediately after a significant position change;
-- periodically;
-- after user input;
-- after map movement;
-- after zoom;
-- after entering a new map tile.
-
-This is particularly important for E-Ink.
-
-The firmware shall avoid unnecessary display updates.
-
----
-
-# 11. Map Storage
-
-The release device shall use removable or replaceable non-volatile storage.
-
-Preferred medium:
-
-**microSD**
-
-The SD card shall contain:
-
-```text
-/maps
-/tracks
-/routes
-/waypoints
-/config
-```
-
-The exact filesystem and file format are to be defined separately.
-
-Maps shall be preprocessed on a PC.
-
-The STM32 shall not perform full OpenStreetMap processing or route calculation.
-
----
-
-# 12. Map Architecture
-
-The map system shall use pre-generated map data.
-
-Conceptually:
-
-```text
-OpenStreetMap / other source
-             │
-             ▼
-       PC preprocessing
-             │
-             ▼
-       PurrGo map data
-             │
-             ▼
-           microSD
-             │
-             ▼
-         STM32U5
-             │
-             ▼
-          Display
-```
-
-The release device is therefore a **map renderer**, not a map-generation system.
-
-This significantly reduces:
-
-- CPU requirements;
-- RAM requirements;
-- storage requirements;
-- software complexity;
-- energy consumption.
-
----
-
-# 13. Battery
-
-The primary release battery is:
-
-**1 × 18650 Li-ion**
-
-Target:
-
-```text
-3000–3500 mAh
-```
-
-The final battery shall be selected based on:
-
-- measured capacity;
-- discharge characteristics;
-- physical size;
-- temperature range;
-- protection requirements;
-- availability.
-
-The firmware shall monitor battery voltage.
-
-Battery percentage shall not be calculated from voltage alone unless a suitable battery model is implemented.
-
----
-
-# 14. Power Management
-
-The release device shall use a dedicated low-quiescent-current power-management solution.
-
-The design shall minimize:
-
-- regulator quiescent current;
-- LED current;
-- leakage through GPIO;
-- inactive peripheral current;
-- SD card idle current;
-- display driver idle current.
-
-The power tree shall be designed around the actual Li-ion discharge curve.
-
-Potential architecture:
-
-```text
-             18650
-               │
-               ▼
-       Protection / Power
-          management
-               │
-       ┌───────┴────────┐
-       │                │
-      3.3 V            other
-       │              supplies
-       │
- ┌─────┼─────────┬──────────┐
- │     │         │          │
-MCU   GNSS      SD       Display
-```
-
-The exact regulator topology shall be selected after measuring the current requirements of the final components.
-
----
-
-# 15. Power Modes
-
-The firmware shall explicitly define power modes.
-
-At minimum:
-
-### Active
-
-All required peripherals are active.
-
-Used for:
-
-- user interaction;
-- map movement;
-- display updates;
-- GNSS processing.
-
-### Navigation
-
-GNSS operates continuously while the MCU performs only required processing.
-
-The display is updated according to the selected display technology.
-
-### Logging
-
-GNSS remains active.
-
-Track data is buffered in RAM and periodically written to storage.
-
-### Idle
-
-The MCU enters a low-power mode while waiting for:
-
-- GNSS UART activity;
-- timer;
-- button;
-- RTC;
-- required peripheral event.
-
-### Deep Sleep
-
-Used when the navigator is not actively being used.
-
-The device may:
-
-- disable display activity;
-- reduce GNSS activity;
-- stop unnecessary peripherals;
-- wake on button/RTC/GNSS event.
-
----
-
-# 16. SD Card Power Control
-
-The release hardware should provide the possibility of switching SD card power.
-
-The purpose is to avoid unnecessary SD-card idle consumption.
-
-Possible architecture:
-
-```text
-3.3 V
- │
- ├── MCU
- ├── GNSS
- │
- └── Load switch
-       │
-       ▼
-      SD
-```
-
-The SD card shall be powered only when required where practical.
-
-The firmware shall also minimize filesystem activity by buffering track records in RAM.
-
----
-
-# 17. User Controls
-
-The release device shall use physical controls rather than a touchscreen.
-
-Target:
-
-- 5–8 buttons;
-- optional rotary encoder or directional control;
-- dedicated power/wake button.
-
-A possible layout:
-
-```text
-       UP
-       ▲
- LEFT ◄ ● ► RIGHT
-       ▼
-      DOWN
-
-   MENU     BACK
-```
-
-The final mechanical arrangement is not yet fixed.
-
-Physical controls are preferred because they:
-
-- consume essentially no power when idle;
-- work with gloves;
-- work in rain;
-- work without looking at the controls;
-- fit the Garmin-like design goal.
-
----
-
-# 18. USB
-
-USB shall be provided primarily for:
-
-- firmware update;
-- debugging during development;
-- GPX transfer;
-- map transfer;
-- configuration.
-
-The release device does not require USB to remain active during normal navigation.
-
-USB power consumption shall therefore be excluded from the normal operating power budget.
-
----
-
-# 19. Debug Interfaces
-
-The release PCB should expose test/debug connections for:
-
-- SWD;
-- UART;
-- power measurement;
-- GNSS UART;
-- SPI;
-- I²C where used.
-
-At minimum, SWD shall remain accessible on engineering samples.
-
-A convenient test connector or test pads should be provided.
-
----
-
-# 20. Development vs Release Hardware
-
-| Component | Development | Release |
-|---|---|---|
-| MCU | STM32F446RE / NUCLEO-F446RE | STM32U5 family |
-| Debugger | Integrated ST-LINK | External SWD during development |
-| GNSS | GY-NEO6MV2 | Modern u-blox M10-class |
-| Display | OLED/TFT |  B/W E-Ink |
-| Storage | microSD | microSD |
-| Controls | Buttons / TM1638 | Physical buttons |
-| Battery | USB / bench supply | 1 × 18650 |
-| Power | NUCLEO power system | Low-Iq power architecture |
-| USB | Always available | Service/data interface |
-| PCB | Development boards/modules | Custom PCB |
-
----
-
-# 21. Initial Development Hardware
-
-The minimum hardware required to start the project is:
-
-- NUCLEO-F446RE;
-- GY-NEO6MV2 GNSS module;
-- USB cable;
-- small display;
-- microSD module;
-- microSD card;
-- breadboard and jumper wires;
-- push buttons.
-
-The existing TM1638 module may be used for additional low-level UI experiments.
-
----
-
-# 22. Release Target
-
-The release hardware shall target:
-
-### Primary goal
-
-**24 hours of continuous navigation from one 18650 battery.**
-
-### Design goal
-
-**36+ hours under typical navigation conditions.**
-
-### Low-power goal
-
-**48 hours or more in an optimized logging/navigation mode**, subject to actual measurements.
-
-These are engineering targets, not guaranteed specifications.
-
-Actual battery life shall be determined from measurements of the completed hardware.
-
----
-
-# 23. Energy Budget
-
-The project shall use measured power consumption rather than estimates wherever possible.
-
-Power measurements shall be made separately for:
-
-1. MCU;
-2. GNSS receiver;
-3. display;
-4. SD card;
-5. power converter;
-6. buttons/LEDs;
-7. complete device.
-
-The final battery-life calculation shall use:
-
-```text
-Operating time ≈ usable battery energy / average system power
-```
-
-The usable battery energy shall account for:
-
-- regulator efficiency;
-- battery discharge curve;
-- minimum operating voltage;
-- temperature;
-- battery ageing.
-
----
-
-# 24. Hardware Design Principles
-
-The following principles are mandatory for the release design:
-
-1. **No unnecessary peripherals.**
-2. **No Wi-Fi unless a future requirement explicitly justifies it.**
-3. **No Bluetooth unless a future requirement explicitly justifies it.**
-4. **No cellular modem.**
-5. **No route-calculation hardware/software requirement.**
-6. **GNSS and display shall be independently power-manageable where practical.**
-7. **SD card activity shall be minimized.**
-8. **The display shall not be refreshed unnecessarily.**
-9. **The MCU shall spend as much time as practical in low-power modes.**
-10. **All important power-consumption figures shall eventually be measured on real hardware.**
-
----
-
-# 25. Current Hardware Decision
-
-The current project direction is:
-
-```text
-DEVELOPMENT
-
-NUCLEO-F446RE
-      │
-      ├── GY-NEO6MV2
-      ├── OLED/TFT
-      ├── microSD
-      └── buttons/TM1638
-
-
-RELEASE
-
-       18650
-          │
-          ▼
-    Low-Iq power system
-          │
-          ▼
-      STM32U5
-       │  │  │
-       │  │  └──── Physical buttons
-       │  │
-       │  └─────── microSD
-       │
-       ├───────   B/W E-Ink
-       │
-       └────────── u-blox M10
-```
-
-The final display technology remains an engineering decision between:
-
-- **black/white E-Ink** — preferred for maximum sunlight readability and potentially lower average display power.
-
-The final choice shall be made after testing actual display modules with the PurrGo map renderer.
-
----
-
-# 26. Hardware Roadmap
-
-### Prototype 1
-
-```text
-STM32F446RE
-+
-GY-NEO6MV2
-+
-simple display
-```
-
-Goal:
-
-- UART;
-- GNSS;
-- NMEA/minmea;
-- position;
-- speed;
-- altitude;
-- time.
-
-### Prototype 2
-
-Add:
-
-```text
-microSD
-+
-track logging
-+
-GPX
-```
-
-### Prototype 3
-
-Add:
-
-```text
-map renderer
-+
-waypoints
-+
-physical controls
-```
-
-### Prototype 4
-
-Evaluate:
-
-```text
-B/W E-Ink
-```
-
-with actual power measurements.
-
-### Prototype 5
-
-Move firmware to:
-
-```text
-STM32U5
-+
-modern u-blox GNSS
-```
-
-and measure the complete power budget.
-
-### Release PCB
-
-Integrate:
-
-- STM32U5;
-- GNSS;
-- display;
-- SD;
-- buttons;
-- battery;
-- power management;
-- SWD;
-- USB;
-- test points.
-
-The release PCB shall be designed only after the major components have been experimentally validated.
+## 7. Целевой энергетический бюджет (Release)
+
+- **Основная цель:** $\ge 24$ часов непрерывной навигации от одного элемента 18650.
+- **Типовой режим:** $36+$ часов работы.
+- **Экспедиционный режим:** $48+$ часов с периодическим пробуждением и фиксацией точек.
 ```
 
 --- FILE: purrgo_file_descriptions.md ---
@@ -6275,11 +5513,11 @@ typedef struct {
 } purrgo_viewport_t;
 
 void purrgo_map_render_layer(
-    purrgo_fs_t* idx_fs, 
-    purrgo_fs_t* mlp_fs, 
-    gfx_context_t* gfx,
-    const purrgo_bbox_t* camera,
-    const purrgo_viewport_t* viewport,
+    purrgo_fs_t *idx_fs,
+    purrgo_fs_t *mlp_fs,
+    gfx_context_t *gfx,
+    const purrgo_bbox_t *camera,
+    const purrgo_viewport_t *viewport,
     bool is_polygon_layer
 );
 
@@ -8110,12 +7348,1511 @@ void purrgo_gpx_parser_feed(purrgo_gpx_parser_t *p, const char *chunk, size_t le
 --- FILE: src\core\map.c ---
 ```c
 // file: src/core/map.c
+
 #include "purrgo/map.h"
 #include "purrgo/logger.h"
+#include "purrgo/gfx_line.h"
+#include "purrgo/gfx_polygon.h"
+
+#include <stdbool.h>
+#include <stdint.h>
+#include <stddef.h>
+#include <stdlib.h>
+
+#define PURRGO_MAP_MAX_PARTS 32
+
+/*
+ * Текущий parser Python использует 50000 как защитное ограничение
+ * количества точек одной MLP geometry.
+ *
+ * Это НЕ ограничение бинарного формата MLP.
+ * Это только защитный предел данной реализации parser/render pipeline.
+ *
+ * Для текущего этапа он нужен потому, что polygon renderer должен
+ * временно разместить projected points в памяти.
+ */
+#define PURRGO_MAP_MAX_POINTS 50000
+
+/*
+ * Диагностические счётчики map subsystem.
+ *
+ * Поток обработки:
+ *
+ * IDX -> SQT -> NAV -> DATA -> AABB -> MLP -> projection -> GFX
+ *
+ * Для polygon layer дополнительно считаются:
+ *
+ *   polygons_filled
+ *   polygons_skipped
+ *
+ * polygons_skipped может включать внутренние кольца (holes), которые
+ * на текущем этапе намеренно не заполняются.
+ */
+typedef struct {
+    uint32_t sqt_blocks;
+    uint32_t nav_visited;
+    uint32_t data_visited;
+    uint32_t data_passed;
+    uint32_t data_culled;
+
+    uint32_t lines_drawn;
+
+    uint32_t polygons_filled;
+    uint32_t polygons_skipped;
+
+    /*
+     * Ограничивает количество подробных диагностических сообщений
+     * о DATA/NAV nodes.
+     */
+    uint32_t nodes_logged;
+} map_diag_t;
+
+
+/* -------------------------------------------------------------------------- */
+/* Little-endian helpers                                                      */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * Безопасное чтение Little-Endian int32_t.
+ */
+static inline int32_t unpack_i32_le(const uint8_t *buf)
+{
+    return (int32_t)(
+        (uint32_t)buf[0] |
+        ((uint32_t)buf[1] << 8) |
+        ((uint32_t)buf[2] << 16) |
+        ((uint32_t)buf[3] << 24)
+    );
+}
+
+
+/*
+ * Безопасное чтение Little-Endian uint32_t.
+ */
+static inline uint32_t unpack_u32_le(const uint8_t *buf)
+{
+    return
+        (uint32_t)buf[0] |
+        ((uint32_t)buf[1] << 8) |
+        ((uint32_t)buf[2] << 16) |
+        ((uint32_t)buf[3] << 24);
+}
+
+
+/*
+ * Чтение IEEE-754 float из четырёх байт Little-Endian.
+ *
+ * IDX хранит BBox NAV/DATA node как float.
+ * Здесь выполняется только побитовое восстановление float.
+ */
+static inline float unpack_float_le(const uint8_t *buf)
+{
+    union {
+        uint32_t i;
+        float f;
+    } u;
+
+    u.i = unpack_u32_le(buf);
+
+    return u.f;
+}
+
+
+/* -------------------------------------------------------------------------- */
+/* Projection                                                                 */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * Преобразование координат карты в координаты framebuffer.
+ *
+ * PurrGo internal coordinate representation:
+ *
+ *     degrees * 10^7
+ *
+ * MLP source coordinate representation:
+ *
+ *     degrees * 10^6
+ *
+ * Поэтому parse_geometry_mlp() передаёт сюда:
+ *
+ *     raw_mlp_coordinate * 10
+ *
+ * Ось Y framebuffer инвертируется:
+ *
+ *     map min_y -> нижняя граница viewport
+ *     map max_y -> верхняя граница viewport
+ *
+ * Для промежуточного умножения используется int64_t.
+ */
+static void project_to_screen(
+    int32_t lon,
+    int32_t lat,
+    const purrgo_bbox_t *cam,
+    const purrgo_viewport_t *vp,
+    int16_t *sx,
+    int16_t *sy
+) {
+    int64_t dx =
+        (int64_t)(lon - cam->min_x) *
+        (int64_t)vp->width;
+
+    int64_t w =
+        (int64_t)(cam->max_x - cam->min_x);
+
+    *sx =
+        (int16_t)(
+            w > 0
+                ? (dx / w)
+                : 0
+        ) +
+        vp->offset_x;
+
+
+    int64_t dy =
+        (int64_t)(lat - cam->min_y) *
+        (int64_t)vp->height;
+
+    int64_t h =
+        (int64_t)(cam->max_y - cam->min_y);
+
+    *sy =
+        (int16_t)(
+            (int64_t)vp->height -
+            (
+                h > 0
+                    ? (dy / h)
+                    : 0
+            )
+        ) +
+        vp->offset_y;
+}
+
+
+/* -------------------------------------------------------------------------- */
+/* Polygon helpers                                                            */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * Вычисляет ориентированную площадь кольца в экранных координатах.
+ *
+ * Формула:
+ *
+ *     area2 = sum(x_i * y_(i+1) - x_(i+1) * y_i)
+ *
+ * В экранной системе PurrGo ось Y направлена вниз.
+ *
+ * Поэтому направление CW/CCW относительно географической системы
+ * меняется на противоположное относительно screen coordinates.
+ *
+ * Для определения topology мы делаем вычисление в screen coordinates
+ * с учётом этого факта.
+ *
+ * Возвращаемое значение:
+ *
+ *     > 0  -> географически CW
+ *     < 0  -> географически CCW
+ *      0  -> вырожденное кольцо
+ *
+ * Используется int64_t. Для координат int16_t и размеров дисплея
+ * этого более чем достаточно.
+ */
+static int64_t polygon_ring_area2(
+    const gfx_point_t *points,
+    uint32_t count
+) {
+    if (points == NULL || count < 3) {
+        return 0;
+    }
+
+    int64_t area2 = 0;
+
+    for (uint32_t i = 0; i < count; i++) {
+        uint32_t j =
+            (i + 1 < count)
+                ? i + 1
+                : 0;
+
+        area2 +=
+            (int64_t)points[i].x * points[j].y -
+            (int64_t)points[j].x * points[i].y;
+    }
+
+    /*
+     * Screen Y направлен вниз.
+     *
+     * В математической системе:
+     *
+     *     positive area = CCW
+     *
+     * В screen coordinates знак меняется.
+     *
+     * Поэтому:
+     *
+     *     screen area < 0 -> geographic CW
+     *     screen area > 0 -> geographic CCW
+     */
+    return -area2;
+}
+
+
+/*
+ * Проверка, является ли кольцо внешним.
+ *
+ * Согласно текущему описанию MLP:
+ *
+ *     Outer = CW
+ *     Inner = CCW
+ *
+ * Поэтому:
+ *
+ *     area2 > 0 -> outer
+ *     area2 < 0 -> hole
+ */
+static bool polygon_ring_is_outer(
+    const gfx_point_t *points,
+    uint32_t count
+) {
+    int64_t area2 =
+        polygon_ring_area2(points, count);
+
+    return area2 > 0;
+}
+
+
+/*
+ * Проверка, что parts[] действительно содержит корректные start indices.
+ *
+ * Формат:
+ *
+ *     parts[0] = начало первого ring
+ *     parts[1] = начало второго ring
+ *     ...
+ *
+ * Для корректной geometry:
+ *
+ *     parts[0] == 0
+ *     parts[i] < parts[i + 1]
+ *     parts[last] < num_points
+ */
+static bool validate_parts(
+    const uint32_t *parts,
+    uint32_t num_parts,
+    uint32_t num_points
+) {
+    if (num_parts == 0) {
+        /*
+         * Geometry без parts допускается только как обычная
+         * последовательность точек для line renderer.
+         */
+        return true;
+    }
+
+    if (parts == NULL || num_points == 0) {
+        return false;
+    }
+
+    if (parts[0] != 0) {
+        return false;
+    }
+
+    for (uint32_t i = 0; i < num_parts; i++) {
+        if (parts[i] >= num_points) {
+            return false;
+        }
+
+        if (i > 0 && parts[i] <= parts[i - 1]) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+
+/* -------------------------------------------------------------------------- */
+/* MLP geometry rendering                                                     */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * Рендерит одну MLP geometry.
+ *
+ * Для line layer:
+ *
+ *     geometry
+ *         |
+ *         +-- part 0 -> polyline
+ *         +-- part 1 -> polyline
+ *         +-- ...
+ *
+ * Для polygon layer:
+ *
+ *     geometry
+ *         |
+ *         +-- outer ring -> gfx_fill_polygon()
+ *         +-- inner ring -> пока пропускается
+ *
+ * Почему geometry читается полностью:
+ *
+ * gfx_fill_polygon() принимает массив gfx_point_t.
+ *
+ * Поэтому потоковый алгоритм, который был достаточен для линий,
+ * недостаточен для polygon fill.
+ */
+static void parse_geometry_mlp(
+    purrgo_fs_t *mlp_fs,
+    uint32_t v1_offset,
+    const purrgo_bbox_t *cam,
+    const purrgo_viewport_t *vp,
+    gfx_context_t *gfx,
+    bool is_polygon_layer,
+    map_diag_t *diag
+) {
+    if (
+        mlp_fs == NULL ||
+        mlp_fs->read == NULL ||
+        mlp_fs->seek == NULL ||
+        cam == NULL ||
+        vp == NULL ||
+        gfx == NULL
+    ) {
+        return;
+    }
+
+
+    /*
+     * Data Node v1 указывает на начало geometry body,
+     * а не на 8-byte local geometry header.
+     *
+     * Поэтому:
+     *
+     *     file_offset = 32 + v1_offset
+     *
+     * 32 байта — YZL header.
+     */
+    if (!mlp_fs->seek(
+            mlp_fs->handle,
+            32u + v1_offset)) {
+
+        return;
+    }
+
+
+    /*
+     * Geometry body fixed header:
+     *
+     *   0x00 minx
+     *   0x04 miny
+     *   0x08 maxx
+     *   0x0C maxy
+     *   0x10 num_parts
+     *   0x14 num_points
+     */
+    uint8_t head[24];
+
+    if (
+        mlp_fs->read(
+            mlp_fs->handle,
+            head,
+            sizeof(head)
+        ) != sizeof(head)
+    ) {
+        return;
+    }
+
+
+    int32_t num_parts =
+        unpack_i32_le(&head[16]);
+
+    int32_t num_points =
+        unpack_i32_le(&head[20]);
+
+
+    /*
+     * Проверка структурных полей.
+     *
+     * num_parts может быть 0 для обычной line geometry.
+     */
+    if (
+        num_parts < 0 ||
+        num_parts > PURRGO_MAP_MAX_PARTS ||
+        num_points <= 0 ||
+        num_points > PURRGO_MAP_MAX_POINTS
+    ) {
+        PURRGO_LOG(
+            "MAP: invalid MLP geometry "
+            "parts=%ld points=%ld\n",
+            (long)num_parts,
+            (long)num_points
+        );
+
+        return;
+    }
+
+
+    uint32_t parts[PURRGO_MAP_MAX_PARTS] = {0};
+
+
+    /*
+     * parts[] располагается непосредственно после
+     * фиксированных 24 байт geometry header.
+     */
+    if (num_parts > 0) {
+        uint32_t bytes_to_read =
+            (uint32_t)num_parts * 4u;
+
+        uint8_t part_buf[
+            PURRGO_MAP_MAX_PARTS * 4
+        ];
+
+
+        if (
+            mlp_fs->read(
+                mlp_fs->handle,
+                part_buf,
+                bytes_to_read
+            ) != bytes_to_read
+        ) {
+            return;
+        }
+
+
+        for (uint32_t i = 0;
+             i < (uint32_t)num_parts;
+             i++) {
+
+            parts[i] =
+                unpack_u32_le(
+                    &part_buf[i * 4u]
+                );
+        }
+    }
+
+
+    /*
+     * Проверяем parts[] до чтения point array.
+     */
+    if (
+        !validate_parts(
+            parts,
+            (uint32_t)num_parts,
+            (uint32_t)num_points
+        )
+    ) {
+        PURRGO_LOG(
+            "MAP: invalid MLP parts "
+            "parts=%ld points=%ld\n",
+            (long)num_parts,
+            (long)num_points
+        );
+
+        return;
+    }
+
+
+    /*
+     * Для polygon rendering необходимо иметь весь массив
+     * projected screen points.
+     *
+     * gfx_point_t:
+     *
+     *     int16_t x
+     *     int16_t y
+     *
+     * Поэтому размер временного буфера:
+     *
+     *     num_points * sizeof(gfx_point_t)
+     *
+     * Буфер выделяется ровно под текущую geometry.
+     *
+     * Важно:
+     * это временное решение Stage 2.
+     * Для STM32 в дальнейшем можно заменить его на
+     * специализированный streaming/ring-buffer renderer.
+     */
+    gfx_point_t *screen_points = NULL;
+
+    if (is_polygon_layer) {
+        size_t point_count =
+            (size_t)num_points;
+
+        /*
+         * Проверка overflow перед malloc().
+         */
+        if (
+            point_count >
+            SIZE_MAX / sizeof(gfx_point_t)
+        ) {
+            PURRGO_LOG(
+                "MAP: polygon point buffer size overflow\n"
+            );
+
+            return;
+        }
+
+
+        screen_points =
+            (gfx_point_t *)malloc(
+                point_count * sizeof(gfx_point_t)
+            );
+
+
+        if (screen_points == NULL) {
+            PURRGO_LOG(
+                "MAP: cannot allocate polygon buffer "
+                "points=%ld bytes=%ld\n",
+                (long)num_points,
+                (long)(
+                    point_count *
+                    sizeof(gfx_point_t)
+                )
+            );
+
+            return;
+        }
+    }
+
+
+    /*
+     * Для line rendering сохраняем старый streaming-подход:
+     *
+     * предыдущая точка -> текущая точка.
+     */
+    int16_t prev_sx = 0;
+    int16_t prev_sy = 0;
+
+    uint32_t current_part_idx = 0;
+
+    uint32_t next_part_start =
+        (num_parts > 1)
+            ? parts[1]
+            : (uint32_t)num_points;
+
+
+    /*
+     * Читаем все точки geometry.
+     */
+    for (
+        uint32_t i = 0;
+        i < (uint32_t)num_points;
+        i++
+    ) {
+        uint8_t pt_buf[8];
+
+
+        if (
+            mlp_fs->read(
+                mlp_fs->handle,
+                pt_buf,
+                sizeof(pt_buf)
+            ) != sizeof(pt_buf)
+        ) {
+            /*
+             * При ошибке чтения geometry нельзя использовать
+             * частично заполненный polygon.
+             */
+            free(screen_points);
+
+            return;
+        }
+
+
+        /*
+         * MLP:
+         *
+         *     X = longitude * 10^6
+         *     Y = latitude  * 10^6
+         *
+         * PurrGo internal:
+         *
+         *     longitude * 10^7
+         *     latitude  * 10^7
+         *
+         * Поэтому умножаем исходные MLP coordinates на 10.
+         *
+         * Это существующая и документированная конверсия проекта.
+         */
+        int32_t raw_x =
+            unpack_i32_le(&pt_buf[0]);
+
+        int32_t raw_y =
+            unpack_i32_le(&pt_buf[4]);
+
+
+        int32_t norm_x =
+            raw_x * 10;
+
+        int32_t norm_y =
+            raw_y * 10;
+
+
+        int16_t sx;
+        int16_t sy;
+
+
+        project_to_screen(
+            norm_x,
+            norm_y,
+            cam,
+            vp,
+            &sx,
+            &sy
+        );
+
+
+        /*
+         * Polygon renderer сохраняет все projected points.
+         */
+        if (is_polygon_layer) {
+            screen_points[i].x = sx;
+            screen_points[i].y = sy;
+        }
+
+
+        /*
+         * Определяем начало следующего part.
+         *
+         * parts[] содержит start index.
+         */
+        if (
+            num_parts > 0 &&
+            i == next_part_start
+        ) {
+            current_part_idx++;
+
+            next_part_start =
+                (
+                    current_part_idx + 1 <
+                    (uint32_t)num_parts
+                )
+                    ? parts[current_part_idx + 1]
+                    : (uint32_t)num_points;
+        }
+
+
+        /*
+         * Для line layer продолжаем старое потоковое
+         * поведение.
+         */
+        if (!is_polygon_layer) {
+            uint32_t current_part_offset =
+                (num_parts > 0)
+                    ? parts[current_part_idx]
+                    : 0;
+
+
+            /*
+             * Первая точка каждого part не соединяется
+             * с предыдущим part.
+             */
+            if (i > current_part_offset) {
+                if (
+                    diag != NULL &&
+                    diag->lines_drawn == 0
+                ) {
+                    PURRGO_LOG(
+                        "MAP: FIRST LINE "
+                        "screen=(%d,%d)->(%d,%d) "
+                        "viewport=(%d,%d,%u,%u)\n",
+                        (int)prev_sx,
+                        (int)prev_sy,
+                        (int)sx,
+                        (int)sy,
+                        (int)vp->offset_x,
+                        (int)vp->offset_y,
+                        (unsigned)vp->width,
+                        (unsigned)vp->height
+                    );
+                }
+
+
+                gfx_draw_line(
+                    gfx,
+                    prev_sx,
+                    prev_sy,
+                    sx,
+                    sy
+                );
+
+
+                if (diag != NULL) {
+                    diag->lines_drawn++;
+                }
+            }
+        }
+
+
+        prev_sx = sx;
+        prev_sy = sy;
+    }
+
+
+    /*
+     * Polygon rendering.
+     */
+    if (is_polygon_layer) {
+        uint32_t part_count =
+            (uint32_t)num_parts;
+
+
+        /*
+         * Формат MLP содержит parts[].
+         *
+         * Для polygon geometry без parts[] нет способа
+         * определить границы нескольких колец.
+         *
+         * Поэтому такой объект не является корректным
+         * multipart polygon.
+         */
+        if (part_count == 0) {
+            PURRGO_LOG(
+                "MAP: polygon geometry has no parts "
+                "points=%ld\n",
+                (long)num_points
+            );
+
+            free(screen_points);
+
+            return;
+        }
+
+
+        for (
+            uint32_t part_idx = 0;
+            part_idx < part_count;
+            part_idx++
+        ) {
+            uint32_t start =
+                parts[part_idx];
+
+
+            uint32_t end =
+                (
+                    part_idx + 1 < part_count
+                )
+                    ? parts[part_idx + 1]
+                    : (uint32_t)num_points;
+
+
+            /*
+             * parts[] задаёт start indices.
+             *
+             * Поэтому:
+             *
+             *     [start, end)
+             *
+             * является текущим ring.
+             */
+            if (
+                start >= end ||
+                end > (uint32_t)num_points
+            ) {
+                if (diag != NULL) {
+                    diag->polygons_skipped++;
+                }
+
+                continue;
+            }
+
+
+            uint32_t ring_count =
+                end - start;
+
+
+            /*
+             * Для заполнения нужен настоящий polygon:
+             * минимум 3 точки.
+             *
+             * Обычно кольцо замкнуто, то есть первая и последняя
+             * точки совпадают. gfx_fill_polygon() умеет замыкать
+             * контур самостоятельно, поэтому дублированная
+             * последняя точка допустима.
+             */
+            if (ring_count < 3) {
+                if (diag != NULL) {
+                    diag->polygons_skipped++;
+                }
+
+                continue;
+            }
+
+
+            gfx_point_t *ring_points =
+                &screen_points[start];
+
+
+            /*
+             * Согласно формату:
+             *
+             *     Outer = CW
+             *     Inner = CCW
+             *
+             * На текущем этапе внутренние кольца не передаются
+             * в gfx_fill_polygon(), потому что тот использует
+             * независимое заполнение одного кольца и не поддерживает
+             * compound polygon / hole subtraction.
+             *
+             * Таким образом мы не получаем неправильное поведение,
+             * при котором hole становится заполненной областью.
+             */
+            if (
+                !polygon_ring_is_outer(
+                    ring_points,
+                    ring_count
+                )
+            ) {
+                if (diag != NULL) {
+                    diag->polygons_skipped++;
+                }
+
+                continue;
+            }
+
+
+            /*
+             * Заполняем внешний контур.
+             *
+             * gfx_fill_polygon() использует текущий
+             * graphics context.
+             */
+            gfx_fill_polygon(
+                gfx,
+                ring_points,
+                (uint16_t)ring_count
+            );
+
+
+            /*
+             * После заливки повторно рисуем контур.
+             *
+             * Это даёт чёткую границу polygon и соответствует
+             * поведению обычного map renderer.
+             */
+            // gfx_draw_polygon(
+            //    gfx,
+            //    ring_points,
+            //    (uint16_t)ring_count
+            //);
+
+
+            if (diag != NULL) {
+                diag->polygons_filled++;
+            }
+        }
+    }
+
+
+    free(screen_points);
+}
+
+
+/* -------------------------------------------------------------------------- */
+/* IDX node parser                                                            */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * Рекурсивный обход SQT R-tree.
+ *
+ * is_nav_node:
+ *
+ *     true  -> текущий node является Navigation Node
+ *     false -> текущий node является Data Node
+ */
+static void parse_node(
+    purrgo_fs_t *idx_fs,
+    uint32_t *current_idx_offset,
+    purrgo_fs_t *mlp_fs,
+    bool is_nav_node,
+    uint32_t level,
+    const purrgo_bbox_t *cam,
+    const purrgo_viewport_t *vp,
+    gfx_context_t *gfx,
+    bool is_polygon_layer,
+    map_diag_t *diag
+) {
+    (void)level;
+
+
+    uint8_t node_buf[28];
+
+
+    if (
+        idx_fs->read(
+            idx_fs->handle,
+            node_buf,
+            sizeof(node_buf)
+        ) != sizeof(node_buf)
+    ) {
+        return;
+    }
+
+
+    *current_idx_offset += 28;
+
+
+    /* ---------------------------------------------------------------------- */
+    /* DATA NODE                                                              */
+    /* ---------------------------------------------------------------------- */
+
+    if (!is_nav_node) {
+        if (diag != NULL) {
+            diag->data_visited++;
+        }
+
+
+        /*
+         * DATA BBox:
+         *
+         *     +0x00 xmin
+         *     +0x04 ymin
+         *     +0x08 xmax
+         *     +0x0C ymax
+         *
+         * В исходном IDX эти значения являются float.
+         */
+        float f_xmin =
+            unpack_float_le(&node_buf[0]);
+
+        float f_ymin =
+            unpack_float_le(&node_buf[4]);
+
+        float f_xmax =
+            unpack_float_le(&node_buf[8]);
+
+        float f_ymax =
+            unpack_float_le(&node_buf[12]);
+
+
+        /*
+         * PurrGo internal coordinate representation:
+         *
+         *     degrees * 10^7
+         */
+        int32_t xmin =
+            (int32_t)(
+                f_xmin * 10000000.0f
+            );
+
+        int32_t ymin =
+            (int32_t)(
+                f_ymin * 10000000.0f
+            );
+
+        int32_t xmax =
+            (int32_t)(
+                f_xmax * 10000000.0f
+            );
+
+        int32_t ymax =
+            (int32_t)(
+                f_ymax * 10000000.0f
+            );
+
+
+        /*
+         * AABB intersection.
+         *
+         * Объект видим, если его BBox пересекает camera.
+         */
+        bool passes =
+            xmax >= cam->min_x &&
+            xmin <= cam->max_x &&
+            ymax >= cam->min_y &&
+            ymin <= cam->max_y;
+
+
+        if (diag != NULL) {
+            if (passes) {
+                diag->data_passed++;
+            } else {
+                diag->data_culled++;
+            }
+
+
+            if (diag->nodes_logged < 10) {
+                PURRGO_LOG(
+                    "MAP: DATA "
+                    "raw=(%08x,%08x,%08x,%08x) "
+                    "flt=(%f,%f,%f,%f) "
+                    "int=(%d,%d,%d,%d) %s\n",
+
+                    unpack_u32_le(&node_buf[0]),
+                    unpack_u32_le(&node_buf[4]),
+                    unpack_u32_le(&node_buf[8]),
+                    unpack_u32_le(&node_buf[12]),
+
+                    f_xmin,
+                    f_ymin,
+                    f_xmax,
+                    f_ymax,
+
+                    xmin,
+                    ymin,
+                    xmax,
+                    ymax,
+
+                    passes
+                        ? "PASS"
+                        : "CULL"
+                );
+
+
+                diag->nodes_logged++;
+            }
+        }
+
+
+        if (passes) {
+            /*
+             * DATA node v1:
+             *
+             *     +0x14
+             *
+             * Указывает на MLP geometry body.
+             */
+            uint32_t v1 =
+                unpack_u32_le(&node_buf[20]);
+
+
+            if (v1 > 0) {
+                parse_geometry_mlp(
+                    mlp_fs,
+                    v1,
+                    cam,
+                    vp,
+                    gfx,
+                    is_polygon_layer,
+                    diag
+                );
+            }
+        }
+
+
+        return;
+    }
+
+
+    /* ---------------------------------------------------------------------- */
+    /* NAVIGATION NODE                                                        */
+    /* ---------------------------------------------------------------------- */
+
+    if (diag != NULL) {
+        diag->nav_visited++;
+    }
+
+
+    /*
+     * NAV node:
+     *
+     *     +0x00 v3_jump
+     *     +0x04 xmin
+     *     +0x08 ymin
+     *     +0x0C xmax
+     *     +0x10 ymax
+     *     +0x14 nav_level
+     *     +0x18 obj_count
+     */
+    uint32_t v3_jump =
+        unpack_u32_le(&node_buf[0]);
+
+
+    float f_c_xmin =
+        unpack_float_le(&node_buf[4]);
+
+    float f_c_ymin =
+        unpack_float_le(&node_buf[8]);
+
+    float f_c_xmax =
+        unpack_float_le(&node_buf[12]);
+
+    float f_c_ymax =
+        unpack_float_le(&node_buf[16]);
+
+
+    int32_t c_xmin =
+        (int32_t)(
+            f_c_xmin * 10000000.0f
+        );
+
+    int32_t c_ymin =
+        (int32_t)(
+            f_c_ymin * 10000000.0f
+        );
+
+    int32_t c_xmax =
+        (int32_t)(
+            f_c_xmax * 10000000.0f
+        );
+
+    int32_t c_ymax =
+        (int32_t)(
+            f_c_ymax * 10000000.0f
+        );
+
+
+    if (
+        diag != NULL &&
+        diag->nodes_logged < 10
+    ) {
+        PURRGO_LOG(
+            "MAP: NAV "
+            "raw=(%08x,%08x,%08x,%08x) "
+            "flt=(%f,%f,%f,%f) "
+            "int=(%d,%d,%d,%d)\n",
+
+            unpack_u32_le(&node_buf[4]),
+            unpack_u32_le(&node_buf[8]),
+            unpack_u32_le(&node_buf[12]),
+            unpack_u32_le(&node_buf[16]),
+
+            f_c_xmin,
+            f_c_ymin,
+            f_c_xmax,
+            f_c_ymax,
+
+            c_xmin,
+            c_ymin,
+            c_xmax,
+            c_ymax
+        );
+
+
+        diag->nodes_logged++;
+    }
+
+
+    uint32_t nav_level =
+        unpack_u32_le(&node_buf[20]);
+
+
+    uint32_t obj_count =
+        unpack_u32_le(&node_buf[24]);
+
+
+    /*
+     * Если BBox NAV node не пересекается с camera,
+     * можно пропустить всё его поддерево.
+     *
+     * v3_jump содержит размер перехода с учётом уже
+     * считанных 8 байт node header.
+     *
+     * Поэтому используется:
+     *
+     *     v3_jump - 8
+     *
+     * Это существующая семантика текущего parser.
+     */
+    if (
+        c_xmax < cam->min_x ||
+        c_xmin > cam->max_x ||
+        c_ymax < cam->min_y ||
+        c_ymin > cam->max_y
+    ) {
+        if (v3_jump >= 8) {
+            uint32_t jump_amount =
+                v3_jump - 8;
+
+
+            if (
+                idx_fs->seek(
+                    idx_fs->handle,
+                    *current_idx_offset +
+                    jump_amount
+                )
+            ) {
+                *current_idx_offset +=
+                    jump_amount;
+            }
+        }
+
+
+        return;
+    }
+
+
+    /*
+     * Если nav_level > 0, непосредственные дети являются
+     * Navigation Nodes.
+     *
+     * Если nav_level == 0, непосредственные дети являются
+     * Data Nodes.
+     */
+    bool child_is_nav =
+        (nav_level > 0);
+
+
+    uint32_t child_level =
+        (nav_level > 0)
+            ? (nav_level - 1)
+            : 0;
+
+
+    for (
+        uint32_t i = 0;
+        i < obj_count;
+        i++
+    ) {
+        parse_node(
+            idx_fs,
+            current_idx_offset,
+            mlp_fs,
+            child_is_nav,
+            child_level,
+            cam,
+            vp,
+            gfx,
+            is_polygon_layer,
+            diag
+        );
+    }
+}
+
+
+/* -------------------------------------------------------------------------- */
+/* Public API                                                                 */
+/* -------------------------------------------------------------------------- */
+
+void purrgo_map_render_layer(
+    purrgo_fs_t *idx_fs,
+    purrgo_fs_t *mlp_fs,
+    gfx_context_t *gfx,
+    const purrgo_bbox_t *camera,
+    const purrgo_viewport_t *viewport,
+    bool is_polygon_layer
+) {
+    if (
+        idx_fs == NULL ||
+        mlp_fs == NULL ||
+        gfx == NULL ||
+        camera == NULL ||
+        viewport == NULL
+    ) {
+        return;
+    }
+
+
+    PURRGO_LOG(
+        "MAP: IDX opened\n"
+    );
+
+
+    PURRGO_LOG(
+        "MAP: CAMERA "
+        "min=(%ld,%ld) "
+        "max=(%ld,%ld)\n",
+
+        (long)camera->min_x,
+        (long)camera->min_y,
+        (long)camera->max_x,
+        (long)camera->max_y
+    );
+
+
+    PURRGO_LOG(
+        "MAP: VIEWPORT "
+        "offset=(%d,%d) "
+        "size=(%u,%u)\n",
+
+        (int)viewport->offset_x,
+        (int)viewport->offset_y,
+        (unsigned)viewport->width,
+        (unsigned)viewport->height
+    );
+
+
+    PURRGO_LOG(
+        "MAP: GEOMETRY TYPE=%s\n",
+        is_polygon_layer
+            ? "POLYGON"
+            : "LINE"
+    );
+
+
+    map_diag_t diag = {0};
+
+
+    uint32_t current_idx_offset = 0;
+
+
+    /*
+     * YZL header занимает первые 32 байта IDX.
+     */
+    uint8_t yzl_header[32];
+
+
+    if (
+        idx_fs->read(
+            idx_fs->handle,
+            yzl_header,
+            sizeof(yzl_header)
+        ) != sizeof(yzl_header)
+    ) {
+        PURRGO_LOG(
+            "MAP: ERROR reading YZL header\n"
+        );
+
+        return;
+    }
+
+
+    current_idx_offset += 32;
+
+
+    /*
+     * Проверяем magic.
+     */
+    if (
+        yzl_header[0] != 'Y' ||
+        yzl_header[1] != 'Z' ||
+        yzl_header[2] != 'L'
+    ) {
+        PURRGO_LOG(
+            "MAP: ERROR invalid YZL header\n"
+        );
+
+        return;
+    }
+
+
+    /*
+     * Последовательно читаем SQT blocks
+     * до EOF или invalid block.
+     */
+    while (true) {
+        uint8_t sqt_header[16];
+
+
+        if (
+            idx_fs->read(
+                idx_fs->handle,
+                sqt_header,
+                sizeof(sqt_header)
+            ) != sizeof(sqt_header)
+        ) {
+            break;
+        }
+
+
+        current_idx_offset += 16;
+
+
+        /*
+         * SQT header:
+         *
+         *     0x00 'S'
+         *     0x01 'Q'
+         *     0x02 'T'
+         *     0x03 0x01
+         */
+        if (
+            sqt_header[0] != 'S' ||
+            sqt_header[1] != 'Q' ||
+            sqt_header[2] != 'T' ||
+            sqt_header[3] != 0x01
+        ) {
+            break;
+        }
+
+
+        diag.sqt_blocks++;
+
+
+        /*
+         * SQT:
+         *
+         *     +0x08 mode
+         *     +0x0C count
+         */
+        uint32_t mode =
+            unpack_u32_le(
+                &sqt_header[8]
+            );
+
+
+        uint32_t count =
+            unpack_u32_le(
+                &sqt_header[12]
+            );
+
+
+        if (count == 0) {
+            continue;
+        }
+
+
+        /*
+         * Root node type:
+         *
+         *     mode > 0 -> Navigation Node
+         *     mode == 0 -> Data Node
+         */
+        bool is_nav =
+            (mode > 0);
+
+
+        uint32_t level =
+            (mode > 0)
+                ? (mode - 1)
+                : 0;
+
+
+        for (
+            uint32_t i = 0;
+            i < count;
+            i++
+        ) {
+            parse_node(
+                idx_fs,
+                &current_idx_offset,
+                mlp_fs,
+                is_nav,
+                level,
+                camera,
+                viewport,
+                gfx,
+                is_polygon_layer,
+                &diag
+            );
+        }
+    }
+
+
+    PURRGO_LOG(
+        "MAP: "
+        "SQT=%u "
+        "NAV=%u "
+        "DATA=%u "
+        "PASS=%u "
+        "CULL=%u "
+        "LINES=%u "
+        "POLYGONS=%u "
+        "SKIPPED=%u\n",
+
+        diag.sqt_blocks,
+        diag.nav_visited,
+        diag.data_visited,
+        diag.data_passed,
+        diag.data_culled,
+        diag.lines_drawn,
+        diag.polygons_filled,
+        diag.polygons_skipped
+    );
+}
+
+```
+
+--- FILE: src\core\map_fill_gemini.c ---
+```c
+// file: src/core/map.c
+#include "purrgo/map.h"
+#include "purrgo/gfx_line.h"
+#include "purrgo/gfx_polygon.h"
+#include <stdio.h>
 #include <stdbool.h>
 #include <stdint.h>
 
 #define PURRGO_MAP_MAX_PARTS 32
+/* Лимит вершин для аппаратной защиты стека от переполнения */
+#define PURRGO_MAP_MAX_POLY_POINTS 128
 
 /*
  * Диагностические счётчики map subsystem.
@@ -8222,22 +8959,17 @@ static void project_to_screen(
  * Здесь уже нет пространственного поиска: решение о том, нужно ли
  * читать конкретный Data Node, принимается в parse_node() по его BBox.
  *
- * Для диагностики дополнительно выводится первая реально построенная
- * линия каждого render-вызова. Это позволяет проверить:
- *
- * MLP coordinates -> project_to_screen() -> screen coordinates
- *
- * и отделить проблему projection от проблемы framebuffer/SDL.
+ * Параметр is_polygon_layer определяет логику обработки массива точек: 
+ * накопление полигонов и заливка (true) или отрисовка полилиний (false).
  */
-#include "purrgo/gfx_line.h"
-
 static void parse_geometry_mlp(
     purrgo_fs_t* mlp_fs,
     uint32_t v1_offset,
     const purrgo_bbox_t* cam,
     const purrgo_viewport_t* vp,
     gfx_context_t* gfx,
-    map_diag_t* diag
+    map_diag_t* diag,
+    bool is_polygon_layer
 ) {
     if (!mlp_fs->seek(mlp_fs->handle, 32 + v1_offset)) {
         return;
@@ -8286,6 +9018,10 @@ static void parse_geometry_mlp(
             ? parts[1]
             : (uint32_t)num_points;
 
+    // Статический буфер для накопления вершин полигона перед заливкой
+    gfx_point_t poly_buf[PURRGO_MAP_MAX_POLY_POINTS];
+    uint16_t poly_count = 0;
+
     for (uint32_t i = 0; i < (uint32_t)num_points; i++) {
         uint8_t pt_buf[8];
 
@@ -8296,8 +9032,6 @@ static void parse_geometry_mlp(
         /*
          * MLP хранит координаты в своей целочисленной шкале.
          * Текущий parser преобразует их умножением на 10.
-         * Это существующая логика проекта; она здесь намеренно
-         * не изменяется.
          */
         int32_t raw_x = unpack_i32_le(&pt_buf[0]);
         int32_t raw_y = unpack_i32_le(&pt_buf[4]);
@@ -8327,43 +9061,59 @@ static void parse_geometry_mlp(
                 (current_part_idx + 1 < (uint32_t)num_parts)
                     ? parts[current_part_idx + 1]
                     : (uint32_t)num_points;
+            
+            poly_count = 0; // Сброс счетчика вершин для новой части
         }
 
         uint32_t current_part_offset = (num_parts > 0) ? parts[current_part_idx] : 0;
 
-        /*
-         * Линия отрисовывается ТОЛЬКО если текущая точка i не является первой
-         * точкой внутри текущей части массива геометрии.
-         */
-        if (i > current_part_offset) {
-            /*
-             * Диагностируем только первую линию, которая действительно
-             * передаётся в GFX. Это не изменяет rendering behaviour.
-             */
-            if (diag && diag->lines_drawn == 0) {
-                PURRGO_LOG(
-
-                    "MAP: FIRST LINE "
-                    "map=(%ld,%ld)->(%ld,%ld) "
-                    "screen=(%d,%d)->(%d,%d) "
-                    "viewport=(%d,%d,%u,%u) "
-                    "camera=(%ld,%ld,%ld,%ld)\n",
-                    (long)(prev_sx), (long)(prev_sy),
-                    (long)norm_x, (long)norm_y,
-                    (int)prev_sx, (int)prev_sy,
-                    (int)sx, (int)sy,
-                    (int)vp->offset_x, (int)vp->offset_y,
-                    (unsigned)vp->width, (unsigned)vp->height,
-                    (long)cam->min_x, (long)cam->min_y,
-                    (long)cam->max_x, (long)cam->max_y
-                );
-
+        if (is_polygon_layer) {
+            // Накопление вершин с защитой границ статического буфера
+            if (poly_count < PURRGO_MAP_MAX_POLY_POINTS) {
+                poly_buf[poly_count].x = sx;
+                poly_buf[poly_count].y = sy;
+                poly_count++;
             }
 
-            gfx_draw_line(gfx, prev_sx, prev_sy, sx, sy);
+            // Триггер отрисовки: текущая точка последняя в данном part
+            if (i == next_part_start - 1) {
+                if (poly_count >= 3) {
+                    gfx_fill_polygon(gfx, poly_buf, poly_count);
+                    gfx_draw_polygon(gfx, poly_buf, poly_count); // Отрисовка контура поверх заливки
+                }
+                poly_count = 0;
+            }
+        } else {
+            /*
+             * Линия отрисовывается ТОЛЬКО если текущая точка i не является первой
+             * точкой внутри текущей части массива геометрии.
+             */
+            if (i > current_part_offset) {
+                if (diag && diag->lines_drawn == 0) {
+                    fprintf(
+                        stderr,
+                        "MAP: FIRST LINE "
+                        "map=(%ld,%ld)->(%ld,%ld) "
+                        "screen=(%d,%d)->(%d,%d) "
+                        "viewport=(%d,%d,%u,%u) "
+                        "camera=(%ld,%ld,%ld,%ld)\n",
+                        (long)(prev_sx), (long)(prev_sy),
+                        (long)norm_x, (long)norm_y,
+                        (int)prev_sx, (int)prev_sy,
+                        (int)sx, (int)sy,
+                        (int)vp->offset_x, (int)vp->offset_y,
+                        (unsigned)vp->width, (unsigned)vp->height,
+                        (long)cam->min_x, (long)cam->min_y,
+                        (long)cam->max_x, (long)cam->max_y
+                    );
+                    fflush(stderr);
+                }
 
-            if (diag) {
-                diag->lines_drawn++;
+                gfx_draw_line(gfx, prev_sx, prev_sy, sx, sy);
+
+                if (diag) {
+                    diag->lines_drawn++;
+                }
             }
         }
 
@@ -8382,7 +9132,8 @@ static void parse_node(
     const purrgo_bbox_t* cam,
     const purrgo_viewport_t* vp,
     gfx_context_t* gfx,
-    map_diag_t* diag
+    map_diag_t* diag,
+    bool is_polygon_layer
 ) {
     uint8_t node_buf[28];
 
@@ -8421,8 +9172,8 @@ static void parse_node(
             }
 
             if (diag->nodes_logged < 10) {
-                PURRGO_LOG(
-
+                fprintf(
+                    stderr,
                     "MAP: DATA "
                     "raw=(%08x,%08x,%08x,%08x) "
                     "flt=(%f,%f,%f,%f) "
@@ -8450,7 +9201,8 @@ static void parse_node(
                     cam,
                     vp,
                     gfx,
-                    diag
+                    diag,
+                    is_polygon_layer
                 );
             }
         }
@@ -8475,8 +9227,8 @@ static void parse_node(
     int32_t c_ymax = (int32_t)(f_c_ymax * 10000000.0f);
 
     if (diag && diag->nodes_logged < 10) {
-        PURRGO_LOG(
-
+        fprintf(
+            stderr,
             "MAP: NAV "
             "raw=(%08x,%08x,%08x,%08x) "
             "flt=(%f,%f,%f,%f) "
@@ -8517,21 +9269,22 @@ static void parse_node(
         return;
     }
 
-bool child_is_nav = (nav_level > 0);
+    bool child_is_nav = (nav_level > 0);
     uint32_t child_level =
         (nav_level > 0) ? (nav_level - 1) : 0;
 
     for (uint32_t i = 0; i < obj_count; i++) {
         parse_node(
             idx_fs,
-            current_idx_offset,
+            current_idx_offset, /* Исправлено: передача адреса без лишнего амперсанда */
             mlp_fs,
             child_is_nav,
             child_level,
             cam,
             vp,
             gfx,
-            diag
+            diag,
+            is_polygon_layer
         );
     }
 }
@@ -8541,12 +9294,13 @@ void purrgo_map_render_layer(
     purrgo_fs_t* mlp_fs,
     gfx_context_t* gfx,
     const purrgo_bbox_t* camera,
-    const purrgo_viewport_t* viewport
+    const purrgo_viewport_t* viewport,
+    bool is_polygon_layer
 ) {
-    PURRGO_LOG("MAP: IDX opened\n");
+    fprintf(stderr, "MAP: IDX opened\n");
 
-    PURRGO_LOG(
-
+    fprintf(
+        stderr,
         "MAP: CAMERA min=(%ld,%ld) max=(%ld,%ld)\n",
         (long)camera->min_x,
         (long)camera->min_y,
@@ -8554,8 +9308,8 @@ void purrgo_map_render_layer(
         (long)camera->max_y
     );
 
-    PURRGO_LOG(
-
+    fprintf(
+        stderr,
         "MAP: VIEWPORT offset=(%d,%d) size=(%u,%u)\n",
         (int)viewport->offset_x,
         (int)viewport->offset_y,
@@ -8576,8 +9330,8 @@ void purrgo_map_render_layer(
             idx_fs->handle,
             yzl_header,
             32) != 32) {
-        PURRGO_LOG("MAP: ERROR reading YZL header\n");
-
+        fprintf(stderr, "MAP: ERROR reading YZL header\n");
+        fflush(stderr);
         return;
     }
 
@@ -8586,8 +9340,8 @@ void purrgo_map_render_layer(
     if (yzl_header[0] != 'Y' ||
         yzl_header[1] != 'Z' ||
         yzl_header[2] != 'L') {
-        PURRGO_LOG("MAP: ERROR invalid YZL header\n");
-
+        fprintf(stderr, "MAP: ERROR invalid YZL header\n");
+        fflush(stderr);
         return;
     }
 
@@ -8636,13 +9390,14 @@ void purrgo_map_render_layer(
                 camera,
                 viewport,
                 gfx,
-                &diag
+                &diag,
+                is_polygon_layer
             );
         }
     }
 
-    PURRGO_LOG(
-
+    fprintf(
+        stderr,
         "MAP: SQT=%u NAV=%u DATA=%u PASS=%u CULL=%u LINES=%u\n",
         diag.sqt_blocks,
         diag.nav_visited,
@@ -8652,7 +9407,7 @@ void purrgo_map_render_layer(
         diag.lines_drawn
     );
 
-
+    fflush(stderr);
 }
 ```
 
@@ -9713,82 +10468,286 @@ void gfx_draw_thick_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1,
 #include "purrgo/gfx_line.h"
 #include "purrgo/gfx_renderer.h"
 
-void gfx_draw_polygon(gfx_context_t *ctx, const gfx_point_t *points, uint16_t count) {
+#include <stdint.h>
+#include <stdlib.h>
+#include <stddef.h>
+
+
+/*
+ * Рисует контур полигона.
+ *
+ * Последняя точка соединяется с первой, поэтому polygon
+ * всегда получается замкнутым.
+ */
+void gfx_draw_polygon(
+    gfx_context_t *ctx,
+    const gfx_point_t *points,
+    uint16_t count
+) {
     if (!ctx || !points || count < 2) {
         return;
     }
 
     for (uint16_t i = 0; i < count - 1; i++) {
-        gfx_draw_line(ctx, points[i].x, points[i].y, points[i+1].x, points[i+1].y);
+        gfx_draw_line(
+            ctx,
+            points[i].x,
+            points[i].y,
+            points[i + 1].x,
+            points[i + 1].y
+        );
     }
 
-    // Замыкаем полигон
-    gfx_draw_line(ctx, points[count - 1].x, points[count - 1].y, points[0].x, points[0].y);
+    /* Замыкаем полигон. */
+    gfx_draw_line(
+        ctx,
+        points[count - 1].x,
+        points[count - 1].y,
+        points[0].x,
+        points[0].y
+    );
 }
 
-void gfx_fill_polygon(gfx_context_t *ctx, const gfx_point_t *points, uint16_t count) {
+
+/*
+ * Заполняет полигон текущим цветом foreground.
+ *
+ * Используется scanline / even-odd алгоритм:
+ *
+ *   1. Для каждой строки framebuffer ищутся пересечения
+ *      горизонтальной scanline с рёбрами полигона.
+ *
+ *   2. X-координаты пересечений сортируются.
+ *
+ *   3. Точки берутся попарно:
+ *
+ *          x0 -------- x1
+ *                 x2 -------- x3
+ *
+ *      и соответствующие интервалы заполняются.
+ *
+ * Цвет заливки — ctx->color_fg.
+ *
+ * ВАЖНО:
+ * Эта функция заполняет один polygon независимо от других polygon
+ * rings. Поэтому она не реализует вычитание holes из внешнего кольца.
+ */
+void gfx_fill_polygon(
+    gfx_context_t *ctx,
+    const gfx_point_t *points,
+    uint16_t count
+) {
     if (!ctx || !points || count < 3) {
         return;
     }
 
+
+    /*
+     * Определяем вертикальный диапазон полигона.
+     */
     int16_t min_y = points[0].y;
     int16_t max_y = points[0].y;
 
     for (uint16_t i = 1; i < count; i++) {
-        if (points[i].y < min_y) min_y = points[i].y;
-        if (points[i].y > max_y) max_y = points[i].y;
+        if (points[i].y < min_y) {
+            min_y = points[i].y;
+        }
+
+        if (points[i].y > max_y) {
+            max_y = points[i].y;
+        }
     }
 
-    if (min_y < 0) min_y = 0;
-    if (max_y >= ctx->height) max_y = ctx->height - 1;
 
-    // Временная подмена цвета для заливки цветом фона
-    gfx_color_t old_fg = ctx->color_fg;
-    ctx->color_fg = ctx->color_bg;
+    /*
+     * Ограничиваем scanline диапазоном framebuffer.
+     */
+    if (min_y < 0) {
+        min_y = 0;
+    }
 
+    if (max_y >= ctx->height) {
+        max_y = ctx->height - 1;
+    }
+
+
+    /*
+     * В отличие от старой реализации здесь НЕ происходит:
+     *
+     *     ctx->color_fg = ctx->color_bg;
+     *
+     * gfx_draw_hline() должен использовать настоящий текущий
+     * foreground color.
+     *
+     * Поэтому polygon заполняется ctx->color_fg.
+     */
+
+
+    /*
+     * Максимальное количество пересечений scanline с polygon
+     * равно количеству его рёбер.
+     *
+     * Поэтому массив nodeX выделяем под весь polygon, а не
+     * ограничиваем произвольным числом 32.
+     *
+     * Это также устраняет потерю пересечений на сложных
+     * landuse polygon.
+     */
+    if (
+        (size_t)count >
+        SIZE_MAX / sizeof(int16_t)
+    ) {
+        return;
+    }
+
+    int16_t *nodeX =
+        (int16_t *)malloc(
+            (size_t)count * sizeof(int16_t)
+        );
+
+    if (!nodeX) {
+        return;
+    }
+
+
+    /*
+     * Scanline rendering.
+     */
     for (int16_t y = min_y; y <= max_y; y++) {
-        int16_t nodeX[32];
         uint16_t nodes = 0;
 
+
+        /*
+         * Находим все пересечения текущей горизонтальной
+         * scanline с рёбрами polygon.
+         */
         for (uint16_t i = 0; i < count; i++) {
-            uint16_t j = (i == count - 1) ? 0 : i + 1;
+            uint16_t j =
+                (i == count - 1)
+                    ? 0
+                    : (uint16_t)(i + 1);
+
 
             int16_t y_start = points[i].y;
-            int16_t y_end = points[j].y;
+            int16_t y_end   = points[j].y;
+
             int16_t x_start = points[i].x;
-            int16_t x_end = points[j].x;
+            int16_t x_end   = points[j].x;
 
-            // Игнорируем горизонтальные ребра и проверяем полуоткрытый интервал
-            if (y_start == y_end) continue;
 
-            if ((y_start <= y && y_end > y) || (y_end <= y && y_start > y)) {
-                if (nodes < 32) {
-                    nodeX[nodes++] = x_start + (int32_t)(x_end - x_start) * (y - y_start) / (y_end - y_start);
+            /*
+             * Горизонтальное ребро не создаёт отдельного
+             * пересечения scanline.
+             */
+            if (y_start == y_end) {
+                continue;
+            }
+
+
+            /*
+             * Полуоткрытый интервал:
+             *
+             *     y_start <= y < y_end
+             *
+             * или
+             *
+             *     y_end <= y < y_start
+             *
+             * Это предотвращает двойной учёт вершины,
+             * где сходятся два ребра.
+             */
+            if (
+                (y_start <= y && y_end > y) ||
+                (y_end <= y && y_start > y)
+            ) {
+                /*
+                 * Вычисляем X пересечения.
+                 *
+                 * Используется int32_t для промежуточного
+                 * умножения, чтобы не выполнять арифметику
+                 * непосредственно в int16_t.
+                 */
+                int32_t x =
+                    (int32_t)x_start +
+                    (
+                        (int32_t)(x_end - x_start) *
+                        (int32_t)(y - y_start)
+                    ) /
+                    (int32_t)(y_end - y_start);
+
+
+                /*
+                 * Теоретически nodes не может превысить count:
+                 * одно ребро даёт максимум одно пересечение
+                 * с конкретной scanline.
+                 */
+                if (nodes < count) {
+                    nodeX[nodes++] = (int16_t)x;
                 }
             }
         }
 
-        // Сортировка пузырьком
+
+        /*
+         * Если пересечений меньше двух, заполнять нечего.
+         */
+        if (nodes < 2) {
+            continue;
+        }
+
+
+        /*
+         * Сортируем X-координаты пересечений.
+         *
+         * Для типичных landuse polygon количество рёбер
+         * относительно небольшое, поэтому простая сортировка
+         * здесь достаточна.
+         */
         for (uint16_t i = 0; i < nodes; i++) {
-            for (uint16_t j = 0; j < nodes - i - 1; j++) {
+            for (
+                uint16_t j = 0;
+                j + 1 < nodes - i;
+                j++
+            ) {
                 if (nodeX[j] > nodeX[j + 1]) {
                     int16_t tmp = nodeX[j];
-                    nodeX[j] = nodeX[j + 1];
-                    nodeX[j + 1] = tmp;
+
+                    nodeX[j] =
+                        nodeX[j + 1];
+
+                    nodeX[j + 1] =
+                        tmp;
                 }
             }
         }
 
-        // Отрисовка попарных интервалов с использованием gfx_draw_hline (которая теперь берет подмененный color_fg)
-        for (uint16_t i = 0; i < nodes; i += 2) {
-            if (i + 1 < nodes) {
-                gfx_draw_hline(ctx, nodeX[i], nodeX[i+1], y);
-            }
+
+        /*
+         * Заполняем пары пересечений:
+         *
+         *     [nodeX[0], nodeX[1]]
+         *     [nodeX[2], nodeX[3]]
+         *     ...
+         *
+         * gfx_draw_hline() использует ctx->color_fg,
+         * то есть цвет, установленный вызывающим кодом.
+         */
+        for (
+            uint16_t i = 0;
+            i + 1 < nodes;
+            i += 2
+        ) {
+            gfx_draw_hline(
+                ctx,
+                nodeX[i],
+                nodeX[i + 1],
+                y
+            );
         }
     }
 
-    // Восстановление исходного цвета переднего плана
-    ctx->color_fg = old_fg;
+
+    free(nodeX);
 }
 ```
 
