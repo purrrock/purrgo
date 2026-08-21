@@ -5390,20 +5390,27 @@ void purrgo_app_ui_render(
 
 #include <stdint.h>
 #include <stdbool.h>
-#include "purrgo/track_logger.h" // Для track_logger_mode_t
+#include "purrgo/track_logger.h"
 
 // Глобальная структура настроек устройства
 typedef struct {
-    int16_t tz_offset_minutes;    // Смещение часового пояса от UTC в минутах (например, +180 для UTC+3:00, -210 для UTC-3:30)
-    track_logger_mode_t log_mode; // Режим записи трека (Standard/Expedition)
-    bool backlight_on;            // Состояние подсветки дисплея
+    int16_t tz_offset_minutes;    // Смещение часового пояса от UTC в минутах[cite: 3]
+    track_logger_mode_t log_mode; // Режим записи трека[cite: 3]
+    bool backlight_on;            // Состояние подсветки дисплея[cite: 3]
+    
+    // Новые параметры навигатора
+    char map_dir[32];             // Директория выбранной карты
+    int32_t last_lat_1e7;         // Последняя широта для центрирования при холодном старте
+    int32_t last_lon_1e7;         // Последняя долгота для центрирования при холодном старте
 } purrgo_config_t;
 
-// Экспорт глобального экземпляра настроек
 extern purrgo_config_t app_config;
 
-// Инициализация настроек значениями по умолчанию
 void purrgo_config_init(void);
+
+// Функции управления файлом конфигурации
+bool purrgo_config_load(void);
+bool purrgo_config_save(void);
 
 #endif // PURRGO_CONFIG_H
 ```
@@ -5686,20 +5693,18 @@ const unsigned char font5x7[256][5] = {
 #include <stdbool.h>
 #include <stddef.h>
 
-// Непрозрачный указатель на структуру файла платформы
 typedef struct purrgo_file_s purrgo_file_t;
 
-// Режимы открытия файла (пока требуется только создание на запись или добавление)
 typedef enum {
-    FS_READ,
+    FS_READ,            // Добавлен режим чтения
     FS_WRITE_CREATE,
     FS_WRITE_APPEND
 } fs_mode_t;
 
 purrgo_file_t* purrgo_fs_open(const char* filepath, fs_mode_t mode);
-size_t purrgo_fs_read(purrgo_file_t* file, uint8_t* buffer, size_t size);
 size_t purrgo_fs_write(purrgo_file_t* file, const uint8_t* data, size_t size);
-bool purrgo_fs_seek(purrgo_file_t* file, uint32_t offset);
+// Добавлена функция чтения (уже использовалась в прототипе gpx_parser)
+size_t purrgo_fs_read(purrgo_file_t* file, uint8_t* buffer, size_t size); 
 void purrgo_fs_sync(purrgo_file_t* file);
 void purrgo_fs_close(purrgo_file_t* file);
 
@@ -5756,6 +5761,17 @@ void gfx_fill_circle(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t r);
  * @param y1 Конечная координата y.
  */
 void gfx_draw_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1, int16_t y1);
+
+/**
+ * @brief Отрисовка тонкой штриховой линии (пунктира) с использованием алгоритма Брезенхема.
+ *
+ * @param ctx Контекст графического ядра.
+ * @param x0 Начальная координата x.
+ * @param y0 Начальная координата y.
+ * @param x1 Конечная координата x.
+ * @param y1 Конечная координата y.
+ */
+void gfx_draw_dashed_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1, int16_t y1);
 
 /**
  * @brief Отрисовка утолщенной линии с использованием целочисленного алгоритма (дублирование пикселей).
@@ -6310,6 +6326,33 @@ void purrgo_gpx_parser_feed(purrgo_gpx_parser_t *parser, const char *chunk, size
 
 ```
 
+--- FILE: include\purrgo\logger.h ---
+```h
+#ifndef PURRGO_LOGGER_H
+#define PURRGO_LOGGER_H
+
+#include "purrgo/hardware_config.h"
+
+/*
+ * В режиме разработки на ПК (эмулятор) логи направляются в стандартный поток ошибок.
+ * Обертка do { ... } while(0) обеспечивает безопасное использование макроса
+ * в условных конструкциях без фигурных скобок.
+ */
+#if PURRGO_HW_PROFILE == PURRGO_HW_PROFILE_DEVELOPMENT
+    #include <stdio.h>
+    #define PURRGO_LOG(...) do { fprintf(stderr, __VA_ARGS__); fflush(stderr); } while(0)
+#else
+    /*
+     * На целевом микроконтроллере логирование отключается для экономии Flash/RAM.
+     * В будущем здесь может быть вызов UART_Transmit или ITM_SendChar.
+     */
+    #define PURRGO_LOG(...) do { } while(0)
+#endif
+
+#endif // PURRGO_LOGGER_H
+
+```
+
 --- FILE: include\purrgo\map.h ---
 ```h
 // file: include/purrgo/map.h
@@ -6549,7 +6592,6 @@ size_t purrgo_ubx_build(
 #include "purrgo/app_fsm.h"
 #include "purrgo/config.h"
 #include "purrgo/purrgo_time.h"
-#include <stdio.h>
 
 // Глобальный экземпляр конфигурации устройства
 purrgo_config_t app_config;
@@ -6681,10 +6723,17 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
 #include <purrgo/map.h>
 #include <purrgo/fs_hal.h>
 #include <purrgo/config.h>
-extern uint32_t emu_fs_read(void* handle, void* buffer, uint32_t size);
-extern bool emu_fs_seek(void* handle, uint32_t offset);
-#include <stdio.h>
+#include "purrgo/logger.h"
 #include <string.h>
+
+// Локальные обертки для согласования сигнатур fs_hal.h и purrgo_fs_t
+static uint32_t core_fs_read_wrapper(void* handle, void* buffer, uint32_t size) {
+    return (uint32_t)purrgo_fs_read((purrgo_file_t*)handle, (uint8_t*)buffer, (size_t)size);
+}
+
+static bool core_fs_seek_wrapper(void* handle, uint32_t offset) {
+    return purrgo_fs_seek((purrgo_file_t*)handle, offset);
+}
 
 void purrgo_app_ui_render(
     gfx_context_t* gfx,
@@ -7114,11 +7163,11 @@ void purrgo_app_ui_render(
             static bool map_screen_logged = false;
 
             if (!map_screen_logged) {
-                fprintf(
-                    stderr,
+                PURRGO_LOG(
+
                     "EMU: APP_STATE_MAP rendering started\n"
                 );
-                fflush(stderr);
+
 
                 map_screen_logged = true;
             }
@@ -7154,14 +7203,14 @@ void purrgo_app_ui_render(
             if (idx_file && mlp_file) {
                 purrgo_fs_t idx_fs = {
                     .handle = idx_file,
-                    .read = emu_fs_read,
-                    .seek = emu_fs_seek
+                    .read = core_fs_read_wrapper,
+                    .seek = core_fs_seek_wrapper
                 };
 
                 purrgo_fs_t mlp_fs = {
                     .handle = mlp_file,
-                    .read = emu_fs_read,
-                    .seek = emu_fs_seek
+                    .read = core_fs_read_wrapper,
+                    .seek = core_fs_seek_wrapper
                 };
 
                 gfx_set_color(
@@ -7217,6 +7266,141 @@ void purrgo_app_ui_render(
         default:
             break;
     }
+}
+```
+
+--- FILE: src\core\config.c ---
+```c
+#include "purrgo/config.h"
+#include "purrgo/fs_hal.h"
+#include <stdio.h>
+#include <string.h>
+
+#define CONFIG_FILENAME "PURRGO.CFG"
+#define CONFIG_MAX_SIZE 256
+
+purrgo_config_t app_config;
+
+// Внутренний парсер целочисленных значений (замена atoi для контроля над типами)
+static int32_t parse_int32(const char* str) {
+    int32_t res = 0;
+    int32_t sign = 1;
+    
+    // Пропуск пробелов
+    while (*str == ' ' || *str == '\t') str++;
+    
+    // Определение знака
+    if (*str == '-') { sign = -1; str++; }
+    else if (*str == '+') { str++; }
+    
+    // Чтение числовой части
+    while (*str >= '0' && *str <= '9') {
+        res = res * 10 + (*str - '0');
+        str++;
+    }
+    return res * sign;
+}
+
+void purrgo_config_init(void) {
+    app_config.tz_offset_minutes = 180; // UTC+3:00 по умолчанию[cite: 3]
+    app_config.log_mode = LOGGER_MODE_STANDARD; //[cite: 3]
+    app_config.backlight_on = true; //[cite: 3]
+    
+    // Базовые значения карт и координат (Минск)
+    strncpy(app_config.map_dir, "/MAPS/BY", sizeof(app_config.map_dir) - 1);
+    app_config.map_dir[sizeof(app_config.map_dir) - 1] = '\0';
+    app_config.last_lat_1e7 = 537135000;
+    app_config.last_lon_1e7 = 284199000;
+}
+
+bool purrgo_config_load(void) {
+    purrgo_file_t* file = purrgo_fs_open(CONFIG_FILENAME, FS_READ);
+    
+    if (!file) {
+        // Если файла нет, инициализируем дефолтные значения и сразу создаем файл
+        purrgo_config_init();
+        purrgo_config_save();
+        return false;
+    }
+
+    // Стековый буфер. 256 байт достаточно для базовой конфигурации.
+    char buf[CONFIG_MAX_SIZE];
+    memset(buf, 0, sizeof(buf));
+    
+    size_t bytes_read = purrgo_fs_read(file, (uint8_t*)buf, sizeof(buf) - 1);
+    purrgo_fs_close(file);
+    
+    if (bytes_read == 0) return false;
+
+    char* line = buf;
+    while (*line) {
+        char* end = line;
+        
+        // Поиск символа завершения текущей строки (CR или LF)
+        while (*end && *end != '\n' && *end != '\r') end++;
+        bool is_eof = (*end == '\0');
+        *end = '\0'; // Замена переноса на терминатор для изоляции строки
+        
+        // Поиск знака равенства (разделителя ключа и значения)
+        char* delim = strchr(line, '=');
+        if (delim) {
+            *delim = '\0'; // Разделение строки на две подстроки
+            char* key = line;
+            char* val = delim + 1;
+            
+            // Маппинг строковых ключей на поля структуры
+            if (strcmp(key, "TZ") == 0) {
+                // Пользователь задает TZ в часах (например, TZ=+3). Конвертируем в минуты.
+                app_config.tz_offset_minutes = (int16_t)(parse_int32(val) * 60);
+            } else if (strcmp(key, "MAP_DIR") == 0) {
+                strncpy(app_config.map_dir, val, sizeof(app_config.map_dir) - 1);
+                app_config.map_dir[sizeof(app_config.map_dir) - 1] = '\0';
+            } else if (strcmp(key, "LAST_LAT_1E7") == 0) {
+                app_config.last_lat_1e7 = parse_int32(val);
+            } else if (strcmp(key, "LAST_LON_1E7") == 0) {
+                app_config.last_lon_1e7 = parse_int32(val);
+            }
+        }
+        
+        if (is_eof) break;
+        line = end + 1;
+        
+        // Пропуск пустых строк и символов CRLF между строками
+        while (*line == '\n' || *line == '\r') line++; 
+    }
+    return true;
+}
+
+bool purrgo_config_save(void) {
+    purrgo_file_t* file = purrgo_fs_open(CONFIG_FILENAME, FS_WRITE_CREATE);
+    if (!file) return false;
+    
+    char buf[CONFIG_MAX_SIZE];
+    
+    // Трансляция минутного интервала обратно в часы. 
+    // Для дробных поясов (UTC+3:30) в будущем потребуется сменить ключ на TZ_MIN.
+    int16_t tz_h = app_config.tz_offset_minutes / 60;
+
+    // Формирование текстового блока настроек. 
+    // Применение (int) каста гарантирует совместимость %d с 32-битными типами.
+    int len = snprintf(buf, sizeof(buf), 
+        "TZ=%+d\n"
+        "MAP_DIR=%s\n"
+        "LAST_LAT_1E7=%d\n"
+        "LAST_LON_1E7=%d\n",
+        tz_h,
+        app_config.map_dir,
+        (int)app_config.last_lat_1e7,
+        (int)app_config.last_lon_1e7
+    );
+    
+    if (len > 0) {
+        purrgo_fs_write(file, (uint8_t*)buf, len);
+        purrgo_fs_sync(file);
+    }
+    
+    purrgo_fs_close(file);
+    return true;
 }
 ```
 
@@ -7745,7 +7929,7 @@ void purrgo_gpx_parser_feed(purrgo_gpx_parser_t *p, const char *chunk, size_t le
 ```c
 // file: src/core/map.c
 #include "purrgo/map.h"
-#include <stdio.h>
+#include "purrgo/logger.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -7975,8 +8159,8 @@ static void parse_geometry_mlp(
              * передаётся в GFX. Это не изменяет rendering behaviour.
              */
             if (diag && diag->lines_drawn == 0) {
-                fprintf(
-                    stderr,
+                PURRGO_LOG(
+
                     "MAP: FIRST LINE "
                     "map=(%ld,%ld)->(%ld,%ld) "
                     "screen=(%d,%d)->(%d,%d) "
@@ -7991,7 +8175,7 @@ static void parse_geometry_mlp(
                     (long)cam->min_x, (long)cam->min_y,
                     (long)cam->max_x, (long)cam->max_y
                 );
-                fflush(stderr);
+
             }
 
             gfx_draw_line(gfx, prev_sx, prev_sy, sx, sy);
@@ -8055,8 +8239,8 @@ static void parse_node(
             }
 
             if (diag->nodes_logged < 10) {
-                fprintf(
-                    stderr,
+                PURRGO_LOG(
+
                     "MAP: DATA "
                     "raw=(%08x,%08x,%08x,%08x) "
                     "flt=(%f,%f,%f,%f) "
@@ -8109,8 +8293,8 @@ static void parse_node(
     int32_t c_ymax = (int32_t)(f_c_ymax * 10000000.0f);
 
     if (diag && diag->nodes_logged < 10) {
-        fprintf(
-            stderr,
+        PURRGO_LOG(
+
             "MAP: NAV "
             "raw=(%08x,%08x,%08x,%08x) "
             "flt=(%f,%f,%f,%f) "
@@ -8177,10 +8361,10 @@ void purrgo_map_render_layer(
     const purrgo_bbox_t* camera,
     const purrgo_viewport_t* viewport
 ) {
-    fprintf(stderr, "MAP: IDX opened\n");
+    PURRGO_LOG("MAP: IDX opened\n");
 
-    fprintf(
-        stderr,
+    PURRGO_LOG(
+
         "MAP: CAMERA min=(%ld,%ld) max=(%ld,%ld)\n",
         (long)camera->min_x,
         (long)camera->min_y,
@@ -8188,8 +8372,8 @@ void purrgo_map_render_layer(
         (long)camera->max_y
     );
 
-    fprintf(
-        stderr,
+    PURRGO_LOG(
+
         "MAP: VIEWPORT offset=(%d,%d) size=(%u,%u)\n",
         (int)viewport->offset_x,
         (int)viewport->offset_y,
@@ -8210,8 +8394,8 @@ void purrgo_map_render_layer(
             idx_fs->handle,
             yzl_header,
             32) != 32) {
-        fprintf(stderr, "MAP: ERROR reading YZL header\n");
-        fflush(stderr);
+        PURRGO_LOG("MAP: ERROR reading YZL header\n");
+
         return;
     }
 
@@ -8220,8 +8404,8 @@ void purrgo_map_render_layer(
     if (yzl_header[0] != 'Y' ||
         yzl_header[1] != 'Z' ||
         yzl_header[2] != 'L') {
-        fprintf(stderr, "MAP: ERROR invalid YZL header\n");
-        fflush(stderr);
+        PURRGO_LOG("MAP: ERROR invalid YZL header\n");
+
         return;
     }
 
@@ -8275,8 +8459,8 @@ void purrgo_map_render_layer(
         }
     }
 
-    fprintf(
-        stderr,
+    PURRGO_LOG(
+
         "MAP: SQT=%u NAV=%u DATA=%u PASS=%u CULL=%u LINES=%u\n",
         diag.sqt_blocks,
         diag.nav_visited,
@@ -8286,7 +8470,7 @@ void purrgo_map_render_layer(
         diag.lines_drawn
     );
 
-    fflush(stderr);
+
 }
 ```
 
@@ -8698,8 +8882,11 @@ const int16_t cos_lut[91] = {
 #include "purrgo/track_logger.h"
 #include "purrgo/geo.h"
 #include "purrgo/config.h" // Подключаем доступ к app_config.timezone_offset_h
-#include <stdio.h>
 #include <string.h>
+
+#include "purrgo/logger.h"
+
+
 
 #define GPX_BUFFER_SIZE 512
 
@@ -9156,6 +9343,113 @@ void gfx_draw_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1, int16
 
         e2 = err << 1; 
         
+        if (e2 >= dy) {
+            err += dy;
+            x0 += sx;
+        }
+        if (e2 <= dx) {
+            err += dx;
+            y0 += sy;
+        }
+    }
+}
+
+void gfx_draw_dashed_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1, int16_t y1)
+{
+    if (ctx == NULL || ctx->draw_pixel == NULL) return;
+
+    // Сохраняем геометрическое начало линии для синхронизации фазы штрихов
+    int16_t orig_x0 = x0;
+    int16_t orig_y0 = y0;
+
+    // 1. Отсечение отрезка (Cohen-Sutherland)
+    uint8_t outcode0 = compute_outcode(ctx, x0, y0);
+    uint8_t outcode1 = compute_outcode(ctx, x1, y1);
+    bool accept = false;
+
+    while (true) {
+        if (!(outcode0 | outcode1)) {
+            accept = true;
+            break;
+        } else if (outcode0 & outcode1) {
+            break;
+        } else {
+            int16_t x, y;
+            uint8_t outcodeOut = outcode0 ? outcode0 : outcode1;
+
+            int32_t dx = x1 - x0;
+            int32_t dy = y1 - y0;
+
+            if (outcodeOut & TOP) {
+                x = x0 + dx * (ctx->height - 1 - y0) / dy;
+                y = ctx->height - 1;
+            } else if (outcodeOut & BOTTOM) {
+                x = x0 + dx * (0 - y0) / dy;
+                y = 0;
+            } else if (outcodeOut & RIGHT) {
+                y = y0 + dy * (ctx->width - 1 - x0) / dx;
+                x = ctx->width - 1;
+            } else if (outcodeOut & LEFT) {
+                y = y0 + dy * (0 - x0) / dx;
+                x = 0;
+            }
+
+            if (outcodeOut == outcode0) {
+                x0 = x;
+                y0 = y;
+                outcode0 = compute_outcode(ctx, x0, y0);
+            } else {
+                x1 = x;
+                y1 = y;
+                outcode1 = compute_outcode(ctx, x1, y1);
+            }
+        }
+    }
+
+    if (!accept) {
+        return;
+    }
+
+    // Параметры паттерна штриха
+    const int16_t dash_len = 4;
+    const int16_t gap_len = 4;
+    const int16_t pattern_len = dash_len + gap_len; // 8 пикселей
+
+    // Вычисляем количество пропущенных пикселей (Chebyshev distance)
+    int16_t dx_clip = gfx_abs(x0 - orig_x0);
+    int16_t dy_clip = gfx_abs(y0 - orig_y0);
+    int16_t clipped_steps = (dx_clip > dy_clip) ? dx_clip : dy_clip;
+    
+    // Инициализируем счетчик с учетом отсеченной части.
+    // Так как pattern_len = 8 (степень двойки), компилятор оптимизирует 
+    // операцию деления с остатком (%) в побитовое И (& 7).
+    int16_t dash_counter = clipped_steps % pattern_len;
+
+    // 2. Отрисовка видимой части (Bresenham optimized)
+    int16_t dx = gfx_abs(x1 - x0);
+    int16_t sx = x0 < x1 ? 1 : -1;
+    int16_t dy = -gfx_abs(y1 - y0);
+    int16_t sy = y0 < y1 ? 1 : -1;
+
+    int16_t err = dx + dy;
+    int16_t e2;
+
+    while (true) {
+        if (dash_counter < dash_len) {
+            ctx->draw_pixel(ctx->framebuffer, x0, y0, ctx->color_fg);
+        }
+
+        dash_counter++;
+        if (dash_counter >= pattern_len) {
+            dash_counter = 0;
+        }
+
+        if (x0 == x1 && y0 == y1) {
+            break;
+        }
+
+        e2 = err << 1;
+
         if (e2 >= dy) {
             err += dy;
             x0 += sx;
