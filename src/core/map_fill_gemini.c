@@ -234,7 +234,7 @@ static void parse_geometry_mlp(
             // Триггер отрисовки: текущая точка последняя в данном part
             if (i == next_part_start - 1) {
                 if (poly_count >= 3) {
-                    gfx_fill_polygon(gfx, poly_buf, poly_count);
+                    gfx_fill_polygon(gfx, poly_buf, poly_count, NULL, 0);
                     gfx_draw_polygon(gfx, poly_buf, poly_count); // Отрисовка контура поверх заливки
                 }
                 poly_count = 0;
