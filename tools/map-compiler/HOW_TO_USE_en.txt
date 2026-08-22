@@ -1,0 +1,70 @@
+========================================================================
+ INSTRUCTIONS FOR CREATING AND INSTALLING MAPS FOR PurrGO
+========================================================================
+
+This utility allows you to compile your own detailed offline map of any 
+region in the world based on open OpenStreetMap data and load it into the PurrGO.
+------------------------------------------------------------------------
+PREPARATION (WHAT TO DOWNLOAD)
+------------------------------------------------------------------------
+
+1. Source map file (.osm):
+   * Go to the site https://www.openstreetmap.org
+   * Find the city or area you need.
+   * Click the "Export" button in the top menu.
+   * If the selected area is not too large, click the "Overpass API" link 
+     on the left. A file named "map.osm" will be downloaded.
+   * IMPORTANT: The PurrGO memory is limited, but with the new R-Tree support, 
+     larger areas are possible. We still recommend keeping areas reasonable to 
+     ensure smooth performance and avoid extremely long linear routes crashing 
+     the PurrGO.
+   * If the site says the area is too large, use the BBBike service 
+     (https://extract.bbbike.org), select the "OSM XML" format, and download 
+     the required area.
+   * Rename the downloaded file strictly to "map.osm".
+
+2. Preprocessing Large Maps (Highly Recommended):
+   * If you are compiling large areas or entire countries, you should preprocess 
+     your raw `.osm` file using the `osm_optimizer.py` utility (requires Python).
+     Command: `python osm_optimizer.py map.osm map_optimized.osm`
+     Then rename `map_optimized.osm` to `map.osm`.
+   * This safely chunks extremely long routes and strips heavy metadata.
+
+------------------------------------------------------------------------
+STEP-BY-STEP MAP COMPILATION PROCESS
+------------------------------------------------------------------------
+
+Step 1. Create a new empty folder on your computer (for example, "My_Map").
+Step 2. Unpack the contents of the downloaded utility archive into this folder:
+       *.py (program files)
+       - features.csv (colors and styles configuration table)
+Step 3. Move the prepared files into the SAME folder:
+       - map.osm (mandatory)
+Step 4. Run the dtg1_map_compiler.py file.
+The program will start processing roads, 
+forests, water bodies, and points of interest. Compilation usually takes from 
+10 seconds to several minutes depending on the size and complexity of the map.
+When the program writes "Compilation finished successfully!".
+
+------------------------------------------------------------------------
+WHAT WILL APPEAR IN THE FOLDER AFTER COMPILATION
+------------------------------------------------------------------------
+
+A ready-made cartographic package will be automatically generated in the folder:
+* roads.mlp, roads.idx, roads.db — the layer of all roads and routes.
+* landuse.mlp, landuse.idx, landuse.db — the layer of forests, parks, residential areas, and baked POIs.
+* water.mlp, water.idx, water.db — the layer of rivers, lakes, and seas.
+* pois.idx, pois.db — POI layer.
+* map.name — an important configuration file (the coordinates of the map center are hardcoded in it).
+
+------------------------------------------------------------------------
+HOW TO LOAD THE MAP INTO THE PurrGO
+------------------------------------------------------------------------
+
+1. Connect the SD card to PC.
+2. Find (or create) the maps folder there ("maps").
+3. Delete the old map files (or move them to a safe place as a backup).
+4. Create a folder for your map in the Maps folder (name it, for example, after the area name).
+5. Copy ALL the newly generated files (roads.*, landuse.*, water.*, map.name) 
+   into this folder.
+6. Safely eject the disk. Go to the offline maps menu on the PurrGO.
