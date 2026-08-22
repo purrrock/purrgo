@@ -746,20 +746,128 @@ static void parse_geometry_mlp(
             return;
         }
 
-        /*
-         * Заполняем весь compound polygon (outer ring и holes)
-         * используя обновлённый gfx_fill_polygon, который поддерживает parts.
-         */
-        gfx_fill_polygon(
-            gfx,
-            screen_points,
-            (uint16_t)num_points,
-            parts,
-            (uint16_t)part_count
-        );
 
-        if (diag != NULL) {
-            diag->polygons_filled++;
+        for (
+            uint32_t part_idx = 0;
+            part_idx < part_count;
+            part_idx++
+        ) {
+            uint32_t start =
+                parts[part_idx];
+
+
+            uint32_t end =
+                (
+                    part_idx + 1 < part_count
+                )
+                    ? parts[part_idx + 1]
+                    : (uint32_t)num_points;
+
+
+            /*
+             * parts[] задаёт start indices.
+             *
+             * Поэтому:
+             *
+             *     [start, end)
+             *
+             * является текущим ring.
+             */
+            if (
+                start >= end ||
+                end > (uint32_t)num_points
+            ) {
+                if (diag != NULL) {
+                    diag->polygons_skipped++;
+                }
+
+                continue;
+            }
+
+
+            uint32_t ring_count =
+                end - start;
+
+
+            /*
+             * Для заполнения нужен настоящий polygon:
+             * минимум 3 точки.
+             *
+             * Обычно кольцо замкнуто, то есть первая и последняя
+             * точки совпадают. gfx_fill_polygon() умеет замыкать
+             * контур самостоятельно, поэтому дублированная
+             * последняя точка допустима.
+             */
+            if (ring_count < 3) {
+                if (diag != NULL) {
+                    diag->polygons_skipped++;
+                }
+
+                continue;
+            }
+
+
+            gfx_point_t *ring_points =
+                &screen_points[start];
+
+
+            /*
+             * Согласно формату:
+             *
+             *     Outer = CW
+             *     Inner = CCW
+             *
+             * На текущем этапе внутренние кольца не передаются
+             * в gfx_fill_polygon(), потому что тот использует
+             * независимое заполнение одного кольца и не поддерживает
+             * compound polygon / hole subtraction.
+             *
+             * Таким образом мы не получаем неправильное поведение,
+             * при котором hole становится заполненной областью.
+             */
+            if (
+                !polygon_ring_is_outer(
+                    ring_points,
+                    ring_count
+                )
+            ) {
+                if (diag != NULL) {
+                    diag->polygons_skipped++;
+                }
+
+                continue;
+            }
+
+
+            /*
+             * Заполняем внешний контур.
+             *
+             * gfx_fill_polygon() использует текущий
+             * graphics context.
+             */
+            gfx_fill_polygon(
+                gfx,
+                ring_points,
+                (uint16_t)ring_count
+            );
+
+
+            /*
+             * После заливки повторно рисуем контур.
+             *
+             * Это даёт чёткую границу polygon и соответствует
+             * поведению обычного map renderer.
+             */
+            // gfx_draw_polygon(
+            //    gfx,
+            //    ring_points,
+            //    (uint16_t)ring_count
+            //);
+
+
+            if (diag != NULL) {
+                diag->polygons_filled++;
+            }
         }
     }
 
