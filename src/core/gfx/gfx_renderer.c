@@ -44,14 +44,12 @@ void gfx_clear(gfx_context_t *ctx)
     if (ctx == NULL) return;
 
     // Temporarily swap foreground color with background color
-    // since gfx_draw_pixel uses color_fg
+    // since gfx_draw_hline uses color_fg
     gfx_color_t old_fg = ctx->color_fg;
     ctx->color_fg = ctx->color_bg;
 
     for (int16_t y = 0; y < ctx->height; y++) {
-        for (int16_t x = 0; x < ctx->width; x++) {
-            gfx_draw_pixel(ctx, x, y);
-        }
+        gfx_draw_hline(ctx, 0, ctx->width - 1, y);
     }
 
     // Restore foreground color

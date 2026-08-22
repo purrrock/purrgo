@@ -8,7 +8,6 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>
-#include <limits.h>
 
 #define PURRGO_MAP_MAX_PARTS 32
 
@@ -827,16 +826,12 @@ static void parse_node(
     uint32_t *current_idx_offset,
     purrgo_fs_t *mlp_fs,
     bool is_nav_node,
-    uint32_t level,
     const purrgo_bbox_t *cam,
     const purrgo_viewport_t *vp,
     gfx_context_t *gfx,
     bool is_polygon_layer,
     map_diag_t *diag
 ) {
-    (void)level;
-
-
     uint8_t node_buf[28];
 
 
@@ -874,37 +869,44 @@ static void parse_node(
          *
          * В исходном IDX эти значения являются float.
          */
-        float f_xmin =
-            unpack_float_le(&node_buf[0]);
-
         float f_ymin =
             unpack_float_le(&node_buf[4]);
 
-        float f_xmax =
-            unpack_float_le(&node_buf[8]);
-
         float f_ymax =
             unpack_float_le(&node_buf[12]);
-
 
         /*
          * PurrGo internal coordinate representation:
          *
          *     degrees * 10^7
          */
-        int32_t xmin = float_bbox_min(f_xmin);
         int32_t ymin = float_bbox_min(f_ymin);
-        int32_t xmax = float_bbox_max(f_xmax);
         int32_t ymax = float_bbox_max(f_ymax);
 
-
         /*
-         * AABB intersection.
-         *
-         * Объект видим, если его BBox пересекает camera.
+         * AABB intersection (Y-axis fast cull).
+         * Сначала проверяем Y, чтобы пропустить распаковку X.
          */
-        bool passes = bbox_intersects_camera(xmin, ymin, xmax, ymax, cam);
+        bool passes = false;
 
+        float f_xmin = 0.0f;
+        float f_xmax = 0.0f;
+        int32_t xmin = 0;
+        int32_t xmax = 0;
+
+        if (!(ymax < cam->min_y || ymin > cam->max_y)) {
+            f_xmin = unpack_float_le(&node_buf[0]);
+            f_xmax = unpack_float_le(&node_buf[8]);
+
+            xmin = float_bbox_min(f_xmin);
+            xmax = float_bbox_max(f_xmax);
+
+            if (cam->min_x <= cam->max_x) {
+                passes = (xmax >= cam->min_x && xmin <= cam->max_x);
+            } else {
+                passes = (xmin <= cam->max_x || xmax >= cam->min_x);
+            }
+        }
 
         if (diag != NULL) {
             if (passes) {
@@ -913,8 +915,16 @@ static void parse_node(
                 diag->data_culled++;
             }
 
-
             if (diag->nodes_logged < 10) {
+                /* Распаковываем X только для логирования, если они еще не распакованы */
+                if (ymax < cam->min_y || ymin > cam->max_y) {
+                    f_xmin = unpack_float_le(&node_buf[0]);
+                    f_xmax = unpack_float_le(&node_buf[8]);
+
+                    xmin = float_bbox_min(f_xmin);
+                    xmax = float_bbox_max(f_xmax);
+                }
+
                 PURRGO_LOG(
                     "MAP: DATA "
                     "raw=(%08x,%08x,%08x,%08x) "
@@ -940,7 +950,6 @@ static void parse_node(
                         ? "PASS"
                         : "CULL"
                 );
-
 
                 diag->nodes_logged++;
             }
@@ -1001,29 +1010,49 @@ static void parse_node(
         unpack_u32_le(&node_buf[0]);
 
 
-    float f_c_xmin =
-        unpack_float_le(&node_buf[4]);
-
     float f_c_ymin =
         unpack_float_le(&node_buf[8]);
-
-    float f_c_xmax =
-        unpack_float_le(&node_buf[12]);
 
     float f_c_ymax =
         unpack_float_le(&node_buf[16]);
 
-
-    int32_t c_xmin = float_bbox_min(f_c_xmin);
     int32_t c_ymin = float_bbox_min(f_c_ymin);
-    int32_t c_xmax = float_bbox_max(f_c_xmax);
     int32_t c_ymax = float_bbox_max(f_c_ymax);
+
+    bool passes = false;
+
+    float f_c_xmin = 0.0f;
+    float f_c_xmax = 0.0f;
+    int32_t c_xmin = 0;
+    int32_t c_xmax = 0;
+
+    if (!(c_ymax < cam->min_y || c_ymin > cam->max_y)) {
+        f_c_xmin = unpack_float_le(&node_buf[4]);
+        f_c_xmax = unpack_float_le(&node_buf[12]);
+
+        c_xmin = float_bbox_min(f_c_xmin);
+        c_xmax = float_bbox_max(f_c_xmax);
+
+        if (cam->min_x <= cam->max_x) {
+            passes = (c_xmax >= cam->min_x && c_xmin <= cam->max_x);
+        } else {
+            passes = (c_xmin <= cam->max_x || c_xmax >= cam->min_x);
+        }
+    }
 
 
     if (
         diag != NULL &&
         diag->nodes_logged < 10
     ) {
+        if (c_ymax < cam->min_y || c_ymin > cam->max_y) {
+            f_c_xmin = unpack_float_le(&node_buf[4]);
+            f_c_xmax = unpack_float_le(&node_buf[12]);
+
+            c_xmin = float_bbox_min(f_c_xmin);
+            c_xmax = float_bbox_max(f_c_xmax);
+        }
+
         PURRGO_LOG(
             "MAP: NAV "
             "raw=(%08x,%08x,%08x,%08x) "
@@ -1070,8 +1099,8 @@ static void parse_node(
      *
      *     v3_jump - 8
      */
-    if (!bbox_intersects_camera(c_xmin, c_ymin, c_xmax, c_ymax, cam)) {
-        if (v3_jump >= 8) {
+    if (!passes) {
+        if (v3_jump > 8) {
             uint32_t jump_amount =
                 v3_jump - 8;
 
@@ -1104,12 +1133,6 @@ static void parse_node(
         (nav_level > 0);
 
 
-    uint32_t child_level =
-        (nav_level > 0)
-            ? (nav_level - 1)
-            : 0;
-
-
     for (
         uint32_t i = 0;
         i < obj_count;
@@ -1120,7 +1143,6 @@ static void parse_node(
             current_idx_offset,
             mlp_fs,
             child_is_nav,
-            child_level,
             cam,
             vp,
             gfx,
@@ -1313,12 +1335,6 @@ void purrgo_map_render_layer(
             (mode > 0);
 
 
-        uint32_t level =
-            (mode > 0)
-                ? (mode - 1)
-                : 0;
-
-
         for (
             uint32_t i = 0;
             i < count;
@@ -1329,7 +1345,6 @@ void purrgo_map_render_layer(
                 &current_idx_offset,
                 mlp_fs,
                 is_nav,
-                level,
                 camera,
                 viewport,
                 gfx,
