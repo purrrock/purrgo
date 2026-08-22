@@ -18,8 +18,16 @@ void gfx_draw_polygon(gfx_context_t *ctx, const gfx_point_t *points, uint16_t co
  *
  * @param ctx Контекст графического ядра.
  * @param points Массив вершин полигона.
- * @param count Количество вершин в массиве.
+ * @param num_points Общее количество вершин во всех частях.
+ * @param parts Массив начальных индексов частей полигона (колец).
+ * @param num_parts Количество частей (колец) полигона.
  */
-void gfx_fill_polygon(gfx_context_t *ctx, const gfx_point_t *points, uint16_t count);
+void gfx_fill_polygon(
+    gfx_context_t *ctx,
+    const gfx_point_t *points,
+    uint16_t num_points,
+    const uint32_t *parts,
+    uint16_t num_parts
+);
 
 #endif /* GFX_POLYGON_H */
