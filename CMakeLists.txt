@@ -87,6 +87,10 @@ target_include_directories(purrgo_platform_pc
     add_executable(test_map tests/core/test_map.c)
     target_link_libraries(test_map PRIVATE purrgo_core)
     add_test(NAME test_map COMMAND test_map)
+
+    add_executable(test_gfx_polygon tests/core/test_gfx_polygon.c)
+    target_link_libraries(test_gfx_polygon PRIVATE purrgo_core)
+    add_test(NAME test_gfx_polygon COMMAND test_gfx_polygon)
 endif()
 
 # Подключение директории эмулятора перенесено в конец дерева сборки, 
