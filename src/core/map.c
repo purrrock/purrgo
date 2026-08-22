@@ -65,6 +65,27 @@ typedef struct {
 /* -------------------------------------------------------------------------- */
 
 /*
+ * AABB Intersection with Antimeridian support
+ */
+static inline bool bbox_intersects_camera(
+    int32_t xmin, int32_t ymin, int32_t xmax, int32_t ymax,
+    const purrgo_bbox_t *cam
+) {
+    if (ymax < cam->min_y || ymin > cam->max_y) {
+        return false;
+    }
+
+    if (cam->min_x <= cam->max_x) {
+        // Ordinary camera
+        return xmax >= cam->min_x && xmin <= cam->max_x;
+    } else {
+        // Antimeridian crossing
+        // Bbox must intersect [-1.8e9, cam->max_x] OR [cam->min_x, +1.8e9]
+        return xmin <= cam->max_x || xmax >= cam->min_x;
+    }
+}
+
+/*
  * Безопасное чтение Little-Endian int32_t.
  */
 static inline int32_t unpack_i32_le(const uint8_t *buf)
@@ -109,10 +130,32 @@ static inline float unpack_float_le(const uint8_t *buf)
     return u.f;
 }
 
+/*
+ * Безопасное преобразование float BBox координат в int32_t.
+ * Применяется запас в 128 единиц (1.28e-5 градуса) для компенсации
+ * потери точности мантиссы IEEE-754 24-bit при 180 градусах
+ * и усечения к нулю при кастинге float -> int.
+ */
+static inline int32_t float_bbox_min(float f_val) {
+    return (int32_t)(f_val * 10000000.0f) - 128;
+}
+
+static inline int32_t float_bbox_max(float f_val) {
+    return (int32_t)(f_val * 10000000.0f) + 128;
+}
+
 
 /* -------------------------------------------------------------------------- */
 /* Projection                                                                 */
 /* -------------------------------------------------------------------------- */
+
+static inline int64_t camera_span_x(const purrgo_bbox_t *cam) {
+    if (cam->min_x <= cam->max_x) {
+        return (int64_t)cam->max_x - (int64_t)cam->min_x;
+    } else {
+        return ((int64_t)cam->max_x + 3600000000LL) - (int64_t)cam->min_x;
+    }
+}
 
 /*
  * Преобразование координат карты в координаты framebuffer.
@@ -152,16 +195,16 @@ static void project_to_screen(
     int16_t *sx,
     int16_t *sy
 ) {
-    int64_t dx =
-        (
-            (int64_t)lon -
-            (int64_t)cam->min_x
-        ) *
-        (int64_t)vp->width;
+    int64_t dx_raw = (int64_t)lon - (int64_t)cam->min_x;
 
-    int64_t w =
-        (int64_t)cam->max_x -
-        (int64_t)cam->min_x;
+    // Normalize wrapped longitude difference for antimeridian crossing
+    if (cam->min_x > cam->max_x && dx_raw < 0) {
+        dx_raw += 3600000000LL;
+    }
+
+    int64_t dx = dx_raw * (int64_t)vp->width;
+
+    int64_t w = camera_span_x(cam);
 
     int64_t projected_x =
         (w > 0)
@@ -849,25 +892,10 @@ static void parse_node(
          *
          *     degrees * 10^7
          */
-        int32_t xmin =
-            (int32_t)(
-                f_xmin * 10000000.0f
-            );
-
-        int32_t ymin =
-            (int32_t)(
-                f_ymin * 10000000.0f
-            );
-
-        int32_t xmax =
-            (int32_t)(
-                f_xmax * 10000000.0f
-            );
-
-        int32_t ymax =
-            (int32_t)(
-                f_ymax * 10000000.0f
-            );
+        int32_t xmin = float_bbox_min(f_xmin);
+        int32_t ymin = float_bbox_min(f_ymin);
+        int32_t xmax = float_bbox_max(f_xmax);
+        int32_t ymax = float_bbox_max(f_ymax);
 
 
         /*
@@ -875,11 +903,7 @@ static void parse_node(
          *
          * Объект видим, если его BBox пересекает camera.
          */
-        bool passes =
-            xmax >= cam->min_x &&
-            xmin <= cam->max_x &&
-            ymax >= cam->min_y &&
-            ymin <= cam->max_y;
+        bool passes = bbox_intersects_camera(xmin, ymin, xmax, ymax, cam);
 
 
         if (diag != NULL) {
@@ -990,25 +1014,10 @@ static void parse_node(
         unpack_float_le(&node_buf[16]);
 
 
-    int32_t c_xmin =
-        (int32_t)(
-            f_c_xmin * 10000000.0f
-        );
-
-    int32_t c_ymin =
-        (int32_t)(
-            f_c_ymin * 10000000.0f
-        );
-
-    int32_t c_xmax =
-        (int32_t)(
-            f_c_xmax * 10000000.0f
-        );
-
-    int32_t c_ymax =
-        (int32_t)(
-            f_c_ymax * 10000000.0f
-        );
+    int32_t c_xmin = float_bbox_min(f_c_xmin);
+    int32_t c_ymin = float_bbox_min(f_c_ymin);
+    int32_t c_xmax = float_bbox_max(f_c_xmax);
+    int32_t c_ymax = float_bbox_max(f_c_ymax);
 
 
     if (
@@ -1061,12 +1070,7 @@ static void parse_node(
      *
      *     v3_jump - 8
      */
-    if (
-        c_xmax < cam->min_x ||
-        c_xmin > cam->max_x ||
-        c_ymax < cam->min_y ||
-        c_ymin > cam->max_y
-    ) {
+    if (!bbox_intersects_camera(c_xmin, c_ymin, c_xmax, c_ymax, cam)) {
         if (v3_jump >= 8) {
             uint32_t jump_amount =
                 v3_jump - 8;
