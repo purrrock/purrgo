@@ -151,9 +151,157 @@ void test_polygon_rendering_limits() {
     purrgo_map_render_layer(&idx_fs, &mlp_fs, &gfx, &cam, &vp, true);
 }
 
+void test_bbox_intersection() {
+    mock_file_t idx_mock = {0};
+    mock_file_t mlp_mock = {0};
+
+    purrgo_fs_t idx_fs = { .handle = &idx_mock, .read = mock_read, .seek = mock_seek };
+    purrgo_fs_t mlp_fs = { .handle = &mlp_mock, .read = mock_read, .seek = mock_seek };
+
+    gfx_context_t gfx;
+    gfx_init(&gfx, 100, 100, NULL, dummy_draw_pixel);
+
+    purrgo_viewport_t vp = { .width = 100, .height = 100, .offset_x = 0, .offset_y = 0 };
+
+    // Common layout setup
+    memcpy(&idx_mock.buffer[0], "YZL\0", 4);
+    memcpy(&idx_mock.buffer[32], "SQT\x01", 4);
+    pack_u32_le(&idx_mock.buffer[32 + 4], 0x00000001); // Topo marker
+    pack_u32_le(&idx_mock.buffer[32 + 8], 0); // Mode
+    pack_u32_le(&idx_mock.buffer[32 + 12], 1); // Count = 1
+
+    // Node parsing data
+    // float bbox touching exactly
+    // e.g. Node bbox [10.0, 10.0] to [20.0, 20.0]
+    pack_float_le(&idx_mock.buffer[48 + 0], 10.0f); // xmin
+    pack_float_le(&idx_mock.buffer[48 + 4], 10.0f); // ymin
+    pack_float_le(&idx_mock.buffer[48 + 8], 20.0f); // xmax
+    pack_float_le(&idx_mock.buffer[48 + 12], 20.0f); // ymax
+    pack_u32_le(&idx_mock.buffer[48 + 16], 1234); // obj_type
+    pack_u32_le(&idx_mock.buffer[48 + 20], 1); // v1 -> parse MLP
+    pack_u32_le(&idx_mock.buffer[48 + 24], 0); // v2
+
+    // Minimal MLP data so it actually reads something if passed
+    // 0x00: marker 0
+    // 0x04: length 0 (no points) -> parse_geometry_mlp will return early cleanly without crashing
+    pack_u32_le(&mlp_mock.buffer[0], 0);
+    pack_u32_le(&mlp_mock.buffer[4], 0);
+    mlp_mock.size = 8;
+    idx_mock.size = 32 + 16 + 28;
+
+    // Test touching exactly on left
+    // Node bbox is [10.0, 10.0] to [20.0, 20.0]
+    // The max value expands by 128 to 200000128
+    purrgo_bbox_t cam_touch = { .min_x = 200000128, .min_y = 100000000, .max_x = 300000000, .max_y = 200000000 };
+    idx_mock.offset = 0;
+    mlp_mock.offset = 0;
+    mlp_mock.seek_called = false;
+    purrgo_map_render_layer(&idx_fs, &mlp_fs, &gfx, &cam_touch, &vp, false);
+    assert(mlp_mock.seek_called); // Should have passed culling and called seek to v1 (which is 1)
+
+    // Test just outside right
+    purrgo_bbox_t cam_out = { .min_x = 200001000, .min_y = 100000000, .max_x = 300000000, .max_y = 200000000 };
+    idx_mock.offset = 0;
+    mlp_mock.offset = 0;
+    mlp_mock.seek_called = false;
+    purrgo_map_render_layer(&idx_fs, &mlp_fs, &gfx, &cam_out, &vp, false);
+    assert(!mlp_mock.seek_called); // Should be culled
+
+    // Test Antimeridian wrap: cam [179.0, -179.0]
+    purrgo_bbox_t cam_wrap = { .min_x = 1790000000, .min_y = -900000000, .max_x = -1790000000, .max_y = 900000000 };
+
+    // Node bbox around +179.5
+    pack_float_le(&idx_mock.buffer[48 + 0], 179.4f);
+    pack_float_le(&idx_mock.buffer[48 + 4], 0.0f);
+    pack_float_le(&idx_mock.buffer[48 + 8], 179.6f);
+    pack_float_le(&idx_mock.buffer[48 + 12], 10.0f);
+
+    idx_mock.offset = 0;
+    mlp_mock.offset = 0;
+    mlp_mock.seek_called = false;
+    purrgo_map_render_layer(&idx_fs, &mlp_fs, &gfx, &cam_wrap, &vp, false);
+    assert(mlp_mock.seek_called); // Intersects +179.5 (which is >= min_x 179.0)
+
+    // Node bbox around -179.5
+    pack_float_le(&idx_mock.buffer[48 + 0], -179.6f);
+    pack_float_le(&idx_mock.buffer[48 + 4], 0.0f);
+    pack_float_le(&idx_mock.buffer[48 + 8], -179.4f);
+    pack_float_le(&idx_mock.buffer[48 + 12], 10.0f);
+
+    idx_mock.offset = 0;
+    mlp_mock.offset = 0;
+    mlp_mock.seek_called = false;
+    purrgo_map_render_layer(&idx_fs, &mlp_fs, &gfx, &cam_wrap, &vp, false);
+    assert(mlp_mock.seek_called); // Intersects -179.5 (which is <= max_x -179.0)
+
+    // Node bbox completely outside wrap around (e.g. 0.0)
+    pack_float_le(&idx_mock.buffer[48 + 0], -5.0f);
+    pack_float_le(&idx_mock.buffer[48 + 4], 0.0f);
+    pack_float_le(&idx_mock.buffer[48 + 8], 5.0f);
+    pack_float_le(&idx_mock.buffer[48 + 12], 10.0f);
+
+    idx_mock.offset = 0;
+    mlp_mock.offset = 0;
+    purrgo_map_render_layer(&idx_fs, &mlp_fs, &gfx, &cam_wrap, &vp, false);
+    assert(!mlp_mock.seek_called || mlp_mock.offset == 0); // Should be culled!
+}
+
+void test_camera_overflow() {
+    mock_file_t idx_mock = {0};
+    mock_file_t mlp_mock = {0};
+
+    purrgo_fs_t idx_fs = { .handle = &idx_mock, .read = mock_read, .seek = mock_seek };
+    purrgo_fs_t mlp_fs = { .handle = &mlp_mock, .read = mock_read, .seek = mock_seek };
+
+    gfx_context_t gfx;
+    gfx_init(&gfx, 100, 100, NULL, dummy_draw_pixel);
+
+    purrgo_viewport_t vp = { .width = 100, .height = 100, .offset_x = 0, .offset_y = 0 };
+
+    memcpy(&idx_mock.buffer[0], "YZL\0", 4);
+    memcpy(&idx_mock.buffer[32], "SQT\x01", 4);
+    pack_u32_le(&idx_mock.buffer[32 + 4], 0x00000001); // Topo marker
+    pack_u32_le(&idx_mock.buffer[32 + 8], 0); // Mode
+    pack_u32_le(&idx_mock.buffer[32 + 12], 1); // Count = 1
+
+    // A large coordinate object
+    pack_float_le(&idx_mock.buffer[48 + 0], 10.0f);
+    pack_float_le(&idx_mock.buffer[48 + 4], 10.0f);
+    pack_float_le(&idx_mock.buffer[48 + 8], 20.0f);
+    pack_float_le(&idx_mock.buffer[48 + 12], 20.0f);
+    pack_u32_le(&idx_mock.buffer[48 + 16], 1234);
+    pack_u32_le(&idx_mock.buffer[48 + 20], 0);
+    pack_u32_le(&idx_mock.buffer[48 + 24], 0);
+
+    idx_mock.size = 32 + 16 + 28;
+
+    // Simulate huge camera near poles where width is maxed out
+    purrgo_bbox_t cam_huge = {
+        .min_x = 2000000000, .min_y = 800000000,
+        .max_x = -2000000000, .max_y = 900000000
+    };
+    idx_mock.offset = 0;
+    mlp_mock.offset = 0;
+
+    // Test should not crash and should correctly cull due to antimeridian projection logic
+    purrgo_map_render_layer(&idx_fs, &mlp_fs, &gfx, &cam_huge, &vp, false);
+
+    // Another huge camera that could test large span projection
+    purrgo_bbox_t cam_huge2 = {
+        .min_x = -2100000000, .min_y = -900000000,
+        .max_x = 2100000000, .max_y = 900000000
+    };
+    idx_mock.offset = 0;
+    mlp_mock.offset = 0;
+    purrgo_map_render_layer(&idx_fs, &mlp_fs, &gfx, &cam_huge2, &vp, false);
+}
+
+
 int main(void) {
     test_sqt_parsing();
     test_polygon_rendering_limits();
+    test_bbox_intersection();
+    test_camera_overflow();
 
 
     // original code from main

@@ -479,15 +479,41 @@ void purrgo_app_ui_render(
 
 int32_t rad_y = purrgo_app_get_zoom_radius_y();
 int32_t cos_val = purrgo_geo_cos_10k(center_lat);
-if (cos_val == 0) cos_val = 1;
+if (cos_val < 100) cos_val = 100; // prevent division by zero and limit max width near poles
 int32_t rad_x_base = (int32_t)(((int64_t)rad_y * map_vp.width) / map_vp.height);
-int32_t rad_x = (rad_x_base * 10000) / cos_val;
+int64_t rad_x_64 = ((int64_t)rad_x_base * 10000) / cos_val;
+if (rad_x_64 > 1800000000LL) {
+    rad_x_64 = 1800000000LL;
+}
+int32_t rad_x = (int32_t)rad_x_64;
+
+            int64_t min_lon = (int64_t)center_lon - rad_x;
+            int64_t max_lon = (int64_t)center_lon + rad_x;
+
+            // Normalize longitude bounds to [-1.8e9, +1.8e9] (WGS84 1e7)
+            if (min_lon < -1800000000LL) {
+                min_lon += 3600000000LL;
+            } else if (min_lon > 1800000000LL) {
+                min_lon -= 3600000000LL;
+            }
+            if (max_lon < -1800000000LL) {
+                max_lon += 3600000000LL;
+            } else if (max_lon > 1800000000LL) {
+                max_lon -= 3600000000LL;
+            }
+
+            int64_t min_lat = (int64_t)center_lat - rad_y;
+            int64_t max_lat = (int64_t)center_lat + rad_y;
+
+            // Clip latitude bounds to [-9.0e8, +9.0e8]
+            if (min_lat < -900000000LL) min_lat = -900000000LL;
+            if (max_lat > 900000000LL) max_lat = 900000000LL;
 
             purrgo_bbox_t dynamic_cam = {
-                .min_x = center_lon - rad_x,
-                .min_y = center_lat - rad_y,
-                .max_x = center_lon + rad_x,
-                .max_y = center_lat + rad_y
+                .min_x = (int32_t)min_lon,
+                .min_y = (int32_t)min_lat,
+                .max_x = (int32_t)max_lon,
+                .max_y = (int32_t)max_lat
             };
 
             /*
