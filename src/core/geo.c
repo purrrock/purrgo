@@ -37,6 +37,65 @@ static uint32_t isqrt64(uint64_t n) {
     return (uint32_t)root;
 }
 
+void purrgo_geo_bbox_from_center(int32_t center_lat_1e7, int32_t center_lon_1e7, uint32_t width_m, const purrgo_viewport_t* vp, purrgo_bbox_t* out_bbox) {
+    if (!vp || !out_bbox) return;
+
+    // Перевод ширины в метрах в градусы широты (1e7)
+    // 1 градус широты ≈ 111195 метров
+    // Значит 1 метр ≈ 10^7 / 111195 ≈ 90 единиц (точнее 89.93)
+    uint32_t width_1e7 = width_m * 90;
+
+    // Половина ширины для X
+    int32_t rad_x_base = width_1e7 / 2;
+
+    // Расчет высоты через пропорцию экрана
+    int32_t height_1e7 = (int32_t)(((int64_t)width_1e7 * vp->height) / vp->width);
+
+    // Половина высоты для Y
+    int32_t rad_y = height_1e7 / 2;
+
+    int32_t cos_val = purrgo_geo_cos_10k(center_lat_1e7);
+    if (cos_val < 100) cos_val = 100; // prevent division by zero near poles
+
+    // Масштабируем X координату в зависимости от широты
+    int64_t rad_x_64 = ((int64_t)rad_x_base * 10000) / cos_val;
+
+    int64_t min_lon, max_lon;
+    if (rad_x_64 >= 1800000000LL) {
+        // Если охват >= 360 градусов, берем весь мир
+        min_lon = -1800000000LL;
+        max_lon = 1800000000LL;
+    } else {
+        int32_t rad_x = (int32_t)rad_x_64;
+        min_lon = (int64_t)center_lon_1e7 - rad_x;
+        max_lon = (int64_t)center_lon_1e7 + rad_x;
+
+        // Нормализация границ долготы до [-1.8e9, +1.8e9] (WGS84 1e7)
+        if (min_lon < -1800000000LL) {
+            min_lon += 3600000000LL;
+        } else if (min_lon > 1800000000LL) {
+            min_lon -= 3600000000LL;
+        }
+        if (max_lon < -1800000000LL) {
+            max_lon += 3600000000LL;
+        } else if (max_lon > 1800000000LL) {
+            max_lon -= 3600000000LL;
+        }
+    }
+
+    int64_t min_lat = (int64_t)center_lat_1e7 - rad_y;
+    int64_t max_lat = (int64_t)center_lat_1e7 + rad_y;
+
+    // Ограничиваем широту до [-9.0e8, +9.0e8]
+    if (min_lat < -900000000LL) min_lat = -900000000LL;
+    if (max_lat > 900000000LL) max_lat = 900000000LL;
+
+    out_bbox->min_x = (int32_t)min_lon;
+    out_bbox->max_x = (int32_t)max_lon;
+    out_bbox->min_y = (int32_t)min_lat;
+    out_bbox->max_y = (int32_t)max_lat;
+}
+
 uint32_t purrgo_geo_distance_m(int32_t lat1, int32_t lon1, int32_t lat2, int32_t lon2) {
     int64_t dlat = (int64_t)lat2 - (int64_t)lat1;
     int64_t dlon = (int64_t)lon2 - (int64_t)lon1;

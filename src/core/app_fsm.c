@@ -15,11 +15,20 @@ static purrgo_state_t current_state;
 // Состояние окна просмотра карты (Map Viewport)
 static int32_t map_center_lat_1e7;
 static int32_t map_center_lon_1e7;
-static uint8_t map_zoom_level;
+static purrgo_map_scale_t map_zoom_level;
 static bool manual_pan_active;
 
-// Массив радиусов обзора для масштабирования (по оси Y в единицах 10^7)
-static const int32_t zoom_radius_y_1e7[] = { 2500, 5000, 10000, 25000, 50000, 100000 };
+// Значения физической ширины BBox в метрах для расчета координат.
+static const uint32_t scale_widths_m[PURRGO_MAP_SCALE_COUNT] = {
+    10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000,
+    20000, 50000, 100000, 200000, 500000, 1000000, 2000000, 5000000, 10000000
+};
+
+// Строковые метки для UI.
+static const char* scale_labels[PURRGO_MAP_SCALE_COUNT] = {
+    "10M", "20M", "50M", "100M", "200M", "500M", "1KM", "2KM", "5KM", "10KM",
+    "20KM", "50KM", "100KM", "200KM", "500KM", "1000KM", "2000KM", "5000KM", "10000KM"
+};
 
 // Черновые (несохраненные) настройки времени для режима редактирования в меню
 static int16_t draft_tz_offset_minutes;
@@ -87,7 +96,7 @@ void purrgo_app_init(void) {
     // Инициализация состояния карты
     map_center_lat_1e7 = app_config.last_lat_1e7;
     map_center_lon_1e7 = app_config.last_lon_1e7;
-    map_zoom_level = 2; // Начальный зум (середина)
+    map_zoom_level = PURRGO_MAP_SCALE_500M; // Начальный зум
     manual_pan_active = false;
 }
 
@@ -120,16 +129,20 @@ int32_t purrgo_app_get_map_center_lon(void) {
     return map_center_lon_1e7;
 }
 
-uint8_t purrgo_app_get_map_zoom_level(void) {
+purrgo_map_scale_t purrgo_app_get_map_zoom_level(void) {
     return map_zoom_level;
+}
+
+uint32_t purrgo_app_get_map_scale_width_m(void) {
+    return scale_widths_m[map_zoom_level];
+}
+
+const char* purrgo_app_get_map_scale_label(void) {
+    return scale_labels[map_zoom_level];
 }
 
 bool purrgo_app_is_manual_pan_active(void) {
     return manual_pan_active;
-}
-
-int32_t purrgo_app_get_zoom_radius_y(void) {
-    return zoom_radius_y_1e7[map_zoom_level];
 }
 
 void purrgo_app_handle_button(purrgo_btn_t button) {
@@ -247,15 +260,23 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
             return;
         }
         if (button == PURRGO_BTN_MINUS) {
-            if (map_zoom_level < 5) map_zoom_level++;
+            if (map_zoom_level < PURRGO_MAP_SCALE_COUNT - 1) map_zoom_level++;
             return;
         }
 
-int32_t step_y = purrgo_app_get_zoom_radius_y() >> 2;
+// Получаем ширину экрана в метрах для текущего масштаба.
+// Шаг панорамирования - 1/4 экрана.
+uint32_t width_m = purrgo_app_get_map_scale_width_m();
+uint32_t step_m = width_m / 4;
+if (step_m == 0) step_m = 1;
+
+// Перевод метров в градусы (10^7).
+// 1 градус широты ≈ 111195 метров. Следовательно, 1 метр ≈ 10^7 / 111195 ≈ 90 единиц 1e7.
+int32_t step_y = (step_m * 90);
+
 int32_t cos_val = purrgo_geo_cos_10k(map_center_lat_1e7);
-if (cos_val == 0) cos_val = 1;
-int32_t step_x_base = (int32_t)(((int64_t)step_y * PURRGO_HW_DISPLAY_WIDTH_PX) / PURRGO_HW_DISPLAY_HEIGHT_PX);
-int32_t step_x = (step_x_base * 10000) / cos_val;
+if (cos_val < 100) cos_val = 100; // prevent division by zero near poles
+int32_t step_x = (step_y * 10000) / cos_val;
 
         if (button == PURRGO_BTN_UP) {
             map_center_lat_1e7 += step_y;

@@ -2,6 +2,11 @@
 #define PURRGO_GEO_H
 
 #include <stdint.h>
+#include "purrgo/map.h"
+
+// Расчет BBox (bounding box) от центральной точки на основе физической ширины в метрах и пропорций экрана.
+// Функция выполняет перевод из метров в градусы (формат 1e7) строго в целых числах.
+void purrgo_geo_bbox_from_center(int32_t center_lat_1e7, int32_t center_lon_1e7, uint32_t width_m, const purrgo_viewport_t* vp, purrgo_bbox_t* out_bbox);
 
 // Вычисление расстояния между двумя точками (в метрах)
 // Координаты передаются в формате 1e7 (например, 53.7134383 -> 537134383)
