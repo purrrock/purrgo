@@ -566,22 +566,23 @@ static void parse_geometry_mlp(
 
 
     /*
-     * Читаем все точки geometry.
+     * Читаем все точки geometry порциями (chunks) по 64 байта
+     * для минимизации количества вызовов read().
      */
-    for (
-        uint32_t i = 0;
-        i < (uint32_t)num_points;
-        i++
-    ) {
-        uint8_t pt_buf[8];
+    uint8_t chunk_buf[64];
+    uint32_t points_read = 0;
 
+    while (points_read < (uint32_t)num_points) {
+        uint32_t points_left = (uint32_t)num_points - points_read;
+        uint32_t points_in_chunk = (points_left > 8) ? 8 : points_left;
+        uint32_t bytes_to_read = points_in_chunk * 8;
 
         if (
             mlp_fs->read(
                 mlp_fs->handle,
-                pt_buf,
-                sizeof(pt_buf)
-            ) != sizeof(pt_buf)
+                chunk_buf,
+                bytes_to_read
+            ) != bytes_to_read
         ) {
             /*
              * При ошибке чтения geometry нельзя использовать
@@ -594,6 +595,9 @@ static void parse_geometry_mlp(
             return;
         }
 
+        for (uint32_t j = 0; j < points_in_chunk; j++) {
+            uint32_t i = points_read + j;
+            uint8_t *pt_buf = &chunk_buf[j * 8];
 
         /*
          * MLP:
@@ -723,6 +727,9 @@ static void parse_geometry_mlp(
 
         prev_sx = sx;
         prev_sy = sy;
+        } // end of for loop over points in chunk
+
+        points_read += points_in_chunk;
     }
 
 
