@@ -748,13 +748,30 @@ static void parse_geometry_mlp(
 
 
         /*
+         * Проверка перед передачей в uint16_t (gfx_fill_compound_polygon)
+         */
+        if (num_points > UINT16_MAX || part_count > UINT16_MAX) {
+            PURRGO_LOG(
+                "MAP: polygon geometry exceeds uint16_t limit "
+                "points=%ld parts=%ld\n",
+                (long)num_points,
+                (long)part_count
+            );
+
+            if (diag != NULL) {
+                diag->polygons_skipped++;
+            }
+            return;
+        }
+
+        /*
          * Заполняем compound polygon.
          *
-         * gfx_fill_polygon() поддерживает multiple parts
+         * gfx_fill_compound_polygon() поддерживает multiple parts
          * и корректно вычитает holes (inner rings)
          * через even-odd правило.
          */
-        gfx_fill_polygon(
+        gfx_fill_compound_polygon(
             gfx,
             screen_points,
             (uint16_t)num_points,

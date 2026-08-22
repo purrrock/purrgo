@@ -14,7 +14,16 @@
 void gfx_draw_polygon(gfx_context_t *ctx, const gfx_point_t *points, uint16_t count);
 
 /**
- * @brief Заливка полигона.
+ * @brief Заливка полигона без holes (обратная совместимость).
+ *
+ * @param ctx Контекст графического ядра.
+ * @param points Массив вершин полигона.
+ * @param count Количество вершин в массиве.
+ */
+void gfx_fill_polygon(gfx_context_t *ctx, const gfx_point_t *points, uint16_t count);
+
+/**
+ * @brief Заливка compound полигона (с holes).
  *
  * @param ctx Контекст графического ядра.
  * @param points Массив вершин полигона.
@@ -22,7 +31,7 @@ void gfx_draw_polygon(gfx_context_t *ctx, const gfx_point_t *points, uint16_t co
  * @param parts Массив начальных индексов частей полигона (колец).
  * @param num_parts Количество частей (колец) полигона.
  */
-void gfx_fill_polygon(
+void gfx_fill_compound_polygon(
     gfx_context_t *ctx,
     const gfx_point_t *points,
     uint16_t num_points,
