@@ -13,9 +13,9 @@ from lxml import etree as ET
 from functools import lru_cache
 from typing import List, Tuple, Dict, Optional
 
-from dtg1_models import MapFeature, HWConfig, safe_encode
-from dtg1_geometry import is_clockwise
-from dtg1_lookup import LookupTables
+from purrgo_models import MapFeature, HWConfig, safe_encode
+from purrgo_geometry import is_clockwise
+from purrgo_lookup import LookupTables
 
 # Global immutable tuple of toponymic descriptors.
 # Strictly sorted by descending length for the startswith algorithm.

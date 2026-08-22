@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-DT G1 Map Compiler (Platform ATS3085S)
+PurrGO Map Compiler (Platform ATS3085S)
 ===============================================
 v1.5.0 (Fully Modular Architecture)
 Main orchestrator. Converts OpenStreetMap (XML) data into closed binary formats
@@ -16,10 +16,10 @@ import struct
 
 from typing import List
 
-from dtg1_models import MapFeature, HWConfig
-from dtg1_osmparser import OSMParser
-from dtg1_bin_writer import MapCompiler
-from dtg1_lookup import LookupTables
+from purrgo_models import MapFeature, HWConfig
+from purrgo_osmparser import OSMParser
+from purrgo_bin_writer import MapCompiler
+from purrgo_lookup import LookupTables
 
 
 def get_base_directory() -> str:
@@ -30,7 +30,7 @@ def get_base_directory() -> str:
 
 
 def main() -> None:
-    cli_parser = argparse.ArgumentParser(description="DT G1 Map Compiler (Platform ATS3085S)")
+    cli_parser = argparse.ArgumentParser(description="PurrGO Map Compiler (Platform ATS3085S)")
     args = cli_parser.parse_args()
 
     # Initialize hardware-independent paths
@@ -44,7 +44,7 @@ def main() -> None:
         return
 
     print("=========================================")
-    print("DT G1 MAP COMPILER")
+    print("PurrGO MAP COMPILER")
     print(f"Base Directory: {base_dir}")
     print("=========================================")
 
@@ -98,7 +98,7 @@ def main() -> None:
 
     # 4. Export JSON Metadata
     if meta_all:
-        MapCompiler.create_map_name("DTG1_Map", meta_all, out_path("map.name"))
+        MapCompiler.create_map_name("PurrGO_Map", meta_all, out_path("map.name"))
 
     print("\n[SUCCESS] Map package compiled successfully!")
 

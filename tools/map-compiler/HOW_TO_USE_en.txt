@@ -40,7 +40,7 @@ Step 2. Unpack the contents of the downloaded utility archive into this folder:
        - features.csv (colors and styles configuration table)
 Step 3. Move the prepared files into the SAME folder:
        - map.osm (mandatory)
-Step 4. Run the dtg1_map_compiler.py file.
+Step 4. Run the purrgo_map_compiler.py file.
 The program will start processing roads, 
 forests, water bodies, and points of interest. Compilation usually takes from 
 10 seconds to several minutes depending on the size and complexity of the map.
