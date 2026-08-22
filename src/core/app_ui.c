@@ -482,24 +482,28 @@ int32_t cos_val = purrgo_geo_cos_10k(center_lat);
 if (cos_val < 100) cos_val = 100; // prevent division by zero and limit max width near poles
 int32_t rad_x_base = (int32_t)(((int64_t)rad_y * map_vp.width) / map_vp.height);
 int64_t rad_x_64 = ((int64_t)rad_x_base * 10000) / cos_val;
-if (rad_x_64 > 1800000000LL) {
-    rad_x_64 = 1800000000LL;
-}
-int32_t rad_x = (int32_t)rad_x_64;
 
-            int64_t min_lon = (int64_t)center_lon - rad_x;
-            int64_t max_lon = (int64_t)center_lon + rad_x;
+            int64_t min_lon, max_lon;
+            if (rad_x_64 >= 1800000000LL) {
+                // If camera span is >= 360 degrees, it covers the whole longitude range.
+                min_lon = -1800000000LL;
+                max_lon = 1800000000LL;
+            } else {
+                int32_t rad_x = (int32_t)rad_x_64;
+                min_lon = (int64_t)center_lon - rad_x;
+                max_lon = (int64_t)center_lon + rad_x;
 
-            // Normalize longitude bounds to [-1.8e9, +1.8e9] (WGS84 1e7)
-            if (min_lon < -1800000000LL) {
-                min_lon += 3600000000LL;
-            } else if (min_lon > 1800000000LL) {
-                min_lon -= 3600000000LL;
-            }
-            if (max_lon < -1800000000LL) {
-                max_lon += 3600000000LL;
-            } else if (max_lon > 1800000000LL) {
-                max_lon -= 3600000000LL;
+                // Normalize longitude bounds to [-1.8e9, +1.8e9] (WGS84 1e7)
+                if (min_lon < -1800000000LL) {
+                    min_lon += 3600000000LL;
+                } else if (min_lon > 1800000000LL) {
+                    min_lon -= 3600000000LL;
+                }
+                if (max_lon < -1800000000LL) {
+                    max_lon += 3600000000LL;
+                } else if (max_lon > 1800000000LL) {
+                    max_lon -= 3600000000LL;
+                }
             }
 
             int64_t min_lat = (int64_t)center_lat - rad_y;
