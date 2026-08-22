@@ -125,8 +125,17 @@ bool purrgo_logger_start(const purrgo_gnss_solution_t* first_fix) {
     uint32_t utc_epoch = datetime_to_epoch(first_fix->year, first_fix->month, first_fix->day, 
                                            first_fix->hours, first_fix->minutes, first_fix->seconds);
     
-    // 2. Смещаем на локальный часовой пояс
-	uint32_t local_epoch = utc_epoch + (app_config.tz_offset_minutes * 60);
+    // 2. Смещаем на локальный часовой пояс.
+    // Используем int64_t для промежуточного значения, чтобы избежать переполнения
+    // при сложении uint32_t и потенциально отрицательного смещения.
+    int64_t local_epoch_64 = (int64_t)utc_epoch + ((int64_t)app_config.tz_offset_minutes * 60);
+
+    // Защита от underflow, если время с учетом пояса уходит до 2000 года.
+    if (local_epoch_64 < 0) {
+        local_epoch_64 = 0;
+    }
+
+    uint32_t local_epoch = (uint32_t)local_epoch_64;
     
     uint8_t l_year, l_month, l_day, l_hour, l_min, l_sec;
     epoch_to_datetime(local_epoch, &l_year, &l_month, &l_day, &l_hour, &l_min, &l_sec);
@@ -159,7 +168,13 @@ void purrgo_logger_add_point(const purrgo_gnss_solution_t* fix) {
     uint32_t utc_epoch = datetime_to_epoch(fix->year, fix->month, fix->day, 
                                            fix->hours, fix->minutes, fix->seconds);
     
-    uint32_t local_epoch = utc_epoch + (app_config.tz_offset_minutes * 60);
+    int64_t local_epoch_64 = (int64_t)utc_epoch + ((int64_t)app_config.tz_offset_minutes * 60);
+
+    if (local_epoch_64 < 0) {
+        local_epoch_64 = 0;
+    }
+
+    uint32_t local_epoch = (uint32_t)local_epoch_64;
     
     uint8_t l_year, l_month, l_day, l_hour, l_min, l_sec;
     epoch_to_datetime(local_epoch, &l_year, &l_month, &l_day, &l_hour, &l_min, &l_sec);

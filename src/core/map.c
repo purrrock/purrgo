@@ -134,12 +134,17 @@ static inline float unpack_float_le(const uint8_t *buf)
  * Применяется запас в 256 единиц (2.5-5 градуса) для компенсации
  * потери точности мантиссы IEEE-754 24-bit при 180 градусах
  * и усечения к нулю при кастинге float -> int.
+ * Также добавлена защита от UB при конвертации очень больших (запредельных) float в int32_t.
  */
 static inline int32_t float_bbox_min(float f_val) {
+    if (f_val <= -214.7483f) return -2147483647;
+    if (f_val >=  214.7483f) return  2147483647 - 256;
     return (int32_t)(f_val * 10000000.0f) - 256;
 }
 
 static inline int32_t float_bbox_max(float f_val) {
+    if (f_val <= -214.7483f) return -2147483647 + 256;
+    if (f_val >=  214.7483f) return  2147483647;
     return (int32_t)(f_val * 10000000.0f) + 256;
 }
 
@@ -243,7 +248,14 @@ static void project_to_screen(
      * Camera/viewport в нормальном режиме проекта дают координаты,
      * помещающиеся в int16_t. Здесь преобразование выполняется
      * только после всей арифметики в int64_t.
+     * Добавлен clamping для защиты от переполнения (заворачивания координат)
+     * при отрисовке очень длинных полилиний или сильно приближенной камеры.
      */
+    if (projected_x < -32768) projected_x = -32768;
+    if (projected_x >  32767) projected_x =  32767;
+    if (projected_y < -32768) projected_y = -32768;
+    if (projected_y >  32767) projected_y =  32767;
+
     *sx = (int16_t)projected_x;
     *sy = (int16_t)projected_y;
 }

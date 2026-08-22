@@ -7,6 +7,8 @@
 #include "purrgo/gnss_adapter.h"
 #include <string.h>
 
+void test_partial_gnss_sentences(void);
+
 static void test_timezone(void) {
     purrgo_gnss_solution_t utc;
     purrgo_gnss_solution_t local;
@@ -229,5 +231,42 @@ int main(void)
     test_gnss_parser_framing();
     test_gnss_adapter_nmea();
 
+    test_partial_gnss_sentences();
     return 0;
+}
+
+void test_partial_gnss_sentences(void) {
+    purrgo_gnss_solution_t sol = {0};
+
+    // Process only GGA. Should not set valid to true, but should update altitude, satellites, etc.
+    const char* gga = "$GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,*47\r\n";
+    purrgo_gnss_process_nmea(gga, &sol);
+
+    // Valid should still be false because RMC wasn't processed
+    assert(!sol.valid);
+    // Altitude and sats should be updated
+    assert(sol.alt_m == 545);
+    assert(sol.satellites_tracked == 8);
+    assert(sol.fix_quality == 1);
+
+    // Process RMC, this should set valid
+    const char* rmc = "$GPRMC,123519,A,4807.038,N,01131.000,E,022.4,084.4,230394,003.1,W*6A\r\n";
+    purrgo_gnss_process_nmea(rmc, &sol);
+
+    // Now it should be valid
+    assert(sol.valid);
+    assert(sol.lat_1e7 == 481173000);
+    assert(sol.lon_1e7 == 115166666);
+    assert(sol.speed_knots == 2240);
+    assert(sol.course_deg_100 == 8440);
+    // Preserves altitude from GGA
+    assert(sol.alt_m == 545);
+
+    // Process GSA, check fix_type
+    const char* gsa = "$GPGSA,A,3,04,05,,09,12,,,24,,,,,2.5,1.3,2.1*39\r\n";
+    purrgo_gnss_process_nmea(gsa, &sol);
+    assert(sol.fix_type == 3);
+    assert(sol.pdop_100 == 250);
+    assert(sol.hdop_100 == 130);
+    assert(sol.vdop_100 == 210);
 }
