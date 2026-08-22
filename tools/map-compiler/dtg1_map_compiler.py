@@ -17,31 +17,20 @@ import struct
 from typing import List
 
 from dtg1_models import MapFeature, HWConfig
-from dtg1_osmparser import GPXParser, OSMParser
+from dtg1_osmparser import OSMParser
 from dtg1_bin_writer import MapCompiler
-from dtg1_geometry import POIGeometryFactory
 from dtg1_lookup import LookupTables
 
 
 def get_base_directory() -> str:
     """
     Determines the base directory for program execution.
-    Critical for the hybrid distribution to function:
-    - sys.frozen detects the PyInstaller (.exe) environment
-    - __file__ is used for the source code (.py)
     """
-    if getattr(sys, 'frozen', False):
-        return os.path.dirname(sys.executable)
-    else:
-        return os.path.dirname(os.path.abspath(__file__))
+    return os.path.dirname(os.path.abspath(__file__))
 
 
 def main() -> None:
     cli_parser = argparse.ArgumentParser(description="DT G1 Map Compiler (Platform ATS3085S)")
-    cli_parser.add_argument(
-        "-p", "--poi-mode", choices=["native", "landuse", "none"], default="landuse",
-        help="POI mode: 'native' (pois.idx/db), 'landuse' (polygon baking), 'none' (ignore)"
-    )
     args = cli_parser.parse_args()
 
     # Initialize hardware-independent paths
@@ -56,7 +45,6 @@ def main() -> None:
 
     print("=========================================")
     print("DT G1 MAP COMPILER")
-    print(f"POI layer mode: {args.poi_mode.upper()}")
     print(f"Base Directory: {base_dir}")
     print("=========================================")
 
@@ -67,32 +55,7 @@ def main() -> None:
     parser = OSMParser(map_osm_path)
     roads_data, landuse_data, pois_data = parser.parse()
 
-    # 3. GPX Track Injection
-    if os.path.exists(routes_dir_path) and os.path.isdir(routes_dir_path):
-        gpx_files = [f for f in os.listdir(routes_dir_path) if f.lower().endswith(".gpx")]
-
-        if gpx_files:
-            print(f"[>] Scanning '{routes_dir_path}/' directory. Found {len(gpx_files)} GPX track(s)...")
-            for idx, file_name in enumerate(gpx_files, start=1):
-                gpx_path = os.path.join(routes_dir_path, file_name)
-                track_name, track_points = GPXParser.parse_track(gpx_path)
-
-                if not track_name or track_name == "Route":
-                    track_name = os.path.splitext(file_name)[0]
-
-                if track_points and len(track_points) >= 2:
-                    unique_track_id = f"user_track_{idx:03d}"
-                    gpx_feature = MapFeature(
-                        osm_id=unique_track_id, fclass="gpx_track",
-                        code=5111, name=track_name, points=track_points
-                    )
-                    gpx_feature.calculate_bbox()
-                    roads_data.append(gpx_feature)
-                    print(f"    [{idx}/{len(gpx_files)}] Track '{track_name}' successfully integrated.")
-        else:
-            print(f"[~] Directory '{routes_dir_path}/' is empty. No GPX tracks to inject.")
-
-    # 4. Serialize Layers
+    # 3. Serialize Layers
     # Helper to route output binary files to the base directory
     def out_path(filename: str) -> str:
         return os.path.join(base_dir, filename)
@@ -106,29 +69,7 @@ def main() -> None:
         MapCompiler.compile_idx(roads_data, out_path("roads.idx"))
         meta_all.extend(roads_data)
 
-    # 4.2 POI Baking (if required)
-    if args.poi_mode == "landuse" and pois_data:
-        print("[>] Baking POI objects into landuse layer using dynamic shape factory...")
-        
-        for poi in pois_data:
-            if not poi.points:
-                continue
-            shape_type = LookupTables.POI_SHAPES.get(poi.fclass, "rhombus").lower()
-            
-            # Распаковка центроида (Signed Int32)
-            cx, cy = struct.unpack("<ii", poi.points)
-            
-            # Генерация полигона и обратная Byte-паковка
-            new_points = POIGeometryFactory.generate_polygon(shape_type, cx, cy)
-            poi.points = b''.join(struct.pack("<ii", p[0], p[1]) for p in new_points)
-            
-            poi.calculate_bbox()
-            landuse_data.append(poi)
-
-        print(f"    Successfully baked {len(pois_data)} POIs.")
-        pois_data.clear()
-
-    # 4.3 Landuse and Water Layers
+    # 3.2 Landuse and Water Layers
     landuse_only = [f for f in landuse_data if f.code != HWConfig.WATER_CODE]
     water_only = [f for f in landuse_data if f.code == HWConfig.WATER_CODE]
 
@@ -147,30 +88,17 @@ def main() -> None:
         MapCompiler.compile_idx(water_only, out_path("water.idx"))
         meta_all.extend(water_only)
 
-    # 4.4 Native POI Layer
-    if args.poi_mode == "none":
-        print("[>] POI layer skipped ('none' mode selected).")
-    elif args.poi_mode == "native":
-        if pois_data:
-            MapCompiler.compile_db(pois_data, out_path("pois.db"), is_poi=True)
-            MapCompiler.compile_idx(pois_data, out_path("pois.idx"), is_poi=True)
-            meta_all.extend(pois_data)
-        else:
-            print("[~] Point objects (POI) are missing in the source data.")
-    elif args.poi_mode == "landuse":
-        print("[>] POI mode 'landuse' successfully handled.")
+    # 3.3 Native POI Layer
+    if pois_data:
+        MapCompiler.compile_db(pois_data, out_path("pois.db"), is_poi=True)
+        MapCompiler.compile_idx(pois_data, out_path("pois.idx"), is_poi=True)
+        meta_all.extend(pois_data)
+    else:
+        print("[~] Point objects (POI) are missing in the source data.")
 
-    # 5. Export JSON Metadata
+    # 4. Export JSON Metadata
     if meta_all:
-        # [CI/CD INTEGRATION]: Динамическое получение имени региона из среды GitHub Actions
-        env_region = os.environ.get('REGION_NAME')
-        if env_region:
-            # Преобразуем идентификаторы Geofabrik (например, "us-midwest" -> "Us Midwest")
-            map_name = env_region.replace('-', ' ').title()
-        else:
-            map_name = "DTG1_Map"
-
-        MapCompiler.create_map_name(map_name, meta_all, out_path("map.name"))
+        MapCompiler.create_map_name("DTG1_Map", meta_all, out_path("map.name"))
 
     print("\n[SUCCESS] Map package compiled successfully!")
 
