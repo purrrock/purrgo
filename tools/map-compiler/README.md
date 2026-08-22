@@ -1,79 +1,297 @@
-# Maps for PurrGO
+# PurrGO Map Compiler
 
-The toolset allows building your own highly detailed maps from open sources (e.g., OpenStreetMap). These custom maps are natively hardware-supported and perfectly rendered by the PurrGO engine. 
----
+Python tools for compiling OpenStreetMap (`.osm`) data into the binary map format used by PurrGO.
 
-## 🚀 Core Compiler Features
-
-The compiler has been significantly upgraded to bypass native firmware limitations and optimize resource consumption:
-* **Country-Sized Map Support (Hierarchical R-Trees):** Generates true STR (Sort-Tile-Recursive) spatial index trees. By utilizing nested Macro-nodes and calculating recursive byte jumps (`v3_jump`), the compiler allows the PurrGO to skip entire regions in a single instruction. This bypasses SRAM limits and ensures butter-smooth panning on maps of any size.
-* **Point of Interest (POI) Icon Baking:** Circumvents the hardware graphics pipeline limitation (which natively drops POI rendering) by parametrically "baking" point objects into the landuse layer. Generates low-poly geometric primitives (triangles, squares, hexagons) with automatic display perspective distortion compensation (Y-multiplier = 1.5).
-* **Software Culling (Early Exit Parsing):** Highly optimized two-pass XML streaming (`xml.etree.ElementTree.iterparse`). Drops disabled routing nodes immediately during tree traversal via the 11th column (`Enabled`) in the LUT configuration.
-* **Dynamic Hardware Overrides (Tag Interception):** Overrides standard LUT routing rules on the fly based on multidimensional OSM tags.
-    * *Road Surface Analysis:* Dynamically analyzes `surface` and `smoothness` tags. Automatically downgrades routing classes (e.g., primary roads) to unpaved gray paths if `smoothness=bad` or `surface=dirt`. Preserves original LUT colors for non-vehicle infrastructure (footways, cycleways) via an internal exclusion mask.
-    * *Access Restrictions:* Physical barriers with restricted access (`access=private/no/permit`) are intercepted prior to LUT evaluation and forced into pink diagonal crosses.
-* **Namespace Collision Isolation:** Blacklist registries are strictly isolated by layer (`pois`, `roads`, `landuse`, `water`) to prevent `fclass` routing conflicts between differently categorized objects.
-* **GPX Track Integration:** Natively compiles custom `.gpx` user routes directly into the hardware vector graph.
-* **Advanced Key-Value Tag Routing:** Fully parses the `OSM_Tags` column from `features.csv` to resolve namespace collisions. Objects are strictly routed using precise `key=value` hash table lookups (e.g., `shop=bicycle -> bicycle_shop`) before applying fallback heuristics. This ensures all complex GIS classes are compiled without data loss.
+The compiler generates the `.idx`, `.mlp`, and `.db` and map.name files required by the PurrGO map renderer.
 
 ---
 
-## 📂 Toolkit Composition
+## Requirements
 
-The project has transitioned to a fully **modular architecture** for better maintainability and isolated debugging. The codebase provides 100% binary compatibility with the hardware parser of the PurrGO and includes:
+- Python 3.10 or newer
+- Dependencies from `requirements.txt`
 
-* **`purrgo_map_compiler.py`** — Main CLI Orchestrator. Coordinates the map building process.
-* **`purrgo_models.py`** — Data structures and system constants (`MapFeature`, `HWConfig`).
-* **`purrgo_osmparser.py`** — Map and route parsing logic (`OSMParser`, `GPXParser`).
-* **`purrgo_geometry.py`** — Geometric algorithms and POI baking (`POIGeometryFactory`).
-* **`purrgo_bin_writer.py`** — Low-level binary serialization for target files (`MapCompiler`).
-* **`purrgo_lookup.py`** — Advanced LUT configuration and tag routing (`LookupTables`).
-* **`features.csv`** — Modifiable style routing table (LUT) with software culling (Blacklist) support.
-* **`features_factory.csv`** — Original dump of the factory style table.
-* **`purrgo_map_specification.md`** — Technical format specification. Contains the byte-by-byte structure of `.mlp`, `.idx`, and `.db` files.
+Install dependencies:
+
+```bash
+pip install -r requirements.txt
+````
 
 ---
 
+## Getting OSM Data
 
-## 📥 Download & Usage
+The compiler uses OpenStreetMap XML (`.osm`) as its input.
 
-1. Ensure you have Python 3.10 or higher installed.
-2. Clone the repository and install dependencies: `pip install -r requirements.txt`.
-3. Place your exported `map.osm` file in the working directory next to the compiler.
-4. Run the script: `python purrgo_map_compiler.py`.
-5. Copy the generated files (`roads.mlp`, `roads.idx`, `landuse.db`, `map.name`) to the PurrGO SD card /MAPS/MAPNAME/.
+You can obtain an `.osm` file from:
 
----
+* OpenStreetMap Export / Overpass API:
+  [https://www.openstreetmap.org](https://www.openstreetmap.org)
+* BBBike extracts:
+  [https://extract.bbbike.org/](https://extract.bbbike.org/)
 
-## ⚡ Preprocessing Large Maps (Highly Recommended)
+For the current compiler workflow, prepare the source file as:
 
-If you are compiling large areas, entire countries, or experiencing Out-Of-Memory errors on your PC during compilation, you should preprocess your raw `.osm` file using the `osm_optimizer.py` utility. The PurrGO's hardware has limitations. Rendering excessively long, continuous lines (like major highways) as single objects can cause the PurrGO UI to freeze or trigger a Soft Reset. 
-
-The optimizer solves this by:
-1.  **Hardware-Safe Chunking:** Safely slicing extremely long linear routes into smaller segments (e.g., 100 vertices per chunk) while preserving the mathematical topology of closed polygons (lakes, forests) to prevent scanline rendering glitches.
-2.  **Aggressive Metadata Stripping:** Removing heavy OSM metadata (timestamps, users, changesets) and dropping globally blacklisted tags (e.g., `power`, `building`, `addr:*`) to drastically reduce the intermediate file size. 
+```text
+map.osm
+```
 
 ---
 
-## 🎨 Style Customization and Object Filtering
+## Compiling a Map
 
-The `features.csv` file (Look-Up Table) is the main configuration file of the compiler. It is loaded dynamically upon each launch.
+Place the compiler files, `features.csv`, and `map.osm` in the working directory.
 
-### LUT Table Structure (11 columns)
+Run:
 
-The configuration consists of 11 columns separated by a semicolon (`;`).
-**Header format:**
+```bash
+python purrgo_map_compiler.py
+```
+
+The compiler processes the OSM data and generates the map layers.
+
+Depending on the size and complexity of the source data, compilation can take from several seconds to several minutes.
+
+---
+
+## Generated Files
+
+The compiler generates the following map layers:
+
+```text
+roads.mlp
+roads.idx
+roads.db
+
+landuse.mlp
+landuse.idx
+landuse.db
+
+water.mlp
+water.idx
+water.db
+
+pois.idx
+pois.db
+
+map.name
+```
+
+Not every `.db` file is necessarily generated. If a layer contains no named objects, its attribute database may be omitted according to the map format specification.
+
+### Map layers
+
+* **roads** — roads and paths.
+* **landuse** — land-use polygons such as forests, parks, and residential areas.
+* **water** — rivers, lakes, and other water bodies.
+* **pois** — native POI layer.
+
+POIs are stored without .mlp.
+
+---
+
+## Installing a Map
+
+1. Connect the PurrGO SD card to the PC.
+2. Find or create the maps directory.
+3. Create a directory for the new map, for example:
+
+```text
+maps/
+└── London/
+```
+
+4. Copy the generated map files into that directory.
+5. Safely eject the SD card.
+6. Insert the card into PurrGO and select the map.
+
+---
+
+## Compiler Configuration
+
+### `features.csv`
+
+`features.csv` is the main map style and filtering configuration.
+
+It defines how OSM objects are classified and which objects are included in the generated map.
+
+The current table contains the following fields:
+
 ```text
 Code;fclass;Color;LOD;Layer;OSM_Tags;Description;Remap_Code;Remap_Color;Remap_LOD;Enabled;;Shape
 ```
 
-**Remapping (aliasing) parameters are of particular importance:**
-* **Remap_Code:** The system 32-bit ID into which the object will be forcibly converted. 
-    * *Example:* Paved roads are mapped to the yellow color ID 5113.
-* **Remap_LOD:** The hardware Z-Culling hide distance (in meters) at which the object will appear on the screen when zooming.
+Important fields include:
 
-### Software Culling (Blacklist)
-To protect the PurrGO's graphics pipeline from RAM overflow and `.idx` binary graph bloating, a software culling system is implemented during the stream parsing stage. The 11th column of the configuration — `Enabled` — is responsible for filtering.
+### `Code`
 
-* `1` (or `true`) — The object is loaded into the compiler and participates in map generation.
-* `0` (or `false`) — Muted class. Hardware-culled. The algorithm utilizes an Early Exit parsing interrupt: upon encountering a tag with the `Enabled=0` value, the parser immediately discards the XML node prior to calculating the Bounding Box. This saves CPU time and prevents replacing excluded objects with default gray or green styles.
+The object class code written into the generated map.
+
+### `fclass`
+
+The logical feature class used by the compiler.
+
+### `LOD`
+
+The default Level of Detail assigned to the feature.
+
+### `Layer`
+
+The target map layer:
+
+```text
+roads
+landuse
+water
+pois
+```
+
+### `OSM_Tags`
+
+OSM tag matching rules used to classify objects.
+
+For example:
+
+```text
+shop=bicycle
+```
+
+can be used to identify bicycle shops.
+
+### `Remap_Code`
+
+Allows an object to be converted to another map class.
+
+### `Remap_Color`
+
+Overrides the default style color.
+
+### `Remap_LOD`
+
+Overrides the Level of Detail assigned to the object.
+
+### `Enabled`
+
+Controls whether a feature is compiled.
+
+```text
+1 / true  → enabled
+0 / false → disabled
+```
+
+Disabled features are discarded during OSM parsing and are not included in the generated map.
+
+---
+
+## Large OSM Files
+
+The compiler supports large map areas through hierarchical spatial indexing.
+
+The generated `.idx` files use the existing PurrGO map format with:
+
+* LOD 0
+* LOD 1
+* LOD 2
+* STR spatial indexing
+* hierarchical R-tree nodes
+* bounding-box culling
+
+Very large OSM files can still require significant amounts of RAM during compilation.
+
+The repository also contains `osm_optimizer.py`, which can be used as an optional preprocessing step for particularly large datasets.
+
+Example:
+
+```bash
+python osm_optimizer.py map.osm map_optimized.osm
+```
+
+Then use the resulting file as the compiler input.
+
+The optimizer is not required for normal map compilation.
+
+---
+
+## Toolkit Structure
+
+The compiler consists of several modules:
+
+```text
+purrgo_map_compiler.py
+purrgo_models.py
+purrgo_osmparser.py
+purrgo_bin_writer.py
+purrgo_lookup.py
+features.csv
+```
+
+Additional utilities and documentation are located in the same directory.
+
+### `purrgo_map_compiler.py`
+
+Main compiler entry point. Coordinates the complete map generation process.
+
+### `purrgo_models.py`
+
+Internal data structures used by the compiler, including map features and spatial-index structures.
+
+### `purrgo_osmparser.py`
+
+Parses OSM XML and converts OSM objects into internal map features.
+
+### `purrgo_bin_writer.py`
+
+Writes the binary `.idx`, `.mlp`, and `.db` files.
+
+### `purrgo_lookup.py`
+
+Contains the feature classification and OSM tag lookup logic.
+
+### `features.csv`
+
+Configurable feature/style lookup table.
+
+### `docs/`
+
+Contains the technical specification of the current binary map format.
+
+---
+
+## Map Format
+
+The compiler currently generates the existing map format. The format consists of three primary file types:
+
+### `.idx`
+
+Spatial index containing LOD sections and hierarchical spatial nodes.
+
+### `.mlp`
+
+Vector geometry containing the coordinates of linear and polygonal objects.
+
+### `.db`
+
+dBase III-compatible attribute database containing object names and related metadata.
+
+See:
+
+```text
+docs/dtg1_map_specification.md
+```
+
+for the detailed binary format specification.
+
+---
+
+## Important Limitations
+
+The compiler currently targets the existing PurrGO map format.
+
+In particular:
+
+* the binary map format is not changed by the compiler;
+* LOD 0/1/2 are generated, although PurrGO does not currently process all LOD levels;
+* the compiler currently uses the coordinate representation defined by the existing format;
+* map rendering behaviour is determined by the PurrGO firmware.
+
+The compiler should therefore be considered a build-time component of the PurrGO project rather than a general-purpose OSM conversion tool.
