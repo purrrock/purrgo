@@ -19,7 +19,6 @@
 #include <purrgo/gfx_circle.h>
 #include <purrgo/gfx_text.h>
 #include <purrgo/config.h>
-#include "purrgo/gfx_text.h"
 #include "purrgo/gfx_renderer.h"
 
 #include <purrgo/sun.h>
