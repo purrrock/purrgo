@@ -32,7 +32,7 @@ void purrgo_app_ui_render(
     .offset_y = 9                               /* Смещение начала отрисовки Viewport на 9 пикселей вниз по оси Y */
 	};
 
-    char buf[64];
+    char buf[PURRGO_FS_MAX_PATH + 32];
     purrgo_gnss_solution_t gnss_solution = *gnss;
     purrgo_sun_info_t sun_info;
     if (sun != NULL) sun_info = *sun;
@@ -500,14 +500,14 @@ void purrgo_app_ui_render(
             /*
              * Динамическое формирование путей к файлам карт на основе app_config.map_dir.
              * Используется snprintf для предотвращения переполнения буфера (buffer overflow prevention).
-             * Размер буфера 64 байта достаточен для путей, состоящих из базовой директории
-             * и стандартного имени файла.
+             * Размер буфера PURRGO_FS_MAX_PATH байт достаточен для путей, состоящих из базовой директории
+             * и стандартного имени файла (особенно учитывая, что app_config.map_dir может быть до 128 байт).
              */
-            char landuse_idx_path[64];
-            char landuse_mlp_path[64];
-            char idx_path[64];
-            char mlp_path[64];
-            char name_path[64];
+            char landuse_idx_path[PURRGO_FS_MAX_PATH];
+            char landuse_mlp_path[PURRGO_FS_MAX_PATH];
+            char idx_path[PURRGO_FS_MAX_PATH];
+            char mlp_path[PURRGO_FS_MAX_PATH];
+            char name_path[PURRGO_FS_MAX_PATH];
 
             snprintf(landuse_idx_path, sizeof(landuse_idx_path), "%s/landuse.idx", app_config.map_dir);
             snprintf(landuse_mlp_path, sizeof(landuse_mlp_path), "%s/landuse.mlp", app_config.map_dir);

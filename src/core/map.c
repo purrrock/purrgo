@@ -4,6 +4,7 @@
 #include "purrgo/logger.h"
 #include "purrgo/gfx_line.h"
 #include "purrgo/gfx_polygon.h"
+#include "purrgo/hardware_config.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -12,16 +13,21 @@
 #define PURRGO_MAP_MAX_PARTS 32
 
 /*
- * Текущий parser Python использует 2048 как защитное ограничение
- * количества точек одной MLP geometry.
+ * Защитное ограничение количества точек одной MLP geometry.
  *
  * Это НЕ ограничение бинарного формата MLP.
  * Это только защитный предел данной реализации parser/render pipeline.
  *
- * Для текущего этапа он нужен потому, что polygon renderer должен
- * временно разместить projected points в памяти.
+ * Оптимизация потребления RAM буфером полигонов:
+ * Статический массив s_polygon_buffer ограничен этим значением.
+ * Для младших чипов (PROTOTYPE) мы ограничиваем его 512 точками,
+ * для остальных профилей (ПК-эмулятор и финальный STM32U5) - 1024.
  */
-#define PURRGO_MAP_MAX_POINTS 2048
+#if PURRGO_HW_PROFILE == PURRGO_HW_PROFILE_PROTOTYPE
+#define PURRGO_MAP_MAX_POINTS 512
+#else
+#define PURRGO_MAP_MAX_POINTS 1024
+#endif
 
 /*
  * Статический буфер для рендеринга полигонов.
@@ -566,22 +572,30 @@ static void parse_geometry_mlp(
 
 
     /*
-     * Читаем все точки geometry.
+     * Читаем все точки geometry пакетно (chunked reading) для оптимизации I/O.
+     * Буфер на 64 байта вмещает 8 вершин (по 8 байт каждая).
      */
+    uint8_t chunk_buf[64];
+    const uint32_t chunk_size = sizeof(chunk_buf) / 8; // 8 vertices
+
     for (
         uint32_t i = 0;
         i < (uint32_t)num_points;
-        i++
+        i += chunk_size
     ) {
-        uint8_t pt_buf[8];
+        uint32_t points_to_read = (uint32_t)num_points - i;
+        if (points_to_read > chunk_size) {
+            points_to_read = chunk_size;
+        }
 
+        uint32_t bytes_to_read = points_to_read * 8;
 
         if (
             mlp_fs->read(
                 mlp_fs->handle,
-                pt_buf,
-                sizeof(pt_buf)
-            ) != sizeof(pt_buf)
+                chunk_buf,
+                bytes_to_read
+            ) != bytes_to_read
         ) {
             /*
              * При ошибке чтения geometry нельзя использовать
@@ -594,135 +608,139 @@ static void parse_geometry_mlp(
             return;
         }
 
+        for (uint32_t j = 0; j < points_to_read; j++) {
+            uint32_t pt_idx = i + j;
+            uint8_t *pt_buf = &chunk_buf[j * 8];
 
-        /*
-         * MLP:
-         *
-         *     X = longitude * 10^6
-         *     Y = latitude  * 10^6
-         *
-         * PurrGo internal:
-         *
-         *     longitude * 10^7
-         *     latitude  * 10^7
-         *
-         * Поэтому умножаем исходные MLP coordinates на 10.
-         */
-        int32_t raw_x =
-            unpack_i32_le(&pt_buf[0]);
+            /*
+             * MLP:
+             *
+             *     X = longitude * 10^6
+             *     Y = latitude  * 10^6
+             *
+             * PurrGo internal:
+             *
+             *     longitude * 10^7
+             *     latitude  * 10^7
+             *
+             * Поэтому умножаем исходные MLP coordinates на 10.
+             */
+            int32_t raw_x =
+                unpack_i32_le(&pt_buf[0]);
 
-        int32_t raw_y =
-            unpack_i32_le(&pt_buf[4]);
-
-
-        /*
-         * Для реальных координат MLP текущего диапазона
-         * умножение на 10 помещается в int32_t.
-         */
-        int32_t norm_x =
-            raw_x * 10;
-
-        int32_t norm_y =
-            raw_y * 10;
-
-
-        int16_t sx;
-        int16_t sy;
-
-
-        project_to_screen(
-            norm_x,
-            norm_y,
-            cam,
-            vp,
-            &sx,
-            &sy
-        );
-
-
-        /*
-         * Polygon renderer сохраняет все projected points.
-         */
-        if (is_polygon_layer) {
-            screen_points[i].x = sx;
-            screen_points[i].y = sy;
-        }
-
-
-        /*
-         * Определяем начало следующего part.
-         *
-         * parts[] содержит start index каждого ring/part.
-         */
-        if (
-            num_parts > 0 &&
-            i == next_part_start
-        ) {
-            current_part_idx++;
-
-            next_part_start =
-                (
-                    current_part_idx + 1 <
-                    (uint32_t)num_parts
-                )
-                    ? parts[current_part_idx + 1]
-                    : (uint32_t)num_points;
-        }
-
-
-        /*
-         * Для line layer продолжаем потоковый рендеринг.
-         */
-        if (!is_polygon_layer) {
-            uint32_t current_part_offset =
-                (num_parts > 0)
-                    ? parts[current_part_idx]
-                    : 0;
+            int32_t raw_y =
+                unpack_i32_le(&pt_buf[4]);
 
 
             /*
-             * Первая точка каждого part не соединяется
-             * с предыдущим part.
+             * Для реальных координат MLP текущего диапазона
+             * умножение на 10 помещается в int32_t.
              */
-            if (i > current_part_offset) {
-                if (
-                    diag != NULL &&
-                    diag->lines_drawn == 0
-                ) {
-                    PURRGO_LOG(
-                        "MAP: FIRST LINE "
-                        "screen=(%d,%d)->(%d,%d) "
-                        "viewport=(%d,%d,%u,%u)\n",
-                        (int)prev_sx,
-                        (int)prev_sy,
-                        (int)sx,
-                        (int)sy,
-                        (int)vp->offset_x,
-                        (int)vp->offset_y,
-                        (unsigned)vp->width,
-                        (unsigned)vp->height
+            int32_t norm_x =
+                raw_x * 10;
+
+            int32_t norm_y =
+                raw_y * 10;
+
+
+            int16_t sx;
+            int16_t sy;
+
+
+            project_to_screen(
+                norm_x,
+                norm_y,
+                cam,
+                vp,
+                &sx,
+                &sy
+            );
+
+
+            /*
+             * Polygon renderer сохраняет все projected points.
+             */
+            if (is_polygon_layer) {
+                screen_points[pt_idx].x = sx;
+                screen_points[pt_idx].y = sy;
+            }
+
+
+            /*
+             * Определяем начало следующего part.
+             *
+             * parts[] содержит start index каждого ring/part.
+             */
+            if (
+                num_parts > 0 &&
+                pt_idx == next_part_start
+            ) {
+                current_part_idx++;
+
+                next_part_start =
+                    (
+                        current_part_idx + 1 <
+                        (uint32_t)num_parts
+                    )
+                        ? parts[current_part_idx + 1]
+                        : (uint32_t)num_points;
+            }
+
+
+            /*
+             * Для line layer продолжаем потоковый рендеринг.
+             */
+            if (!is_polygon_layer) {
+                uint32_t current_part_offset =
+                    (num_parts > 0)
+                        ? parts[current_part_idx]
+                        : 0;
+
+
+                /*
+                 * Первая точка каждого part не соединяется
+                 * с предыдущим part.
+                 */
+                if (pt_idx > current_part_offset) {
+                    if (
+                        diag != NULL &&
+                        diag->lines_drawn == 0
+                    ) {
+                        PURRGO_LOG(
+                            "MAP: FIRST LINE "
+                            "screen=(%d,%d)->(%d,%d) "
+                            "viewport=(%d,%d,%u,%u)\n",
+                            (int)prev_sx,
+                            (int)prev_sy,
+                            (int)sx,
+                            (int)sy,
+                            (int)vp->offset_x,
+                            (int)vp->offset_y,
+                            (unsigned)vp->width,
+                            (unsigned)vp->height
+                        );
+                    }
+
+
+                    gfx_draw_line(
+                        gfx,
+                        prev_sx,
+                        prev_sy,
+                        sx,
+                        sy
                     );
-                }
 
 
-                gfx_draw_line(
-                    gfx,
-                    prev_sx,
-                    prev_sy,
-                    sx,
-                    sy
-                );
-
-
-                if (diag != NULL) {
-                    diag->lines_drawn++;
+                    if (diag != NULL) {
+                        diag->lines_drawn++;
+                    }
                 }
             }
+
+
+            prev_sx = sx;
+            prev_sy = sy;
         }
-
-
-        prev_sx = sx;
-        prev_sy = sy;
     }
 
 
