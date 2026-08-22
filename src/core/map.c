@@ -1299,6 +1299,12 @@ void purrgo_map_render_layer(
         }
 
 
+        // Временный отказ от LOD (Z-Culling).
+        // Читаем только первую SQT секцию (LOD 0).
+        if (diag.sqt_blocks > 0) {
+            break;
+        }
+
         diag.sqt_blocks++;
 
 
