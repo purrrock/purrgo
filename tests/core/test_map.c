@@ -100,8 +100,61 @@ void test_sqt_parsing() {
     assert(idx_mock.offset == 32 + 16 + 28);
 }
 
+
+void test_polygon_rendering_limits() {
+    mock_file_t mock_idx = {0};
+    mock_file_t mock_mlp = {0};
+
+    purrgo_fs_t idx_fs = { .handle = &mock_idx, .read = mock_read, .seek = mock_seek };
+    purrgo_fs_t mlp_fs = { .handle = &mock_mlp, .read = mock_read, .seek = mock_seek };
+
+    gfx_context_t gfx;
+    gfx_init(&gfx, 128, 296, NULL, dummy_draw_pixel);
+
+    purrgo_bbox_t cam = { .min_x = 0, .min_y = 0, .max_x = 10000000, .max_y = 10000000 };
+    purrgo_viewport_t vp = { .width = 128, .height = 296, .offset_x = 0, .offset_y = 0 };
+
+    // minimal YZL
+    mock_idx.buffer[0] = 'Y'; mock_idx.buffer[1] = 'Z'; mock_idx.buffer[2] = 'L';
+
+    // minimal SQT block
+    mock_idx.buffer[32] = 'S'; mock_idx.buffer[33] = 'Q'; mock_idx.buffer[34] = 'T'; mock_idx.buffer[35] = 0x01;
+    pack_u32_le(&mock_idx.buffer[32+8], 0); // mode 0 (data nodes)
+    pack_u32_le(&mock_idx.buffer[32+12], 1); // 1 node
+
+    // data node
+    int base = 48;
+    pack_u32_le(&mock_idx.buffer[base], 0); // xmin
+    pack_u32_le(&mock_idx.buffer[base+4], 0); // ymin
+    pack_u32_le(&mock_idx.buffer[base+8], 0x4f000000); // xmax (dummy float > 1)
+    pack_u32_le(&mock_idx.buffer[base+12], 0x4f000000); // ymax
+    pack_u32_le(&mock_idx.buffer[base+20], 8); // v1 offset inside MLP
+
+    mock_idx.size = base + 28;
+
+    // MLP data
+    // YZL header 32 bytes
+    mock_mlp.buffer[0] = 'Y'; mock_mlp.buffer[1] = 'Z'; mock_mlp.buffer[2] = 'L';
+    // Geometry header at offset 32+8 = 40
+    // +16 bytes num_parts
+    // +20 bytes num_points
+    pack_u32_le(&mock_mlp.buffer[40+16], 1); // 1 part
+    pack_u32_le(&mock_mlp.buffer[40+20], 3000); // 3000 points, > 2048
+
+    // parts offset: 40 + 24 = 64
+    pack_u32_le(&mock_mlp.buffer[64], 0); // part 0 starts at 0
+
+    // We don't need to populate the points since the limit check will reject it immediately.
+    mock_mlp.size = MOCK_BUFFER_SIZE; // Let it be fake size
+
+    // Must not crash
+    purrgo_map_render_layer(&idx_fs, &mlp_fs, &gfx, &cam, &vp, true);
+}
+
 int main(void) {
     test_sqt_parsing();
+    test_polygon_rendering_limits();
+
 
     // original code from main
     mock_file_t idx_mock = {0};
