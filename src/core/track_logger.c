@@ -131,8 +131,10 @@ bool purrgo_logger_start(const purrgo_gnss_solution_t* first_fix) {
     int64_t local_epoch_64 = (int64_t)utc_epoch + ((int64_t)app_config.tz_offset_minutes * 60);
 
     // Защита от underflow, если время с учетом пояса уходит до 2000 года.
+    // Если результат отрицательный, мы не можем корректно представить дату,
+    // так как epoch начинается с 2000 года. Возвращаем false.
     if (local_epoch_64 < 0) {
-        local_epoch_64 = 0;
+        return false;
     }
 
     uint32_t local_epoch = (uint32_t)local_epoch_64;
@@ -170,8 +172,9 @@ void purrgo_logger_add_point(const purrgo_gnss_solution_t* fix) {
     
     int64_t local_epoch_64 = (int64_t)utc_epoch + ((int64_t)app_config.tz_offset_minutes * 60);
 
+    // Если время уходит до 2000 года, пропускаем запись этой точки
     if (local_epoch_64 < 0) {
-        local_epoch_64 = 0;
+        return;
     }
 
     uint32_t local_epoch = (uint32_t)local_epoch_64;

@@ -77,10 +77,8 @@ void test_timezone_negative_underflow() {
     fix.hours = 1; fix.minutes = 0; fix.seconds = 0; // 01:00 UTC -> 22:00 UTC-3 prev day (Underflows to 0)
 
     purrgo_logger_stop();
-    EXPECT_TRUE(purrgo_logger_start(&fix));
-
-    // Check it capped at 2000-01-01 00:00:00 (which is 000101-000000)
-    EXPECT_TRUE(strstr(last_filename, "000101-000000") != NULL);
+    // It should now reject the start since we can't represent negative epochs.
+    EXPECT_FALSE(purrgo_logger_start(&fix));
 }
 
 int main(void) {

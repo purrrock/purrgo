@@ -57,10 +57,14 @@ void purrgo_geo_bbox_from_center(int32_t center_lat_1e7, int32_t center_lon_1e7,
     int32_t rad_x_base = width_1e7 / 2;
 
     // Расчет высоты через пропорцию экрана
-    int32_t height_1e7 = (int32_t)(((int64_t)width_1e7 * vp->height) / vp->width);
+    // Используем int64_t, чтобы избежать переполнения до приведения к int32_t.
+    int64_t height_1e7_64 = ((int64_t)width_1e7 * vp->height) / vp->width;
+    if (height_1e7_64 > 1800000000LL) {
+        height_1e7_64 = 1800000000LL;
+    }
 
     // Половина высоты для Y
-    int32_t rad_y = height_1e7 / 2;
+    int64_t rad_y = height_1e7_64 / 2;
 
     int32_t cos_val = purrgo_geo_cos_10k(center_lat_1e7);
     if (cos_val < 100) cos_val = 100; // prevent division by zero near poles
@@ -74,9 +78,8 @@ void purrgo_geo_bbox_from_center(int32_t center_lat_1e7, int32_t center_lon_1e7,
         min_lon = -1800000000LL;
         max_lon = 1800000000LL;
     } else {
-        int32_t rad_x = (int32_t)rad_x_64;
-        min_lon = (int64_t)center_lon_1e7 - rad_x;
-        max_lon = (int64_t)center_lon_1e7 + rad_x;
+        min_lon = (int64_t)center_lon_1e7 - rad_x_64;
+        max_lon = (int64_t)center_lon_1e7 + rad_x_64;
 
         // Нормализация границ долготы до [-1.8e9, +1.8e9] (WGS84 1e7)
         if (min_lon < -1800000000LL) {
