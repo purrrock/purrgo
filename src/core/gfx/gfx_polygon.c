@@ -43,6 +43,22 @@ void gfx_draw_polygon(
 
 
 /*
+ * Заполняет полигон текущим цветом foreground (обратная совместимость).
+ */
+void gfx_fill_polygon(
+    gfx_context_t *ctx,
+    const gfx_point_t *points,
+    uint16_t count
+) {
+    if (!ctx || !points || count < 3) {
+        return;
+    }
+
+    uint32_t parts[1] = {0};
+    gfx_fill_compound_polygon(ctx, points, count, parts, 1);
+}
+
+/*
  * Заполняет полигон текущим цветом foreground.
  * Поддерживает compound polygons (с holes).
  *
@@ -62,7 +78,7 @@ void gfx_draw_polygon(
  *
  * Цвет заливки — ctx->color_fg.
  */
-void gfx_fill_polygon(
+void gfx_fill_compound_polygon(
     gfx_context_t *ctx,
     const gfx_point_t *points,
     uint16_t num_points,
@@ -71,6 +87,26 @@ void gfx_fill_polygon(
 ) {
     if (!ctx || !points || num_points < 3 || !parts || num_parts == 0) {
         return;
+    }
+
+    /*
+     * Строгая валидация массива parts[].
+     */
+    if (parts[0] != 0) {
+        return;
+    }
+
+    for (uint16_t part_idx = 0; part_idx < num_parts; part_idx++) {
+        uint32_t start_32 = parts[part_idx];
+        uint32_t end_32 = (part_idx + 1 < num_parts) ? parts[part_idx + 1] : num_points;
+
+        if (start_32 >= end_32 || end_32 > (uint32_t)num_points) {
+            return;
+        }
+
+        if (part_idx > 0 && start_32 <= parts[part_idx - 1]) {
+            return; // индексы должны строго возрастать
+        }
     }
 
 
@@ -131,6 +167,7 @@ void gfx_fill_polygon(
          * scanline с рёбрами всех колец polygon.
          */
         for (uint16_t part_idx = 0; part_idx < num_parts; part_idx++) {
+            // Безопасный каст после валидации выше
             uint16_t start = (uint16_t)parts[part_idx];
             uint16_t end = (part_idx + 1 < num_parts) ? (uint16_t)parts[part_idx + 1] : num_points;
 
@@ -190,9 +227,9 @@ void gfx_fill_polygon(
 
 
                 /*
-                 * Теоретически nodes не может превысить count:
-                 * одно ребро даёт максимум одно пересечение
-                 * с конкретной scanline.
+                 * Для compound polygons (с holes) количество пересечений
+                 * может быть большим. В ограниченной памяти STM32 мы
+                 * выделяем статический размер (64). Защищаем от overflow.
                  */
                 if (nodes < 64) {
                     nodeX[nodes++] = (int16_t)x;
