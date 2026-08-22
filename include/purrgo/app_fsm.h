@@ -54,12 +54,36 @@ int purrgo_app_get_config_cursor(void);
 int purrgo_app_get_dir_list(purrgo_fs_dirent_t** list_out);
 int purrgo_app_get_dir_cursor(void);
 
+typedef enum {
+    PURRGO_MAP_SCALE_10M,
+    PURRGO_MAP_SCALE_20M,
+    PURRGO_MAP_SCALE_50M,
+    PURRGO_MAP_SCALE_100M,
+    PURRGO_MAP_SCALE_200M,
+    PURRGO_MAP_SCALE_500M,
+    PURRGO_MAP_SCALE_1KM,
+    PURRGO_MAP_SCALE_2KM,
+    PURRGO_MAP_SCALE_5KM,
+    PURRGO_MAP_SCALE_10KM,
+    PURRGO_MAP_SCALE_20KM,
+    PURRGO_MAP_SCALE_50KM,
+    PURRGO_MAP_SCALE_100KM,
+    PURRGO_MAP_SCALE_200KM,
+    PURRGO_MAP_SCALE_500KM,
+    PURRGO_MAP_SCALE_1000KM,
+    PURRGO_MAP_SCALE_2000KM,
+    PURRGO_MAP_SCALE_5000KM,
+    PURRGO_MAP_SCALE_10000KM,
+    PURRGO_MAP_SCALE_COUNT
+} purrgo_map_scale_t;
+
 // Геттеры для состояния карты (Map Viewport)
 int32_t purrgo_app_get_map_center_lat(void);
 int32_t purrgo_app_get_map_center_lon(void);
-uint8_t purrgo_app_get_map_zoom_level(void);
+purrgo_map_scale_t purrgo_app_get_map_zoom_level(void);
+uint32_t purrgo_app_get_map_scale_width_m(void);
+const char* purrgo_app_get_map_scale_label(void);
 bool purrgo_app_is_manual_pan_active(void);
-int32_t purrgo_app_get_zoom_radius_y(void);
 
 // Функция применения часового пояса с календарным пересчетом (влияет на локальное время и расчет восхода/заката)
 void purrgo_app_apply_timezone(const purrgo_gnss_solution_t* utc, purrgo_gnss_solution_t* local, int16_t tz_offset_minutes);

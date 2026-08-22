@@ -476,49 +476,10 @@ void purrgo_app_ui_render(
 
             int32_t center_lat = purrgo_app_get_map_center_lat();
             int32_t center_lon = purrgo_app_get_map_center_lon();
+            uint32_t width_m = purrgo_app_get_map_scale_width_m();
 
-int32_t rad_y = purrgo_app_get_zoom_radius_y();
-int32_t cos_val = purrgo_geo_cos_10k(center_lat);
-if (cos_val < 100) cos_val = 100; // prevent division by zero and limit max width near poles
-int32_t rad_x_base = (int32_t)(((int64_t)rad_y * map_vp.width) / map_vp.height);
-int64_t rad_x_64 = ((int64_t)rad_x_base * 10000) / cos_val;
-
-            int64_t min_lon, max_lon;
-            if (rad_x_64 >= 1800000000LL) {
-                // If camera span is >= 360 degrees, it covers the whole longitude range.
-                min_lon = -1800000000LL;
-                max_lon = 1800000000LL;
-            } else {
-                int32_t rad_x = (int32_t)rad_x_64;
-                min_lon = (int64_t)center_lon - rad_x;
-                max_lon = (int64_t)center_lon + rad_x;
-
-                // Normalize longitude bounds to [-1.8e9, +1.8e9] (WGS84 1e7)
-                if (min_lon < -1800000000LL) {
-                    min_lon += 3600000000LL;
-                } else if (min_lon > 1800000000LL) {
-                    min_lon -= 3600000000LL;
-                }
-                if (max_lon < -1800000000LL) {
-                    max_lon += 3600000000LL;
-                } else if (max_lon > 1800000000LL) {
-                    max_lon -= 3600000000LL;
-                }
-            }
-
-            int64_t min_lat = (int64_t)center_lat - rad_y;
-            int64_t max_lat = (int64_t)center_lat + rad_y;
-
-            // Clip latitude bounds to [-9.0e8, +9.0e8]
-            if (min_lat < -900000000LL) min_lat = -900000000LL;
-            if (max_lat > 900000000LL) max_lat = 900000000LL;
-
-            purrgo_bbox_t dynamic_cam = {
-                .min_x = (int32_t)min_lon,
-                .min_y = (int32_t)min_lat,
-                .max_x = (int32_t)max_lon,
-                .max_y = (int32_t)max_lat
-            };
+            purrgo_bbox_t dynamic_cam;
+            purrgo_geo_bbox_from_center(center_lat, center_lon, width_m, &map_vp, &dynamic_cam);
 
             /*
              * Верхняя служебная строка.
@@ -655,6 +616,21 @@ int64_t rad_x_64 = ((int64_t)rad_x_base * 10000) / cos_val;
                 0,
                 3
             );
+
+            // Отрисовка масштаба в правом нижнем углу
+            const char* scale_label = purrgo_app_get_map_scale_label();
+
+            // Расчет ширины текста: каждый символ занимает 6 пикселей (5px ширина + 1px отступ).
+            // Завершающий отступ не учитываем, поэтому (len * 6) - 1.
+            int label_len = 0;
+            while(scale_label[label_len] != '\0') label_len++;
+            int text_width = label_len * 6;
+
+            // Координаты нижнего правого угла с небольшим отступом (например, 5 пикселей)
+            int16_t scale_x = map_vp.offset_x + map_vp.width - text_width - 5;
+            int16_t scale_y = map_vp.offset_y + map_vp.height - 8 - 5; // 8 - высота шрифта
+
+            gfx_draw_string(gfx, scale_x, scale_y, scale_label);
 
             break;
         }
