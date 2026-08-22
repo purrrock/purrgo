@@ -22,15 +22,15 @@ The compiler has been significantly upgraded to bypass native firmware limitatio
 
 The project has transitioned to a fully **modular architecture** for better maintainability and isolated debugging. The codebase provides 100% binary compatibility with the hardware parser of the PurrGO and includes:
 
-* **`dtg1_map_compiler.py`** — Main CLI Orchestrator. Coordinates the map building process.
-* **`dtg1_models.py`** — Data structures and system constants (`MapFeature`, `HWConfig`).
-* **`dtg1_osmparser.py`** — Map and route parsing logic (`OSMParser`, `GPXParser`).
-* **`dtg1_geometry.py`** — Geometric algorithms and POI baking (`POIGeometryFactory`).
-* **`dtg1_bin_writer.py`** — Low-level binary serialization for target files (`MapCompiler`).
-* **`dtg1_lookup.py`** — Advanced LUT configuration and tag routing (`LookupTables`).
+* **`purrgo_map_compiler.py`** — Main CLI Orchestrator. Coordinates the map building process.
+* **`purrgo_models.py`** — Data structures and system constants (`MapFeature`, `HWConfig`).
+* **`purrgo_osmparser.py`** — Map and route parsing logic (`OSMParser`, `GPXParser`).
+* **`purrgo_geometry.py`** — Geometric algorithms and POI baking (`POIGeometryFactory`).
+* **`purrgo_bin_writer.py`** — Low-level binary serialization for target files (`MapCompiler`).
+* **`purrgo_lookup.py`** — Advanced LUT configuration and tag routing (`LookupTables`).
 * **`features.csv`** — Modifiable style routing table (LUT) with software culling (Blacklist) support.
 * **`features_factory.csv`** — Original dump of the factory style table.
-* **`dtg1_map_specification.md`** — Technical format specification. Contains the byte-by-byte structure of `.mlp`, `.idx`, and `.db` files.
+* **`purrgo_map_specification.md`** — Technical format specification. Contains the byte-by-byte structure of `.mlp`, `.idx`, and `.db` files.
 
 ---
 
@@ -40,7 +40,7 @@ The project has transitioned to a fully **modular architecture** for better main
 1. Ensure you have Python 3.10 or higher installed.
 2. Clone the repository and install dependencies: `pip install -r requirements.txt`.
 3. Place your exported `map.osm` file in the working directory next to the compiler.
-4. Run the script: `python dtg1_map_compiler.py`.
+4. Run the script: `python purrgo_map_compiler.py`.
 5. Copy the generated files (`roads.mlp`, `roads.idx`, `landuse.db`, `map.name`) to the PurrGO SD card /MAPS/MAPNAME/.
 
 ---

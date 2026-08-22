@@ -1,4 +1,4 @@
-# DT G1 MAP FORMAT TECHNICAL SPECIFICATION (Reverse Engineering)
+# PurrGO MAP FORMAT TECHNICAL SPECIFICATION (Reverse Engineering)
 
 **Version:** 4.0 (C-Union Node / Mode Switch)
 **Application Area:** GIS data compilers/decompilers for wearable devices based on the ATS3085S platform (DT NO.1 G1)

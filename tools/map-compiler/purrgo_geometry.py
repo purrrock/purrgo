@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-Geometry helpers for DTG1 map compiler.
+Geometry helpers for PurrGO map compiler.
 
 Contains:
 - POIGeometryFactory: generator of low-polygon POI primitives
@@ -10,7 +10,7 @@ Contains:
 - PERSPECTIVE_Y_MULTIPLIER constant (1.5) for ATS3085S compensation
 - is_clockwise(points): CW winding rule checker
 
-API mirrors original usage in dtg1_map_compiler.py:
+API mirrors original usage in purrgo_map_compiler.py:
 POIGeometryFactory.generate_polygon(shape_type, center_lon, center_lat)
 and is_clockwise(points) which accepts a sequence of (lon, lat) tuples
 (closed or open) and returns True if ring is clockwise.
