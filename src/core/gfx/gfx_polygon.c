@@ -44,12 +44,11 @@ void gfx_draw_polygon(
 
 /*
  * Заполняет полигон текущим цветом foreground.
- * Поддерживает compound polygons (с holes) через even-odd scanline алгоритм.
  *
  * Используется scanline / even-odd алгоритм:
  *
  *   1. Для каждой строки framebuffer ищутся пересечения
- *      горизонтальной scanline с рёбрами всех частей (колец) полигона.
+ *      горизонтальной scanline с рёбрами полигона.
  *
  *   2. X-координаты пересечений сортируются.
  *
@@ -62,28 +61,19 @@ void gfx_draw_polygon(
  *
  * Цвет заливки — ctx->color_fg.
  *
+ * ВАЖНО:
+ * Эта функция заполняет один polygon независимо от других polygon
+ * rings. Поэтому она не реализует вычитание holes из внешнего кольца.
  */
 void gfx_fill_polygon(
     gfx_context_t *ctx,
     const gfx_point_t *points,
-    uint16_t num_points,
-    const uint32_t *parts,
-    uint16_t num_parts
+    uint16_t count
 ) {
-    if (!ctx || !points || num_points < 3) {
+    if (!ctx || !points || count < 3) {
         return;
     }
 
-    if (!parts || num_parts == 0) {
-        /*
-         * Если нет информации о частях, считаем весь массив одной частью.
-         * Это может быть полезно для обычных полигонов, переданных из
-         * другого места, если parts == NULL.
-         */
-        uint32_t default_part = 0;
-        gfx_fill_polygon(ctx, points, num_points, &default_part, 1);
-        return;
-    }
 
     /*
      * Определяем вертикальный диапазон полигона.
@@ -91,7 +81,7 @@ void gfx_fill_polygon(
     int16_t min_y = points[0].y;
     int16_t max_y = points[0].y;
 
-    for (uint16_t i = 1; i < num_points; i++) {
+    for (uint16_t i = 1; i < count; i++) {
         if (points[i].y < min_y) {
             min_y = points[i].y;
         }
@@ -100,6 +90,7 @@ void gfx_fill_polygon(
             max_y = points[i].y;
         }
     }
+
 
     /*
      * Ограничиваем scanline диапазоном framebuffer.
@@ -112,6 +103,22 @@ void gfx_fill_polygon(
         max_y = ctx->height - 1;
     }
 
+
+    /*
+     * В отличие от старой реализации здесь НЕ происходит:
+     *
+     *     ctx->color_fg = ctx->color_bg;
+     *
+     * gfx_draw_hline() должен использовать настоящий текущий
+     * foreground color.
+     *
+     * Поэтому polygon заполняется ctx->color_fg.
+     */
+
+
+
+
+
     /*
      * Scanline rendering.
      */
@@ -119,59 +126,77 @@ void gfx_fill_polygon(
         int16_t nodeX[64];
         uint16_t nodes = 0;
 
+
         /*
          * Находим все пересечения текущей горизонтальной
-         * scanline с рёбрами всех колец polygon.
+         * scanline с рёбрами polygon.
          */
-        for (uint16_t part_idx = 0; part_idx < num_parts; part_idx++) {
-            uint32_t start = parts[part_idx];
-            uint32_t end = (part_idx + 1 < num_parts) ? parts[part_idx + 1] : num_points;
+        for (uint16_t i = 0; i < count; i++) {
+            uint16_t j =
+                (i == count - 1)
+                    ? 0
+                    : (uint16_t)(i + 1);
 
-            if (start >= end || end > num_points) {
+
+            int16_t y_start = points[i].y;
+            int16_t y_end   = points[j].y;
+
+            int16_t x_start = points[i].x;
+            int16_t x_end   = points[j].x;
+
+
+            /*
+             * Горизонтальное ребро не создаёт отдельного
+             * пересечения scanline.
+             */
+            if (y_start == y_end) {
                 continue;
             }
 
-            uint32_t ring_count = end - start;
 
-            if (ring_count < 3) {
-                continue;
-            }
+            /*
+             * Полуоткрытый интервал:
+             *
+             *     y_start <= y < y_end
+             *
+             * или
+             *
+             *     y_end <= y < y_start
+             *
+             * Это предотвращает двойной учёт вершины,
+             * где сходятся два ребра.
+             */
+            if (
+                (y_start <= y && y_end > y) ||
+                (y_end <= y && y_start > y)
+            ) {
+                /*
+                 * Вычисляем X пересечения.
+                 *
+                 * Используется int32_t для промежуточного
+                 * умножения, чтобы не выполнять арифметику
+                 * непосредственно в int16_t.
+                 */
+                int32_t x =
+                    (int32_t)x_start +
+                    (
+                        (int32_t)(x_end - x_start) *
+                        (int32_t)(y - y_start)
+                    ) /
+                    (int32_t)(y_end - y_start);
 
-            const gfx_point_t *ring_points = &points[start];
-
-            for (uint32_t i = 0; i < ring_count; i++) {
-                uint32_t j = (i == ring_count - 1) ? 0 : (i + 1);
-
-                int16_t y_start = ring_points[i].y;
-                int16_t y_end   = ring_points[j].y;
-                int16_t x_start = ring_points[i].x;
-                int16_t x_end   = ring_points[j].x;
 
                 /*
-                 * Горизонтальное ребро не создаёт отдельного
-                 * пересечения scanline.
+                 * Теоретически nodes не может превысить count:
+                 * одно ребро даёт максимум одно пересечение
+                 * с конкретной scanline.
                  */
-                if (y_start == y_end) {
-                    continue;
-                }
-
-                /*
-                 * Полуоткрытый интервал.
-                 */
-                if ((y_start <= y && y_end > y) || (y_end <= y && y_start > y)) {
-                    /*
-                     * Вычисляем X пересечения.
-                     */
-                    int32_t x = (int32_t)x_start +
-                                ((int32_t)(x_end - x_start) * (int32_t)(y - y_start)) /
-                                (int32_t)(y_end - y_start);
-
-                    if (nodes < 64) {
-                        nodeX[nodes++] = (int16_t)x;
-                    }
+                if (nodes < 64) {
+                    nodeX[nodes++] = (int16_t)x;
                 }
             }
         }
+
 
         /*
          * Если пересечений меньше двух, заполнять нечего.
@@ -180,23 +205,48 @@ void gfx_fill_polygon(
             continue;
         }
 
+
         /*
          * Сортируем X-координаты пересечений.
+         *
+         * Для типичных landuse polygon количество рёбер
+         * относительно небольшое, поэтому простая сортировка
+         * здесь достаточна.
          */
         for (uint16_t i = 0; i < nodes; i++) {
-            for (uint16_t j = 0; j + 1 < nodes - i; j++) {
+            for (
+                uint16_t j = 0;
+                j + 1 < nodes - i;
+                j++
+            ) {
                 if (nodeX[j] > nodeX[j + 1]) {
                     int16_t tmp = nodeX[j];
-                    nodeX[j] = nodeX[j + 1];
-                    nodeX[j + 1] = tmp;
+
+                    nodeX[j] =
+                        nodeX[j + 1];
+
+                    nodeX[j + 1] =
+                        tmp;
                 }
             }
         }
 
+
         /*
-         * Заполняем пары пересечений.
+         * Заполняем пары пересечений:
+         *
+         *     [nodeX[0], nodeX[1]]
+         *     [nodeX[2], nodeX[3]]
+         *     ...
+         *
+         * gfx_draw_hline() использует ctx->color_fg,
+         * то есть цвет, установленный вызывающим кодом.
          */
-        for (uint16_t i = 0; i + 1 < nodes; i += 2) {
+        for (
+            uint16_t i = 0;
+            i + 1 < nodes;
+            i += 2
+        ) {
             gfx_draw_hline(
                 ctx,
                 nodeX[i],
@@ -205,4 +255,6 @@ void gfx_fill_polygon(
             );
         }
     }
+
+
 }
