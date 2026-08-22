@@ -132,16 +132,16 @@ static inline float unpack_float_le(const uint8_t *buf)
 
 /*
  * Безопасное преобразование float BBox координат в int32_t.
- * Применяется запас в 128 единиц (1.28e-5 градуса) для компенсации
+ * Применяется запас в 256 единиц (2.5-5 градуса) для компенсации
  * потери точности мантиссы IEEE-754 24-bit при 180 градусах
  * и усечения к нулю при кастинге float -> int.
  */
 static inline int32_t float_bbox_min(float f_val) {
-    return (int32_t)(f_val * 10000000.0f) - 128;
+    return (int32_t)(f_val * 10000000.0f) - 256;
 }
 
 static inline int32_t float_bbox_max(float f_val) {
-    return (int32_t)(f_val * 10000000.0f) + 128;
+    return (int32_t)(f_val * 10000000.0f) + 256;
 }
 
 
