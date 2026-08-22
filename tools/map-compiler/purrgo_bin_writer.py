@@ -7,8 +7,8 @@ import struct
 import hashlib
 from typing import List, Tuple, Any
 
-from dtg1_models import MapFeature, RTreeNode, HWConfig, safe_encode
-from dtg1_lookup import LookupTables
+from purrgo_models import MapFeature, RTreeNode, HWConfig, safe_encode
+from purrgo_lookup import LookupTables
 
 
 class MapCompiler:
