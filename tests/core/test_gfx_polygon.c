@@ -229,6 +229,102 @@ static bool test_hole_partially_out_of_viewport() {
     return passed;
 }
 
+static bool test_polygon_too_many_nodes() {
+    printf("Running test_polygon_too_many_nodes...\n");
+    gfx_context_t ctx;
+    gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, draw_pixel);
+    reset_framebuffer(&ctx);
+
+    // To hit >64 intersections on a single horizontal scanline,
+    // we generate a single "comb" or "zigzag" polygon.
+    // Each tooth of the comb goes up and down, generating 2 intersections per tooth.
+    // 33 teeth = 66 intersections.
+    gfx_point_t points[150]; // 33 * 4 + some buffer
+    uint32_t parts[] = {0};
+    uint16_t num_points = 0;
+
+    int16_t start_x = 0;
+
+    // Create the top zigzags
+    for (int i = 0; i < 35; i++) {
+        points[num_points++] = (gfx_point_t){start_x, 10};
+        start_x++;
+        points[num_points++] = (gfx_point_t){start_x, 30};
+        start_x++;
+    }
+
+    // Close the polygon safely
+    points[num_points++] = (gfx_point_t){start_x, 50};
+    points[num_points++] = (gfx_point_t){0, 50};
+
+    // The scanline at y=20 will intersect all the vertical lines.
+    // It should hit >= 64 intersections and abort (return).
+    // The screen shouldn't be filled completely inappropriately or cause memory faults.
+    gfx_fill_compound_polygon(&ctx, points, num_points, parts, 1);
+
+    bool passed = true;
+
+    // Because it aborted midway, we expect significantly fewer pixels drawn, or zero for that scanline.
+    // Mostly we want to ensure valgrind/asan doesn't crash here.
+    if (pixels_drawn > 2000) {
+        printf("FAILED test_polygon_too_many_nodes: Should have aborted, but drew too many pixels\n");
+        passed = false;
+    }
+
+    if (!passed) {
+        printf("FAILED test_polygon_too_many_nodes\n");
+    } else {
+        printf("PASSED test_polygon_too_many_nodes (Count: %d)\n", pixels_drawn);
+    }
+    return passed;
+}
+
+static bool test_even_odd_winding() {
+    printf("Running test_even_odd_winding...\n");
+    gfx_context_t ctx;
+    gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, draw_pixel);
+    reset_framebuffer(&ctx);
+
+    gfx_point_t points[] = {
+        // Outer ring (CW)
+        {10, 10},
+        {50, 10},
+        {50, 50},
+        {10, 50},
+        // Inner hole (also CW - testing even-odd rule independence)
+        {20, 20},
+        {40, 20},
+        {40, 40},
+        {20, 40}
+    };
+    uint32_t parts[] = {0, 4};
+
+    gfx_fill_compound_polygon(&ctx, points, 8, parts, 2);
+
+    bool passed = true;
+
+    // Check inside outer ring, outside hole
+    if (!check_pixel(15, 30, 1)) {
+        printf("FAILED: Pixel at (15,30) should be 1\n");
+        passed = false;
+    }
+
+    // Check inside hole (should be empty even though both CW)
+    if (!check_pixel(30, 30, 0)) {
+        printf("FAILED: Pixel at (30,30) should be 0 (hole)\n");
+        passed = false;
+    }
+
+    if (!passed) {
+        printf("FAILED test_even_odd_winding\n");
+        print_framebuffer();
+    } else {
+        printf("PASSED test_even_odd_winding (Count: %d)\n", pixels_drawn);
+    }
+    return passed;
+}
+
+
 int main() {
     bool success = true;
 
@@ -236,6 +332,8 @@ int main() {
     if (!test_polygon_with_one_hole()) success = false;
     if (!test_polygon_with_multiple_holes()) success = false;
     if (!test_hole_partially_out_of_viewport()) success = false;
+    if (!test_polygon_too_many_nodes()) success = false;
+    if (!test_even_odd_winding()) success = false;
 
     if (success) {
         printf("All tests passed!\n");

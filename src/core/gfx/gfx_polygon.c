@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#define GFX_MAX_POLYGON_NODES 64
 
 /*
  * Рисует контур полигона.
@@ -158,7 +159,7 @@ void gfx_fill_compound_polygon(
      * Scanline rendering.
      */
     for (int16_t y = min_y; y <= max_y; y++) {
-        int16_t nodeX[64];
+        int16_t nodeX[GFX_MAX_POLYGON_NODES];
         uint16_t nodes = 0;
 
 
@@ -229,11 +230,18 @@ void gfx_fill_compound_polygon(
                 /*
                  * Для compound polygons (с holes) количество пересечений
                  * может быть большим. В ограниченной памяти STM32 мы
-                 * выделяем статический размер (64). Защищаем от overflow.
+                 * выделяем статический размер.
+                 *
+                 * Строгий fail-fast: если количество пересечений превысило
+                 * статический буфер, мы не можем корректно залить сканлайн,
+                 * поэтому прерываем заливку всего полигона, чтобы избежать
+                 * тихо неправильных графических артефактов и overflow.
                  */
-                if (nodes < 64) {
-                    nodeX[nodes++] = (int16_t)x;
+                if (nodes >= GFX_MAX_POLYGON_NODES) {
+                    return;
                 }
+
+                nodeX[nodes++] = (int16_t)x;
             }
             }
         }
