@@ -1,5 +1,6 @@
 #include "purrgo/config.h"
 #include "purrgo/fs_hal.h"
+#include "purrgo/logger.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -9,6 +10,7 @@
 purrgo_config_t app_config;
 
 // Внутренний парсер целочисленных значений (замена atoi для контроля над типами)
+// Реализована защита от переполнения
 static int32_t parse_int32(const char* str) {
     int32_t res = 0;
     int32_t sign = 1;
@@ -22,7 +24,14 @@ static int32_t parse_int32(const char* str) {
     
     // Чтение числовой части
     while (*str >= '0' && *str <= '9') {
-        res = res * 10 + (*str - '0');
+        int32_t digit = *str - '0';
+
+        // Проверка переполнения
+        if (res > (INT32_MAX - digit) / 10) {
+            return sign == 1 ? INT32_MAX : INT32_MIN;
+        }
+
+        res = res * 10 + digit;
         str++;
     }
     return res * sign;
@@ -53,11 +62,14 @@ void purrgo_config_init(void) {
  }
 
 bool purrgo_config_load(void) {
+    // Безусловная инициализация дефолтных значений перед загрузкой.
+    // Если ключа в файле нет, сохранится дефолтное значение.
+    purrgo_config_init();
+
     purrgo_file_t* file = purrgo_fs_open(CONFIG_FILENAME, FS_READ);
     
     if (!file) {
-        // Если файла нет, инициализируем дефолтные значения и сразу создаем файл
-        purrgo_config_init();
+        // Если файла нет, создаем его с дефолтными значениями
         purrgo_config_save();
         return false;
     }
@@ -98,17 +110,29 @@ bool purrgo_config_load(void) {
 		// Маппинг строковых ключей на поля структуры
             if (strcmp(key, "TZ") == 0) {
                 // Обратная совместимость для старых файлов
-                app_config.tz_offset_minutes = (int16_t)(parse_int32(val) * 60);
+                int32_t tz = parse_int32(val) * 60;
+                if (tz >= -720 && tz <= 840) {
+                    app_config.tz_offset_minutes = (int16_t)tz;
+                }
             } else if (strcmp(key, "TZ_MIN") == 0) {
                 // Прямое чтение в минутах
-                app_config.tz_offset_minutes = (int16_t)parse_int32(val);
+                int32_t tz_min = parse_int32(val);
+                if (tz_min >= -720 && tz_min <= 840) {
+                    app_config.tz_offset_minutes = (int16_t)tz_min;
+                }
             } else if (strcmp(key, "MAP_DIR") == 0) {
                 strncpy(app_config.map_dir, val, sizeof(app_config.map_dir) - 1);
                 app_config.map_dir[sizeof(app_config.map_dir) - 1] = '\0';
             } else if (strcmp(key, "LAST_LAT_1E7") == 0) {
-                app_config.last_lat_1e7 = parse_int32(val);
+                int32_t lat = parse_int32(val);
+                if (lat >= -900000000 && lat <= 900000000) {
+                    app_config.last_lat_1e7 = lat;
+                }
             } else if (strcmp(key, "LAST_LON_1E7") == 0) {
-                app_config.last_lon_1e7 = parse_int32(val);
+                int32_t lon = parse_int32(val);
+                if (lon >= -1800000000 && lon <= 1800000000) {
+                    app_config.last_lon_1e7 = lon;
+                }
             }
         }
         
@@ -122,13 +146,13 @@ bool purrgo_config_load(void) {
 }
 
 bool purrgo_config_save(void) {
-	fprintf(stderr, "Saving configuration to: %s\n", CONFIG_FILENAME);
+    PURRGO_LOG("Saving configuration to: %s\n", CONFIG_FILENAME);
     purrgo_file_t* file = purrgo_fs_open(CONFIG_FILENAME, FS_WRITE_CREATE);
 	
     if (!file) {
-    perror("purrgo_config_save: fopen");
-    return false;
-}
+        PURRGO_LOG("purrgo_config_save: failed to open file\n");
+        return false;
+    }
     
     char buf[CONFIG_MAX_SIZE];
     

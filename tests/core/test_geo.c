@@ -1,5 +1,9 @@
 #include "purrgo/geo.h"
 #include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+void test_geo_overflow(void);
 
 int main(void) {
     // Тестовая точка A (0.0000000 N, 0.0000000 E)
@@ -93,5 +97,22 @@ int main(void) {
     assert(dist_large_wrap2 > 6670000U && dist_large_wrap2 < 6672000U);
     assert(purrgo_geo_azimuth_deg(0, large_lon2, 0, large_lon1) == 270U);
 
+    test_geo_overflow();
     return 0;
 }
+
+void test_geo_overflow(void) {
+    purrgo_viewport_t vp = {100, 100, 0, 0};
+    purrgo_bbox_t bbox;
+
+    // Very large width to trigger width_1e7 limit
+    purrgo_geo_bbox_from_center(0, 0, 100000000, &vp, &bbox);
+    // Should be clamped to 3.6e9 which spans the whole world
+
+    if (bbox.min_x != -1800000000LL || bbox.max_x != 1800000000LL) {
+        printf("Overflow test failed: %d, %d\n", bbox.min_x, bbox.max_x);
+        exit(1);
+    }
+}
+
+// ensure test_geo_overflow is called in main
