@@ -3,7 +3,6 @@
 #include "purrgo/gfx_renderer.h"
 
 #include <stdint.h>
-#include <stdlib.h>
 #include <stddef.h>
 
 
@@ -117,37 +116,14 @@ void gfx_fill_polygon(
      */
 
 
-    /*
-     * Максимальное количество пересечений scanline с polygon
-     * равно количеству его рёбер.
-     *
-     * Поэтому массив nodeX выделяем под весь polygon, а не
-     * ограничиваем произвольным числом 32.
-     *
-     * Это также устраняет потерю пересечений на сложных
-     * landuse polygon.
-     */
-    if (
-        (size_t)count >
-        SIZE_MAX / sizeof(int16_t)
-    ) {
-        return;
-    }
 
-    int16_t *nodeX =
-        (int16_t *)malloc(
-            (size_t)count * sizeof(int16_t)
-        );
-
-    if (!nodeX) {
-        return;
-    }
 
 
     /*
      * Scanline rendering.
      */
     for (int16_t y = min_y; y <= max_y; y++) {
+        int16_t nodeX[64];
         uint16_t nodes = 0;
 
 
@@ -215,7 +191,7 @@ void gfx_fill_polygon(
                  * одно ребро даёт максимум одно пересечение
                  * с конкретной scanline.
                  */
-                if (nodes < count) {
+                if (nodes < 64) {
                     nodeX[nodes++] = (int16_t)x;
                 }
             }
@@ -281,5 +257,4 @@ void gfx_fill_polygon(
     }
 
 
-    free(nodeX);
 }
