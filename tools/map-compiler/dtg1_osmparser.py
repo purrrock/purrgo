@@ -69,35 +69,6 @@ def _sanitize_name_cached(name: str) -> str:
     return name
 
 
-class GPXParser:
-    """Extract track geometry for injection into the Roads layer."""
-
-    @staticmethod
-    def parse_track(filepath: str) -> Tuple[str, List[Tuple[int, int]]]:
-        if not os.path.exists(filepath):
-            return "Route", []
-
-        tree = ET.parse(filepath)
-        root = tree.getroot()
-        ns = {'gpx': 'http://www.topografix.com/GPX/1/1'}
-
-        track_name = "Route"
-        metadata_name = root.find('.//gpx:metadata/gpx:name', namespaces=ns)
-        if metadata_name is not None and metadata_name.text:
-            track_name = metadata_name.text.strip()
-        else:
-            trk_name = root.find('.//gpx:trk/gpx:name', namespaces=ns)
-            if trk_name is not None and trk_name.text:
-                track_name = trk_name.text.strip()
-
-        points = []
-        for trkpt in root.findall('.//gpx:trkpt', namespaces=ns):
-            try:
-                points.append((int(float(trkpt.get('lon')) * 1000000), int(float(trkpt.get('lat')) * 1000000)))
-            except (ValueError, TypeError, OverflowError):
-                continue
-
-        return track_name, points
 
 
 class OSMParser:
