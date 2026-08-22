@@ -21,7 +21,7 @@
  * Для текущего этапа он нужен потому, что polygon renderer должен
  * временно разместить projected points в памяти.
  */
-#define PURRGO_MAP_MAX_POINTS 2048
+#define PURRGO_MAP_MAX_POINTS 512
 
 /*
  * Статический буфер для рендеринга полигонов.
