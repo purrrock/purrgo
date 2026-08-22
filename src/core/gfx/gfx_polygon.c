@@ -401,28 +401,19 @@ void gfx_fill_compound_polygon(
         /*
          * Сортируем X-координаты пересечений.
          *
-         * Для типичных map polygons количество пересечений
-         * небольшое, поэтому простая bubble sort здесь
-         * достаточно предсказуема и не требует дополнительной
-         * памяти.
+         * Insertion sort используется вместо bubble sort для
+         * уменьшения количества перемещений данных, сохраняя
+         * работу in-place без дополнительной памяти.
          */
-        for (uint16_t i = 0; i < nodes; i++) {
-            for (
-                uint16_t j = 0;
-                j + 1 < nodes - i;
-                j++
-            ) {
-                if (nodeX[j] > nodeX[j + 1]) {
-                    int16_t tmp =
-                        nodeX[j];
+        for (uint16_t i = 1; i < nodes; i++) {
+            int16_t key = nodeX[i];
+            int16_t j = i - 1;
 
-                    nodeX[j] =
-                        nodeX[j + 1];
-
-                    nodeX[j + 1] =
-                        tmp;
-                }
+            while (j >= 0 && nodeX[j] > key) {
+                nodeX[j + 1] = nodeX[j];
+                j = j - 1;
             }
+            nodeX[j + 1] = key;
         }
 
 
