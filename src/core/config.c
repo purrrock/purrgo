@@ -22,19 +22,30 @@ static int32_t parse_int32(const char* str) {
     if (*str == '-') { sign = -1; str++; }
     else if (*str == '+') { str++; }
     
-    // Чтение числовой части
+    // Чтение числовой части с накоплением в отрицательном виде
+    // (так как INT32_MIN по модулю больше INT32_MAX на 1).
     while (*str >= '0' && *str <= '9') {
         int32_t digit = *str - '0';
 
-        // Проверка переполнения
-        if (res > (INT32_MAX - digit) / 10) {
+        // Проверка переполнения для отрицательного накопителя.
+        // res и промежуточные значения всегда <= 0.
+        if (res < (INT32_MIN + digit) / 10) {
             return sign == 1 ? INT32_MAX : INT32_MIN;
         }
 
-        res = res * 10 + digit;
+        res = res * 10 - digit;
         str++;
     }
-    return res * sign;
+
+    // Если число было положительным, меняем знак, проверяя границу INT32_MAX.
+    if (sign == 1) {
+        if (res == INT32_MIN) {
+            return INT32_MAX;
+        }
+        return -res;
+    }
+
+    return res;
 }
 
 void purrgo_config_init(void) {
@@ -110,9 +121,10 @@ bool purrgo_config_load(void) {
 		// Маппинг строковых ключей на поля структуры
             if (strcmp(key, "TZ") == 0) {
                 // Обратная совместимость для старых файлов
-                int32_t tz = parse_int32(val) * 60;
-                if (tz >= -720 && tz <= 840) {
-                    app_config.tz_offset_minutes = (int16_t)tz;
+                int32_t tz_hours = parse_int32(val);
+                // Защита от переполнения перед умножением на 60
+                if (tz_hours >= -12 && tz_hours <= 14) {
+                    app_config.tz_offset_minutes = (int16_t)(tz_hours * 60);
                 }
             } else if (strcmp(key, "TZ_MIN") == 0) {
                 // Прямое чтение в минутах
