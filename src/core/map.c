@@ -8,6 +8,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>
+#include <limits.h>
 
 #define PURRGO_MAP_MAX_PARTS 32
 
@@ -24,8 +25,10 @@
 #define PURRGO_MAP_MAX_POINTS 2048
 
 /*
- * Статический буфер для рендеринга полигонов, чтобы избежать malloc.
- * 2048 точек достаточно для большинства объектов landuse на дисплее 128x296.
+ * Статический буфер для рендеринга полигонов.
+ *
+ * Использование статического буфера позволяет избежать malloc/free
+ * и делает поведение предсказуемым для STM32.
  */
 static gfx_point_t s_polygon_buffer[PURRGO_MAP_MAX_POINTS];
 
@@ -35,15 +38,7 @@ static gfx_point_t s_polygon_buffer[PURRGO_MAP_MAX_POINTS];
  *
  * Поток обработки:
  *
- * IDX -> SQT -> NAV -> DATA -> AABB -> MLP -> projection -> GFX
- *
- * Для polygon layer дополнительно считаются:
- *
- *   polygons_filled
- *   polygons_skipped
- *
- * polygons_skipped может включать внутренние кольца (holes), которые
- * на текущем этапе намеренно не заполняются.
+ *     IDX -> SQT -> NAV -> DATA -> AABB -> MLP -> projection -> GFX
  */
 typedef struct {
     uint32_t sqt_blocks;
@@ -139,7 +134,15 @@ static inline float unpack_float_le(const uint8_t *buf)
  *     map min_y -> нижняя граница viewport
  *     map max_y -> верхняя граница viewport
  *
- * Для промежуточного умножения используется int64_t.
+ * Для промежуточного умножения и вычитания используется int64_t.
+ *
+ * Важно:
+ * приведение к int64_t выполняется ДО вычитания координат.
+ * Иначе выражение вида
+ *
+ *     lon - cam->min_x
+ *
+ * сначала вычислялось бы в int32_t и могло бы переполниться.
  */
 static void project_to_screen(
     int32_t lon,
@@ -150,131 +153,63 @@ static void project_to_screen(
     int16_t *sy
 ) {
     int64_t dx =
-        (int64_t)(lon - cam->min_x) *
+        (
+            (int64_t)lon -
+            (int64_t)cam->min_x
+        ) *
         (int64_t)vp->width;
 
     int64_t w =
-        (int64_t)(cam->max_x - cam->min_x);
+        (int64_t)cam->max_x -
+        (int64_t)cam->min_x;
 
-    *sx =
-        (int16_t)(
-            w > 0
-                ? (dx / w)
-                : 0
-        ) +
-        vp->offset_x;
+    int64_t projected_x =
+        (w > 0)
+            ? (dx / w)
+            : 0;
+
+    projected_x +=
+        (int64_t)vp->offset_x;
 
 
     int64_t dy =
-        (int64_t)(lat - cam->min_y) *
+        (
+            (int64_t)lat -
+            (int64_t)cam->min_y
+        ) *
         (int64_t)vp->height;
 
     int64_t h =
-        (int64_t)(cam->max_y - cam->min_y);
+        (int64_t)cam->max_y -
+        (int64_t)cam->min_y;
 
-    *sy =
-        (int16_t)(
-            (int64_t)vp->height -
-            (
-                h > 0
-                    ? (dy / h)
-                    : 0
+    int64_t projected_y =
+        (h > 0)
+            ? (
+                (int64_t)vp->height -
+                (dy / h)
             )
-        ) +
-        vp->offset_y;
+            : 0;
+
+    projected_y +=
+        (int64_t)vp->offset_y;
+
+
+    /*
+     * gfx_point_t использует int16_t.
+     *
+     * Camera/viewport в нормальном режиме проекта дают координаты,
+     * помещающиеся в int16_t. Здесь преобразование выполняется
+     * только после всей арифметики в int64_t.
+     */
+    *sx = (int16_t)projected_x;
+    *sy = (int16_t)projected_y;
 }
 
 
 /* -------------------------------------------------------------------------- */
 /* Polygon helpers                                                            */
 /* -------------------------------------------------------------------------- */
-
-/*
- * Вычисляет ориентированную площадь кольца в экранных координатах.
- *
- * Формула:
- *
- *     area2 = sum(x_i * y_(i+1) - x_(i+1) * y_i)
- *
- * В экранной системе PurrGo ось Y направлена вниз.
- *
- * Поэтому направление CW/CCW относительно географической системы
- * меняется на противоположное относительно screen coordinates.
- *
- * Для определения topology мы делаем вычисление в screen coordinates
- * с учётом этого факта.
- *
- * Возвращаемое значение:
- *
- *     > 0  -> географически CW
- *     < 0  -> географически CCW
- *      0  -> вырожденное кольцо
- *
- * Используется int64_t. Для координат int16_t и размеров дисплея
- * этого более чем достаточно.
- */
-static int64_t polygon_ring_area2(
-    const gfx_point_t *points,
-    uint32_t count
-) {
-    if (points == NULL || count < 3) {
-        return 0;
-    }
-
-    int64_t area2 = 0;
-
-    for (uint32_t i = 0; i < count; i++) {
-        uint32_t j =
-            (i + 1 < count)
-                ? i + 1
-                : 0;
-
-        area2 +=
-            (int64_t)points[i].x * points[j].y -
-            (int64_t)points[j].x * points[i].y;
-    }
-
-    /*
-     * Screen Y направлен вниз.
-     *
-     * В математической системе:
-     *
-     *     positive area = CCW
-     *
-     * В screen coordinates знак меняется.
-     *
-     * Поэтому:
-     *
-     *     screen area < 0 -> geographic CW
-     *     screen area > 0 -> geographic CCW
-     */
-    return -area2;
-}
-
-
-/*
- * Проверка, является ли кольцо внешним.
- *
- * Согласно текущему описанию MLP:
- *
- *     Outer = CW
- *     Inner = CCW
- *
- * Поэтому:
- *
- *     area2 > 0 -> outer
- *     area2 < 0 -> hole
- */
-static bool polygon_ring_is_outer(
-    const gfx_point_t *points,
-    uint32_t count
-) {
-    int64_t area2 =
-        polygon_ring_area2(points, count);
-
-    return area2 > 0;
-}
-
 
 /*
  * Проверка, что parts[] действительно содержит корректные start indices.
@@ -290,6 +225,20 @@ static bool polygon_ring_is_outer(
  *     parts[0] == 0
  *     parts[i] < parts[i + 1]
  *     parts[last] < num_points
+ *
+ * Важно:
+ *
+ *     parts[] не содержит конечный индекс последнего ring.
+ *
+ * Поэтому конец каждого ring вычисляется как:
+ *
+ *     parts[i + 1]
+ *
+ * либо:
+ *
+ *     num_points
+ *
+ * для последнего ring.
  */
 static bool validate_parts(
     const uint32_t *parts,
@@ -298,8 +247,10 @@ static bool validate_parts(
 ) {
     if (num_parts == 0) {
         /*
-         * Geometry без parts допускается только как обычная
-         * последовательность точек для line renderer.
+         * Geometry без parts допускается для line renderer.
+         *
+         * Polygon renderer отдельно требует хотя бы один part,
+         * поскольку без него невозможно определить границы ring.
          */
         return true;
     }
@@ -313,10 +264,17 @@ static bool validate_parts(
     }
 
     for (uint32_t i = 0; i < num_parts; i++) {
+        /*
+         * Каждый start index должен указывать на существующую
+         * точку geometry.
+         */
         if (parts[i] >= num_points) {
             return false;
         }
 
+        /*
+         * Ring boundaries должны идти строго по возрастанию.
+         */
         if (i > 0 && parts[i] <= parts[i - 1]) {
             return false;
         }
@@ -345,15 +303,18 @@ static bool validate_parts(
  *
  *     geometry
  *         |
- *         +-- outer ring -> gfx_fill_polygon()
- *         +-- inner ring -> пока пропускается
+ *         +-- ring 0
+ *         +-- ring 1
+ *         +-- ...
  *
- * Почему geometry читается полностью:
+ * Все rings передаются одновременно в
+ * gfx_fill_compound_polygon().
  *
- * gfx_fill_polygon() принимает массив gfx_point_t.
+ * Renderer использует even-odd правило, поэтому внутренние rings
+ * автоматически образуют holes.
  *
- * Поэтому потоковый алгоритм, который был достаточен для линий,
- * недостаточен для polygon fill.
+ * Geometry читается полностью потому, что polygon renderer требует
+ * массив projected points.
  */
 static void parse_geometry_mlp(
     purrgo_fs_t *mlp_fs,
@@ -388,8 +349,8 @@ static void parse_geometry_mlp(
      */
     if (!mlp_fs->seek(
             mlp_fs->handle,
-            32u + v1_offset)) {
-
+            32u + v1_offset
+        )) {
         return;
     }
 
@@ -403,6 +364,8 @@ static void parse_geometry_mlp(
      *   0x0C maxy
      *   0x10 num_parts
      *   0x14 num_points
+     *
+     * Всего 24 байта.
      */
     uint8_t head[24];
 
@@ -442,6 +405,10 @@ static void parse_geometry_mlp(
             (long)num_points
         );
 
+        if (is_polygon_layer && diag != NULL) {
+            diag->polygons_skipped++;
+        }
+
         return;
     }
 
@@ -469,14 +436,19 @@ static void parse_geometry_mlp(
                 bytes_to_read
             ) != bytes_to_read
         ) {
+            if (is_polygon_layer && diag != NULL) {
+                diag->polygons_skipped++;
+            }
+
             return;
         }
 
 
-        for (uint32_t i = 0;
-             i < (uint32_t)num_parts;
-             i++) {
-
+        for (
+            uint32_t i = 0;
+            i < (uint32_t)num_parts;
+            i++
+        ) {
             parts[i] =
                 unpack_u32_le(
                     &part_buf[i * 4u]
@@ -502,51 +474,29 @@ static void parse_geometry_mlp(
             (long)num_points
         );
 
+        if (is_polygon_layer && diag != NULL) {
+            diag->polygons_skipped++;
+        }
+
         return;
     }
 
 
     /*
-     * Для polygon rendering необходимо иметь весь массив
-     * projected screen points.
+     * Для polygon rendering используется общий статический буфер.
      *
-     * gfx_point_t:
-     *
-     *     int16_t x
-     *     int16_t y
-     *
-     * Поэтому размер временного буфера:
-     *
-     *     num_points * sizeof(gfx_point_t)
-     *
-     * Буфер выделяется ровно под текущую geometry.
-     *
-     * Важно:
-     * это временное решение Stage 2.
-     * Для STM32 в дальнейшем можно заменить его на
-     * специализированный streaming/ring-buffer renderer.
+     * num_points уже ограничен PURRGO_MAP_MAX_POINTS выше, поэтому
+     * дополнительной проверки размера самого буфера здесь не требуется.
      */
     gfx_point_t *screen_points = NULL;
 
     if (is_polygon_layer) {
-        if ((size_t)num_points > PURRGO_MAP_MAX_POINTS) {
-            PURRGO_LOG(
-                "MAP: polygon points %ld exceed static buffer size %d, skipping\n",
-                (long)num_points,
-                PURRGO_MAP_MAX_POINTS
-            );
-            if (diag != NULL) {
-                diag->polygons_skipped++;
-            }
-            return;
-        }
-
         screen_points = s_polygon_buffer;
     }
 
 
     /*
-     * Для line rendering сохраняем старый streaming-подход:
+     * Для line rendering сохраняем потоковый подход:
      *
      * предыдущая точка -> текущая точка.
      */
@@ -583,6 +533,9 @@ static void parse_geometry_mlp(
              * При ошибке чтения geometry нельзя использовать
              * частично заполненный polygon.
              */
+            if (is_polygon_layer && diag != NULL) {
+                diag->polygons_skipped++;
+            }
 
             return;
         }
@@ -600,8 +553,6 @@ static void parse_geometry_mlp(
          *     latitude  * 10^7
          *
          * Поэтому умножаем исходные MLP coordinates на 10.
-         *
-         * Это существующая и документированная конверсия проекта.
          */
         int32_t raw_x =
             unpack_i32_le(&pt_buf[0]);
@@ -610,6 +561,10 @@ static void parse_geometry_mlp(
             unpack_i32_le(&pt_buf[4]);
 
 
+        /*
+         * Для реальных координат MLP текущего диапазона
+         * умножение на 10 помещается в int32_t.
+         */
         int32_t norm_x =
             raw_x * 10;
 
@@ -643,7 +598,7 @@ static void parse_geometry_mlp(
         /*
          * Определяем начало следующего part.
          *
-         * parts[] содержит start index.
+         * parts[] содержит start index каждого ring/part.
          */
         if (
             num_parts > 0 &&
@@ -662,8 +617,7 @@ static void parse_geometry_mlp(
 
 
         /*
-         * Для line layer продолжаем старое потоковое
-         * поведение.
+         * Для line layer продолжаем потоковый рендеринг.
          */
         if (!is_polygon_layer) {
             uint32_t current_part_offset =
@@ -718,22 +672,20 @@ static void parse_geometry_mlp(
     }
 
 
-    /*
-     * Polygon rendering.
-     */
+    /* ---------------------------------------------------------------------- */
+    /* Polygon rendering                                                      */
+    /* ---------------------------------------------------------------------- */
+
     if (is_polygon_layer) {
         uint32_t part_count =
             (uint32_t)num_parts;
 
 
         /*
-         * Формат MLP содержит parts[].
+         * Для polygon geometry parts[] обязателен.
          *
-         * Для polygon geometry без parts[] нет способа
-         * определить границы нескольких колец.
-         *
-         * Поэтому такой объект не является корректным
-         * multipart polygon.
+         * Без parts невозможно определить границы rings,
+         * поэтому compound polygon построить нельзя.
          */
         if (part_count == 0) {
             PURRGO_LOG(
@@ -742,15 +694,26 @@ static void parse_geometry_mlp(
                 (long)num_points
             );
 
+            if (diag != NULL) {
+                diag->polygons_skipped++;
+            }
 
             return;
         }
 
 
         /*
-         * Проверка перед передачей в uint16_t (gfx_fill_compound_polygon)
+         * Проверка контракта gfx_fill_compound_polygon().
+         *
+         * На текущем этапе выше уже существует более жёсткое
+         * ограничение PURRGO_MAP_MAX_POINTS=2048 и
+         * PURRGO_MAP_MAX_PARTS=32, но этот check оставляет
+         * явную границу API.
          */
-        if (num_points > UINT16_MAX || part_count > UINT16_MAX) {
+        if (
+            num_points > UINT16_MAX ||
+            part_count > UINT16_MAX
+        ) {
             PURRGO_LOG(
                 "MAP: polygon geometry exceeds uint16_t limit "
                 "points=%ld parts=%ld\n",
@@ -761,15 +724,22 @@ static void parse_geometry_mlp(
             if (diag != NULL) {
                 diag->polygons_skipped++;
             }
+
             return;
         }
 
+
         /*
-         * Заполняем compound polygon.
+         * Передаём все rings одновременно.
          *
-         * gfx_fill_compound_polygon() поддерживает multiple parts
-         * и корректно вычитает holes (inner rings)
-         * через even-odd правило.
+         * gfx_fill_compound_polygon() использует even-odd rule:
+         *
+         *     outer ring + inner ring
+         *
+         * даёт заполненный outer и пустой inner.
+         *
+         * Направление обхода ring здесь намеренно не проверяется:
+         * even-odd алгоритм не зависит от CW/CCW winding.
          */
         gfx_fill_compound_polygon(
             gfx,
@@ -779,12 +749,21 @@ static void parse_geometry_mlp(
             (uint16_t)part_count
         );
 
+
+        /*
+         * Здесь geometry успешно прошла все проверки и была
+         * передана renderer.
+         *
+         * Важно: gfx_fill_compound_polygon() имеет void API и не
+         * сообщает, произошёл ли внутренний fail-fast из-за
+         * GFX_MAX_POLYGON_NODES. Поэтому этот счётчик означает
+         * "polygon accepted by map renderer", а не гарантированно
+         * полностью отображённый polygon.
+         */
         if (diag != NULL) {
             diag->polygons_filled++;
         }
     }
-
-
 }
 
 
@@ -1081,8 +1060,6 @@ static void parse_node(
      * Поэтому используется:
      *
      *     v3_jump - 8
-     *
-     * Это существующая семантика текущего parser.
      */
     if (
         c_xmax < cam->min_x ||
