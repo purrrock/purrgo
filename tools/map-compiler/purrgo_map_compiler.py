@@ -53,7 +53,7 @@ def main() -> None:
 
     # 2. Parse Source Data
     parser = OSMParser(map_osm_path)
-    roads_data, landuse_data, pois_data = parser.parse()
+    roads_data, landuse_data, water_data, pois_data = parser.parse()
 
     # 3. Serialize Layers
     # Helper to route output binary files to the base directory
@@ -70,23 +70,20 @@ def main() -> None:
         meta_all.extend(roads_data)
 
     # 3.2 Landuse and Water Layers
-    landuse_only = [f for f in landuse_data if f.code != HWConfig.WATER_CODE]
-    water_only = [f for f in landuse_data if f.code == HWConfig.WATER_CODE]
-
-    if landuse_only:
-        MapCompiler.compile_mlp(landuse_only, out_path("landuse.mlp"))
-        MapCompiler.compile_db(landuse_only, out_path("landuse.db"))
-        MapCompiler.compile_idx(landuse_only, out_path("landuse.idx"))
-        meta_all.extend(landuse_only)
+    if landuse_data:
+        MapCompiler.compile_mlp(landuse_data, out_path("landuse.mlp"))
+        MapCompiler.compile_db(landuse_data, out_path("landuse.db"))
+        MapCompiler.compile_idx(landuse_data, out_path("landuse.idx"))
+        meta_all.extend(landuse_data)
     else:
         # Pass the absolute prefix to the empty layer creation method
         MapCompiler.create_empty_layer(out_path("landuse"))
 
-    if water_only:
-        MapCompiler.compile_mlp(water_only, out_path("water.mlp"))
-        MapCompiler.compile_db(water_only, out_path("water.db"))
-        MapCompiler.compile_idx(water_only, out_path("water.idx"))
-        meta_all.extend(water_only)
+    if water_data:
+        MapCompiler.compile_mlp(water_data, out_path("water.mlp"))
+        MapCompiler.compile_db(water_data, out_path("water.db"))
+        MapCompiler.compile_idx(water_data, out_path("water.idx"))
+        meta_all.extend(water_data)
 
     # 3.3 Native POI Layer
     if pois_data:

@@ -1,47 +1,32 @@
 import sys
 import csv
-from typing import Dict, Tuple, Set
+from typing import Dict, Tuple, List, Optional
+from dataclasses import dataclass
 
-
-class HWConstants:
-    """Hardware reserved constants for Fallback mechanics."""
-    WATER_CODE = 8200
+@dataclass
+class FeatureRule:
+    code: int
+    pg_class: str
+    style: str
+    lod: int
+    layer: str
+    osm_tags: List[Tuple[str, str]]
+    icon: str
 
 
 class LookupTables:
     """
-    Look-Up Tables (LUT) and routing registries for the parser.
-    Includes hash tables for Advanced Key-Value Tag Routing and
-    layer-isolated Blacklist registries (Namespace Collisions prevention).
+    Rule table loaded from features.csv. Processes rules strictly top-to-bottom.
     """
-    HIGHWAY_CODES: Dict[str, int] = {}
-    POLYGON_CODES: Dict[str, int] = {}
-    POI_CODES: Dict[str, int] = {}
-    DISPLAY_SCALES: Dict[int, int] = {}
-    POI_SHAPES: Dict[str, str] = {}
-
-    # Isolation of Blacklist registries by layer (Software Culling)
-    DISABLED_ROADS: Set[str] = set()
-    DISABLED_LANDUSE: Set[str] = set()
-    DISABLED_POIS: Set[str] = set()
-    DISABLED_WATER: Set[str] = set()
-
-    # Advanced Key-Value Tag Routing: layer -> (key, value) -> fclass
-    TAG_ROUTING: Dict[str, Dict[Tuple[str, str], str]] = {
-        'pois': {},
-        'roads': {},
-        'landuse': {},
-        'water': {}
-    }
+    RULES: List[FeatureRule] = []
 
     @classmethod
     def load_from_csv(cls, filepath: str = "features.csv") -> None:
         """
-        Method for parsing the routing configuration (LUT).
-        Loads mapping rules, populates tables for Early Exit
-        and dynamically binds aliases (LOD/Color/Shape).
+        Parses features.csv and builds the rule list.
         """
-        print(f"[>] Loading LUT style table from {filepath}...")
+        print(f"[>] Loading rules from {filepath}...")
+        cls.RULES = []
 
         try:
             with open(filepath, mode="r", encoding="utf-8") as f:
@@ -50,71 +35,69 @@ class LookupTables:
 
                 loaded_records = 0
                 for row in reader:
-                    # Check minimum length of configuration string
-                    if len(row) < 11:
+                    # Expecting at least 8 columns: Code, PG_class, STYLE, LOD, Layer, OSM_Tags, Description, Enabled
+                    if len(row) < 8:
                         continue
 
-                    fclass = row[1].strip()
-                    layer = row[4].strip()
-                    osm_tag = row[5].strip()
-                    enabled_flag = row[10].strip().lower()
-
-                    # === Software Culling Mechanism (Early Exit parsing) ===
-                    # Isolate registries to prevent Namespace Collisions
-                    if enabled_flag in ("0", "false", "no", "off", ""):
-                        if layer == "roads":
-                            cls.DISABLED_ROADS.add(fclass)
-                        elif layer == "pois":
-                            cls.DISABLED_POIS.add(fclass)
-                        elif layer == "water":
-                            cls.DISABLED_WATER.add(fclass)
-                        else:
-                            cls.DISABLED_LANDUSE.add(fclass)
-                        continue
-
-                    # === Advanced Key-Value Tag Routing ===
-                    # Parsing complex OSM tags (e.g. amenity=hospital, place=city)
-                    if osm_tag and "=" in osm_tag:
-                        for tag_pair in osm_tag.split(","):
-                            if "=" in tag_pair:
-                                k, v = tag_pair.split("=", 1)
-                                if layer not in cls.TAG_ROUTING:
-                                    cls.TAG_ROUTING[layer] = {}
-                                cls.TAG_ROUTING[layer][(k.strip(), v.strip())] = fclass
-
-                    # Parsing remapping parameters (hardware IDs and SQT indexation levels)
                     try:
-                        remap_code = int(row[7].strip())
-                        remap_lod = int(row[9].strip())
+                        code = int(row[0].strip())
+                        lod = int(row[3].strip())
                     except ValueError:
                         continue
 
-                    # === Populating LUT tables for the binary graph generator ===
-                    if layer == "roads":
-                        cls.HIGHWAY_CODES[fclass] = remap_code
-                        cls.DISPLAY_SCALES[remap_code] = remap_lod
-                    elif layer in ("landuse", "water"):
-                        cls.POLYGON_CODES[fclass] = remap_code
-                        cls.DISPLAY_SCALES[remap_code] = remap_lod
-                    elif layer == "pois":
-                        cls.POI_CODES[fclass] = remap_code
-                        cls.DISPLAY_SCALES[remap_code] = remap_lod
-                        # Fallback mechanism for missing POI shape
-                        shape_val = row[11].strip().lower() if len(row) > 11 else "rhombus"
-                        cls.POI_SHAPES[fclass] = shape_val if shape_val else "rhombus"
+                    enabled = row[7].strip()
+                    if enabled not in ("1", "true", "yes", "on"):
+                        continue
 
+                    pg_class = row[1].strip()
+                    style = row[2].strip()
+                    layer = row[4].strip()
+
+                    osm_tags_str = row[5].strip()
+                    osm_tags = []
+                    if osm_tags_str:
+                        for tag_pair in osm_tags_str.split(","):
+                            if "=" in tag_pair:
+                                k, v = tag_pair.split("=", 1)
+                                osm_tags.append((k.strip(), v.strip()))
+
+                    icon = row[8].strip() if len(row) > 8 else ""
+
+                    rule = FeatureRule(
+                        code=code,
+                        pg_class=pg_class,
+                        style=style,
+                        lod=lod,
+                        layer=layer,
+                        osm_tags=osm_tags,
+                        icon=icon
+                    )
+                    cls.RULES.append(rule)
                     loaded_records += 1
 
             print(f"    Successfully imported rules: {loaded_records}")
-            print(f"[i] LUT loaded. Roads: {len(cls.HIGHWAY_CODES)}, Polygons: {len(cls.POLYGON_CODES)}, POI: {len(cls.POI_CODES)}")
-
-            # Failsafe for the water layer (must be present in LOD2)
-            if HWConstants.WATER_CODE not in cls.DISPLAY_SCALES:
-                cls.DISPLAY_SCALES[HWConstants.WATER_CODE] = 1000
 
         except FileNotFoundError:
-            print(f"[-] Error: LUT configuration file {filepath} not found.")
+            print(f"[-] Error: Configuration file {filepath} not found.")
             sys.exit(1)
         except Exception as e:
             print(f"[-] Critical error parsing {filepath}: {e}")
             sys.exit(1)
+
+    @classmethod
+    def match_feature(cls, tags: Dict[str, str]) -> Optional[FeatureRule]:
+        """
+        Matches tags against rules top-to-bottom. First fully matching rule wins.
+        """
+        if not tags:
+            return None
+
+        for rule in cls.RULES:
+            match = True
+            for k, v in rule.osm_tags:
+                if tags.get(k) != v:
+                    match = False
+                    break
+            if match and rule.osm_tags:
+                return rule
+        return None

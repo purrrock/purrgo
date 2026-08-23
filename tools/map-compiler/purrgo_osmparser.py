@@ -96,6 +96,7 @@ class OSMParser:
 
         self.roads: List[MapFeature] = []
         self.landuse: List[MapFeature] = []
+        self.water: List[MapFeature] = []
         self.pois: List[MapFeature] = []
 
     @staticmethod
@@ -121,10 +122,10 @@ class OSMParser:
 
         return None
 
-    def parse(self) -> Tuple[List[MapFeature], List[MapFeature], List[MapFeature]]:
+    def parse(self) -> Tuple[List[MapFeature], List[MapFeature], List[MapFeature], List[MapFeature]]:
         self._pass1_cache_nodes()
         self._pass2_build_features()
-        return self.roads, self.landuse, self.pois
+        return self.roads, self.landuse, self.water, self.pois
 
     def _get_node_coord(self, node_id: int) -> Optional[Tuple[int, int]]:
         # Protection in case relation/way calls for node after nodes are freed
@@ -298,42 +299,14 @@ class OSMParser:
         if not tags:
             return
 
-        is_restricted = tags.get('access') in self.RESTRICTED_ACCESS_VALUES
-        is_barrier = 'barrier' in tags
-
-        if is_restricted and not is_barrier:
-            return
-
-        fclass = code = None
-
-        if is_restricted and is_barrier:
-            fclass = tags.get('barrier', 'barrier')
-            code = 7209
-            LookupTables.POI_SHAPES[fclass] = "barrier"
-        else:
-            for k, v in tags.items():
-                if (k, v) in LookupTables.TAG_ROUTING.get('pois', {}):
-                    fclass = LookupTables.TAG_ROUTING['pois'][(k, v)]
-                    break
-
-            if not fclass:
-                for val in tags.values():
-                    if val in LookupTables.POI_CODES:
-                        fclass = val
-                        break
-
-            if fclass:
-                if fclass in LookupTables.DISABLED_POIS:
-                    return
-                code = LookupTables.POI_CODES.get(fclass)
-
-        if code is None:
+        rule = LookupTables.match_feature(tags)
+        if not rule:
             return
 
         raw_name = tags.get('short_name:en') or tags.get('int_name') or tags.get('name:en') or tags.get('short_name') or tags.get('name') or ""
         name = _sanitize_name_cached(raw_name)
-        if not name and fclass:
-            name = str(fclass)
+        if not name:
+            name = str(rule.pg_class)
 
         try:
             osm_id = elem.get('id')
@@ -343,10 +316,22 @@ class OSMParser:
         except (TypeError, ValueError):
             return
 
+        # points field is unused for native POIs but we'll set it for backwards compatibility if needed, or just let bbox take over
         points_bytes = struct.pack("<ii", node_coord[0], node_coord[1])
-        feature = MapFeature(osm_id=osm_id, fclass=fclass, code=code, name=name, points=points_bytes)
+        feature = MapFeature(osm_id=osm_id, code=rule.code, name=name, points=points_bytes, lod=rule.lod)
         feature.calculate_bbox()
-        self.pois.append(feature)
+
+        # Override bbox for POIs (xmin == xmax, ymin == ymax)
+        feature.bbox = (node_coord[0], node_coord[1], node_coord[0], node_coord[1])
+
+        if rule.layer == 'pois':
+            self.pois.append(feature)
+        elif rule.layer == 'roads':
+            self.roads.append(feature)
+        elif rule.layer == 'landuse':
+            self.landuse.append(feature)
+        elif rule.layer == 'water':
+            self.water.append(feature)
 
     def _process_way(self, elem: ET.Element) -> None:
         tags = self._extract_tags(elem)
@@ -391,121 +376,61 @@ class OSMParser:
         name = _sanitize_name_cached(raw_name)
         osm_id = str(way_id)
 
+        rule = LookupTables.match_feature(tags)
+        if not rule:
+            return
+
         is_closed = len(points) >= 4 and points[0] == points[-1]
 
-        if is_closed and any(k in tags for k in ('building', 'amenity', 'shop', 'leisure', 'tourism', 'historic')):
-            poi_fclass = None
+        if rule.layer == 'pois':
+            # Way POIs logic: calculate centroid
+            if is_closed:
+                unique_points = points[:-1]
+                avg_lon = sum(p[0] for p in unique_points) // len(unique_points)
+                avg_lat = sum(p[1] for p in unique_points) // len(unique_points)
 
-            for k, v in tags.items():
-                if (k, v) in LookupTables.TAG_ROUTING.get('pois', {}):
-                    poi_fclass = LookupTables.TAG_ROUTING['pois'][(k, v)]
-                    break
+                poi_name = name if name else str(rule.pg_class)
+                points_bytes = struct.pack("<ii", avg_lon, avg_lat)
+                poi_feature = MapFeature(
+                    osm_id=f"v{osm_id}",
+                    code=rule.code,
+                    name=poi_name,
+                    points=points_bytes,
+                    lod=rule.lod
+                )
+                poi_feature.calculate_bbox()
+                poi_feature.bbox = (avg_lon, avg_lat, avg_lon, avg_lat)
+                self.pois.append(poi_feature)
+            return
 
-            if not poi_fclass:
-                for val in tags.values():
-                    if val in LookupTables.POI_CODES:
-                        poi_fclass = val
-                        break
-
-            if poi_fclass and poi_fclass not in LookupTables.DISABLED_POIS:
-                poi_code = LookupTables.POI_CODES.get(poi_fclass)
-                if poi_code:
-                    unique_points = points[:-1]
-                    avg_lon = sum(p[0] for p in unique_points) // len(unique_points)
-                    avg_lat = sum(p[1] for p in unique_points) // len(unique_points)
-
-                    poi_name = name if name else str(poi_fclass)
-                    points_bytes = struct.pack("<ii", avg_lon, avg_lat)
-                    poi_feature = MapFeature(
-                        osm_id=f"v{osm_id}",
-                        fclass=poi_fclass,
-                        code=poi_code,
-                        name=poi_name,
-                        points=points_bytes
-                    )
-                    poi_feature.calculate_bbox()
-                    self.pois.append(poi_feature)
-
-        target_layer = fclass = None
-
-        for k, v in tags.items():
-            if (k, v) in LookupTables.TAG_ROUTING.get('roads', {}):
-                fclass, target_layer = LookupTables.TAG_ROUTING['roads'][(k, v)], 'roads'
-                break
-            elif (k, v) in LookupTables.TAG_ROUTING.get('landuse', {}):
-                fclass, target_layer = LookupTables.TAG_ROUTING['landuse'][(k, v)], 'landuse'
-                break
-            elif (k, v) in LookupTables.TAG_ROUTING.get('water', {}):
-                fclass, target_layer = LookupTables.TAG_ROUTING['water'][(k, v)], 'landuse'
-                break
-
-        if not fclass:
-            if 'highway' in tags:
-                fclass, target_layer = tags['highway'], 'roads'
-            elif 'landuse' in tags:
-                fclass, target_layer = tags['landuse'], 'landuse'
-            elif 'natural' in tags:
-                fclass, target_layer = tags['natural'], 'landuse'
-            elif 'leisure' in tags:
-                fclass, target_layer = tags['leisure'], 'landuse'
-
-        if target_layer == 'roads' and len(points) >= 2:
-            if fclass == 'track' and 'tracktype' in tags:
-                fclass += f'_{tags["tracktype"]}'
-            if fclass in LookupTables.DISABLED_ROADS:
-                return
-
-            code = LookupTables.HIGHWAY_CODES.get(fclass, HWConfig.DEFAULT_HIGHWAY_CODE)
-            surface_state = self._analyze_road_surface(tags)
-
-            if surface_state == "unpaved":
-                code = 5142
-            elif surface_state == "paved":
-                non_vehicle_classes = {
-                    'footway', 'path', 'steps', 'pedestrian',
-                    'cycleway', 'bridleway', 'corridor', 'elevator', 'escalator'
-                }
-                if fclass not in non_vehicle_classes:
-                    code = 5113
-
+        if rule.layer == 'roads' and len(points) >= 2:
             points_bytes = self.way_coords_pool[start_idx:start_idx + len(points) * 2].tobytes()
-            feature = MapFeature(osm_id=osm_id, fclass=fclass, code=code, name=name, points=points_bytes)
+            feature = MapFeature(osm_id=osm_id, code=rule.code, name=name, points=points_bytes, lod=rule.lod)
             feature.calculate_bbox()
             self.roads.append(feature)
 
-        elif target_layer == 'landuse' and len(points) >= 4:
-            if fclass in LookupTables.DISABLED_LANDUSE:
-                return
-
-            if points[0] == points[-1]:
+        elif rule.layer in ('landuse', 'water') and len(points) >= 4:
+            if is_closed:
                 if not self._is_clockwise(points):
                     points.reverse()
 
                 points_bytes = b''.join(struct.pack("<ii", p[0], p[1]) for p in points)
 
-                code = LookupTables.POLYGON_CODES.get(fclass, HWConfig.DEFAULT_POLYGON_CODE)
-                feature = MapFeature(osm_id=osm_id, fclass=fclass, code=code, name=name, points=points_bytes)
+                feature = MapFeature(osm_id=osm_id, code=rule.code, name=name, points=points_bytes, lod=rule.lod)
                 feature.calculate_bbox()
-                self.landuse.append(feature)
+
+                if rule.layer == 'water':
+                    self.water.append(feature)
+                else:
+                    self.landuse.append(feature)
 
     def _process_relation(self, elem: ET.Element) -> None:
         tags = self._extract_tags(elem)
         if tags.get('type') != 'multipolygon':
             return
 
-        fclass = None
-        for k, v in tags.items():
-            if (k, v) in LookupTables.TAG_ROUTING.get('landuse', {}):
-                fclass = LookupTables.TAG_ROUTING['landuse'][(k, v)]
-                break
-            elif (k, v) in LookupTables.TAG_ROUTING.get('water', {}):
-                fclass = LookupTables.TAG_ROUTING['water'][(k, v)]
-                break
-
-        if not fclass:
-            fclass = tags.get('landuse') or tags.get('leisure') or tags.get('natural')
-
-        if not fclass or fclass in LookupTables.DISABLED_LANDUSE:
+        rule = LookupTables.match_feature(tags)
+        if not rule or rule.layer not in ('landuse', 'water'):
             return
 
         raw_name = tags.get('short_name:en') or tags.get('int_name') or tags.get('name:en') or tags.get('short_name') or tags.get('name') or ""
@@ -549,8 +474,10 @@ class OSMParser:
 
         osm_id = elem.get('id')
         if combined_points and parts and osm_id:
-            code = LookupTables.POLYGON_CODES.get(fclass, HWConfig.DEFAULT_POLYGON_CODE)
             points_bytes = b''.join(struct.pack("<ii", p[0], p[1]) for p in combined_points)
-            feature = MapFeature(osm_id=osm_id, fclass=fclass, code=code, name=name, points=points_bytes, parts=parts)
+            feature = MapFeature(osm_id=osm_id, code=rule.code, name=name, points=points_bytes, parts=parts, lod=rule.lod)
             feature.calculate_bbox()
-            self.landuse.append(feature)
+            if rule.layer == 'water':
+                self.water.append(feature)
+            else:
+                self.landuse.append(feature)
