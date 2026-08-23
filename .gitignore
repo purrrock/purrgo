@@ -41,6 +41,8 @@ venv/
 Thumbs.db
  
  *.exe
+ *.osm
+ 
  build/
 CMakeCache.txt
 CMakeFiles/
