@@ -13350,7 +13350,7 @@ class MapCompiler:
                 total_records += 1
 
                 r_bytes = bytearray(b'\x20')
-                r_bytes += cls._pad(feature.osm_id, 12) + cls._pad(feature.code, 4) + cls._pad(feature.fclass, 28) + cls._pad(feature.name, 100)
+                r_bytes += cls._pad(feature.osm_id, 12) + cls._pad(str(feature.code), 4) + cls._pad(feature.name, 100)
                 bin_records += r_bytes
 
         dbf_header = (
@@ -13361,7 +13361,6 @@ class MapCompiler:
             + b'\x00' * 20
             + cls._desc("osm_id", 12)
             + cls._desc("code", 4)
-            + cls._desc("fclass", 28)
             + cls._desc("name", 100)
             + b'\x0D'
         )
@@ -13429,58 +13428,47 @@ class MapCompiler:
         idx_buffer = bytearray()
 
         if is_poi:
-            # For large POI arrays, R-Tree compression is now also applied
-            if not features:
+            for f in features:
+                f.v1 = 0
+
+        # Standard multi-level GIS geometry (LOD 0, 1, 2)
+        lod_filters = [
+            lambda f: f.lod >= 0,
+            lambda f: f.lod >= 1,
+            lambda f: f.lod >= 2
+        ]
+
+        lod2_size = 0
+        prev_len = -1
+        cached_packed = b""
+        for lod_index, condition in enumerate(lod_filters):
+            start_len = len(idx_buffer)
+            lod_records = [f for f in features if condition(f)]
+
+            if not lod_records:
                 idx_buffer.extend(b'SQT\x01\x01\x00\x00\x00' + struct.pack("<II", 0, 0))
             else:
-                for f in features:
-                    f.v1 = 0
-                depth, root_nodes = cls._build_rtree(features)
-
-                idx_buffer.extend(b'SQT\x01\x01\x00\x00\x00' + struct.pack("<II", depth, len(root_nodes)))
-                for node in root_nodes:
-                    idx_buffer.extend(node.pack())
-
-            cls._write_yzl_container(filepath, idx_buffer, is_idx=False)
-
-        else:
-            # Standard multi-level GIS geometry (LOD 0, 1, 2)
-            lod_filters = [
-                lambda c: True,
-                lambda c: LookupTables.DISPLAY_SCALES.get(c, 20) >= 500,
-                lambda c: LookupTables.DISPLAY_SCALES.get(c, 20) >= 1000
-            ]
-
-            lod2_size = 0
-            prev_len = -1
-            cached_packed = b""
-            for lod_index, condition in enumerate(lod_filters):
-                start_len = len(idx_buffer)
-                lod_records = [f for f in features if condition(f.code)]
-
-                if not lod_records:
-                    idx_buffer.extend(b'SQT\x01\x01\x00\x00\x00' + struct.pack("<II", 0, 0))
+                if len(lod_records) == prev_len:
+                    idx_buffer.extend(cached_packed)
                 else:
-                    if len(lod_records) == prev_len:
-                        idx_buffer.extend(cached_packed)
-                    else:
-                        depth, root_nodes = cls._build_rtree(lod_records)
+                    depth, root_nodes = cls._build_rtree(lod_records)
 
-                        # Dynamic recording of a 16-byte SQT header
-                        header = b'SQT\x01\x01\x00\x00\x00' + struct.pack("<II", depth, len(root_nodes))
-                        packed_data = bytearray(header)
-                        for node in root_nodes:
-                            packed_data.extend(node.pack())
+                    # Dynamic recording of a 16-byte SQT header
+                    header = b'SQT\x01\x01\x00\x00\x00' + struct.pack("<II", depth, len(root_nodes))
+                    packed_data = bytearray(header)
+                    for node in root_nodes:
+                        packed_data.extend(node.pack())
 
-                        idx_buffer.extend(packed_data)
+                    idx_buffer.extend(packed_data)
 
-                        cached_packed = packed_data
-                        prev_len = len(lod_records)
+                    cached_packed = packed_data
+                    prev_len = len(lod_records)
 
-                if lod_index == 2:
-                    lod2_size = len(idx_buffer) - start_len
+            if lod_index == 2:
+                lod2_size = len(idx_buffer) - start_len
 
-            cls._write_yzl_container(filepath, idx_buffer, is_idx=True, lod2_size=lod2_size)
+        # POIs use the same LOD logic but are encapsulated with is_idx=False because their magic extension is 0x00 and RAM type is 0x04000000
+        cls._write_yzl_container(filepath, idx_buffer, is_idx=not is_poi, lod2_size=lod2_size)
 
     @staticmethod
     def create_empty_layer(layer_prefix: str) -> None:
@@ -13561,48 +13549,33 @@ def is_clockwise(points: List[Tuple[int, int]]) -> bool:
 ```py
 import sys
 import csv
-from typing import Dict, Tuple, Set
+from typing import Dict, Tuple, List, Optional
+from dataclasses import dataclass
 
-
-class HWConstants:
-    """Hardware reserved constants for Fallback mechanics."""
-    WATER_CODE = 8200
+@dataclass
+class FeatureRule:
+    code: int
+    pg_class: str
+    style: str
+    lod: int
+    layer: str
+    osm_tags: List[Tuple[str, str]]
+    icon: str
 
 
 class LookupTables:
     """
-    Look-Up Tables (LUT) and routing registries for the parser.
-    Includes hash tables for Advanced Key-Value Tag Routing and
-    layer-isolated Blacklist registries (Namespace Collisions prevention).
+    Rule table loaded from features.csv. Processes rules strictly top-to-bottom.
     """
-    HIGHWAY_CODES: Dict[str, int] = {}
-    POLYGON_CODES: Dict[str, int] = {}
-    POI_CODES: Dict[str, int] = {}
-    DISPLAY_SCALES: Dict[int, int] = {}
-    POI_SHAPES: Dict[str, str] = {}
-
-    # Isolation of Blacklist registries by layer (Software Culling)
-    DISABLED_ROADS: Set[str] = set()
-    DISABLED_LANDUSE: Set[str] = set()
-    DISABLED_POIS: Set[str] = set()
-    DISABLED_WATER: Set[str] = set()
-
-    # Advanced Key-Value Tag Routing: layer -> (key, value) -> fclass
-    TAG_ROUTING: Dict[str, Dict[Tuple[str, str], str]] = {
-        'pois': {},
-        'roads': {},
-        'landuse': {},
-        'water': {}
-    }
+    RULES: List[FeatureRule] = []
 
     @classmethod
     def load_from_csv(cls, filepath: str = "features.csv") -> None:
         """
-        Method for parsing the routing configuration (LUT).
-        Loads mapping rules, populates tables for Early Exit
-        and dynamically binds aliases (LOD/Color/Shape).
+        Parses features.csv and builds the rule list.
         """
-        print(f"[>] Loading LUT style table from {filepath}...")
+        print(f"[>] Loading rules from {filepath}...")
+        cls.RULES = []
 
         try:
             with open(filepath, mode="r", encoding="utf-8") as f:
@@ -13611,74 +13584,72 @@ class LookupTables:
 
                 loaded_records = 0
                 for row in reader:
-                    # Check minimum length of configuration string
-                    if len(row) < 11:
+                    # Expecting at least 8 columns: Code, PG_class, STYLE, LOD, Layer, OSM_Tags, Description, Enabled
+                    if len(row) < 8:
                         continue
 
-                    fclass = row[1].strip()
-                    layer = row[4].strip()
-                    osm_tag = row[5].strip()
-                    enabled_flag = row[10].strip().lower()
-
-                    # === Software Culling Mechanism (Early Exit parsing) ===
-                    # Isolate registries to prevent Namespace Collisions
-                    if enabled_flag in ("0", "false", "no", "off", ""):
-                        if layer == "roads":
-                            cls.DISABLED_ROADS.add(fclass)
-                        elif layer == "pois":
-                            cls.DISABLED_POIS.add(fclass)
-                        elif layer == "water":
-                            cls.DISABLED_WATER.add(fclass)
-                        else:
-                            cls.DISABLED_LANDUSE.add(fclass)
-                        continue
-
-                    # === Advanced Key-Value Tag Routing ===
-                    # Parsing complex OSM tags (e.g. amenity=hospital, place=city)
-                    if osm_tag and "=" in osm_tag:
-                        for tag_pair in osm_tag.split(","):
-                            if "=" in tag_pair:
-                                k, v = tag_pair.split("=", 1)
-                                if layer not in cls.TAG_ROUTING:
-                                    cls.TAG_ROUTING[layer] = {}
-                                cls.TAG_ROUTING[layer][(k.strip(), v.strip())] = fclass
-
-                    # Parsing remapping parameters (hardware IDs and SQT indexation levels)
                     try:
-                        remap_code = int(row[7].strip())
-                        remap_lod = int(row[9].strip())
+                        code = int(row[0].strip())
+                        lod = int(row[3].strip())
                     except ValueError:
                         continue
 
-                    # === Populating LUT tables for the binary graph generator ===
-                    if layer == "roads":
-                        cls.HIGHWAY_CODES[fclass] = remap_code
-                        cls.DISPLAY_SCALES[remap_code] = remap_lod
-                    elif layer in ("landuse", "water"):
-                        cls.POLYGON_CODES[fclass] = remap_code
-                        cls.DISPLAY_SCALES[remap_code] = remap_lod
-                    elif layer == "pois":
-                        cls.POI_CODES[fclass] = remap_code
-                        cls.DISPLAY_SCALES[remap_code] = remap_lod
-                        # Fallback mechanism for missing POI shape
-                        shape_val = row[11].strip().lower() if len(row) > 11 else "rhombus"
-                        cls.POI_SHAPES[fclass] = shape_val if shape_val else "rhombus"
+                    enabled = row[7].strip()
+                    if enabled not in ("1", "true", "yes", "on"):
+                        continue
 
+                    pg_class = row[1].strip()
+                    style = row[2].strip()
+                    layer = row[4].strip()
+
+                    osm_tags_str = row[5].strip()
+                    osm_tags = []
+                    if osm_tags_str:
+                        for tag_pair in osm_tags_str.split(","):
+                            if "=" in tag_pair:
+                                k, v = tag_pair.split("=", 1)
+                                osm_tags.append((k.strip(), v.strip()))
+
+                    icon = row[8].strip() if len(row) > 8 else ""
+
+                    rule = FeatureRule(
+                        code=code,
+                        pg_class=pg_class,
+                        style=style,
+                        lod=lod,
+                        layer=layer,
+                        osm_tags=osm_tags,
+                        icon=icon
+                    )
+                    cls.RULES.append(rule)
                     loaded_records += 1
 
             print(f"    Successfully imported rules: {loaded_records}")
-            print(f"[i] LUT loaded. Roads: {len(cls.HIGHWAY_CODES)}, Polygons: {len(cls.POLYGON_CODES)}, POI: {len(cls.POI_CODES)}")
-
-            # Failsafe for the water layer (must be present in LOD2)
-            if HWConstants.WATER_CODE not in cls.DISPLAY_SCALES:
-                cls.DISPLAY_SCALES[HWConstants.WATER_CODE] = 1000
 
         except FileNotFoundError:
-            print(f"[-] Error: LUT configuration file {filepath} not found.")
+            print(f"[-] Error: Configuration file {filepath} not found.")
             sys.exit(1)
         except Exception as e:
             print(f"[-] Critical error parsing {filepath}: {e}")
             sys.exit(1)
+
+    @classmethod
+    def match_feature(cls, tags: Dict[str, str]) -> Optional[FeatureRule]:
+        """
+        Matches tags against rules top-to-bottom. First fully matching rule wins.
+        """
+        if not tags:
+            return None
+
+        for rule in cls.RULES:
+            match = True
+            for k, v in rule.osm_tags:
+                if tags.get(k) != v:
+                    match = False
+                    break
+            if match and rule.osm_tags:
+                return rule
+        return None
 
 ```
 
@@ -13739,7 +13710,7 @@ def main() -> None:
 
     # 2. Parse Source Data
     parser = OSMParser(map_osm_path)
-    roads_data, landuse_data, pois_data = parser.parse()
+    roads_data, landuse_data, water_data, pois_data = parser.parse()
 
     # 3. Serialize Layers
     # Helper to route output binary files to the base directory
@@ -13756,23 +13727,20 @@ def main() -> None:
         meta_all.extend(roads_data)
 
     # 3.2 Landuse and Water Layers
-    landuse_only = [f for f in landuse_data if f.code != HWConfig.WATER_CODE]
-    water_only = [f for f in landuse_data if f.code == HWConfig.WATER_CODE]
-
-    if landuse_only:
-        MapCompiler.compile_mlp(landuse_only, out_path("landuse.mlp"))
-        MapCompiler.compile_db(landuse_only, out_path("landuse.db"))
-        MapCompiler.compile_idx(landuse_only, out_path("landuse.idx"))
-        meta_all.extend(landuse_only)
+    if landuse_data:
+        MapCompiler.compile_mlp(landuse_data, out_path("landuse.mlp"))
+        MapCompiler.compile_db(landuse_data, out_path("landuse.db"))
+        MapCompiler.compile_idx(landuse_data, out_path("landuse.idx"))
+        meta_all.extend(landuse_data)
     else:
         # Pass the absolute prefix to the empty layer creation method
         MapCompiler.create_empty_layer(out_path("landuse"))
 
-    if water_only:
-        MapCompiler.compile_mlp(water_only, out_path("water.mlp"))
-        MapCompiler.compile_db(water_only, out_path("water.db"))
-        MapCompiler.compile_idx(water_only, out_path("water.idx"))
-        meta_all.extend(water_only)
+    if water_data:
+        MapCompiler.compile_mlp(water_data, out_path("water.mlp"))
+        MapCompiler.compile_db(water_data, out_path("water.db"))
+        MapCompiler.compile_idx(water_data, out_path("water.idx"))
+        meta_all.extend(water_data)
 
     # 3.3 Native POI Layer
     if pois_data:
@@ -13808,17 +13776,9 @@ class HWConfig:
     YZL_HEADER_SIZE = 32
     NODE_SIZE = 28           # Unified node size (Data Node / Nav Node)
     CHUNK_SIZE = 14          # Maximum number of objects in a cluster
-    DBF_HEADER_LEN = 161     # dBase III header
-    DBF_RECORD_LEN = 145     # Fixed-length dBase III record
+    DBF_HEADER_LEN = 129     # dBase III header
+    DBF_RECORD_LEN = 117     # Fixed-length dBase III record
 
-    # System rendering codes
-    WATER_CODE = 8200
-    DEFAULT_HIGHWAY_CODE = 5142
-    DEFAULT_POLYGON_CODE = 7208
-    DEFAULT_POI_CODE = 2724
-
-    # Other constants
-    LOD_MASK = 0x0E
     RAM_LOAD_TYPE = 0x04000000
 
 
@@ -13840,10 +13800,10 @@ def safe_encode(text: Any, max_len: int) -> bytes:
 class MapFeature:
     """Represents a single map primitive (Road, Polygon, POI)"""
     osm_id: str
-    fclass: str
     code: int
     name: str
     points: bytes
+    lod: int
 
     # [MEMORY OPTIMIZATION 2]: Используем иммутабельный (неизменяемый) кортеж по умолчанию.
     # Это позволяет всем миллионам объектов без multipolygon ссылаться на один и тот же (0,) в памяти.
@@ -14061,6 +14021,7 @@ class OSMParser:
 
         self.roads: List[MapFeature] = []
         self.landuse: List[MapFeature] = []
+        self.water: List[MapFeature] = []
         self.pois: List[MapFeature] = []
 
     @staticmethod
@@ -14086,10 +14047,10 @@ class OSMParser:
 
         return None
 
-    def parse(self) -> Tuple[List[MapFeature], List[MapFeature], List[MapFeature]]:
+    def parse(self) -> Tuple[List[MapFeature], List[MapFeature], List[MapFeature], List[MapFeature]]:
         self._pass1_cache_nodes()
         self._pass2_build_features()
-        return self.roads, self.landuse, self.pois
+        return self.roads, self.landuse, self.water, self.pois
 
     def _get_node_coord(self, node_id: int) -> Optional[Tuple[int, int]]:
         # Protection in case relation/way calls for node after nodes are freed
@@ -14263,42 +14224,14 @@ class OSMParser:
         if not tags:
             return
 
-        is_restricted = tags.get('access') in self.RESTRICTED_ACCESS_VALUES
-        is_barrier = 'barrier' in tags
-
-        if is_restricted and not is_barrier:
-            return
-
-        fclass = code = None
-
-        if is_restricted and is_barrier:
-            fclass = tags.get('barrier', 'barrier')
-            code = 7209
-            LookupTables.POI_SHAPES[fclass] = "barrier"
-        else:
-            for k, v in tags.items():
-                if (k, v) in LookupTables.TAG_ROUTING.get('pois', {}):
-                    fclass = LookupTables.TAG_ROUTING['pois'][(k, v)]
-                    break
-
-            if not fclass:
-                for val in tags.values():
-                    if val in LookupTables.POI_CODES:
-                        fclass = val
-                        break
-
-            if fclass:
-                if fclass in LookupTables.DISABLED_POIS:
-                    return
-                code = LookupTables.POI_CODES.get(fclass)
-
-        if code is None:
+        rule = LookupTables.match_feature(tags)
+        if not rule:
             return
 
         raw_name = tags.get('short_name:en') or tags.get('int_name') or tags.get('name:en') or tags.get('short_name') or tags.get('name') or ""
         name = _sanitize_name_cached(raw_name)
-        if not name and fclass:
-            name = str(fclass)
+        if not name:
+            name = str(rule.pg_class)
 
         try:
             osm_id = elem.get('id')
@@ -14308,10 +14241,22 @@ class OSMParser:
         except (TypeError, ValueError):
             return
 
+        # points field is unused for native POIs but we'll set it for backwards compatibility if needed, or just let bbox take over
         points_bytes = struct.pack("<ii", node_coord[0], node_coord[1])
-        feature = MapFeature(osm_id=osm_id, fclass=fclass, code=code, name=name, points=points_bytes)
+        feature = MapFeature(osm_id=osm_id, code=rule.code, name=name, points=points_bytes, lod=rule.lod)
         feature.calculate_bbox()
-        self.pois.append(feature)
+
+        # Override bbox for POIs (xmin == xmax, ymin == ymax)
+        feature.bbox = (node_coord[0], node_coord[1], node_coord[0], node_coord[1])
+
+        if rule.layer == 'pois':
+            self.pois.append(feature)
+        elif rule.layer == 'roads':
+            self.roads.append(feature)
+        elif rule.layer == 'landuse':
+            self.landuse.append(feature)
+        elif rule.layer == 'water':
+            self.water.append(feature)
 
     def _process_way(self, elem: ET.Element) -> None:
         tags = self._extract_tags(elem)
@@ -14356,121 +14301,61 @@ class OSMParser:
         name = _sanitize_name_cached(raw_name)
         osm_id = str(way_id)
 
+        rule = LookupTables.match_feature(tags)
+        if not rule:
+            return
+
         is_closed = len(points) >= 4 and points[0] == points[-1]
 
-        if is_closed and any(k in tags for k in ('building', 'amenity', 'shop', 'leisure', 'tourism', 'historic')):
-            poi_fclass = None
+        if rule.layer == 'pois':
+            # Way POIs logic: calculate centroid
+            if is_closed:
+                unique_points = points[:-1]
+                avg_lon = sum(p[0] for p in unique_points) // len(unique_points)
+                avg_lat = sum(p[1] for p in unique_points) // len(unique_points)
 
-            for k, v in tags.items():
-                if (k, v) in LookupTables.TAG_ROUTING.get('pois', {}):
-                    poi_fclass = LookupTables.TAG_ROUTING['pois'][(k, v)]
-                    break
+                poi_name = name if name else str(rule.pg_class)
+                points_bytes = struct.pack("<ii", avg_lon, avg_lat)
+                poi_feature = MapFeature(
+                    osm_id=f"v{osm_id}",
+                    code=rule.code,
+                    name=poi_name,
+                    points=points_bytes,
+                    lod=rule.lod
+                )
+                poi_feature.calculate_bbox()
+                poi_feature.bbox = (avg_lon, avg_lat, avg_lon, avg_lat)
+                self.pois.append(poi_feature)
+            return
 
-            if not poi_fclass:
-                for val in tags.values():
-                    if val in LookupTables.POI_CODES:
-                        poi_fclass = val
-                        break
-
-            if poi_fclass and poi_fclass not in LookupTables.DISABLED_POIS:
-                poi_code = LookupTables.POI_CODES.get(poi_fclass)
-                if poi_code:
-                    unique_points = points[:-1]
-                    avg_lon = sum(p[0] for p in unique_points) // len(unique_points)
-                    avg_lat = sum(p[1] for p in unique_points) // len(unique_points)
-
-                    poi_name = name if name else str(poi_fclass)
-                    points_bytes = struct.pack("<ii", avg_lon, avg_lat)
-                    poi_feature = MapFeature(
-                        osm_id=f"v{osm_id}",
-                        fclass=poi_fclass,
-                        code=poi_code,
-                        name=poi_name,
-                        points=points_bytes
-                    )
-                    poi_feature.calculate_bbox()
-                    self.pois.append(poi_feature)
-
-        target_layer = fclass = None
-
-        for k, v in tags.items():
-            if (k, v) in LookupTables.TAG_ROUTING.get('roads', {}):
-                fclass, target_layer = LookupTables.TAG_ROUTING['roads'][(k, v)], 'roads'
-                break
-            elif (k, v) in LookupTables.TAG_ROUTING.get('landuse', {}):
-                fclass, target_layer = LookupTables.TAG_ROUTING['landuse'][(k, v)], 'landuse'
-                break
-            elif (k, v) in LookupTables.TAG_ROUTING.get('water', {}):
-                fclass, target_layer = LookupTables.TAG_ROUTING['water'][(k, v)], 'landuse'
-                break
-
-        if not fclass:
-            if 'highway' in tags:
-                fclass, target_layer = tags['highway'], 'roads'
-            elif 'landuse' in tags:
-                fclass, target_layer = tags['landuse'], 'landuse'
-            elif 'natural' in tags:
-                fclass, target_layer = tags['natural'], 'landuse'
-            elif 'leisure' in tags:
-                fclass, target_layer = tags['leisure'], 'landuse'
-
-        if target_layer == 'roads' and len(points) >= 2:
-            if fclass == 'track' and 'tracktype' in tags:
-                fclass += f'_{tags["tracktype"]}'
-            if fclass in LookupTables.DISABLED_ROADS:
-                return
-
-            code = LookupTables.HIGHWAY_CODES.get(fclass, HWConfig.DEFAULT_HIGHWAY_CODE)
-            surface_state = self._analyze_road_surface(tags)
-
-            if surface_state == "unpaved":
-                code = 5142
-            elif surface_state == "paved":
-                non_vehicle_classes = {
-                    'footway', 'path', 'steps', 'pedestrian',
-                    'cycleway', 'bridleway', 'corridor', 'elevator', 'escalator'
-                }
-                if fclass not in non_vehicle_classes:
-                    code = 5113
-
+        if rule.layer == 'roads' and len(points) >= 2:
             points_bytes = self.way_coords_pool[start_idx:start_idx + len(points) * 2].tobytes()
-            feature = MapFeature(osm_id=osm_id, fclass=fclass, code=code, name=name, points=points_bytes)
+            feature = MapFeature(osm_id=osm_id, code=rule.code, name=name, points=points_bytes, lod=rule.lod)
             feature.calculate_bbox()
             self.roads.append(feature)
 
-        elif target_layer == 'landuse' and len(points) >= 4:
-            if fclass in LookupTables.DISABLED_LANDUSE:
-                return
-
-            if points[0] == points[-1]:
+        elif rule.layer in ('landuse', 'water') and len(points) >= 4:
+            if is_closed:
                 if not self._is_clockwise(points):
                     points.reverse()
 
                 points_bytes = b''.join(struct.pack("<ii", p[0], p[1]) for p in points)
 
-                code = LookupTables.POLYGON_CODES.get(fclass, HWConfig.DEFAULT_POLYGON_CODE)
-                feature = MapFeature(osm_id=osm_id, fclass=fclass, code=code, name=name, points=points_bytes)
+                feature = MapFeature(osm_id=osm_id, code=rule.code, name=name, points=points_bytes, lod=rule.lod)
                 feature.calculate_bbox()
-                self.landuse.append(feature)
+
+                if rule.layer == 'water':
+                    self.water.append(feature)
+                else:
+                    self.landuse.append(feature)
 
     def _process_relation(self, elem: ET.Element) -> None:
         tags = self._extract_tags(elem)
         if tags.get('type') != 'multipolygon':
             return
 
-        fclass = None
-        for k, v in tags.items():
-            if (k, v) in LookupTables.TAG_ROUTING.get('landuse', {}):
-                fclass = LookupTables.TAG_ROUTING['landuse'][(k, v)]
-                break
-            elif (k, v) in LookupTables.TAG_ROUTING.get('water', {}):
-                fclass = LookupTables.TAG_ROUTING['water'][(k, v)]
-                break
-
-        if not fclass:
-            fclass = tags.get('landuse') or tags.get('leisure') or tags.get('natural')
-
-        if not fclass or fclass in LookupTables.DISABLED_LANDUSE:
+        rule = LookupTables.match_feature(tags)
+        if not rule or rule.layer not in ('landuse', 'water'):
             return
 
         raw_name = tags.get('short_name:en') or tags.get('int_name') or tags.get('name:en') or tags.get('short_name') or tags.get('name') or ""
@@ -14514,11 +14399,13 @@ class OSMParser:
 
         osm_id = elem.get('id')
         if combined_points and parts and osm_id:
-            code = LookupTables.POLYGON_CODES.get(fclass, HWConfig.DEFAULT_POLYGON_CODE)
             points_bytes = b''.join(struct.pack("<ii", p[0], p[1]) for p in combined_points)
-            feature = MapFeature(osm_id=osm_id, fclass=fclass, code=code, name=name, points=points_bytes, parts=parts)
+            feature = MapFeature(osm_id=osm_id, code=rule.code, name=name, points=points_bytes, parts=parts, lod=rule.lod)
             feature.calculate_bbox()
-            self.landuse.append(feature)
+            if rule.layer == 'water':
+                self.water.append(feature)
+            else:
+                self.landuse.append(feature)
 
 ```
 
@@ -15220,7 +15107,13 @@ The Navigation Node itself does not contain a cartographic feature code.
 
 `v3_jump` is used for fast subtree skipping during BBox culling.
 
-The field includes the hardware prefetch compensation required by the current parser.
+`v3_jump` includes an 8-byte hardware prefetch compensation.
+
+Therefore, when the current Navigation Node is culled, the parser advances by:
+
+`v3_jump - 8`
+
+bytes relative to the position immediately after the node.
 
 When a Navigation Node is invisible, the parser performs the corresponding jump over the entire child subtree.
 
@@ -15305,46 +15198,31 @@ The `.db` file stores textual attributes such as object names.
 
 The format is a standard **dBase III (DBF)** database encapsulated inside a YZL container.
 
-The feature classification system no longer requires `fclass` to be stored in the database.
-
 ## 8.1. DBF Header
 
 Starts at offset `0x20`, immediately after the YZL header.
 
 * dBase III Magic Byte: `0x03`
 * Number of Records: 4-byte little-endian value at offset `0x24`
-* Database Header Size: `161` (`0xA1 0x00`) at offset `0x28`
-* Record Size: `145` (`0x91 0x00`) at offset `0x2A`
+* Database Header Size: `129` (`0x81 0x00`) at offset `0x28`
+* Record Size: `117` (`0x75 0x00`) at offset `0x2A`
 
 ---
 
 ## 8.2. Record Fields
 
-Each field descriptor occupies 32 bytes.
+The DBF header contains exactly three 32-byte field descriptors:
 
-Field descriptor terminator:
+1. `osm_id`
+2. `code`
+3. `name`
 
-```text
-0x0D
-```
-
-The database contains:
-
-1. `osm_id` — Type `C`, 12 bytes.
-2. `code` — Type `C`, 4 bytes.
-3. `name` — Type `C`, 100 bytes.
-
-The previous `fclass` field is no longer required by the PurrGO feature classification system.
-
-The numeric feature `Code` in `.idx` is the authoritative feature classification.
-
+The header terminator `0x0D` follows the third field descriptor.
 ---
 
 ## 8.3. Dummy Record
 
-For standard map layers, the first physical data record is reserved as the unnamed/dummy record.
-
-It is filled with zeros.
+The dummy record is a special exception and is filled entirely with zero bytes.
 
 Unnamed objects reference this record using:
 
@@ -15360,7 +15238,7 @@ v2 = 3
 ...
 ```
 
-Each normal DBF record begins with the standard dBase validity indicator byte.
+All subsequent normal DBF records begin with the standard dBase validity indicator byte (`0x20`).
 
 ---
 
@@ -15379,10 +15257,6 @@ for all features in that layer.
 ---
 
 # 9. POI LAYER
-
-POIs are represented as **native point features**.
-
-POIs are no longer baked into `.mlp` geometry.
 
 The POI layer therefore does not require a `pois.mlp` geometry file.
 
@@ -15407,6 +15281,20 @@ The `v1` geometry pointer is unused for native POIs.
 The feature `Code` identifies the PurrGO POI class.
 
 The `Icon` information originates from `features.csv`, but at the current implementation stage POIs are rendered using a native circle representation.
+
+### 9.1. POI Attribute Database
+
+If named POIs are stored in `pois.db`, the POI database uses the same three-field DBF structure as standard layers.
+
+Unlike standard map layers, the POI database does not contain the zero dummy record.
+
+The first physical POI record has index:
+
+`v2 = 1`
+
+Unnamed POIs use:
+
+`v2 = 0`
 
 ---
 
