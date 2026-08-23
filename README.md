@@ -284,8 +284,7 @@ This is particularly important for low-power reflective displays and E-Ink.
 
 Current release-display candidates are:
 
-- Memory LCD;
-- black/white/red E-Ink.
+- black/white 4 color E-Ink.
 
 The final display will be selected after testing actual hardware, especially:
 
@@ -341,9 +340,8 @@ The NUCLEO board is a development platform and is not intended to define the fin
 
 The release hardware is currently planned around:
 
-- STM32U5 family MCU;
+- STM32U585CIU6;
 - modern u-blox M10-class GNSS receiver;
-- dedicated GNSS antenna;
 - microSD;
 - low-power display;
 - physical controls;
@@ -413,55 +411,7 @@ A detailed Windows build guide is available in:
 
 [`Руководство по компиляции.md`](Руководство%20по%20компиляции.md)
 
----
-
-## Command-line build
-
-From the repository root:
-
-```bash
-cmake -S . -B build
-cmake --build build
-```
-
-On Windows, the default CMake configuration enables the PC emulator.
-
-To explicitly control the emulator:
-
-```bash
-cmake -S . -B build -DBUILD_EMULATOR=ON
-cmake --build build
-```
-
-or:
-
-```bash
-cmake -S . -B build -DBUILD_EMULATOR=OFF
-cmake --build build
-```
-
 `BUILD_EMULATOR` defaults to enabled on Windows and disabled for non-Windows/cross-compilation configurations. 
-
----
-
-# Tests
-
-The PC build includes deterministic tests for the portable core.
-
-Current tests include:
-
-```text
-test_geo
-test_gnss
-```
-
-Run them with:
-
-```bash
-ctest --test-dir build --output-on-failure
-```
-
-The purpose of these tests is to verify navigation algorithms independently from STM32 hardware.
 
 ---
 
@@ -481,32 +431,6 @@ The application is useful for testing the GNSS pipeline with real receiver data 
 
 ---
 
-# Development workflow
-
-The preferred development cycle is:
-
-```text
-1. Implement algorithm
-        │
-        ▼
-2. Test with deterministic PC input
-        │
-        ▼
-3. Test with recorded GNSS data
-        │
-        ▼
-4. Test with live GNSS receiver
-        │
-        ▼
-5. Integrate with STM32 platform layer
-        │
-        ▼
-6. Measure on real hardware
-```
-
-Hardware-specific implementation should be introduced only after the required hardware characteristics are known.
-
----
 
 # Power-management strategy
 
