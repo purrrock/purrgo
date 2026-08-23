@@ -2,19 +2,19 @@
 
 **PurrGo** is an open-source GNSS navigator and track logger for resource-constrained embedded hardware.
 
-The project is inspired by classic handheld GPS navigators such as Garmin outdoor devices, but follows a different architectural priority:
+The project is inspired by classic handheld GPS navigators, with a different priority:
 
 > **Useful offline navigation with minimal power consumption and no route calculation.**
 
-PurrGo is being developed as a portable C application whose navigation algorithms can be tested on a PC and subsequently deployed to STM32 microcontrollers with minimal changes to the core code.
+PurrGo is being developed as portable C software. The same core algorithms are developed and tested on a PC and are intended to run on STM32 with minimal source changes.
 
 ---
 
 ## Project status
 
-PurrGo is currently under active development.
+PurrGo is under active development.
 
-The current development workflow is:
+Current development flow:
 
 ```text
 GNSS data
@@ -22,83 +22,70 @@ GNSS data
    ▼
 PC / emulator
    │
-   ├── GNSS parsing
-   ├── navigation state
-   ├── geographic calculations
-   ├── track logging
-   └── map processing/rendering
+   ├── GNSS
+   ├── navigation
+   ├── geo
+   ├── track
+   └── maps
    │
    ▼
 STM32 firmware
 ```
 
-The PC implementation is not a separate navigation engine. It is intended to execute the same portable `src/core/` code that will eventually run on the STM32 target.
+The PC implementation is a development environment for the same portable core that will run on the embedded target.
 
 ---
 
-# Features
+## Features
 
-The planned navigator provides:
+Planned and currently developed functionality includes:
 
 - GNSS positioning;
-- latitude and longitude;
-- altitude;
-- speed;
-- UTC time;
-- satellite/fix information;
+- latitude, longitude and altitude;
+- speed, course and UTC time;
+- fix and satellite information;
 - track recording;
 - GPX support;
 - waypoint management;
-- offline maps;
-- map rendering;
-- map zoom and pan;
+- offline vector maps;
+- map rendering, zoom and pan;
 - current-position marker;
 - track display;
-- basic navigation to a waypoint;
+- basic waypoint navigation;
 - physical controls;
-- operation without Internet access;
-- operation without cellular connectivity.
+- completely offline operation.
 
 PurrGo intentionally does **not** implement turn-by-turn route calculation.
 
-The device is a **navigator/logger**, not a routing engine.
+It is a **navigator/logger**, not a routing engine.
 
 ---
 
-# Design goals
+## Design goals
 
-## Low power consumption
+### Low power
 
 The final device is intended to operate from a single 18650 Li-ion cell.
 
-Power consumption is therefore a first-class architectural requirement.
+Power management is treated as an architectural requirement. GNSS, display, storage and MCU power states are designed to be controlled independently where the hardware allows it.
 
-The firmware is designed to allow independent control of:
+Actual power consumption will be measured on hardware rather than estimated from theoretical component figures.
 
-- GNSS activity;
-- display updates;
-- SD-card activity;
-- MCU operating modes;
-- peripheral power.
-
-The project does not rely on theoretical power figures for the final design. Important power-consumption characteristics will be measured on real hardware.
-
-## Offline operation
+### Offline operation
 
 PurrGo does not require:
 
-- Internet access;
-- mobile network;
+- Internet;
+- cellular connectivity;
 - Wi-Fi;
+- Bluetooth;
 - cloud services.
 
-Maps and recorded tracks are stored locally.
+Maps, tracks and waypoints are stored locally.
 
-## Portable core
+### Portable software
 
-Navigation algorithms must remain independent from the hardware platform.
-
-The core library must not depend on:
+Navigation logic is kept independent from:
 
 - STM32 HAL;
 - CMSIS;
@@ -106,382 +93,135 @@ The core library must not depend on:
 - GUI frameworks;
 - operating-system APIs.
 
-This allows deterministic PC testing before deployment to the MCU. 
+Detailed software architecture and portability rules are described in [`docs/architecture.md`](docs/architecture.md).
 
 ---
 
-# Software architecture
+## Hardware
 
-The repository is divided into three main layers:
+PurrGo currently uses three conceptual hardware profiles.
 
-```text
-+------------------------------------------------------+
-| apps/pc/                 apps/stm32/                 |
-| target-specific composition and entry points         |
-+--------------------------+---------------------------+
-| src/platform/pc/         | src/platform/stm32/      |
-| PC adapters              | STM32 adapters           |
-+------------------------------------------------------+
-|                    src/core/                         |
-| GNSS | navigation | geo | track | map | math        |
-|             hardware-independent C                   |
-+------------------------------------------------------+
-```
+| Profile | Platform | GNSS | Display |
+|---|---|---|---|
+| Development | PC | Mock / USB GNSS | Emulator |
+| Prototype | NUCLEO-F446RE | GY-NEO6MV2 / u-blox NEO-6M | 2.4" 240×320 ST7789 |
+| Release | STM32U5-class | u-blox M10-class | 2.9" 128×296 E-Ink |
 
-## `src/core/`
+The release device is planned around:
 
-Portable application logic.
-
-The core is responsible for algorithms and data structures and must not directly access hardware.
-
-Typical responsibilities include:
-
-- GNSS parsing;
-- navigation state;
-- geographic calculations;
-- track processing;
-- map-related algorithms;
-- mathematical operations.
-
-The core uses standard C and fixed-width integer types where the data width is part of the interface contract. Dynamic allocation is avoided unless a concrete requirement makes it necessary. 
-
-## `src/platform/`
-
-Hardware and operating-system adapters.
-
-Current platform separation includes:
-
-```text
-src/platform/pc/
-src/platform/stm32/
-src/platform/ublox/
-```
-
-The platform layer provides the interfaces required by the portable core, including I/O, time and hardware-specific services.
-
-Board-specific pin assignments and peripheral initialization belong outside `src/core/`.
-
-## `apps/`
-
-Application entry points and target-specific composition.
-
-Current PC applications include:
-
-- `purrgo_pc`;
-- `pc_realtime_logger`;
-- PC emulator.
-
-The STM32 application layer is intended to become the firmware composition point for the embedded target.
-
----
-
-# GNSS subsystem
-
-PurrGo initially uses standard NMEA data and the [`minmea`](https://github.com/kosma/minmea) library for NMEA sentence parsing.
-
-The GNSS interface is intentionally separated from the navigation core:
-
-```text
-GNSS UART / file
-       │
-       ▼
-transport layer
-       │
-       ▼
-NMEA / minmea
-       │
-       ▼
-navigation state
-       │
-       ▼
-track / map / UI
-```
-
-This allows development hardware and final GNSS hardware to be changed without coupling the navigation algorithms to a particular receiver.
-
-The repository also contains a separate u-blox platform layer.
-
-The current development hardware uses a GY-NEO6MV2-class receiver.
-
-The release hardware is intended to use a modern u-blox M10-class receiver, subject to final hardware validation.
-
----
-
-# Fixed-point arithmetic
-
-The project targets microcontrollers where floating-point performance and energy consumption are important considerations.
-
-Where practical, navigation calculations are implemented using integer arithmetic with explicit scaling rather than relying on floating-point calculations.
-
-This allows the same algorithms to be:
-
-- deterministic;
-- portable;
-- tested on a PC;
-- executed efficiently on the target MCU.
-
-The exact scaling and units are part of the corresponding C interfaces and data structures.
-
----
-
-# Map subsystem
-
-PurrGo does not generate maps on the embedded device.
-
-Maps are prepared on a PC and stored in a compact format suitable for the navigator.
-
-The intended workflow is:
-
-```text
-OpenStreetMap / source data
-             │
-             ▼
-       PC preprocessing
-             │
-             ▼
-      PurrGo map format
-             │
-             ▼
-           microSD
-             │
-             ▼
-       STM32 map renderer
-             │
-             ▼
-          display
-```
-
-The STM32 therefore acts primarily as a **map renderer and navigator**, rather than as a general-purpose GIS processor.
-
-This reduces:
-
-- RAM requirements;
-- CPU requirements;
-- storage overhead;
-- software complexity;
-- power consumption.
-
----
-
-# Display architecture
-
-The display is treated as a separately managed subsystem.
-
-The navigation update rate and display update rate are deliberately independent.
-
-For example:
-
-```text
-GNSS                  1 Hz
-Track recording       1 Hz
-Navigation state      1 Hz
-Display                variable
-```
-
-The display does not need to be redrawn after every GNSS update.
-
-This is particularly important for low-power reflective displays and E-Ink.
-
-Current release-display candidates are:
-
-- black/white 4 color E-Ink.
-
-The final display will be selected after testing actual hardware, especially:
-
-- readability;
-- refresh behaviour;
-- map usability;
-- energy consumption.
-
----
-
-# Storage
-
-The intended storage medium is microSD.
-
-The card will contain data such as:
-
-```text
-/maps
-/tracks
-/waypoints
-/config
-```
-
-The storage subsystem is separated from the application logic so that the physical storage interface can be changed without rewriting the navigation algorithms.
-
-Track data should be buffered where practical to reduce unnecessary SD-card activity and power consumption.
-
----
-
-# Hardware targets
-
-PurrGo has separate development and release hardware targets.
-
-## Development hardware
-
-The initial embedded development platform is:
-
-**NUCLEO-F446RE**
-
-with:
-
-- STM32F446RE;
-- integrated ST-LINK;
-- USB connection;
-- GY-NEO6MV2 GNSS receiver;
-- development display;
-- microSD;
-- physical buttons.
-
-The NUCLEO board is a development platform and is not intended to define the final PCB architecture.
-
-## Release hardware
-
-The release hardware is currently planned around:
-
-- STM32U585CIU6;
-- modern u-blox M10-class GNSS receiver;
+- STM32U5-class MCU;
+- modern u-blox M10-class receiver;
 - microSD;
 - low-power display;
-- physical controls;
-- low-quiescent-current power architecture;
+- physical buttons;
 - one 18650 Li-ion cell.
 
-The exact MCU, GNSS module, display and power-management components remain subject to hardware validation.
-
-For the current hardware architecture and roadmap, see [`HARDWARE.md`](HARDWARE.md).
+Hardware details and the current hardware roadmap are documented in [`HARDWARE.md`](HARDWARE.md).
 
 ---
 
-# Repository structure
+## Map system
+
+Maps are prepared on a PC and stored in a compact binary format for the navigator.
+
+```text
+source map data
+      │
+      ▼
+PC preprocessing
+      │
+      ▼
+PurrGo map format
+      │
+      ▼
+microSD
+      │
+      ▼
+STM32 renderer
+      │
+      ▼
+display
+```
+
+The embedded device renders precompiled map data; it is not intended to perform general-purpose GIS processing.
+
+The map format, parser and rendering architecture are documented in [`docs/architecture.md`](docs/architecture.md).
+
+---
+
+## Repository
 
 ```text
 purrgo/
 ├── apps/
-│   ├── pc/                 # PC applications
-│   ├── stm32/              # STM32 application layer
-│   └── emulator/           # PC hardware/emulator application
-│
-├── cmake/                  # CMake support files
+│   ├── pc/
+│   ├── stm32/
+│   └── emulator/
 │
 ├── docs/
-│   └── architecture.md    # Software architecture and portability rules
-│
-├── include/                # Public C headers
-│
+├── include/
 ├── src/
-│   ├── core/               # Hardware-independent navigation code
+│   ├── core/
 │   └── platform/
-│       ├── pc/             # PC platform adapters
-│       ├── stm32/          # STM32 platform adapters
-│       └── ublox/          # u-blox-specific code
+│       ├── pc/
+│       ├── stm32/
+│       └── ublox/
 │
 ├── tests/
-│   └── core/               # Deterministic core tests
-│
-├── third_party/            # External dependencies
-│
-├── tools/                  # Development and preprocessing tools
+├── third_party/
+├── tools/
 │
 ├── CMakeLists.txt
 ├── HARDWARE.md
 └── README.md
 ```
 
-The repository currently builds the portable core, PC platform, PC applications, tests and, when enabled, the emulator through CMake. 
+For the detailed source-level architecture, see [`docs/architecture.md`](docs/architecture.md).
 
 ---
 
-# Building on Windows
+## Building on Windows
 
-## Requirements
+The current PC development environment uses:
 
-The current PC development environment requires:
-
-- CMake 3.20 or newer;
+- CMake 3.20+;
 - MinGW-w64 GCC or MSVC;
 - Visual Studio Code;
-- Microsoft C/C++ extension;
-- Microsoft CMake Tools extension.
+- C/C++ extension;
+- CMake Tools.
 
-The repository uses CMake and C11. 
+The project uses C11 and CMake.
 
-A detailed Windows build guide is available in:
+Detailed build instructions are available in:
 
 [`Руководство по компиляции.md`](Руководство%20по%20компиляции.md)
 
-`BUILD_EMULATOR` defaults to enabled on Windows and disabled for non-Windows/cross-compilation configurations. 
-
 ---
 
-# PC real-time GNSS logger
+## PC real-time GNSS logger
 
-The repository contains a PC application for reading GNSS data from a serial port.
+The repository includes a PC application for reading GNSS data from a serial port.
 
-After building, it can be run as:
+Example:
 
 ```cmd
 .\build\apps\pc_realtime_logger\pc_realtime_logger.exe COM3
 ```
 
-Replace `COM3` with the actual GNSS receiver COM port.
+Replace `COM3` with the actual receiver port.
 
-The application is useful for testing the GNSS pipeline with real receiver data before deploying the same core algorithms to the STM32 target.
-
----
-
-
-# Power-management strategy
-
-Low power consumption is not treated as a final optimization step.
-
-The firmware architecture is intended to support explicit power states such as:
-
-- active;
-- navigation;
-- logging;
-- idle;
-- deep sleep.
-
-Potentially power-hungry peripherals such as the SD card and display should be independently controlled where the hardware permits it.
-
-The final power budget will be based on measurements of:
-
-- MCU;
-- GNSS receiver;
-- display;
-- SD card;
-- regulators;
-- peripheral leakage;
-- complete system.
+This application is intended for testing the GNSS pipeline with real receiver data before deploying the same core algorithms to STM32.
 
 ---
 
-# What PurrGo is not
+## Documentation
 
-PurrGo is intentionally not:
-
-- an online navigation service;
-- a smartphone application;
-- a cloud-connected tracker;
-- a turn-by-turn routing engine;
-- a full GIS workstation.
-
-The project focuses on a small, autonomous embedded navigation device.
+- [`docs/architecture.md`](docs/architecture.md) — detailed software architecture, module boundaries, data flow, map subsystem and portability rules.
+- [`HARDWARE.md`](HARDWARE.md) — hardware profiles, peripherals and power architecture.
+- [`Руководство по компиляции.md`](Руководство%20по%20компиляции.md) — Windows / VS Code build instructions.
 
 ---
 
-# Documentation
-
-Important project documents:
-
-- [`HARDWARE.md`](HARDWARE.md) — hardware architecture, development hardware, release hardware and power strategy.
-- [`docs/architecture.md`](docs/architecture.md) — software architecture and portability rules.
-- [`Руководство по компиляции.md`](Руководство%20по%20компиляции.md) — Windows/VS Code build instructions.
-
----
-
-# License
+## License
 
 PurrGo is distributed under the license included in [`LICENSE`](LICENSE).
