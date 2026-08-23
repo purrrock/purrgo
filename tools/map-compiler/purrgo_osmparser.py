@@ -9,6 +9,7 @@ import array
 import bisect
 import itertools
 import struct
+from decimal import Decimal
 from lxml import etree as ET
 from functools import lru_cache
 from typing import List, Tuple, Dict, Optional
@@ -165,8 +166,8 @@ class OSMParser:
                 try:
                     nid = int(elem.get('id'))
                     node_ids_append(nid)
-                    node_coords_append(int(float(elem.get('lon')) * 1000000))
-                    node_coords_append(int(float(elem.get('lat')) * 1000000))
+                    node_coords_append(int(Decimal(elem.get('lon')) * 10000000))
+                    node_coords_append(int(Decimal(elem.get('lat')) * 10000000))
 
                     if is_sorted and nid < last_id:
                         is_sorted = False
