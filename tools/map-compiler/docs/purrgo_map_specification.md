@@ -393,7 +393,13 @@ The Navigation Node itself does not contain a cartographic feature code.
 
 `v3_jump` is used for fast subtree skipping during BBox culling.
 
-The field includes the hardware prefetch compensation required by the current parser.
+`v3_jump` includes an 8-byte hardware prefetch compensation.
+
+Therefore, when the current Navigation Node is culled, the parser advances by:
+
+`v3_jump - 8`
+
+bytes relative to the position immediately after the node.
 
 When a Navigation Node is invisible, the parser performs the corresponding jump over the entire child subtree.
 
@@ -478,46 +484,31 @@ The `.db` file stores textual attributes such as object names.
 
 The format is a standard **dBase III (DBF)** database encapsulated inside a YZL container.
 
-The feature classification system no longer requires `fclass` to be stored in the database.
-
 ## 8.1. DBF Header
 
 Starts at offset `0x20`, immediately after the YZL header.
 
 * dBase III Magic Byte: `0x03`
 * Number of Records: 4-byte little-endian value at offset `0x24`
-* Database Header Size: `161` (`0xA1 0x00`) at offset `0x28`
-* Record Size: `145` (`0x91 0x00`) at offset `0x2A`
+* Database Header Size: `129` (`0x81 0x00`) at offset `0x28`
+* Record Size: `117` (`0x75 0x00`) at offset `0x2A`
 
 ---
 
 ## 8.2. Record Fields
 
-Each field descriptor occupies 32 bytes.
+The DBF header contains exactly three 32-byte field descriptors:
 
-Field descriptor terminator:
+1. `osm_id`
+2. `code`
+3. `name`
 
-```text
-0x0D
-```
-
-The database contains:
-
-1. `osm_id` — Type `C`, 12 bytes.
-2. `code` — Type `C`, 4 bytes.
-3. `name` — Type `C`, 100 bytes.
-
-The previous `fclass` field is no longer required by the PurrGO feature classification system.
-
-The numeric feature `Code` in `.idx` is the authoritative feature classification.
-
+The header terminator `0x0D` follows the third field descriptor.
 ---
 
 ## 8.3. Dummy Record
 
-For standard map layers, the first physical data record is reserved as the unnamed/dummy record.
-
-It is filled with zeros.
+The dummy record is a special exception and is filled entirely with zero bytes.
 
 Unnamed objects reference this record using:
 
@@ -533,7 +524,7 @@ v2 = 3
 ...
 ```
 
-Each normal DBF record begins with the standard dBase validity indicator byte.
+All subsequent normal DBF records begin with the standard dBase validity indicator byte (`0x20`).
 
 ---
 
@@ -552,10 +543,6 @@ for all features in that layer.
 ---
 
 # 9. POI LAYER
-
-POIs are represented as **native point features**.
-
-POIs are no longer baked into `.mlp` geometry.
 
 The POI layer therefore does not require a `pois.mlp` geometry file.
 
@@ -580,6 +567,20 @@ The `v1` geometry pointer is unused for native POIs.
 The feature `Code` identifies the PurrGO POI class.
 
 The `Icon` information originates from `features.csv`, but at the current implementation stage POIs are rendered using a native circle representation.
+
+### 9.1. POI Attribute Database
+
+If named POIs are stored in `pois.db`, the POI database uses the same three-field DBF structure as standard layers.
+
+Unlike standard map layers, the POI database does not contain the zero dummy record.
+
+The first physical POI record has index:
+
+`v2 = 1`
+
+Unnamed POIs use:
+
+`v2 = 0`
 
 ---
 
