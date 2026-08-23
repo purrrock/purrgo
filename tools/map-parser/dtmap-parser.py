@@ -27,7 +27,8 @@ stats = {
     "data_visited": 0,
     "data_drawn": 0,
     "lines_drawn": 0,
-    "polygons_drawn": 0
+    "polygons_drawn": 0,
+    "pois_drawn": 0
 }
 
 
@@ -185,7 +186,7 @@ def parse_geometry_mlp(
         return
 
     minx, miny, maxx, maxy, num_parts, num_points = struct.unpack(
-        "<iiiiii",
+        "<iiiiII",
         head_data
     )
 
@@ -366,7 +367,21 @@ def parse_node(
         ):
             stats["data_drawn"] += 1
 
-            if v1 > 0:
+            # Check if this is a native POI (xmin == xmax and ymin == ymax)
+            if xmin == xmax and ymin == ymax:
+                lon = xmin / COORD_SCALE
+                lat = ymin / COORD_SCALE
+                screen_x, screen_y = world_to_screen(lon, lat, camera_bbox)
+
+                # Draw native POI as a circle
+                pygame.draw.circle(
+                    screen_surface,
+                    (200, 100, 100),
+                    (screen_x, screen_y),
+                    4
+                )
+                stats["pois_drawn"] += 1
+            elif v1 > 0 and mlp_file is not None:
                 parse_geometry_mlp(
                     mlp_file,
                     v1,
@@ -456,21 +471,20 @@ def render_map(idx_path, mlp_path, map_name_path):
 
     screen.fill((20, 20, 20))
 
-    if (
-        not os.path.exists(idx_path)
-        or not os.path.exists(mlp_path)
-    ):
-        print(
-            f"[ERROR] Не найдены файлы карт: "
-            f"{idx_path} или {mlp_path}"
-        )
+    if not os.path.exists(idx_path):
+        print(f"[ERROR] Не найден файл карты: {idx_path}")
         return
 
+    has_mlp = os.path.exists(mlp_path)
+    if not has_mlp:
+        print(f"[WARN] Файл геометрии {mlp_path} не найден. Работа только с {idx_path} (режим POI).")
+
     # 2. Обход IDX.
-    with (
-        open(idx_path, "rb") as idx_file,
-        open(mlp_path, "rb") as mlp_file
-    ):
+    import contextlib
+    with contextlib.ExitStack() as stack:
+        idx_file = stack.enter_context(open(idx_path, "rb"))
+        mlp_file = stack.enter_context(open(mlp_path, "rb")) if has_mlp else None
+
         print(
             f"[INFO] Открытие слоя: {idx_path}"
         )
@@ -551,6 +565,10 @@ def render_map(idx_path, mlp_path, map_name_path):
     print(
         f"Отрисовано полигонов:  "
         f"{stats['polygons_drawn']}"
+    )
+    print(
+        f"Отрисовано POI:        "
+        f"{stats['pois_drawn']}"
     )
     print("=============================")
 
