@@ -94,7 +94,7 @@ class MapCompiler:
                 total_records += 1
 
                 r_bytes = bytearray(b'\x20')
-                r_bytes += cls._pad(feature.osm_id, 12) + cls._pad(feature.code, 4) + cls._pad(feature.fclass, 28) + cls._pad(feature.name, 100)
+                r_bytes += cls._pad(feature.osm_id, 12) + cls._pad(str(feature.code), 4) + cls._pad(feature.name, 100)
                 bin_records += r_bytes
 
         dbf_header = (
@@ -105,7 +105,6 @@ class MapCompiler:
             + b'\x00' * 20
             + cls._desc("osm_id", 12)
             + cls._desc("code", 4)
-            + cls._desc("fclass", 28)
             + cls._desc("name", 100)
             + b'\x0D'
         )
@@ -173,58 +172,47 @@ class MapCompiler:
         idx_buffer = bytearray()
 
         if is_poi:
-            # For large POI arrays, R-Tree compression is now also applied
-            if not features:
+            for f in features:
+                f.v1 = 0
+
+        # Standard multi-level GIS geometry (LOD 0, 1, 2)
+        lod_filters = [
+            lambda f: f.lod >= 0,
+            lambda f: f.lod >= 1,
+            lambda f: f.lod >= 2
+        ]
+
+        lod2_size = 0
+        prev_len = -1
+        cached_packed = b""
+        for lod_index, condition in enumerate(lod_filters):
+            start_len = len(idx_buffer)
+            lod_records = [f for f in features if condition(f)]
+
+            if not lod_records:
                 idx_buffer.extend(b'SQT\x01\x01\x00\x00\x00' + struct.pack("<II", 0, 0))
             else:
-                for f in features:
-                    f.v1 = 0
-                depth, root_nodes = cls._build_rtree(features)
-
-                idx_buffer.extend(b'SQT\x01\x01\x00\x00\x00' + struct.pack("<II", depth, len(root_nodes)))
-                for node in root_nodes:
-                    idx_buffer.extend(node.pack())
-
-            cls._write_yzl_container(filepath, idx_buffer, is_idx=False)
-
-        else:
-            # Standard multi-level GIS geometry (LOD 0, 1, 2)
-            lod_filters = [
-                lambda c: True,
-                lambda c: LookupTables.DISPLAY_SCALES.get(c, 20) >= 500,
-                lambda c: LookupTables.DISPLAY_SCALES.get(c, 20) >= 1000
-            ]
-
-            lod2_size = 0
-            prev_len = -1
-            cached_packed = b""
-            for lod_index, condition in enumerate(lod_filters):
-                start_len = len(idx_buffer)
-                lod_records = [f for f in features if condition(f.code)]
-
-                if not lod_records:
-                    idx_buffer.extend(b'SQT\x01\x01\x00\x00\x00' + struct.pack("<II", 0, 0))
+                if len(lod_records) == prev_len:
+                    idx_buffer.extend(cached_packed)
                 else:
-                    if len(lod_records) == prev_len:
-                        idx_buffer.extend(cached_packed)
-                    else:
-                        depth, root_nodes = cls._build_rtree(lod_records)
+                    depth, root_nodes = cls._build_rtree(lod_records)
 
-                        # Dynamic recording of a 16-byte SQT header
-                        header = b'SQT\x01\x01\x00\x00\x00' + struct.pack("<II", depth, len(root_nodes))
-                        packed_data = bytearray(header)
-                        for node in root_nodes:
-                            packed_data.extend(node.pack())
+                    # Dynamic recording of a 16-byte SQT header
+                    header = b'SQT\x01\x01\x00\x00\x00' + struct.pack("<II", depth, len(root_nodes))
+                    packed_data = bytearray(header)
+                    for node in root_nodes:
+                        packed_data.extend(node.pack())
 
-                        idx_buffer.extend(packed_data)
+                    idx_buffer.extend(packed_data)
 
-                        cached_packed = packed_data
-                        prev_len = len(lod_records)
+                    cached_packed = packed_data
+                    prev_len = len(lod_records)
 
-                if lod_index == 2:
-                    lod2_size = len(idx_buffer) - start_len
+            if lod_index == 2:
+                lod2_size = len(idx_buffer) - start_len
 
-            cls._write_yzl_container(filepath, idx_buffer, is_idx=True, lod2_size=lod2_size)
+        # POIs use the same LOD logic but are encapsulated with is_idx=False because their magic extension is 0x00 and RAM type is 0x04000000
+        cls._write_yzl_container(filepath, idx_buffer, is_idx=not is_poi, lod2_size=lod2_size)
 
     @staticmethod
     def create_empty_layer(layer_prefix: str) -> None:
