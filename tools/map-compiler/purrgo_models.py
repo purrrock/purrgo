@@ -11,17 +11,9 @@ class HWConfig:
     YZL_HEADER_SIZE = 32
     NODE_SIZE = 28           # Unified node size (Data Node / Nav Node)
     CHUNK_SIZE = 14          # Maximum number of objects in a cluster
-    DBF_HEADER_LEN = 161     # dBase III header
-    DBF_RECORD_LEN = 145     # Fixed-length dBase III record
+    DBF_HEADER_LEN = 129     # dBase III header
+    DBF_RECORD_LEN = 117     # Fixed-length dBase III record
 
-    # System rendering codes
-    WATER_CODE = 8200
-    DEFAULT_HIGHWAY_CODE = 5142
-    DEFAULT_POLYGON_CODE = 7208
-    DEFAULT_POI_CODE = 2724
-
-    # Other constants
-    LOD_MASK = 0x0E
     RAM_LOAD_TYPE = 0x04000000
 
 
@@ -43,10 +35,10 @@ def safe_encode(text: Any, max_len: int) -> bytes:
 class MapFeature:
     """Represents a single map primitive (Road, Polygon, POI)"""
     osm_id: str
-    fclass: str
     code: int
     name: str
     points: bytes
+    lod: int
 
     # [MEMORY OPTIMIZATION 2]: Используем иммутабельный (неизменяемый) кортеж по умолчанию.
     # Это позволяет всем миллионам объектов без multipolygon ссылаться на один и тот же (0,) в памяти.
