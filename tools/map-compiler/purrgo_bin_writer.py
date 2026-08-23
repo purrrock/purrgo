@@ -242,7 +242,7 @@ class MapCompiler:
         """Generates the JSON camera centering file."""
         if not meta_records:
             return
-        center_lat = (min(r.bbox[1] for r in meta_records) + max(r.bbox[3] for r in meta_records)) / 2.0 / 1000000.0
-        center_lon = (min(r.bbox[0] for r in meta_records) + max(r.bbox[2] for r in meta_records)) / 2.0 / 1000000.0
+        center_lat = (min(r.bbox[1] for r in meta_records) + max(r.bbox[3] for r in meta_records)) / 2.0 / 10000000.0
+        center_lon = (min(r.bbox[0] for r in meta_records) + max(r.bbox[2] for r in meta_records)) / 2.0 / 10000000.0
         with open(out_file, "w", encoding="utf-8") as f:
             json.dump({"centerLat": center_lat, "centerLon": center_lon, "mapName": name}, f, separators=(',', ':'))

@@ -46,7 +46,7 @@ The record body size in bytes is strictly equal to the `Content Length` field va
 | `0x10` | 4 | `int32` | `num_parts` — total number of segments/rings in the object |
 | `0x14` | 4 | `int32` | `num_points` — total number of points (vertices) in the object |
 | `0x18` | `num_parts * 4` | `uint32[]` | `parts` array. Point indices (offsets) where each segment begins (starting from 0). *These are indices, not contour lengths.* |
-| `0x18 + (num_parts * 4)` | `num_points * 8` | `int32[2][]` | `points` array (pairs of `[X, Y]`). Conversion to Float: `Coordinate = Value / 1000000.0` |
+| `0x18 + (num_parts * 4)` | `num_points * 8` | `int32[2][]` | `points` array (pairs of `[X, Y]`). Conversion to Float: `Coordinate = Value / 10000000.0` |
 
 ### 2.3. Polygon Topology (Multipolygons)
 
@@ -80,8 +80,8 @@ Fundamental rule: the last 8 bytes of any node (offset `+20` and `+24`) are alwa
 ```c
 struct UnifiedNode {
     union {
-        struct { float xmin, ymin, xmax, ymax; uint32_t type; } data; // 20 bytes
-        struct { uint32_t v3_jump; float xmin, ymin, xmax, ymax; } nav;  // 20 bytes
+        struct { int32_t xmin, ymin, xmax, ymax; uint32_t type; } data; // 20 bytes
+        struct { uint32_t v3_jump; int32_t xmin, ymin, xmax, ymax; } nav;  // 20 bytes
     } payload;
     uint32_t v1;  // offset 20
     uint32_t v2;  // offset 24
@@ -90,11 +90,11 @@ struct UnifiedNode {
 
 #### 1. Data Node
 
-Contains the cartographic primitive itself. Unpacking format (Python): `<ffffIII`.
+Contains the cartographic primitive itself. Unpacking format (Python): `<iiiiIII`.
 
 | Offset        | Size | Type       | Description                                                                 |
 | :------------ | :--- | :--------- | :-------------------------------------------------------------------------- |
-| `0x00 - 0x0F` | 16   | `float[4]` | BBox (xmin, ymin, xmax, ymax)                                               |
+| `0x00 - 0x0F` | 16   | `int32[4]` | BBox (xmin, ymin, xmax, ymax)                                               |
 | `0x10 - 0x13` | 4    | `uint32`   | **Type** (OSM object class code, e.g., `5114` — secondary road)             |
 | `0x14 - 0x17` | 4    | `uint32`   | **v1** (Pointer to Payload in `.mlp`). Must skip the 8-byte geometry header |
 | `0x18 - 0x1B` | 4    | `uint32`   | **v2** (Index in `.db`). `1` — empty record (unnamed), `>=2` — unique names |
@@ -111,12 +111,12 @@ Contains the cartographic primitive itself. Unpacking format (Python): `<ffffIII
 
 Opens geometry (Mode 0x00) or a branch of the hierarchical R-tree (Mode > 0x01).
 
-Unpacking format (Python): `<IffffII`.
+Unpacking format (Python): `<IiiiiII`.
 
 | Offset        | Size | Type     | Description                                                                                                                              |
 | ------------- | ---- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | `0x00 - 0x03` | 4    | uint32   | `v3_jump` (Early Exit jump). Size of the entire child subtree in bytes + 8 bytes of prefetch compensation.                               |
-| `0x04 - 0x13` | 16   | float[4] | Cluster BBox (covers all nested child BBoxes)                                                                                            |
+| `0x04 - 0x13` | 16   | int32[4] | Cluster BBox (covers all nested child BBoxes)                                                                                            |
 | `0x14 - 0x17` | 4    | uint32   | `v1` (Tree Depth / Height of subtree). `0` = children are `Data Node`. `>0` = children are macro-nodes (`Nav Node` with level `v1 - 1`). |
 | `0x18 - 0x1B` | 4    | uint32   | `v2` (Number of child nodes directly inside the current cluster).                                                                        |
 
@@ -195,13 +195,13 @@ def parse_node(file, is_nav_node, current_level):
     if not is_nav_node:
         # Read Data Node
         data_bytes = file.read(28)
-        xmin, ymin, xmax, ymax, obj_type, v1, v2 = struct.unpack("<ffffIII", data_bytes)
+        xmin, ymin, xmax, ymax, obj_type, v1, v2 = struct.unpack("<iiiiIII", data_bytes)
         render_object(xmin, ymin, xmax, ymax, obj_type, v1, v2)
         return
 
     # Read Nav Node
     nav_bytes = file.read(28)
-    v3_jump, c_xmin, c_ymin, c_xmax, c_ymax, nav_level, obj_count = struct.unpack("<IffffII", nav_bytes)
+    v3_jump, c_xmin, c_ymin, c_xmax, c_ymax, nav_level, obj_count = struct.unpack("<IiiiiII", nav_bytes)
 
     if not is_in_screen(c_xmin, c_ymin, c_xmax, c_ymax):
         # Culling: Jump to the next Nav Node

@@ -88,9 +88,9 @@ class MapFeature:
         Format (C-Union): [BBox 16b] [Type 4b] [v1 4b] [v2 4b]
         """
         return struct.pack(
-            "<ffffIII",
-            self.bbox[0] / 1000000.0, self.bbox[1] / 1000000.0,
-            self.bbox[2] / 1000000.0, self.bbox[3] / 1000000.0,
+            "<iiiiIII",
+            self.bbox[0], self.bbox[1],
+            self.bbox[2], self.bbox[3],
             self.code, self.v1, self.v2
         )
 
@@ -146,10 +146,10 @@ class RTreeNode:
         Recursive packing of C-Union tree structures into a binary stream.
         """
         data = bytearray(struct.pack(
-            "<IffffII",
+            "<IiiiiII",
             self.v3_jump,
-            self.bbox[0] / 1000000.0, self.bbox[1] / 1000000.0,
-            self.bbox[2] / 1000000.0, self.bbox[3] / 1000000.0,
+            self.bbox[0], self.bbox[1],
+            self.bbox[2], self.bbox[3],
             self.level,
             len(self.children)
         ))
