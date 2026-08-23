@@ -131,8 +131,8 @@ def parse_geometry_mlp(mlp_file, v1_offset, camera_bbox, screen_surface):
     # 4. Проекция
     screen_points = []
     for i in range(num_points):
-        lon = raw_points[i * 2] / 1000000.0
-        lat = raw_points[i * 2 + 1] / 1000000.0
+        lon = raw_points[i * 2] / 10000000.0
+        lat = raw_points[i * 2 + 1] / 10000000.0
         screen_points.append(world_to_screen(lon, lat, camera_bbox))
     
     # 5. Отрисовка
@@ -161,18 +161,24 @@ def parse_node(idx_file, mlp_file, is_nav_node, current_level, camera_bbox, scre
 
     if not is_nav_node:
         stats["data_visited"] += 1
-        xmin, ymin, xmax, ymax, obj_type, v1, v2 = struct.unpack("<ffffIII", node_data)
+        xmin, ymin, xmax, ymax, obj_type, v1, v2 = struct.unpack("<iiiiIII", node_data)
         
-        if is_in_screen(xmin, ymin, xmax, ymax, camera_bbox):
+        if is_in_screen(xmin / 10000000.0, ymin / 10000000.0, xmax / 10000000.0, ymax / 10000000.0, camera_bbox):
             stats["data_drawn"] += 1
             if v1 > 0:
                 parse_geometry_mlp(mlp_file, v1, camera_bbox, screen_surface)
         return
 
     stats["nav_visited"] += 1
-    v3_jump, c_xmin, c_ymin, c_xmax, c_ymax, nav_level, obj_count = struct.unpack("<IffffII", node_data)
+    v3_jump, c_xmin, c_ymin, c_xmax, c_ymax, nav_level, obj_count = struct.unpack("<IiiiiII", node_data)
 
-    if not is_in_screen(c_xmin, c_ymin, c_xmax, c_ymax, camera_bbox):
+    # We must convert ints back to floats for is_in_screen
+    c_xmin_f = c_xmin / 10000000.0
+    c_ymin_f = c_ymin / 10000000.0
+    c_xmax_f = c_xmax / 10000000.0
+    c_ymax_f = c_ymax / 10000000.0
+
+    if not is_in_screen(c_xmin_f, c_ymin_f, c_xmax_f, c_ymax_f, camera_bbox):
         stats["nav_culled"] += 1
         # Аппаратный пропуск дочернего поддерева (компенсация префетча -8 байт)
         idx_file.seek(v3_jump - 8, os.SEEK_CUR)

@@ -111,44 +111,6 @@ static inline uint32_t unpack_u32_le(const uint8_t *buf)
 }
 
 
-/*
- * Чтение IEEE-754 float из четырёх байт Little-Endian.
- *
- * IDX хранит BBox NAV/DATA node как float.
- * Здесь выполняется только побитовое восстановление float.
- */
-static inline float unpack_float_le(const uint8_t *buf)
-{
-    union {
-        uint32_t i;
-        float f;
-    } u;
-
-    u.i = unpack_u32_le(buf);
-
-    return u.f;
-}
-
-/*
- * Безопасное преобразование float BBox координат в int32_t.
- * Применяется запас в 256 единиц (2.5-5 градуса) для компенсации
- * потери точности мантиссы IEEE-754 24-bit при 180 градусах
- * и усечения к нулю при кастинге float -> int.
- * Также добавлена защита от UB при конвертации очень больших (запредельных) float в int32_t.
- */
-static inline int32_t float_bbox_min(float f_val) {
-    if (f_val <= -214.7483f) return -2147483647;
-    if (f_val >=  214.7483f) return  2147483647 - 256;
-    return (int32_t)(f_val * 10000000.0f) - 256;
-}
-
-static inline int32_t float_bbox_max(float f_val) {
-    if (f_val <= -214.7483f) return -2147483647 + 256;
-    if (f_val >=  214.7483f) return  2147483647;
-    return (int32_t)(f_val * 10000000.0f) + 256;
-}
-
-
 /* -------------------------------------------------------------------------- */
 /* Projection                                                                 */
 /* -------------------------------------------------------------------------- */
@@ -602,15 +564,15 @@ static void parse_geometry_mlp(
         /*
          * MLP:
          *
-         *     X = longitude * 10^6
-         *     Y = latitude  * 10^6
+         *     X = longitude * 10^7
+         *     Y = latitude  * 10^7
          *
          * PurrGo internal:
          *
          *     longitude * 10^7
          *     latitude  * 10^7
          *
-         * Поэтому умножаем исходные MLP coordinates на 10.
+         * Coordinates are already in the internal format.
          */
         int32_t raw_x =
             unpack_i32_le(&pt_buf[0]);
@@ -619,24 +581,13 @@ static void parse_geometry_mlp(
             unpack_i32_le(&pt_buf[4]);
 
 
-        /*
-         * Для реальных координат MLP текущего диапазона
-         * умножение на 10 помещается в int32_t.
-         */
-        int32_t norm_x =
-            raw_x * 10;
-
-        int32_t norm_y =
-            raw_y * 10;
-
-
         int16_t sx;
         int16_t sy;
 
 
         project_to_screen(
-            norm_x,
-            norm_y,
+            raw_x,
+            raw_y,
             cam,
             vp,
             &sx,
@@ -886,21 +837,10 @@ static void parse_node(
          *     +0x08 xmax
          *     +0x0C ymax
          *
-         * В исходном IDX эти значения являются float.
+         * В исходном IDX эти значения являются int32_t.
          */
-        float f_ymin =
-            unpack_float_le(&node_buf[4]);
-
-        float f_ymax =
-            unpack_float_le(&node_buf[12]);
-
-        /*
-         * PurrGo internal coordinate representation:
-         *
-         *     degrees * 10^7
-         */
-        int32_t ymin = float_bbox_min(f_ymin);
-        int32_t ymax = float_bbox_max(f_ymax);
+        int32_t ymin = unpack_i32_le(&node_buf[4]);
+        int32_t ymax = unpack_i32_le(&node_buf[12]);
 
         /*
          * AABB intersection (Y-axis fast cull).
@@ -908,17 +848,12 @@ static void parse_node(
          */
         bool passes = false;
 
-        float f_xmin = 0.0f;
-        float f_xmax = 0.0f;
         int32_t xmin = 0;
         int32_t xmax = 0;
 
         if (!(ymax < cam->min_y || ymin > cam->max_y)) {
-            f_xmin = unpack_float_le(&node_buf[0]);
-            f_xmax = unpack_float_le(&node_buf[8]);
-
-            xmin = float_bbox_min(f_xmin);
-            xmax = float_bbox_max(f_xmax);
+            xmin = unpack_i32_le(&node_buf[0]);
+            xmax = unpack_i32_le(&node_buf[8]);
 
             if (cam->min_x <= cam->max_x) {
                 passes = (xmax >= cam->min_x && xmin <= cam->max_x);
@@ -937,28 +872,19 @@ static void parse_node(
             if (diag->nodes_logged < 10) {
                 /* Распаковываем X только для логирования, если они еще не распакованы */
                 if (ymax < cam->min_y || ymin > cam->max_y) {
-                    f_xmin = unpack_float_le(&node_buf[0]);
-                    f_xmax = unpack_float_le(&node_buf[8]);
-
-                    xmin = float_bbox_min(f_xmin);
-                    xmax = float_bbox_max(f_xmax);
+                    xmin = unpack_i32_le(&node_buf[0]);
+                    xmax = unpack_i32_le(&node_buf[8]);
                 }
 
                 PURRGO_LOG(
                     "MAP: DATA "
                     "raw=(%08x,%08x,%08x,%08x) "
-                    "flt=(%f,%f,%f,%f) "
                     "int=(%d,%d,%d,%d) %s\n",
 
                     unpack_u32_le(&node_buf[0]),
                     unpack_u32_le(&node_buf[4]),
                     unpack_u32_le(&node_buf[8]),
                     unpack_u32_le(&node_buf[12]),
-
-                    f_xmin,
-                    f_ymin,
-                    f_xmax,
-                    f_ymax,
 
                     xmin,
                     ymin,
@@ -1029,28 +955,17 @@ static void parse_node(
         unpack_u32_le(&node_buf[0]);
 
 
-    float f_c_ymin =
-        unpack_float_le(&node_buf[8]);
-
-    float f_c_ymax =
-        unpack_float_le(&node_buf[16]);
-
-    int32_t c_ymin = float_bbox_min(f_c_ymin);
-    int32_t c_ymax = float_bbox_max(f_c_ymax);
+    int32_t c_ymin = unpack_i32_le(&node_buf[8]);
+    int32_t c_ymax = unpack_i32_le(&node_buf[16]);
 
     bool passes = false;
 
-    float f_c_xmin = 0.0f;
-    float f_c_xmax = 0.0f;
     int32_t c_xmin = 0;
     int32_t c_xmax = 0;
 
     if (!(c_ymax < cam->min_y || c_ymin > cam->max_y)) {
-        f_c_xmin = unpack_float_le(&node_buf[4]);
-        f_c_xmax = unpack_float_le(&node_buf[12]);
-
-        c_xmin = float_bbox_min(f_c_xmin);
-        c_xmax = float_bbox_max(f_c_xmax);
+        c_xmin = unpack_i32_le(&node_buf[4]);
+        c_xmax = unpack_i32_le(&node_buf[12]);
 
         if (cam->min_x <= cam->max_x) {
             passes = (c_xmax >= cam->min_x && c_xmin <= cam->max_x);
@@ -1065,28 +980,19 @@ static void parse_node(
         diag->nodes_logged < 10
     ) {
         if (c_ymax < cam->min_y || c_ymin > cam->max_y) {
-            f_c_xmin = unpack_float_le(&node_buf[4]);
-            f_c_xmax = unpack_float_le(&node_buf[12]);
-
-            c_xmin = float_bbox_min(f_c_xmin);
-            c_xmax = float_bbox_max(f_c_xmax);
+            c_xmin = unpack_i32_le(&node_buf[4]);
+            c_xmax = unpack_i32_le(&node_buf[12]);
         }
 
         PURRGO_LOG(
             "MAP: NAV "
             "raw=(%08x,%08x,%08x,%08x) "
-            "flt=(%f,%f,%f,%f) "
             "int=(%d,%d,%d,%d)\n",
 
             unpack_u32_le(&node_buf[4]),
             unpack_u32_le(&node_buf[8]),
             unpack_u32_le(&node_buf[12]),
             unpack_u32_le(&node_buf[16]),
-
-            f_c_xmin,
-            f_c_ymin,
-            f_c_xmax,
-            f_c_ymax,
 
             c_xmin,
             c_ymin,
