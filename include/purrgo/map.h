@@ -38,4 +38,12 @@ void purrgo_map_render_layer(
     bool is_polygon_layer
 );
 
+/* High-level viewport rendering function that handles opening files. */
+bool purrgo_map_render_viewport(
+    gfx_context_t *gfx,
+    const purrgo_viewport_t *viewport,
+    const purrgo_bbox_t *camera,
+    const char *map_dir
+);
+
 #endif // PURRGO_MAP_H
