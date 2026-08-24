@@ -14,56 +14,95 @@ uint8_t purrgo_time_days_in_month(uint8_t month, uint8_t year) {
     return 31;
 }
 
-void purrgo_time_apply_timezone(const purrgo_gnss_solution_t* utc, purrgo_gnss_solution_t* local, int16_t tz_offset_minutes) {
+bool purrgo_time_datetime_to_epoch(uint8_t year, uint8_t month, uint8_t day,
+                                   uint8_t h, uint8_t m, uint8_t s,
+                                   uint32_t* epoch_out) {
+    if (year > 99) return false;
+    if (month < 1 || month > 12) return false;
+    if (day < 1 || day > purrgo_time_days_in_month(month, year)) return false;
+    if (h > 23) return false;
+    if (m > 59) return false;
+    if (s > 59) return false;
+
+    static const uint16_t days_before_month[12] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334};
+
+    // Подсчет прошедших лет и дней до начала текущего года
+    uint32_t days = year * 365 + (year + 3) / 4 + days_before_month[month - 1] + day - 1;
+
+    // Корректировка, если текущий год високосный и месяц больше февраля
+    if (purrgo_time_is_leap_year(year) && month > 2) {
+        days++;
+    }
+
+    if (epoch_out) {
+        *epoch_out = ((days * 24 + h) * 60 + m) * 60 + s;
+    }
+    return true;
+}
+
+// 100 years from 2000 to 2099 inclusive equals 36524 days + 25 leap days = 36525 days.
+// 36525 * 86400 = 3155760000. So the valid epochs are 0 to 3155759999.
+#define PURRGO_TIME_MAX_EPOCH 3155759999UL
+
+bool purrgo_time_epoch_to_datetime(uint32_t epoch, uint8_t* year, uint8_t* month, uint8_t* day,
+                                   uint8_t* h, uint8_t* m, uint8_t* s) {
+    if (epoch > PURRGO_TIME_MAX_EPOCH) {
+        return false;
+    }
+
+    uint32_t time_of_day = epoch % 86400;
+    uint32_t days = epoch / 86400;
+
+    if (h) *h = time_of_day / 3600;
+    if (m) *m = (time_of_day % 3600) / 60;
+    if (s) *s = time_of_day % 60;
+
+    uint32_t y = 0;
+    while (1) {
+        uint32_t days_in_year = purrgo_time_is_leap_year((uint8_t)y) ? 366 : 365;
+        if (days >= days_in_year) {
+            days -= days_in_year;
+            y++;
+        } else {
+            break;
+        }
+    }
+
+    if (year) *year = (uint8_t)y;
+
+    uint8_t mo = 1;
+    while (1) {
+        uint32_t days_in_mo = purrgo_time_days_in_month(mo, (uint8_t)y);
+        if (days >= days_in_mo) {
+            days -= days_in_mo;
+            mo++;
+        } else {
+            break;
+        }
+    }
+    if (month) *month = mo;
+    if (day) *day = (uint8_t)(days + 1);
+
+    return true;
+}
+
+bool purrgo_time_apply_timezone(const purrgo_gnss_solution_t* utc, purrgo_gnss_solution_t* local, int16_t tz_offset_minutes) {
     *local = *utc;
 
-    if (!local->valid) return;
+    if (!local->valid) return false;
 
-    int32_t total_mins = (int32_t)local->hours * 60 + (int32_t)local->minutes + tz_offset_minutes;
-
-    // Коррекция перехода через полночь назад
-    while (total_mins < 0) {
-        total_mins += 1440;
-
-        if (local->day > 1) {
-            local->day--;
-        } else {
-            if (local->month > 1) {
-                local->month--;
-            } else {
-                local->month = 12;
-                if (local->year > 0) {
-                    local->year--;
-                } else {
-                    local->year = 99; // 2000 -> 2099
-                }
-            }
-            local->day = purrgo_time_days_in_month(local->month, local->year);
-        }
+    uint32_t utc_epoch;
+    if (!purrgo_time_datetime_to_epoch(utc->year, utc->month, utc->day, utc->hours, utc->minutes, utc->seconds, &utc_epoch)) {
+        return false; // Некорректное время в UTC
     }
 
-    // Коррекция перехода через полночь вперед
-    while (total_mins >= 1440) {
-        total_mins -= 1440;
+    int64_t local_epoch_64 = (int64_t)utc_epoch + ((int64_t)tz_offset_minutes * 60);
 
-        uint8_t dim = purrgo_time_days_in_month(local->month, local->year);
-        if (local->day < dim) {
-            local->day++;
-        } else {
-            local->day = 1;
-            if (local->month < 12) {
-                local->month++;
-            } else {
-                local->month = 1;
-                if (local->year < 99) {
-                    local->year++;
-                } else {
-                    local->year = 0; // 2099 -> 2000
-                }
-            }
-        }
+    if (local_epoch_64 < 0 || local_epoch_64 > PURRGO_TIME_MAX_EPOCH) {
+        return false;
     }
 
-    local->hours = (uint8_t)(total_mins / 60);
-    local->minutes = (uint8_t)(total_mins % 60);
+    return purrgo_time_epoch_to_datetime((uint32_t)local_epoch_64,
+                                  &local->year, &local->month, &local->day,
+                                  &local->hours, &local->minutes, &local->seconds);
 }
