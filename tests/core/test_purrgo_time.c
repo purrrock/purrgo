@@ -93,7 +93,7 @@ void test_epoch_roundtrip() {
                                                   dates[i].h, dates[i].min, dates[i].s, &epoch));
 
         uint8_t y_out, m_out, d_out, h_out, min_out, s_out;
-        purrgo_time_epoch_to_datetime(epoch, &y_out, &m_out, &d_out, &h_out, &min_out, &s_out);
+        EXPECT_TRUE(purrgo_time_epoch_to_datetime(epoch, &y_out, &m_out, &d_out, &h_out, &min_out, &s_out));
 
         EXPECT_EQ(dates[i].y, y_out);
         EXPECT_EQ(dates[i].m, m_out);
@@ -102,6 +102,11 @@ void test_epoch_roundtrip() {
         EXPECT_EQ(dates[i].min, min_out);
         EXPECT_EQ(dates[i].s, s_out);
     }
+
+    uint8_t y, m, d, h, min, s;
+    // Epoch out of bounds tests
+    EXPECT_FALSE(purrgo_time_epoch_to_datetime(3155760000UL, &y, &m, &d, &h, &min, &s));
+    EXPECT_FALSE(purrgo_time_epoch_to_datetime(0xFFFFFFFF, &y, &m, &d, &h, &min, &s));
 }
 
 void test_timezone_application() {
@@ -113,77 +118,73 @@ void test_timezone_application() {
     // Normal offset +3
     utc.year = 23; utc.month = 10; utc.day = 5;
     utc.hours = 12; utc.minutes = 0; utc.seconds = 0;
-    purrgo_time_apply_timezone(&utc, &local, 180);
+    EXPECT_TRUE(purrgo_time_apply_timezone(&utc, &local, 180));
     EXPECT_EQ(23, local.year); EXPECT_EQ(10, local.month); EXPECT_EQ(5, local.day);
     EXPECT_EQ(15, local.hours); EXPECT_EQ(0, local.minutes); EXPECT_EQ(0, local.seconds);
 
     // Cross midnight forward
     utc.year = 23; utc.month = 10; utc.day = 5;
     utc.hours = 23; utc.minutes = 0; utc.seconds = 0;
-    purrgo_time_apply_timezone(&utc, &local, 180);
+    EXPECT_TRUE(purrgo_time_apply_timezone(&utc, &local, 180));
     EXPECT_EQ(23, local.year); EXPECT_EQ(10, local.month); EXPECT_EQ(6, local.day);
     EXPECT_EQ(2, local.hours); EXPECT_EQ(0, local.minutes); EXPECT_EQ(0, local.seconds);
 
     // Cross midnight backward
     utc.year = 23; utc.month = 10; utc.day = 5;
     utc.hours = 1; utc.minutes = 0; utc.seconds = 0;
-    purrgo_time_apply_timezone(&utc, &local, -180);
+    EXPECT_TRUE(purrgo_time_apply_timezone(&utc, &local, -180));
     EXPECT_EQ(23, local.year); EXPECT_EQ(10, local.month); EXPECT_EQ(4, local.day);
     EXPECT_EQ(22, local.hours); EXPECT_EQ(0, local.minutes); EXPECT_EQ(0, local.seconds);
 
     // Cross month backward (May 1 -> Apr 30)
     utc.year = 23; utc.month = 5; utc.day = 1;
     utc.hours = 1; utc.minutes = 0; utc.seconds = 0;
-    purrgo_time_apply_timezone(&utc, &local, -180);
+    EXPECT_TRUE(purrgo_time_apply_timezone(&utc, &local, -180));
     EXPECT_EQ(23, local.year); EXPECT_EQ(4, local.month); EXPECT_EQ(30, local.day);
     EXPECT_EQ(22, local.hours); EXPECT_EQ(0, local.minutes); EXPECT_EQ(0, local.seconds);
 
     // Cross month forward (Feb 28 2023 -> Mar 1 2023)
     utc.year = 23; utc.month = 2; utc.day = 28;
     utc.hours = 23; utc.minutes = 0; utc.seconds = 0;
-    purrgo_time_apply_timezone(&utc, &local, 180);
+    EXPECT_TRUE(purrgo_time_apply_timezone(&utc, &local, 180));
     EXPECT_EQ(23, local.year); EXPECT_EQ(3, local.month); EXPECT_EQ(1, local.day);
     EXPECT_EQ(2, local.hours); EXPECT_EQ(0, local.minutes); EXPECT_EQ(0, local.seconds);
 
     // Cross month forward (Feb 29 2024 -> Mar 1 2024)
     utc.year = 24; utc.month = 2; utc.day = 29;
     utc.hours = 23; utc.minutes = 0; utc.seconds = 0;
-    purrgo_time_apply_timezone(&utc, &local, 180);
+    EXPECT_TRUE(purrgo_time_apply_timezone(&utc, &local, 180));
     EXPECT_EQ(24, local.year); EXPECT_EQ(3, local.month); EXPECT_EQ(1, local.day);
     EXPECT_EQ(2, local.hours); EXPECT_EQ(0, local.minutes); EXPECT_EQ(0, local.seconds);
 
     // Cross year forward
     utc.year = 23; utc.month = 12; utc.day = 31;
     utc.hours = 23; utc.minutes = 0; utc.seconds = 0;
-    purrgo_time_apply_timezone(&utc, &local, 180);
+    EXPECT_TRUE(purrgo_time_apply_timezone(&utc, &local, 180));
     EXPECT_EQ(24, local.year); EXPECT_EQ(1, local.month); EXPECT_EQ(1, local.day);
     EXPECT_EQ(2, local.hours); EXPECT_EQ(0, local.minutes); EXPECT_EQ(0, local.seconds);
 
     // Cross year backward
     utc.year = 23; utc.month = 1; utc.day = 1;
     utc.hours = 1; utc.minutes = 0; utc.seconds = 0;
-    purrgo_time_apply_timezone(&utc, &local, -180);
+    EXPECT_TRUE(purrgo_time_apply_timezone(&utc, &local, -180));
     EXPECT_EQ(22, local.year); EXPECT_EQ(12, local.month); EXPECT_EQ(31, local.day);
     EXPECT_EQ(22, local.hours); EXPECT_EQ(0, local.minutes); EXPECT_EQ(0, local.seconds);
 
-    // Century underflow (2000 Jan 1 -> 2099 Dec 31)
+    // Century underflow (2000 Jan 1 -> out of bounds)
     utc.year = 0; utc.month = 1; utc.day = 1;
     utc.hours = 1; utc.minutes = 0; utc.seconds = 0;
-    purrgo_time_apply_timezone(&utc, &local, -180);
-    EXPECT_EQ(99, local.year); EXPECT_EQ(12, local.month); EXPECT_EQ(31, local.day);
-    EXPECT_EQ(22, local.hours); EXPECT_EQ(0, local.minutes); EXPECT_EQ(0, local.seconds);
+    EXPECT_FALSE(purrgo_time_apply_timezone(&utc, &local, -180));
 
-    // Century overflow (2099 Dec 31 -> 2000 Jan 1)
+    // Century overflow (2099 Dec 31 -> out of bounds)
     utc.year = 99; utc.month = 12; utc.day = 31;
     utc.hours = 23; utc.minutes = 0; utc.seconds = 0;
-    purrgo_time_apply_timezone(&utc, &local, 180);
-    EXPECT_EQ(0, local.year); EXPECT_EQ(1, local.month); EXPECT_EQ(1, local.day);
-    EXPECT_EQ(2, local.hours); EXPECT_EQ(0, local.minutes); EXPECT_EQ(0, local.seconds);
+    EXPECT_FALSE(purrgo_time_apply_timezone(&utc, &local, 180));
 
     // Fractional hour timezone (UTC+5:45 Nepal)
     utc.year = 23; utc.month = 10; utc.day = 5;
     utc.hours = 12; utc.minutes = 30; utc.seconds = 15;
-    purrgo_time_apply_timezone(&utc, &local, 5 * 60 + 45); // +345
+    EXPECT_TRUE(purrgo_time_apply_timezone(&utc, &local, 5 * 60 + 45)); // +345
     EXPECT_EQ(23, local.year); EXPECT_EQ(10, local.month); EXPECT_EQ(5, local.day);
     EXPECT_EQ(18, local.hours); EXPECT_EQ(15, local.minutes); EXPECT_EQ(15, local.seconds);
 }

@@ -40,14 +40,22 @@ bool purrgo_time_datetime_to_epoch(uint8_t year, uint8_t month, uint8_t day,
     return true;
 }
 
-void purrgo_time_epoch_to_datetime(uint32_t epoch, uint8_t* year, uint8_t* month, uint8_t* day,
+// 100 years from 2000 to 2099 inclusive equals 36524 days + 25 leap days = 36525 days.
+// 36525 * 86400 = 3155760000. So the valid epochs are 0 to 3155759999.
+#define PURRGO_TIME_MAX_EPOCH 3155759999UL
+
+bool purrgo_time_epoch_to_datetime(uint32_t epoch, uint8_t* year, uint8_t* month, uint8_t* day,
                                    uint8_t* h, uint8_t* m, uint8_t* s) {
+    if (epoch > PURRGO_TIME_MAX_EPOCH) {
+        return false;
+    }
+
     uint32_t time_of_day = epoch % 86400;
     uint32_t days = epoch / 86400;
 
-    *h = time_of_day / 3600;
-    *m = (time_of_day % 3600) / 60;
-    *s = time_of_day % 60;
+    if (h) *h = time_of_day / 3600;
+    if (m) *m = (time_of_day % 3600) / 60;
+    if (s) *s = time_of_day % 60;
 
     uint32_t y = 0;
     while (1) {
@@ -59,12 +67,12 @@ void purrgo_time_epoch_to_datetime(uint32_t epoch, uint8_t* year, uint8_t* month
             break;
         }
     }
-    // wrap around at 100 years, according to logic format
-    *year = (uint8_t)(y % 100);
+
+    if (year) *year = (uint8_t)y;
 
     uint8_t mo = 1;
     while (1) {
-        uint32_t days_in_mo = purrgo_time_days_in_month(mo, *year);
+        uint32_t days_in_mo = purrgo_time_days_in_month(mo, (uint8_t)y);
         if (days >= days_in_mo) {
             days -= days_in_mo;
             mo++;
@@ -72,44 +80,29 @@ void purrgo_time_epoch_to_datetime(uint32_t epoch, uint8_t* year, uint8_t* month
             break;
         }
     }
-    *month = mo;
-    *day = (uint8_t)(days + 1);
+    if (month) *month = mo;
+    if (day) *day = (uint8_t)(days + 1);
+
+    return true;
 }
 
-void purrgo_time_apply_timezone(const purrgo_gnss_solution_t* utc, purrgo_gnss_solution_t* local, int16_t tz_offset_minutes) {
+bool purrgo_time_apply_timezone(const purrgo_gnss_solution_t* utc, purrgo_gnss_solution_t* local, int16_t tz_offset_minutes) {
     *local = *utc;
 
-    if (!local->valid) return;
+    if (!local->valid) return false;
 
     uint32_t utc_epoch;
     if (!purrgo_time_datetime_to_epoch(utc->year, utc->month, utc->day, utc->hours, utc->minutes, utc->seconds, &utc_epoch)) {
-        return; // Некорректное время в UTC
+        return false; // Некорректное время в UTC
     }
 
     int64_t local_epoch_64 = (int64_t)utc_epoch + ((int64_t)tz_offset_minutes * 60);
 
-    // Коррекция wrap around назад в прошлое (year 0 -> year 99)
-    if (local_epoch_64 < 0) {
-        // Мы предполагаем, что смещение не будет больше 100 лет,
-        // поэтому просто добавим 100 лет в секундах.
-        // 100 лет = 36525 дней = 3155760000 секунд
-        // Но лучше использовать цикл, как было в старом коде,
-        // или пересчитать в дни.
-        // В старом коде 2000-01-01 -> 2099-12-31 при смещении назад.
-        // 100 лет с 2000 до 2100 - это 24 високосных года (2000,2004..2096).
-        // 24 + 76 = 100 лет. 100*365 + 25 = 36525 дней.
-        int64_t century_seconds = 36525LL * 86400LL;
-        while (local_epoch_64 < 0) {
-            local_epoch_64 += century_seconds;
-        }
+    if (local_epoch_64 < 0 || local_epoch_64 > PURRGO_TIME_MAX_EPOCH) {
+        return false;
     }
 
-    // В старом коде year == 99 и month == 12 и день 31 -> 2000 год.
-    // Поскольку у нас 100 лет - это ровно 36525 дней, мы можем взять % century_seconds.
-    int64_t century_seconds = 36525LL * 86400LL;
-    local_epoch_64 = local_epoch_64 % century_seconds;
-
-    purrgo_time_epoch_to_datetime((uint32_t)local_epoch_64,
+    return purrgo_time_epoch_to_datetime((uint32_t)local_epoch_64,
                                   &local->year, &local->month, &local->day,
                                   &local->hours, &local->minutes, &local->seconds);
 }

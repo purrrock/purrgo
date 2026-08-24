@@ -72,15 +72,13 @@ static void test_timezone(void) {
     purrgo_time_apply_timezone(&utc, &local, -120); // -2 hours
     assert(local.hours == 23 && local.minutes == 0 && local.day == 31 && local.month == 12 && local.year == 23);
 
-    // Test 11: Year rollover wrapping 00 to 99 explicitly as part of 2-digit 2000-2099 semantics
+    // Test 11: Year rollover going backward from 2000 fails
     utc.hours = 1; utc.minutes = 0; utc.day = 1; utc.month = 1; utc.year = 0; // 2000
-    purrgo_time_apply_timezone(&utc, &local, -120); // -2 hours
-    assert(local.hours == 23 && local.minutes == 0 && local.day == 31 && local.month == 12 && local.year == 99); // 2099 wrap around check
+    assert(purrgo_time_apply_timezone(&utc, &local, -120) == false); // -2 hours out of bounds
 
-    // Test 12: Year rollover wrapping 99 to 00 explicitly as part of 2-digit 2000-2099 semantics
+    // Test 12: Year rollover going forward from 2099 fails
     utc.hours = 23; utc.minutes = 0; utc.day = 31; utc.month = 12; utc.year = 99; // 2099
-    purrgo_time_apply_timezone(&utc, &local, 120); // +2 hours
-    assert(local.hours == 1 && local.minutes == 0 && local.day == 1 && local.month == 1 && local.year == 0); // 2000 wrap around check
+    assert(purrgo_time_apply_timezone(&utc, &local, 120) == false); // +2 hours out of bounds
 
     // Test 13: Minimum configured timezone offset (-720)
     utc.hours = 1; utc.minutes = 0; utc.day = 15; utc.month = 5; utc.year = 23;
