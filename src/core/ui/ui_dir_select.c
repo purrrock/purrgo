@@ -1,4 +1,9 @@
-#include "ui_common.h"
+#include "ui_dir_select.h"
+#include "purrgo/app_fsm.h"
+#include "purrgo/gfx_text.h"
+#include "purrgo/gfx_rect.h"
+#include "purrgo/fs_hal.h"
+#include <stdio.h>
 
 void ui_render_menu_dir_select(gfx_context_t* gfx) {
     char buf[PURRGO_FS_MAX_PATH + 32];

@@ -1,4 +1,9 @@
-#include "ui_common.h"
+#include "ui_trip.h"
+#include "purrgo/app_fsm.h"
+#include "purrgo/gfx_text.h"
+#include "purrgo/gfx_rect.h"
+#include "purrgo/config.h"
+#include <stdio.h>
 
 void ui_render_trip_computer(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const purrgo_sun_info_t* sun) {
     char buf[64];
