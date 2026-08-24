@@ -44,7 +44,7 @@ void purrgo_geo_bbox_from_center(int32_t center_lat_1e7, int32_t center_lon_1e7,
     // 1 градус широты ≈ 111195 метров
     // Значит 1 метр ≈ 10^7 / 111195 ≈ 90 единиц (точнее 89.93)
     // Используем uint64_t, чтобы избежать переполнения при больших width_m
-    uint64_t width_1e7_64 = (uint64_t)width_m * 90ULL;
+    uint64_t width_1e7_64 = (uint64_t)width_m * PURRGO_1E7_PER_METER;
 
     // Ограничиваем максимальную ширину до 360 градусов (3.6e9)
     if (width_1e7_64 > 3600000000ULL) {

@@ -77,6 +77,11 @@ typedef enum {
     PURRGO_MAP_SCALE_COUNT
 } purrgo_map_scale_t;
 
+// Глобальный флаг перерисовки UI
+void purrgo_app_ui_mark_dirty(void);
+bool purrgo_app_ui_is_dirty(void);
+void purrgo_app_ui_clear_dirty(void);
+
 // Геттеры для состояния карты (Map Viewport)
 void purrgo_app_map_mark_dirty(void);
 bool purrgo_app_map_is_dirty(void);
