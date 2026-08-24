@@ -39,55 +39,8 @@ void purrgo_logger_set_mode(track_logger_mode_t mode) {
     current_mode = mode;
 }
 
-// Легковесный конвертер в секунды с 2000 года (для расчета дельты времени)
-// Оптимизировано для микроконтроллеров, работает в диапазоне 2000-2099 гг.
-static uint32_t datetime_to_epoch(uint8_t year, uint8_t month, uint8_t day, uint8_t h, uint8_t m, uint8_t s) {
-    static const uint16_t days_before_month[12] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334};
-    
-    // Подсчет прошедших лет и високосных дней
-    uint32_t days = year * 365 + (year + 3) / 4 + days_before_month[month - 1] + day - 1;
-    
-    // Корректировка, если текущий год високосный и месяц больше февраля
-    if (year % 4 == 0 && month > 2) {
-        days++;
-    }
-    
-    return ((days * 24 + h) * 60 + m) * 60 + s;
-}
-// Обратный конвертер из секунд (с 2000 года) в локальную дату и время.
-// Корректно обрабатывает високосные года до 2099 года (2100 не является високосным).
-static void epoch_to_datetime(uint32_t epoch, uint8_t *year, uint8_t *month, uint8_t *day, 
-                              uint8_t *h, uint8_t *m, uint8_t *s) {
-    uint32_t time_of_day = epoch % 86400;
-    uint32_t days = epoch / 86400;
+#include "purrgo/purrgo_time.h"
 
-    *h = time_of_day / 3600;
-    *m = (time_of_day % 3600) / 60;
-    *s = time_of_day % 60;
-
-    uint32_t y = 0;
-    while (1) {
-        uint32_t days_in_year = (y % 4 == 0) ? 366 : 365;
-        if (days >= days_in_year) {
-            days -= days_in_year;
-            y++;
-        } else {
-            break;
-        }
-    }
-    *year = (uint8_t)y;
-
-    uint8_t mo = 1;
-    uint16_t days_in_month[] = {0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-    if (y % 4 == 0) days_in_month[2] = 29;
-
-    while (days >= days_in_month[mo]) {
-        days -= days_in_month[mo];
-        mo++;
-    }
-    *month = mo;
-    *day = (uint8_t)(days + 1);
-}
 // Вспомогательная функция для сброса данных на файловую систему
 static void flush_buffer(void) {
     if (buffer_pos > 0 && active_file != NULL) {
@@ -121,34 +74,30 @@ bool purrgo_logger_start(const purrgo_gnss_solution_t* first_fix) {
     if (current_state == LOGGER_STATE_RECORDING) return false;
     if (!first_fix || !first_fix->valid) return false;
 
-    // 1. Получаем базовое UTC время в секундах
-    uint32_t utc_epoch = datetime_to_epoch(first_fix->year, first_fix->month, first_fix->day, 
-                                           first_fix->hours, first_fix->minutes, first_fix->seconds);
+    // 1. Получаем базовое UTC время в секундах для проверки underflow
+    uint32_t utc_epoch = 0;
+    if (!purrgo_time_datetime_to_epoch(first_fix->year, first_fix->month, first_fix->day,
+                                       first_fix->hours, first_fix->minutes, first_fix->seconds, &utc_epoch)) {
+        return false;
+    }
     
-    // 2. Смещаем на локальный часовой пояс.
-    // Используем int64_t для промежуточного значения, чтобы избежать переполнения
-    // при сложении uint32_t и потенциально отрицательного смещения.
+    // 2. Проверяем underflow, если время с учетом пояса уходит до 2000 года.
     int64_t local_epoch_64 = (int64_t)utc_epoch + ((int64_t)app_config.tz_offset_minutes * 60);
-
-    // Защита от underflow, если время с учетом пояса уходит до 2000 года.
-    // Если результат отрицательный, мы не можем корректно представить дату,
-    // так как epoch начинается с 2000 года. Возвращаем false.
     if (local_epoch_64 < 0) {
         return false;
     }
 
-    uint32_t local_epoch = (uint32_t)local_epoch_64;
-    
-    uint8_t l_year, l_month, l_day, l_hour, l_min, l_sec;
-    epoch_to_datetime(local_epoch, &l_year, &l_month, &l_day, &l_hour, &l_min, &l_sec);
+    purrgo_gnss_solution_t local_fix;
+    purrgo_time_apply_timezone(first_fix, &local_fix, app_config.tz_offset_minutes);
 
     // Запоминаем ЛОКАЛЬНЫЙ день старта для проверки смены суток
-    current_track_day = l_day;
+    current_track_day = local_fix.day;
 
     // Имя файла формируется по локальному времени пользователя
     char filename[32];
     snprintf(filename, sizeof(filename), "%02d%02d%02d-%02d%02d%02d.gpx", 
-             l_year, l_month, l_day, l_hour, l_min, l_sec);
+             local_fix.year, local_fix.month, local_fix.day,
+             local_fix.hours, local_fix.minutes, local_fix.seconds);
 
     active_file = purrgo_fs_open(filename, FS_WRITE_CREATE);
     if (!active_file) {
@@ -167,8 +116,11 @@ bool purrgo_logger_start(const purrgo_gnss_solution_t* first_fix) {
 void purrgo_logger_add_point(const purrgo_gnss_solution_t* fix) {
     if (current_state != LOGGER_STATE_RECORDING || !fix || !fix->valid) return;
 
-    uint32_t utc_epoch = datetime_to_epoch(fix->year, fix->month, fix->day, 
-                                           fix->hours, fix->minutes, fix->seconds);
+    uint32_t utc_epoch = 0;
+    if (!purrgo_time_datetime_to_epoch(fix->year, fix->month, fix->day,
+                                       fix->hours, fix->minutes, fix->seconds, &utc_epoch)) {
+        return;
+    }
     
     int64_t local_epoch_64 = (int64_t)utc_epoch + ((int64_t)app_config.tz_offset_minutes * 60);
 
@@ -177,13 +129,11 @@ void purrgo_logger_add_point(const purrgo_gnss_solution_t* fix) {
         return;
     }
 
-    uint32_t local_epoch = (uint32_t)local_epoch_64;
-    
-    uint8_t l_year, l_month, l_day, l_hour, l_min, l_sec;
-    epoch_to_datetime(local_epoch, &l_year, &l_month, &l_day, &l_hour, &l_min, &l_sec);
+    purrgo_gnss_solution_t local_fix;
+    purrgo_time_apply_timezone(fix, &local_fix, app_config.tz_offset_minutes);
 
     // Проверка смены суток происходит по ЛОКАЛЬНОМУ времени
-    if (l_day != current_track_day) {
+    if (local_fix.day != current_track_day) {
         purrgo_logger_stop();
         if (!purrgo_logger_start(fix)) {
             return; 
