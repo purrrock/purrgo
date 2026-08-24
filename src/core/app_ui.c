@@ -1,6 +1,9 @@
 #include "purrgo/app_ui.h"
 #include "purrgo/app_fsm.h"
-#include "ui/ui_common.h"
+#include "ui/ui_map.h"
+#include "ui/ui_trip.h"
+#include "ui/ui_config.h"
+#include "ui/ui_dir_select.h"
 
 int dbg_map_render_calls = 0;
 

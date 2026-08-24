@@ -1,4 +1,14 @@
-#include "ui_common.h"
+#include "ui_map.h"
+#include "purrgo/app_fsm.h"
+#include "purrgo/gfx_rect.h"
+#include "purrgo/gfx_text.h"
+#include "purrgo/geo.h"
+#include "purrgo/map.h"
+#include "purrgo/config.h"
+#include "purrgo/logger.h"
+#include "purrgo/hardware_config.h"
+#include <stdio.h>
+#include <string.h>
 
 extern int dbg_map_render_calls;
 
@@ -44,21 +54,6 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
         gfx_fill_rect(gfx, map_vp.offset_x, map_vp.offset_y, map_vp.width, map_vp.height);
 
         bool map_success = purrgo_map_render_viewport(gfx, &map_vp, &dynamic_cam, app_config.map_dir);
-
-        // Name handling was removed from the orchestrator in the ui as it's not actually drawn right now, but let's read it to be safe
-        char name_path[PURRGO_FS_MAX_PATH];
-        char map_name_buf[65] = {0};
-        snprintf(name_path, sizeof(name_path), "%s/map.name", app_config.map_dir);
-        purrgo_file_t* name_file = purrgo_fs_open(name_path, FS_READ);
-
-        if (name_file) {
-            uint32_t n = purrgo_fs_read(name_file, (uint8_t*)map_name_buf, 64);
-            if (n > 64) n = 64;
-            map_name_buf[n] = '\0';
-            purrgo_fs_close(name_file);
-        } else {
-            map_name_buf[0] = '\0';
-        }
 
         if (map_success) {
             purrgo_app_map_clear_dirty();
