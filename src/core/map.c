@@ -4,6 +4,8 @@
 #include "purrgo/logger.h"
 #include "purrgo/gfx_line.h"
 #include "purrgo/gfx_polygon.h"
+#include "purrgo/map_style.h"
+#include "purrgo/gfx_circle.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -92,6 +94,10 @@ typedef struct {
 
     uint32_t polygons_filled;
     uint32_t polygons_skipped;
+
+    /* Diagnostics for unknown and NONE styles */
+    uint32_t styles_unknown;
+    uint32_t style_none;
 
     /*
      * Ограничивает количество подробных диагностических сообщений
@@ -474,6 +480,7 @@ static void parse_geometry_mlp(
     const purrgo_viewport_t *vp,
     gfx_context_t *gfx,
     bool is_polygon_layer,
+    purrgo_map_style_t style,
     map_diag_t *diag
 ) {
     if (
@@ -876,14 +883,36 @@ static void parse_geometry_mlp(
                         );
                     }
 
-
-                    gfx_draw_line(
-                        gfx,
-                        prev_sx,
-                        prev_sy,
-                        sx,
-                        sy
-                    );
+                    gfx_color_t prev_fg = gfx->color_fg;
+                    switch (style) {
+                        case PURRGO_STYLE_DARK_GRAY_THICK_LINE:
+                            gfx_set_color(gfx, 1, gfx->color_bg);
+                            gfx_draw_thick_line(gfx, prev_sx, prev_sy, sx, sy, 3);
+                            break;
+                        case PURRGO_STYLE_DARK_GRAY_SEMITHICK_LINE:
+                            gfx_set_color(gfx, 1, gfx->color_bg);
+                            gfx_draw_thick_line(gfx, prev_sx, prev_sy, sx, sy, 2);
+                            break;
+                        case PURRGO_STYLE_DARK_GRAY_LINE:
+                            gfx_set_color(gfx, 1, gfx->color_bg);
+                            gfx_draw_line(gfx, prev_sx, prev_sy, sx, sy);
+                            break;
+                        case PURRGO_STYLE_DARK_GRAY_DASHED_LINE:
+                            gfx_set_color(gfx, 1, gfx->color_bg);
+                            gfx_draw_dashed_line(gfx, prev_sx, prev_sy, sx, sy);
+                            break;
+                        case PURRGO_STYLE_DARK_GRAY_DOTTED_LINE:
+                            gfx_set_color(gfx, 1, gfx->color_bg);
+                            gfx_draw_dotted_line(gfx, prev_sx, prev_sy, sx, sy);
+                            break;
+                        case PURRGO_STYLE_RAILWAY_LINE:
+                            gfx_draw_railway_line(gfx, prev_sx, prev_sy, sx, sy, 1, 3);
+                            break;
+                        default:
+                            /* Do not draw unknown line styles, just in case */
+                            break;
+                    }
+                    gfx_set_color(gfx, prev_fg, gfx->color_bg);
 
 
                     if (diag != NULL) {
@@ -956,6 +985,14 @@ static void parse_geometry_mlp(
         }
 
 
+        /* Setup polygon colors */
+        gfx_color_t prev_fg = gfx->color_fg;
+        if (style == PURRGO_STYLE_LIGHT_GRAY_FILL) {
+            gfx_set_color(gfx, 2, gfx->color_bg);
+        } else if (style == PURRGO_STYLE_DARK_GRAY_FILL) {
+            gfx_set_color(gfx, 1, gfx->color_bg);
+        }
+
         /*
          * Передаём все rings одновременно.
          *
@@ -969,6 +1006,8 @@ static void parse_geometry_mlp(
             parts,
             (uint16_t)part_count
         );
+
+        gfx_set_color(gfx, prev_fg, gfx->color_bg);
 
 
         if (diag != NULL) {
@@ -1169,35 +1208,54 @@ static void parse_node(
             /*
              * DATA node:
              *
-             *     v1 @ +0x14
+             *     type @ +0x10
+             *     v1   @ +0x14
              *
              * В V2 v1 указывает непосредственно
              * на MLP geometry body.
              */
+            uint32_t obj_type =
+                unpack_u32_le(
+                    &node_buf[16]
+                );
+
             uint32_t v1 =
                 unpack_u32_le(
                     &node_buf[20]
                 );
 
 
-            /*
-             * v1 == 0 означает отсутствие MLP geometry.
-             *
-             * В частности, это может быть DATA node,
-             * для которого geometry не представлена в MLP.
-             *
-             * POI сейчас намеренно не обрабатываем.
-             */
-            if (v1 > 0) {
-                parse_geometry_mlp(
-                    mlp_fs,
-                    v1,
-                    cam,
-                    vp,
-                    gfx,
-                    is_polygon_layer,
-                    diag
-                );
+            purrgo_map_style_t style = purrgo_map_style_from_feature(obj_type);
+
+            if (style == PURRGO_STYLE_NONE) {
+                if (diag != NULL) {
+                    if (obj_type == 0) {
+                        diag->style_none++;
+                    } else {
+                        diag->styles_unknown++;
+                    }
+                }
+            } else {
+                /*
+                 * v1 == 0 означает отсутствие MLP geometry.
+                 *
+                 * В частности, это может быть DATA node,
+                 * для которого geometry не представлена в MLP.
+                 *
+                 * POI сейчас намеренно не обрабатываем.
+                 */
+                if (v1 > 0) {
+                    parse_geometry_mlp(
+                        mlp_fs,
+                        v1,
+                        cam,
+                        vp,
+                        gfx,
+                        is_polygon_layer,
+                        style,
+                        diag
+                    );
+                }
             }
         }
 
