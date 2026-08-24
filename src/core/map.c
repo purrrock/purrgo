@@ -2,8 +2,20 @@
 #include "purrgo/logger.h"
 #include "map_internal.h"
 #include "map_idx.h"
+#include "purrgo/fs_hal.h"
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdio.h>
+#include <string.h>
+
+/* Локальные обертки для согласования сигнатур fs_hal.h и purrgo_fs_t */
+static uint32_t core_fs_read_wrapper(void* handle, void* buffer, uint32_t size) {
+    return (uint32_t)purrgo_fs_read((purrgo_file_t*)handle, (uint8_t*)buffer, (size_t)size);
+}
+
+static bool core_fs_seek_wrapper(void* handle, uint32_t offset) {
+    return purrgo_fs_seek((purrgo_file_t*)handle, offset);
+}
 
 /* -------------------------------------------------------------------------- */
 /* Public API                                                                 */
@@ -171,4 +183,73 @@ void purrgo_map_render_layer(
         (unsigned)diag.polygons_filled,
         (unsigned)diag.polygons_skipped
     );
+}
+
+bool purrgo_map_render_viewport(
+    gfx_context_t *gfx,
+    const purrgo_viewport_t *viewport,
+    const purrgo_bbox_t *camera,
+    const char *map_dir
+) {
+    char landuse_idx_path[PURRGO_FS_MAX_PATH];
+    char landuse_mlp_path[PURRGO_FS_MAX_PATH];
+    char idx_path[PURRGO_FS_MAX_PATH];
+    char mlp_path[PURRGO_FS_MAX_PATH];
+
+    snprintf(landuse_idx_path, sizeof(landuse_idx_path), "%s/landuse.idx", map_dir);
+    snprintf(landuse_mlp_path, sizeof(landuse_mlp_path), "%s/landuse.mlp", map_dir);
+    snprintf(idx_path, sizeof(idx_path), "%s/roads.idx", map_dir);
+    snprintf(mlp_path, sizeof(mlp_path), "%s/roads.mlp", map_dir);
+
+    purrgo_file_t* landuse_idx_file = purrgo_fs_open(landuse_idx_path, FS_READ);
+    purrgo_file_t* landuse_mlp_file = purrgo_fs_open(landuse_mlp_path, FS_READ);
+
+    bool landuse_success = false;
+    if (landuse_idx_file && landuse_mlp_file) {
+        purrgo_fs_t landuse_idx_fs = {
+            .handle = landuse_idx_file,
+            .read = core_fs_read_wrapper,
+            .seek = core_fs_seek_wrapper
+        };
+
+        purrgo_fs_t landuse_mlp_fs = {
+            .handle = landuse_mlp_file,
+            .read = core_fs_read_wrapper,
+            .seek = core_fs_seek_wrapper
+        };
+
+        gfx_set_color(gfx, 2, 3);
+        purrgo_map_render_layer(&landuse_idx_fs, &landuse_mlp_fs, gfx, camera, viewport, true);
+        landuse_success = true;
+    }
+
+    if (landuse_idx_file) purrgo_fs_close(landuse_idx_file);
+    if (landuse_mlp_file) purrgo_fs_close(landuse_mlp_file);
+
+    purrgo_file_t* idx_file = purrgo_fs_open(idx_path, FS_READ);
+    purrgo_file_t* mlp_file = purrgo_fs_open(mlp_path, FS_READ);
+
+    bool roads_success = false;
+    if (idx_file && mlp_file) {
+        purrgo_fs_t idx_fs = {
+            .handle = idx_file,
+            .read = core_fs_read_wrapper,
+            .seek = core_fs_seek_wrapper
+        };
+
+        purrgo_fs_t mlp_fs = {
+            .handle = mlp_file,
+            .read = core_fs_read_wrapper,
+            .seek = core_fs_seek_wrapper
+        };
+
+        gfx_set_color(gfx, 1, 3);
+        purrgo_map_render_layer(&idx_fs, &mlp_fs, gfx, camera, viewport, false);
+        roads_success = true;
+    }
+
+    if (idx_file) purrgo_fs_close(idx_file);
+    if (mlp_file) purrgo_fs_close(mlp_file);
+
+    return landuse_success && roads_success;
 }

@@ -27,6 +27,10 @@ add_subdirectory(third_party)
 set(CORE_SOURCES
     src/core/app_fsm.c
     src/core/app_ui.c
+    src/core/ui/ui_map.c
+    src/core/ui/ui_trip.c
+    src/core/ui/ui_config.c
+    src/core/ui/ui_dir_select.c
     src/core/config.c
     src/core/geo.c
     src/core/gfx/gfx_circle.c
