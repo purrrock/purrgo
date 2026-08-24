@@ -17,6 +17,7 @@ static int32_t map_center_lat_1e7;
 static int32_t map_center_lon_1e7;
 static purrgo_map_scale_t map_zoom_level;
 static bool manual_pan_active;
+static bool map_dirty = true;
 
 // Значения физической ширины BBox в метрах для расчета координат.
 static const uint32_t scale_widths_m[PURRGO_MAP_SCALE_COUNT] = {
@@ -98,6 +99,19 @@ void purrgo_app_init(void) {
     map_center_lon_1e7 = app_config.last_lon_1e7;
     map_zoom_level = PURRGO_MAP_SCALE_500M; // Начальный зум
     manual_pan_active = false;
+    map_dirty = true;
+}
+
+void purrgo_app_map_mark_dirty(void) {
+    map_dirty = true;
+}
+
+bool purrgo_app_map_is_dirty(void) {
+    return map_dirty;
+}
+
+void purrgo_app_map_clear_dirty(void) {
+    map_dirty = false;
 }
 
 purrgo_state_t purrgo_app_get_state(void) {
@@ -193,6 +207,7 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
         purrgo_config_save();
 
         current_state = APP_STATE_MAP;
+        map_dirty = true;
     } else if (config_cursor_idx == 1) {
         current_state = APP_STATE_MENU_DIR_SELECT;
         load_directory_list();
@@ -202,6 +217,7 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
             case PURRGO_BTN_MENU:
                 // Отмена изменений и возврат на главный экран по зацикливанию
                 current_state = APP_STATE_MAP;
+                map_dirty = true;
                 break;
 
             default:
@@ -256,11 +272,17 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
     // Обработка ввода на карте
     if (current_state == APP_STATE_MAP) {
         if (button == PURRGO_BTN_PLUS) {
-            if (map_zoom_level > 0) map_zoom_level--;
+            if (map_zoom_level > 0) {
+                map_zoom_level--;
+                map_dirty = true;
+            }
             return;
         }
         if (button == PURRGO_BTN_MINUS) {
-            if (map_zoom_level < PURRGO_MAP_SCALE_COUNT - 1) map_zoom_level++;
+            if (map_zoom_level < PURRGO_MAP_SCALE_COUNT - 1) {
+                map_zoom_level++;
+                map_dirty = true;
+            }
             return;
         }
 
@@ -293,6 +315,7 @@ int32_t step_x = (int32_t)step_x_64;
             if (next_lat < INT32_MIN) next_lat = INT32_MIN;
             map_center_lat_1e7 = (int32_t)next_lat;
             manual_pan_active = true;
+            map_dirty = true;
             return;
         }
         if (button == PURRGO_BTN_DOWN) {
@@ -301,6 +324,7 @@ int32_t step_x = (int32_t)step_x_64;
             if (next_lat < INT32_MIN) next_lat = INT32_MIN;
             map_center_lat_1e7 = (int32_t)next_lat;
             manual_pan_active = true;
+            map_dirty = true;
             return;
         }
         if (button == PURRGO_BTN_RIGHT) {
@@ -309,6 +333,7 @@ int32_t step_x = (int32_t)step_x_64;
             if (next_lon < INT32_MIN) next_lon = INT32_MIN;
             map_center_lon_1e7 = (int32_t)next_lon;
             manual_pan_active = true;
+            map_dirty = true;
             return;
         }
         if (button == PURRGO_BTN_LEFT) {
@@ -317,11 +342,15 @@ int32_t step_x = (int32_t)step_x_64;
             if (next_lon < INT32_MIN) next_lon = INT32_MIN;
             map_center_lon_1e7 = (int32_t)next_lon;
             manual_pan_active = true;
+            map_dirty = true;
             return;
         }
 
         if (button == PURRGO_BTN_OK) {
-            manual_pan_active = false;
+            if (manual_pan_active) {
+                manual_pan_active = false;
+                map_dirty = true;
+            }
             return;
         }
     }
@@ -342,6 +371,7 @@ int32_t step_x = (int32_t)step_x_64;
 
             default:
                 current_state = APP_STATE_MAP;
+                map_dirty = true;
                 break;
         }
     }
@@ -358,8 +388,12 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
         case APP_STATE_MAP:
             // Фоновые расчеты для карты (панорамирование, проверке BBox, подгрузка кластеров)
             if (current_fix->valid && !manual_pan_active) {
-                map_center_lat_1e7 = current_fix->lat_1e7;
-                map_center_lon_1e7 = current_fix->lon_1e7;
+                if (map_center_lat_1e7 != current_fix->lat_1e7 ||
+                    map_center_lon_1e7 != current_fix->lon_1e7) {
+                    map_center_lat_1e7 = current_fix->lat_1e7;
+                    map_center_lon_1e7 = current_fix->lon_1e7;
+                    map_dirty = true;
+                }
             }
             break;
 

@@ -78,6 +78,10 @@ typedef enum {
 } purrgo_map_scale_t;
 
 // Геттеры для состояния карты (Map Viewport)
+void purrgo_app_map_mark_dirty(void);
+bool purrgo_app_map_is_dirty(void);
+void purrgo_app_map_clear_dirty(void);
+
 int32_t purrgo_app_get_map_center_lat(void);
 int32_t purrgo_app_get_map_center_lon(void);
 purrgo_map_scale_t purrgo_app_get_map_zoom_level(void);
