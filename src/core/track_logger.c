@@ -74,21 +74,10 @@ bool purrgo_logger_start(const purrgo_gnss_solution_t* first_fix) {
     if (current_state == LOGGER_STATE_RECORDING) return false;
     if (!first_fix || !first_fix->valid) return false;
 
-    // 1. Получаем базовое UTC время в секундах для проверки underflow
-    uint32_t utc_epoch = 0;
-    if (!purrgo_time_datetime_to_epoch(first_fix->year, first_fix->month, first_fix->day,
-                                       first_fix->hours, first_fix->minutes, first_fix->seconds, &utc_epoch)) {
-        return false;
-    }
-    
-    // 2. Проверяем underflow, если время с учетом пояса уходит до 2000 года.
-    int64_t local_epoch_64 = (int64_t)utc_epoch + ((int64_t)app_config.tz_offset_minutes * 60);
-    if (local_epoch_64 < 0) {
-        return false;
-    }
-
     purrgo_gnss_solution_t local_fix;
-    purrgo_time_apply_timezone(first_fix, &local_fix, app_config.tz_offset_minutes);
+    if (!purrgo_time_apply_timezone(first_fix, &local_fix, app_config.tz_offset_minutes)) {
+        return false;
+    }
 
     // Запоминаем ЛОКАЛЬНЫЙ день старта для проверки смены суток
     current_track_day = local_fix.day;
@@ -122,15 +111,10 @@ void purrgo_logger_add_point(const purrgo_gnss_solution_t* fix) {
         return;
     }
     
-    int64_t local_epoch_64 = (int64_t)utc_epoch + ((int64_t)app_config.tz_offset_minutes * 60);
-
-    // Если время уходит до 2000 года, пропускаем запись этой точки
-    if (local_epoch_64 < 0) {
+    purrgo_gnss_solution_t local_fix;
+    if (!purrgo_time_apply_timezone(fix, &local_fix, app_config.tz_offset_minutes)) {
         return;
     }
-
-    purrgo_gnss_solution_t local_fix;
-    purrgo_time_apply_timezone(fix, &local_fix, app_config.tz_offset_minutes);
 
     // Проверка смены суток происходит по ЛОКАЛЬНОМУ времени
     if (local_fix.day != current_track_day) {

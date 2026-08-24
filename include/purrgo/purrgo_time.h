@@ -18,10 +18,12 @@ bool purrgo_time_datetime_to_epoch(uint8_t year, uint8_t month, uint8_t day,
                                    uint32_t* epoch_out);
 
 // Преобразование секунд с начала 2000 года в дату и время (формат двухзначного года 2000-2099).
-void purrgo_time_epoch_to_datetime(uint32_t epoch, uint8_t* year, uint8_t* month, uint8_t* day,
+// Возвращает true, если epoch находится в поддерживаемом диапазоне (0..3155759999)
+bool purrgo_time_epoch_to_datetime(uint32_t epoch, uint8_t* year, uint8_t* month, uint8_t* day,
                                    uint8_t* h, uint8_t* m, uint8_t* s);
 
 // Применение смещения часового пояса к UTC времени с пересчетом календаря
-void purrgo_time_apply_timezone(const purrgo_gnss_solution_t* utc, purrgo_gnss_solution_t* local, int16_t tz_offset_minutes);
+// Возвращает true при успешном смещении (без выхода за границы поддерживаемого диапазона)
+bool purrgo_time_apply_timezone(const purrgo_gnss_solution_t* utc, purrgo_gnss_solution_t* local, int16_t tz_offset_minutes);
 
 #endif // PURRGO_TIME_H
