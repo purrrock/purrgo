@@ -118,6 +118,105 @@ void test_pan_coordinate_bounds_clamping() {
     assert(current_lon == my_min);
 }
 
+void test_map_dirty_state() {
+    purrgo_app_init();
+
+    // Initial entry should be dirty
+    assert(purrgo_app_map_is_dirty() == true);
+
+    // Manual clear
+    purrgo_app_map_clear_dirty();
+    assert(purrgo_app_map_is_dirty() == false);
+
+    // Panning sets dirty
+    purrgo_app_handle_button(PURRGO_BTN_UP);
+    assert(purrgo_app_map_is_dirty() == true);
+    purrgo_app_map_clear_dirty();
+
+    // Zooming sets dirty
+    purrgo_app_handle_button(PURRGO_BTN_PLUS);
+    assert(purrgo_app_map_is_dirty() == true);
+    purrgo_app_map_clear_dirty();
+
+    // Leaving manual pan state sets dirty
+    assert(purrgo_app_is_manual_pan_active() == true);
+    purrgo_app_handle_button(PURRGO_BTN_OK);
+    assert(purrgo_app_is_manual_pan_active() == false);
+    assert(purrgo_app_map_is_dirty() == true);
+    purrgo_app_map_clear_dirty();
+
+    // GNSS change without manual pan sets dirty
+    purrgo_gnss_solution_t fix = {0};
+    fix.valid = true;
+    fix.lat_1e7 = 1000;
+    fix.lon_1e7 = 1000;
+    purrgo_app_update(&fix);
+    assert(purrgo_app_map_is_dirty() == true);
+    purrgo_app_map_clear_dirty();
+
+    // GNSS change with manual pan DOES NOT set dirty
+    purrgo_app_handle_button(PURRGO_BTN_UP); // enter manual pan mode
+    assert(purrgo_app_is_manual_pan_active() == true);
+    purrgo_app_map_clear_dirty(); // clear the pan dirty flag
+
+    fix.lat_1e7 = 2000;
+    purrgo_app_update(&fix); // should ignore gnss change for map follow
+    assert(purrgo_app_map_is_dirty() == false);
+
+    purrgo_app_handle_button(PURRGO_BTN_OK); // reset manual pan
+    purrgo_app_map_clear_dirty();
+
+    // State transition sets dirty
+    purrgo_app_handle_button(PURRGO_BTN_MENU); // goto trip computer
+    purrgo_app_handle_button(PURRGO_BTN_MENU); // goto menu config
+    purrgo_app_handle_button(PURRGO_BTN_MENU); // goto map
+    assert(purrgo_app_map_is_dirty() == true);
+}
+
+#include "purrgo/app_ui.h"
+
+extern int dbg_map_render_calls;
+
+void dummy_draw_pixel(void *fb, int16_t x, int16_t y, gfx_color_t color) {
+    // mock
+}
+
+void test_map_clean_refresh_skips_render() {
+    purrgo_app_init();
+
+    // Create dummy gfx context
+    gfx_context_t gfx;
+    gfx_init(&gfx, 400, 300, (void*)1, dummy_draw_pixel);
+
+    purrgo_gnss_solution_t gnss = {0};
+    purrgo_sun_info_t sun = {0};
+
+    // FSM starts in APP_STATE_MAP and dirty is true
+    assert(purrgo_app_map_is_dirty() == true);
+
+    int calls_before = dbg_map_render_calls;
+
+    // Call UI render. Since it's dirty, it should increment the counter
+    purrgo_app_ui_render(&gfx, &gnss, &sun);
+
+    // In our test mock, purrgo_fs_open always returns NULL so landuse_success and roads_success are false.
+    // So purrgo_app_map_clear_dirty() will not be called automatically by app_ui_render.
+    // We will call it manually to simulate successful load.
+    purrgo_app_map_clear_dirty();
+
+    // Render should have incremented the calls
+    assert(dbg_map_render_calls == calls_before + 1);
+
+    // It should have cleared the dirty flag
+    assert(purrgo_app_map_is_dirty() == false);
+
+    // Call UI render again (refresh). Since dirty is false, counter shouldn't change
+    calls_before = dbg_map_render_calls;
+    purrgo_app_ui_render(&gfx, &gnss, &sun);
+
+    assert(dbg_map_render_calls == calls_before);
+}
+
 int main() {
     // Setup basic mock or rely on defaults since config_init logic is needed.
     // config load creates PURRGO.CFG
@@ -125,6 +224,8 @@ int main() {
     test_pan_small_scale();
     test_pan_large_scale_high_latitude();
     test_pan_coordinate_bounds_clamping();
+    test_map_dirty_state();
+    test_map_clean_refresh_skips_render();
 
     printf("App FSM tests passed!\n");
     return 0;
@@ -139,3 +240,4 @@ uint32_t purrgo_fs_read(purrgo_file_t* file, uint8_t* buffer, uint32_t size) { r
 uint32_t purrgo_fs_write(purrgo_file_t* file, const uint8_t* buffer, uint32_t size) { return size; }
 void purrgo_fs_close(purrgo_file_t* file) {}
 void purrgo_fs_sync(purrgo_file_t* file) {}
+bool purrgo_fs_seek(purrgo_file_t* file, uint32_t offset) { return false; }
