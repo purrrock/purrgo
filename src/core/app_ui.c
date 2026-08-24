@@ -637,7 +637,7 @@ void purrgo_app_ui_render(
                     map_name_buf[0] = '\0';
                 }
 
-                if (landuse_success || roads_success) {
+                if (landuse_success && roads_success) {
                     purrgo_app_map_clear_dirty();
                 }
 
