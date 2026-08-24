@@ -66,7 +66,7 @@ int main(int argc, char *argv[]) {
                 // Фильтрация дубликатов: запись и вывод осуществляются только 1 раз за эпоху,
                 // после обработки сообщения GGA (содержащего высоту). К этому моменту 
                 // координаты и время уже гарантированно обновлены сообщением RMC.
-                if (solution.valid && strstr(line_buffer, "GGA") != NULL) {
+                if (solution.valid && strncmp(&line_buffer[3], "GGA", 3) == 0) {
                     // 1. Инициализация логгера при первом получении 3D Fix
                     if (!is_logging_active) {
                         if (purrgo_logger_start(&solution)) {

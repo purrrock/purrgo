@@ -15,10 +15,9 @@ void ui_render_trip_computer(gfx_context_t* gfx, const purrgo_gnss_solution_t* g
     snprintf(
         buf,
         sizeof(buf),
-        "UTC: %02d:%02d:%02d",
+        "UTC: %02d:%02d",
         gnss->hours,
-        gnss->minutes,
-        gnss->seconds
+        gnss->minutes
     );
 
     gfx_set_color(gfx, 0, 3);
@@ -40,10 +39,9 @@ void ui_render_trip_computer(gfx_context_t* gfx, const purrgo_gnss_solution_t* g
     snprintf(
         buf,
         sizeof(buf),
-        "LOC: %02d:%02d:%02d",
+        "LOC: %02d:%02d",
         loc_hours,
-        loc_minutes,
-        gnss->seconds
+        loc_minutes
     );
 
     gfx_set_color(gfx, 0, 3);

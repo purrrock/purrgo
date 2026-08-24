@@ -99,7 +99,7 @@ void gfx_draw_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1, int16
             break;
         }
 
-        e2 = err << 1; 
+        e2 = err * 2;
         
         if (e2 >= dy) {
             err += dy;
@@ -206,7 +206,7 @@ void gfx_draw_dashed_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1
             break;
         }
 
-        e2 = err << 1;
+        e2 = err * 2;
 
         if (e2 >= dy) {
             err += dy;
@@ -359,7 +359,7 @@ void gfx_draw_thick_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1,
             break;
         }
 
-        e2 = err << 1;
+        e2 = err * 2;
         
         if (e2 >= dy) {
             err += dy;
@@ -457,7 +457,7 @@ void gfx_draw_dotted_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1
             break;
         }
 
-        e2 = err << 1;
+        e2 = err * 2;
 
         if (e2 >= dy) {
             err += dy;
@@ -563,7 +563,7 @@ void gfx_draw_railway_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x
             break;
         }
 
-        e2 = err << 1;
+        e2 = err * 2;
 
         if (e2 >= dy) {
             err += dy;

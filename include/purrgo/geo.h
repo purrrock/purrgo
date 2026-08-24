@@ -18,4 +18,7 @@ uint16_t purrgo_geo_azimuth_deg(int32_t lat1_1e7, int32_t lon1_1e7, int32_t lat2
 // Вычисление косинуса широты, возвращает значение масштабированное на 10000
 int32_t purrgo_geo_cos_10k(int32_t lat_1e7);
 
+// Конвертация метров в единицы 1e7 (1 метр ≈ 10^7 / 111195 ≈ 90)
+#define PURRGO_1E7_PER_METER 90
+
 #endif // PURRGO_GEO_H
