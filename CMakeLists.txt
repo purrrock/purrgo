@@ -99,6 +99,10 @@ target_include_directories(purrgo_platform_pc
     add_executable(test_app_fsm tests/core/test_app_fsm.c)
     target_link_libraries(test_app_fsm PRIVATE purrgo_core)
     add_test(NAME test_app_fsm COMMAND test_app_fsm)
+
+    add_executable(test_purrgo_time tests/core/test_purrgo_time.c)
+    target_link_libraries(test_purrgo_time PRIVATE purrgo_core)
+    add_test(NAME test_purrgo_time COMMAND test_purrgo_time)
 endif()
 
 # Подключение директории эмулятора перенесено в конец дерева сборки, 
