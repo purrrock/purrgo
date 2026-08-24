@@ -24,7 +24,35 @@ endif()
 add_subdirectory(third_party)
 
 # Автоматический рекурсивный поиск всех .c файлов в директории src/core/.
-file(GLOB_RECURSE CORE_SOURCES CONFIGURE_DEPENDS "src/core/*.c")
+set(CORE_SOURCES
+    src/core/app_fsm.c
+    src/core/app_ui.c
+    src/core/config.c
+    src/core/geo.c
+    src/core/gfx/gfx_circle.c
+    src/core/gfx/gfx_line.c
+    src/core/gfx/gfx_polygon.c
+    src/core/gfx/gfx_rect.c
+    src/core/gfx/gfx_renderer.c
+    src/core/gfx/gfx_text.c
+    src/core/gnss.c
+    src/core/gnss_adapter.c
+    src/core/gnss_mock.c
+    src/core/gpx_parser.c
+    src/core/map.c
+    src/core/map_culling.c
+    src/core/map_idx.c
+    src/core/map_mlp.c
+    src/core/map_projection.c
+    src/core/map_render.c
+    src/core/map_style.c
+    src/core/navigation.c
+    src/core/purrgo_time.c
+    src/core/sun.c
+    src/core/sun_tables.c
+    src/core/track_logger.c
+    src/core/ubx.c
+)
 
 add_library(purrgo_core
     ${CORE_SOURCES}
