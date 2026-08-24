@@ -279,29 +279,43 @@ if (cos_val < 100) cos_val = 100; // prevent division by zero near poles
 int64_t step_x_64 = (step_y_64 * 10000) / cos_val;
 
 // Safety clamping before casting to int32_t
-if (step_y_64 > 2147483647LL) step_y_64 = 2147483647LL;
-if (step_x_64 > 2147483647LL) step_x_64 = 2147483647LL;
+if (step_y_64 > INT32_MAX) step_y_64 = INT32_MAX;
+if (step_y_64 < INT32_MIN) step_y_64 = INT32_MIN;
+if (step_x_64 > INT32_MAX) step_x_64 = INT32_MAX;
+if (step_x_64 < INT32_MIN) step_x_64 = INT32_MIN;
 
 int32_t step_y = (int32_t)step_y_64;
 int32_t step_x = (int32_t)step_x_64;
 
         if (button == PURRGO_BTN_UP) {
-            map_center_lat_1e7 += step_y;
+            int64_t next_lat = (int64_t)map_center_lat_1e7 + step_y;
+            if (next_lat > INT32_MAX) next_lat = INT32_MAX;
+            if (next_lat < INT32_MIN) next_lat = INT32_MIN;
+            map_center_lat_1e7 = (int32_t)next_lat;
             manual_pan_active = true;
             return;
         }
         if (button == PURRGO_BTN_DOWN) {
-            map_center_lat_1e7 -= step_y;
+            int64_t next_lat = (int64_t)map_center_lat_1e7 - step_y;
+            if (next_lat > INT32_MAX) next_lat = INT32_MAX;
+            if (next_lat < INT32_MIN) next_lat = INT32_MIN;
+            map_center_lat_1e7 = (int32_t)next_lat;
             manual_pan_active = true;
             return;
         }
         if (button == PURRGO_BTN_RIGHT) {
-            map_center_lon_1e7 += step_x;
+            int64_t next_lon = (int64_t)map_center_lon_1e7 + step_x;
+            if (next_lon > INT32_MAX) next_lon = INT32_MAX;
+            if (next_lon < INT32_MIN) next_lon = INT32_MIN;
+            map_center_lon_1e7 = (int32_t)next_lon;
             manual_pan_active = true;
             return;
         }
         if (button == PURRGO_BTN_LEFT) {
-            map_center_lon_1e7 -= step_x;
+            int64_t next_lon = (int64_t)map_center_lon_1e7 - step_x;
+            if (next_lon > INT32_MAX) next_lon = INT32_MAX;
+            if (next_lon < INT32_MIN) next_lon = INT32_MIN;
+            map_center_lon_1e7 = (int32_t)next_lon;
             manual_pan_active = true;
             return;
         }
