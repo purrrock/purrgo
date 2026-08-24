@@ -12,22 +12,41 @@
 #define PURRGO_MAP_MAX_PARTS 32
 
 /*
- * Текущий parser Python использует 2048 как защитное ограничение
- * количества точек одной MLP geometry.
+ * Защитный предел реализации renderer.
  *
  * Это НЕ ограничение бинарного формата MLP.
- * Это только защитный предел данной реализации parser/render pipeline.
+ * MLP использует uint32/int32 для количества parts/points.
  *
- * Для текущего этапа он нужен потому, что polygon renderer должен
- * временно разместить projected points в памяти.
+ * Ограничение необходимо потому, что polygon renderer требует
+ * одновременно хранить все projected points geometry.
  */
 #define PURRGO_MAP_MAX_POINTS 512
 
 /*
- * Статический буфер для рендеринга полигонов.
+ * Размер chunk при чтении MLP point array.
  *
- * Использование статического буфера позволяет избежать malloc/free
- * и делает поведение предсказуемым для STM32.
+ * Одна MLP point занимает:
+ *
+ *     int32 X + int32 Y = 8 bytes
+ *
+ * Поэтому 64-byte chunk содержит максимум 8 точек.
+ *
+ * Chunked reading позволяет не делать отдельный filesystem read()
+ * для каждой точки и при этом не требует большого временного буфера.
+ */
+#define PURRGO_MAP_READ_CHUNK_SIZE 64
+
+/*
+ * Количество точек, помещающихся в один MLP read chunk.
+ */
+#define PURRGO_MAP_POINTS_PER_CHUNK \
+    (PURRGO_MAP_READ_CHUNK_SIZE / 8)
+
+
+/*
+ * Статический буфер для polygon rendering.
+ *
+ * malloc/free здесь намеренно не используется.
  */
 static gfx_point_t s_polygon_buffer[PURRGO_MAP_MAX_POINTS];
 
@@ -37,11 +56,34 @@ static gfx_point_t s_polygon_buffer[PURRGO_MAP_MAX_POINTS];
  *
  * Поток обработки:
  *
- *     IDX -> SQT -> NAV -> DATA -> AABB -> MLP -> projection -> GFX
+ *     IDX
+ *       |
+ *       v
+ *     SQT
+ *       |
+ *       v
+ *     NAV
+ *       |
+ *       v
+ *     DATA
+ *       |
+ *       v
+ *     AABB culling
+ *       |
+ *       v
+ *     MLP
+ *       |
+ *       v
+ *     projection
+ *       |
+ *       v
+ *     GFX
  */
 typedef struct {
     uint32_t sqt_blocks;
+
     uint32_t nav_visited;
+
     uint32_t data_visited;
     uint32_t data_passed;
     uint32_t data_culled;
@@ -64,28 +106,14 @@ typedef struct {
 /* -------------------------------------------------------------------------- */
 
 /*
- * AABB Intersection with Antimeridian support
- */
-static inline bool bbox_intersects_camera(
-    int32_t xmin, int32_t ymin, int32_t xmax, int32_t ymax,
-    const purrgo_bbox_t *cam
-) {
-    if (ymax < cam->min_y || ymin > cam->max_y) {
-        return false;
-    }
-
-    if (cam->min_x <= cam->max_x) {
-        // Ordinary camera
-        return xmax >= cam->min_x && xmin <= cam->max_x;
-    } else {
-        // Antimeridian crossing
-        // Bbox must intersect [-1.8e9, cam->max_x] OR [cam->min_x, +1.8e9]
-        return xmin <= cam->max_x || xmax >= cam->min_x;
-    }
-}
-
-/*
  * Безопасное чтение Little-Endian int32_t.
+ *
+ * Нельзя напрямую делать cast uint8_t* -> int32_t*:
+ *
+ * - возможны проблемы с alignment;
+ * - архитектура может иметь другой byte order.
+ *
+ * Поэтому поле собирается побайтно.
  */
 static inline int32_t unpack_i32_le(const uint8_t *buf)
 {
@@ -112,46 +140,111 @@ static inline uint32_t unpack_u32_le(const uint8_t *buf)
 
 
 /* -------------------------------------------------------------------------- */
-/* Projection                                                                 */
+/* AABB                                                                      */
 /* -------------------------------------------------------------------------- */
 
-static inline int64_t camera_span_x(const purrgo_bbox_t *cam) {
-    if (cam->min_x <= cam->max_x) {
-        return (int64_t)cam->max_x - (int64_t)cam->min_x;
-    } else {
-        return ((int64_t)cam->max_x + 3600000000LL) - (int64_t)cam->min_x;
-    }
-}
-
 /*
- * Преобразование координат карты в координаты framebuffer.
+ * Проверка пересечения BBox geometry/node с камерой.
  *
- * PurrGo internal coordinate representation:
+ * Координаты PurrGO:
  *
  *     degrees * 10^7
  *
- * MLP source coordinate representation:
+ * Поддерживается переход через antimeridian.
+ */
+static inline bool bbox_intersects_camera(
+    int32_t xmin,
+    int32_t ymin,
+    int32_t xmax,
+    int32_t ymax,
+    const purrgo_bbox_t *cam
+) {
+    /*
+     * Сначала проверяем latitude.
+     */
+    if (ymax < cam->min_y || ymin > cam->max_y) {
+        return false;
+    }
+
+    /*
+     * Обычный BBox:
+     *
+     *     min_x <= max_x
+     */
+    if (cam->min_x <= cam->max_x) {
+        return (
+            xmax >= cam->min_x &&
+            xmin <= cam->max_x
+        );
+    }
+
+    /*
+     * Camera BBox пересекает antimeridian.
+     *
+     * Например:
+     *
+     *     min_x = +179°
+     *     max_x = -179°
+     *
+     * Видимая область состоит из двух частей:
+     *
+     *     [+179°, +180°]
+     *     [-180°, -179°]
+     */
+    return (
+        xmin <= cam->max_x ||
+        xmax >= cam->min_x
+    );
+}
+
+
+/* -------------------------------------------------------------------------- */
+/* Projection                                                                 */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * Размер camera longitude span.
  *
- *     degrees * 10^6
+ * Для обычной камеры:
  *
- * Поэтому parse_geometry_mlp() передаёт сюда:
+ *     max_x - min_x
  *
- *     raw_mlp_coordinate * 10
+ * Для camera BBox через antimeridian:
  *
- * Ось Y framebuffer инвертируется:
+ *     (max_x + 360°) - min_x
  *
- *     map min_y -> нижняя граница viewport
- *     map max_y -> верхняя граница viewport
+ * Все координаты находятся в формате degrees * 10^7.
+ */
+static inline int64_t camera_span_x(
+    const purrgo_bbox_t *cam
+) {
+    if (cam->min_x <= cam->max_x) {
+        return (
+            (int64_t)cam->max_x -
+            (int64_t)cam->min_x
+        );
+    }
+
+    return (
+        (int64_t)cam->max_x +
+        3600000000LL
+    ) - (int64_t)cam->min_x;
+}
+
+
+/*
+ * Преобразование координат карты в framebuffer coordinates.
  *
- * Для промежуточного умножения и вычитания используется int64_t.
+ * Формат координат V2:
  *
- * Важно:
- * приведение к int64_t выполняется ДО вычитания координат.
- * Иначе выражение вида
+ *     longitude = int32 / 10^7
+ *     latitude  = int32 / 10^7
  *
- *     lon - cam->min_x
+ * Внутри PurrGO используется тот же integer representation:
  *
- * сначала вычислялось бы в int32_t и могло бы переполниться.
+ *     degrees * 10^7
+ *
+ * Вся промежуточная арифметика выполняется в int64_t.
  */
 static void project_to_screen(
     int32_t lon,
@@ -161,26 +254,59 @@ static void project_to_screen(
     int16_t *sx,
     int16_t *sy
 ) {
-    int64_t dx_raw = (int64_t)lon - (int64_t)cam->min_x;
+    /*
+     * Longitude displacement относительно левой границы камеры.
+     *
+     * Приведение к int64_t происходит ДО вычитания.
+     */
+    int64_t dx_raw =
+        (int64_t)lon -
+        (int64_t)cam->min_x;
 
-    // Normalize wrapped longitude difference for antimeridian crossing
-    if (cam->min_x > cam->max_x && dx_raw < 0) {
+
+    /*
+     * Нормализация longitude при переходе через antimeridian.
+     */
+    if (
+        cam->min_x > cam->max_x &&
+        dx_raw < 0
+    ) {
         dx_raw += 3600000000LL;
     }
 
-    int64_t dx = dx_raw * (int64_t)vp->width;
 
-    int64_t w = camera_span_x(cam);
+    /*
+     * Масштабирование longitude в pixel coordinates.
+     */
+    int64_t dx =
+        dx_raw *
+        (int64_t)vp->width;
+
+
+    int64_t width =
+        camera_span_x(cam);
+
 
     int64_t projected_x =
-        (w > 0)
-            ? (dx / w)
+        (width > 0)
+            ? (dx / width)
             : 0;
+
 
     projected_x +=
         (int64_t)vp->offset_x;
 
 
+    /*
+     * Latitude.
+     *
+     * framebuffer Y направлен вниз.
+     *
+     * Поэтому:
+     *
+     *     min_y -> нижняя часть viewport
+     *     max_y -> верхняя часть viewport
+     */
     int64_t dy =
         (
             (int64_t)lat -
@@ -188,17 +314,20 @@ static void project_to_screen(
         ) *
         (int64_t)vp->height;
 
-    int64_t h =
+
+    int64_t height =
         (int64_t)cam->max_y -
         (int64_t)cam->min_y;
 
+
     int64_t projected_y =
-        (h > 0)
+        (height > 0)
             ? (
                 (int64_t)vp->height -
-                (dy / h)
+                (dy / height)
             )
             : 0;
+
 
     projected_y +=
         (int64_t)vp->offset_y;
@@ -207,16 +336,24 @@ static void project_to_screen(
     /*
      * gfx_point_t использует int16_t.
      *
-     * Camera/viewport в нормальном режиме проекта дают координаты,
-     * помещающиеся в int16_t. Здесь преобразование выполняется
-     * только после всей арифметики в int64_t.
-     * Добавлен clamping для защиты от переполнения (заворачивания координат)
-     * при отрисовке очень длинных полилиний или сильно приближенной камеры.
+     * Clamping выполняется после всей арифметики.
      */
-    if (projected_x < -32768) projected_x = -32768;
-    if (projected_x >  32767) projected_x =  32767;
-    if (projected_y < -32768) projected_y = -32768;
-    if (projected_y >  32767) projected_y =  32767;
+    if (projected_x < -32768) {
+        projected_x = -32768;
+    }
+
+    if (projected_x > 32767) {
+        projected_x = 32767;
+    }
+
+    if (projected_y < -32768) {
+        projected_y = -32768;
+    }
+
+    if (projected_y > 32767) {
+        projected_y = 32767;
+    }
+
 
     *sx = (int16_t)projected_x;
     *sy = (int16_t)projected_y;
@@ -228,109 +365,107 @@ static void project_to_screen(
 /* -------------------------------------------------------------------------- */
 
 /*
- * Проверка, что parts[] действительно содержит корректные start indices.
+ * Проверка массива parts[].
  *
- * Формат:
+ * MLP V2:
  *
- *     parts[0] = начало первого ring
- *     parts[1] = начало второго ring
+ *     parts[0] = start point первого part/ring
+ *     parts[1] = start point второго part/ring
  *     ...
  *
- * Для корректной geometry:
+ * Конечный индекс последнего part отдельно не хранится.
  *
- *     parts[0] == 0
- *     parts[i] < parts[i + 1]
- *     parts[last] < num_points
+ * Для последнего part:
  *
- * Важно:
- *
- *     parts[] не содержит конечный индекс последнего ring.
- *
- * Поэтому конец каждого ring вычисляется как:
- *
- *     parts[i + 1]
- *
- * либо:
- *
- *     num_points
- *
- * для последнего ring.
+ *     end = num_points
  */
 static bool validate_parts(
     const uint32_t *parts,
     uint32_t num_parts,
     uint32_t num_points
 ) {
+    /*
+     * Для line geometry parts могут отсутствовать.
+     */
     if (num_parts == 0) {
-        /*
-         * Geometry без parts допускается для line renderer.
-         *
-         * Polygon renderer отдельно требует хотя бы один part,
-         * поскольку без него невозможно определить границы ring.
-         */
         return true;
     }
 
-    if (parts == NULL || num_points == 0) {
+
+    if (
+        parts == NULL ||
+        num_points == 0
+    ) {
         return false;
     }
 
+
+    /*
+     * Первый part обязан начинаться с первой точки.
+     */
     if (parts[0] != 0) {
         return false;
     }
 
-    for (uint32_t i = 0; i < num_parts; i++) {
+
+    for (
+        uint32_t i = 0;
+        i < num_parts;
+        i++
+    ) {
         /*
-         * Каждый start index должен указывать на существующую
-         * точку geometry.
+         * Start index должен указывать
+         * на существующую точку.
          */
         if (parts[i] >= num_points) {
             return false;
         }
 
+
         /*
-         * Ring boundaries должны идти строго по возрастанию.
+         * Start indices должны строго возрастать.
          */
-        if (i > 0 && parts[i] <= parts[i - 1]) {
+        if (
+            i > 0 &&
+            parts[i] <= parts[i - 1]
+        ) {
             return false;
         }
     }
+
 
     return true;
 }
 
 
 /* -------------------------------------------------------------------------- */
-/* MLP geometry rendering                                                     */
+/* MLP geometry                                                               */
 /* -------------------------------------------------------------------------- */
 
 /*
- * Рендерит одну MLP geometry.
+ * Чтение и rendering одной MLP geometry.
  *
- * Для line layer:
+ * MLP V2 geometry body:
  *
- *     geometry
- *         |
- *         +-- part 0 -> polyline
- *         +-- part 1 -> polyline
- *         +-- ...
+ *     +0x00 int32 minx
+ *     +0x04 int32 miny
+ *     +0x08 int32 maxx
+ *     +0x0C int32 maxy
+ *     +0x10 int32 num_parts
+ *     +0x14 int32 num_points
  *
- * Для polygon layer:
+ *     parts[num_parts]      uint32
+ *     points[num_points]    int32 X + int32 Y
  *
- *     geometry
- *         |
- *         +-- ring 0
- *         +-- ring 1
- *         +-- ...
+ * Все координаты:
  *
- * Все rings передаются одновременно в
- * gfx_fill_compound_polygon().
+ *     degrees * 10^7
  *
- * Renderer использует even-odd правило, поэтому внутренние rings
- * автоматически образуют holes.
+ * Важный контракт IDX:
  *
- * Geometry читается полностью потому, что polygon renderer требует
- * массив projected points.
+ *     v1 -> непосредственно начало geometry body
+ *
+ * Поэтому local 8-byte MLP header пропускается самим v1.
  */
 static void parse_geometry_mlp(
     purrgo_fs_t *mlp_fs,
@@ -354,36 +489,38 @@ static void parse_geometry_mlp(
 
 
     /*
-     * Data Node v1 указывает на начало geometry body,
-     * а не на 8-byte local geometry header.
+     * YZL global header:
      *
-     * Поэтому:
+     *     32 bytes
      *
-     *     file_offset = 32 + v1_offset
-     *
-     * 32 байта — YZL header.
+     * v1_offset является offset относительно конца
+     * этого header.
      */
-    if (!mlp_fs->seek(
+    uint32_t absolute_body_offset =
+        32u + v1_offset;
+
+
+    if (
+        !mlp_fs->seek(
             mlp_fs->handle,
-            32u + v1_offset
-        )) {
+            absolute_body_offset
+        )
+    ) {
         return;
     }
 
 
     /*
-     * Geometry body fixed header:
+     * Fixed MLP geometry body header:
      *
-     *   0x00 minx
-     *   0x04 miny
-     *   0x08 maxx
-     *   0x0C maxy
-     *   0x10 num_parts
-     *   0x14 num_points
+     *     4 * int32 BBox = 16 bytes
+     *     int32 num_parts = 4 bytes
+     *     int32 num_points = 4 bytes
      *
-     * Всего 24 байта.
+     * Всего 24 bytes.
      */
     uint8_t head[24];
+
 
     if (
         mlp_fs->read(
@@ -396,17 +533,24 @@ static void parse_geometry_mlp(
     }
 
 
+    /*
+     * BBox geometry пока не используется отдельно:
+     * DATA node уже выполнил AABB culling.
+     *
+     * Читаем только структурные поля, необходимые parser.
+     */
     int32_t num_parts =
         unpack_i32_le(&head[16]);
+
 
     int32_t num_points =
         unpack_i32_le(&head[20]);
 
 
     /*
-     * Проверка структурных полей.
+     * Защитные проверки реализации.
      *
-     * num_parts может быть 0 для обычной line geometry.
+     * Это не ограничения бинарного формата.
      */
     if (
         num_parts < 0 ||
@@ -421,24 +565,30 @@ static void parse_geometry_mlp(
             (long)num_points
         );
 
-        if (is_polygon_layer && diag != NULL) {
+
+        if (
+            is_polygon_layer &&
+            diag != NULL
+        ) {
             diag->polygons_skipped++;
         }
+
 
         return;
     }
 
 
+    /* ---------------------------------------------------------------------- */
+    /* parts[]                                                                 */
+    /* ---------------------------------------------------------------------- */
+
     uint32_t parts[PURRGO_MAP_MAX_PARTS] = {0};
 
 
-    /*
-     * parts[] располагается непосредственно после
-     * фиксированных 24 байт geometry header.
-     */
     if (num_parts > 0) {
         uint32_t bytes_to_read =
             (uint32_t)num_parts * 4u;
+
 
         uint8_t part_buf[
             PURRGO_MAP_MAX_PARTS * 4
@@ -452,9 +602,13 @@ static void parse_geometry_mlp(
                 bytes_to_read
             ) != bytes_to_read
         ) {
-            if (is_polygon_layer && diag != NULL) {
+            if (
+                is_polygon_layer &&
+                diag != NULL
+            ) {
                 diag->polygons_skipped++;
             }
+
 
             return;
         }
@@ -490,37 +644,47 @@ static void parse_geometry_mlp(
             (long)num_points
         );
 
-        if (is_polygon_layer && diag != NULL) {
+
+        if (
+            is_polygon_layer &&
+            diag != NULL
+        ) {
             diag->polygons_skipped++;
         }
+
 
         return;
     }
 
 
     /*
-     * Для polygon rendering используется общий статический буфер.
+     * Polygon renderer требует весь массив projected points.
      *
-     * num_points уже ограничен PURRGO_MAP_MAX_POINTS выше, поэтому
-     * дополнительной проверки размера самого буфера здесь не требуется.
+     * Line renderer работает потоково и буфер ему не нужен.
      */
-    gfx_point_t *screen_points = NULL;
+    gfx_point_t *screen_points =
+        is_polygon_layer
+            ? s_polygon_buffer
+            : NULL;
 
-    if (is_polygon_layer) {
-        screen_points = s_polygon_buffer;
-    }
 
+    /* ---------------------------------------------------------------------- */
+    /* Point array                                                             */
+    /* ---------------------------------------------------------------------- */
 
-    /*
-     * Для line rendering сохраняем потоковый подход:
-     *
-     * предыдущая точка -> текущая точка.
-     */
     int16_t prev_sx = 0;
     int16_t prev_sy = 0;
 
+
     uint32_t current_part_idx = 0;
 
+
+    /*
+     * Первый part начинается с point 0.
+     *
+     * Если parts > 1, parts[1] является первой точкой
+     * следующего part.
+     */
     uint32_t next_part_start =
         (num_parts > 1)
             ? parts[1]
@@ -528,17 +692,47 @@ static void parse_geometry_mlp(
 
 
     /*
-     * Читаем все точки geometry порциями (chunks) по 64 байта
-     * для минимизации количества вызовов read().
+     * Chunk buffer:
+     *
+     *     64 bytes
+     *
+     *     8 points * 8 bytes
      */
-    uint8_t chunk_buf[64];
+    uint8_t chunk_buf[
+        PURRGO_MAP_READ_CHUNK_SIZE
+    ];
+
+
     uint32_t points_read = 0;
 
-    while (points_read < (uint32_t)num_points) {
-        uint32_t points_left = (uint32_t)num_points - points_read;
-        uint32_t points_in_chunk = (points_left > 8) ? 8 : points_left;
-        uint32_t bytes_to_read = points_in_chunk * 8;
 
+    while (
+        points_read <
+        (uint32_t)num_points
+    ) {
+        uint32_t points_left =
+            (uint32_t)num_points -
+            points_read;
+
+
+        uint32_t points_in_chunk =
+            (
+                points_left >
+                PURRGO_MAP_POINTS_PER_CHUNK
+            )
+                ? PURRGO_MAP_POINTS_PER_CHUNK
+                : points_left;
+
+
+        uint32_t bytes_to_read =
+            points_in_chunk * 8u;
+
+
+        /*
+         * Читаем chunk целиком.
+         *
+         * Для последнего chunk размер может быть меньше 64 bytes.
+         */
         if (
             mlp_fs->read(
                 mlp_fs->handle,
@@ -547,138 +741,162 @@ static void parse_geometry_mlp(
             ) != bytes_to_read
         ) {
             /*
-             * При ошибке чтения geometry нельзя использовать
-             * частично заполненный polygon.
+             * При ошибке чтения нельзя считать polygon
+             * полностью полученным.
              */
-            if (is_polygon_layer && diag != NULL) {
+            if (
+                is_polygon_layer &&
+                diag != NULL
+            ) {
                 diag->polygons_skipped++;
             }
+
 
             return;
         }
 
-        for (uint32_t j = 0; j < points_in_chunk; j++) {
-            uint32_t i = points_read + j;
-            uint8_t *pt_buf = &chunk_buf[j * 8];
 
-        /*
-         * MLP:
-         *
-         *     X = longitude * 10^7
-         *     Y = latitude  * 10^7
-         *
-         * PurrGo internal:
-         *
-         *     longitude * 10^7
-         *     latitude  * 10^7
-         *
-         * Coordinates are already in the internal format.
-         */
-        int32_t raw_x =
-            unpack_i32_le(&pt_buf[0]);
-
-        int32_t raw_y =
-            unpack_i32_le(&pt_buf[4]);
-
-
-        int16_t sx;
-        int16_t sy;
-
-
-        project_to_screen(
-            raw_x,
-            raw_y,
-            cam,
-            vp,
-            &sx,
-            &sy
-        );
-
-
-        /*
-         * Polygon renderer сохраняет все projected points.
-         */
-        if (is_polygon_layer) {
-            screen_points[i].x = sx;
-            screen_points[i].y = sy;
-        }
-
-
-        /*
-         * Определяем начало следующего part.
-         *
-         * parts[] содержит start index каждого ring/part.
-         */
-        if (
-            num_parts > 0 &&
-            i == next_part_start
+        for (
+            uint32_t j = 0;
+            j < points_in_chunk;
+            j++
         ) {
-            current_part_idx++;
-
-            next_part_start =
-                (
-                    current_part_idx + 1 <
-                    (uint32_t)num_parts
-                )
-                    ? parts[current_part_idx + 1]
-                    : (uint32_t)num_points;
-        }
+            uint32_t point_index =
+                points_read + j;
 
 
-        /*
-         * Для line layer продолжаем потоковый рендеринг.
-         */
-        if (!is_polygon_layer) {
-            uint32_t current_part_offset =
-                (num_parts > 0)
-                    ? parts[current_part_idx]
-                    : 0;
+            uint8_t *point_buf =
+                &chunk_buf[j * 8u];
 
 
             /*
-             * Первая точка каждого part не соединяется
-             * с предыдущим part.
+             * MLP V2:
+             *
+             *     X = longitude * 10^7
+             *     Y = latitude  * 10^7
+             *
+             * Значения уже совпадают с внутренним
+             * PurrGO coordinate representation.
              */
-            if (i > current_part_offset) {
-                if (
-                    diag != NULL &&
-                    diag->lines_drawn == 0
-                ) {
-                    PURRGO_LOG(
-                        "MAP: FIRST LINE "
-                        "screen=(%d,%d)->(%d,%d) "
-                        "viewport=(%d,%d,%u,%u)\n",
-                        (int)prev_sx,
-                        (int)prev_sy,
-                        (int)sx,
-                        (int)sy,
-                        (int)vp->offset_x,
-                        (int)vp->offset_y,
-                        (unsigned)vp->width,
-                        (unsigned)vp->height
-                    );
-                }
-
-
-                gfx_draw_line(
-                    gfx,
-                    prev_sx,
-                    prev_sy,
-                    sx,
-                    sy
+            int32_t raw_x =
+                unpack_i32_le(
+                    &point_buf[0]
                 );
 
 
-                if (diag != NULL) {
-                    diag->lines_drawn++;
+            int32_t raw_y =
+                unpack_i32_le(
+                    &point_buf[4]
+                );
+
+
+            int16_t sx;
+            int16_t sy;
+
+
+            project_to_screen(
+                raw_x,
+                raw_y,
+                cam,
+                vp,
+                &sx,
+                &sy
+            );
+
+
+            /*
+             * Polygon renderer сохраняет все точки.
+             */
+            if (is_polygon_layer) {
+                screen_points[point_index].x = sx;
+                screen_points[point_index].y = sy;
+            }
+
+
+            /*
+             * Если текущая точка является началом следующего
+             * part, переключаем current_part_idx ДО line drawing.
+             */
+            if (
+                num_parts > 0 &&
+                point_index == next_part_start
+            ) {
+                current_part_idx++;
+
+
+                next_part_start =
+                    (
+                        current_part_idx + 1 <
+                        (uint32_t)num_parts
+                    )
+                        ? parts[
+                            current_part_idx + 1
+                        ]
+                        : (uint32_t)num_points;
+            }
+
+
+            /*
+             * Line geometry рендерится потоково.
+             *
+             * Первая точка каждого part не соединяется
+             * с последней точкой предыдущего part.
+             */
+            if (!is_polygon_layer) {
+                uint32_t current_part_offset =
+                    (num_parts > 0)
+                        ? parts[current_part_idx]
+                        : 0;
+
+
+                if (
+                    point_index >
+                    current_part_offset
+                ) {
+                    if (
+                        diag != NULL &&
+                        diag->lines_drawn == 0
+                    ) {
+                        PURRGO_LOG(
+                            "MAP: FIRST LINE "
+                            "screen=(%d,%d)->(%d,%d) "
+                            "viewport=(%d,%d,%u,%u)\n",
+
+                            (int)prev_sx,
+                            (int)prev_sy,
+
+                            (int)sx,
+                            (int)sy,
+
+                            (int)vp->offset_x,
+                            (int)vp->offset_y,
+
+                            (unsigned)vp->width,
+                            (unsigned)vp->height
+                        );
+                    }
+
+
+                    gfx_draw_line(
+                        gfx,
+                        prev_sx,
+                        prev_sy,
+                        sx,
+                        sy
+                    );
+
+
+                    if (diag != NULL) {
+                        diag->lines_drawn++;
+                    }
                 }
             }
+
+
+            prev_sx = sx;
+            prev_sy = sy;
         }
 
-
-        prev_sx = sx;
-        prev_sy = sy;
-        } // end of for loop over points in chunk
 
         points_read += points_in_chunk;
     }
@@ -694,10 +912,7 @@ static void parse_geometry_mlp(
 
 
         /*
-         * Для polygon geometry parts[] обязателен.
-         *
-         * Без parts невозможно определить границы rings,
-         * поэтому compound polygon построить нельзя.
+         * Polygon geometry должна иметь хотя бы один part.
          */
         if (part_count == 0) {
             PURRGO_LOG(
@@ -706,36 +921,36 @@ static void parse_geometry_mlp(
                 (long)num_points
             );
 
+
             if (diag != NULL) {
                 diag->polygons_skipped++;
             }
+
 
             return;
         }
 
 
         /*
-         * Проверка контракта gfx_fill_compound_polygon().
-         *
-         * На текущем этапе выше уже существует более жёсткое
-         * ограничение PURRGO_MAP_MAX_POINTS=2048 и
-         * PURRGO_MAP_MAX_PARTS=32, но этот check оставляет
-         * явную границу API.
+         * Проверка API gfx_fill_compound_polygon().
          */
         if (
             num_points > UINT16_MAX ||
             part_count > UINT16_MAX
         ) {
             PURRGO_LOG(
-                "MAP: polygon geometry exceeds uint16_t limit "
+                "MAP: polygon geometry exceeds "
+                "uint16_t limit "
                 "points=%ld parts=%ld\n",
                 (long)num_points,
                 (long)part_count
             );
 
+
             if (diag != NULL) {
                 diag->polygons_skipped++;
             }
+
 
             return;
         }
@@ -744,14 +959,8 @@ static void parse_geometry_mlp(
         /*
          * Передаём все rings одновременно.
          *
-         * gfx_fill_compound_polygon() использует even-odd rule:
-         *
-         *     outer ring + inner ring
-         *
-         * даёт заполненный outer и пустой inner.
-         *
-         * Направление обхода ring здесь намеренно не проверяется:
-         * even-odd алгоритм не зависит от CW/CCW winding.
+         * gfx_fill_compound_polygon() использует even-odd rule,
+         * поэтому внутренние rings могут образовывать holes.
          */
         gfx_fill_compound_polygon(
             gfx,
@@ -762,16 +971,6 @@ static void parse_geometry_mlp(
         );
 
 
-        /*
-         * Здесь geometry успешно прошла все проверки и была
-         * передана renderer.
-         *
-         * Важно: gfx_fill_compound_polygon() имеет void API и не
-         * сообщает, произошёл ли внутренний fail-fast из-за
-         * GFX_MAX_POLYGON_NODES. Поэтому этот счётчик означает
-         * "polygon accepted by map renderer", а не гарантированно
-         * полностью отображённый polygon.
-         */
         if (diag != NULL) {
             diag->polygons_filled++;
         }
@@ -784,12 +983,29 @@ static void parse_geometry_mlp(
 /* -------------------------------------------------------------------------- */
 
 /*
- * Рекурсивный обход SQT R-tree.
+ * Рекурсивный обход IDX SQT tree.
  *
- * is_nav_node:
+ * IDX V2 использует единый 28-byte node record.
  *
- *     true  -> текущий node является Navigation Node
- *     false -> текущий node является Data Node
+ * DATA node:
+ *
+ *     +0x00 int32  xmin
+ *     +0x04 int32  ymin
+ *     +0x08 int32  xmax
+ *     +0x0C int32  ymax
+ *     +0x10 uint32 type
+ *     +0x14 uint32 v1
+ *     +0x18 uint32 v2
+ *
+ * NAV node:
+ *
+ *     +0x00 uint32 v3_jump
+ *     +0x04 int32  xmin
+ *     +0x08 int32  ymin
+ *     +0x0C int32  xmax
+ *     +0x10 int32  ymax
+ *     +0x14 uint32 level
+ *     +0x18 uint32 child_count
  */
 static void parse_node(
     purrgo_fs_t *idx_fs,
@@ -830,37 +1046,57 @@ static void parse_node(
 
 
         /*
-         * DATA BBox:
+         * DATA node BBox.
          *
-         *     +0x00 xmin
-         *     +0x04 ymin
-         *     +0x08 xmax
-         *     +0x0C ymax
-         *
-         * В исходном IDX эти значения являются int32_t.
+         * Сначала проверяем Y.
+         * Это позволяет не выполнять X comparison,
+         * если node заведомо находится вне camera.
          */
-        int32_t ymin = unpack_i32_le(&node_buf[4]);
-        int32_t ymax = unpack_i32_le(&node_buf[12]);
+        int32_t ymin =
+            unpack_i32_le(
+                &node_buf[4]
+            );
 
-        /*
-         * AABB intersection (Y-axis fast cull).
-         * Сначала проверяем Y, чтобы пропустить распаковку X.
-         */
+
+        int32_t ymax =
+            unpack_i32_le(
+                &node_buf[12]
+            );
+
+
         bool passes = false;
+
 
         int32_t xmin = 0;
         int32_t xmax = 0;
 
-        if (!(ymax < cam->min_y || ymin > cam->max_y)) {
-            xmin = unpack_i32_le(&node_buf[0]);
-            xmax = unpack_i32_le(&node_buf[8]);
 
-            if (cam->min_x <= cam->max_x) {
-                passes = (xmax >= cam->min_x && xmin <= cam->max_x);
-            } else {
-                passes = (xmin <= cam->max_x || xmax >= cam->min_x);
-            }
+        if (
+            !(ymax < cam->min_y ||
+              ymin > cam->max_y)
+        ) {
+            xmin =
+                unpack_i32_le(
+                    &node_buf[0]
+                );
+
+
+            xmax =
+                unpack_i32_le(
+                    &node_buf[8]
+                );
+
+
+            passes =
+                bbox_intersects_camera(
+                    xmin,
+                    ymin,
+                    xmax,
+                    ymax,
+                    cam
+                );
         }
+
 
         if (diag != NULL) {
             if (passes) {
@@ -869,22 +1105,49 @@ static void parse_node(
                 diag->data_culled++;
             }
 
+
             if (diag->nodes_logged < 10) {
-                /* Распаковываем X только для логирования, если они еще не распакованы */
-                if (ymax < cam->min_y || ymin > cam->max_y) {
-                    xmin = unpack_i32_le(&node_buf[0]);
-                    xmax = unpack_i32_le(&node_buf[8]);
+                /*
+                 * Для диагностического сообщения X должен быть
+                 * известен даже если DATA был отброшен по Y.
+                 */
+                if (
+                    ymax < cam->min_y ||
+                    ymin > cam->max_y
+                ) {
+                    xmin =
+                        unpack_i32_le(
+                            &node_buf[0]
+                        );
+
+
+                    xmax =
+                        unpack_i32_le(
+                            &node_buf[8]
+                        );
                 }
+
 
                 PURRGO_LOG(
                     "MAP: DATA "
                     "raw=(%08x,%08x,%08x,%08x) "
                     "int=(%d,%d,%d,%d) %s\n",
 
-                    unpack_u32_le(&node_buf[0]),
-                    unpack_u32_le(&node_buf[4]),
-                    unpack_u32_le(&node_buf[8]),
-                    unpack_u32_le(&node_buf[12]),
+                    unpack_u32_le(
+                        &node_buf[0]
+                    ),
+
+                    unpack_u32_le(
+                        &node_buf[4]
+                    ),
+
+                    unpack_u32_le(
+                        &node_buf[8]
+                    ),
+
+                    unpack_u32_le(
+                        &node_buf[12]
+                    ),
 
                     xmin,
                     ymin,
@@ -896,6 +1159,7 @@ static void parse_node(
                         : "CULL"
                 );
 
+
                 diag->nodes_logged++;
             }
         }
@@ -903,16 +1167,27 @@ static void parse_node(
 
         if (passes) {
             /*
-             * DATA node v1:
+             * DATA node:
              *
-             *     +0x14
+             *     v1 @ +0x14
              *
-             * Указывает на MLP geometry body.
+             * В V2 v1 указывает непосредственно
+             * на MLP geometry body.
              */
             uint32_t v1 =
-                unpack_u32_le(&node_buf[20]);
+                unpack_u32_le(
+                    &node_buf[20]
+                );
 
 
+            /*
+             * v1 == 0 означает отсутствие MLP geometry.
+             *
+             * В частности, это может быть DATA node,
+             * для которого geometry не представлена в MLP.
+             *
+             * POI сейчас намеренно не обрабатываем.
+             */
             if (v1 > 0) {
                 parse_geometry_mlp(
                     mlp_fs,
@@ -941,37 +1216,58 @@ static void parse_node(
 
 
     /*
-     * NAV node:
-     *
-     *     +0x00 v3_jump
-     *     +0x04 xmin
-     *     +0x08 ymin
-     *     +0x0C xmax
-     *     +0x10 ymax
-     *     +0x14 nav_level
-     *     +0x18 obj_count
+     * v3_jump используется для аппаратного/потокового
+     * пропуска subtree.
      */
     uint32_t v3_jump =
-        unpack_u32_le(&node_buf[0]);
+        unpack_u32_le(
+            &node_buf[0]
+        );
 
 
-    int32_t c_ymin = unpack_i32_le(&node_buf[8]);
-    int32_t c_ymax = unpack_i32_le(&node_buf[16]);
+    int32_t c_ymin =
+        unpack_i32_le(
+            &node_buf[8]
+        );
+
+
+    int32_t c_ymax =
+        unpack_i32_le(
+            &node_buf[16]
+        );
+
 
     bool passes = false;
+
 
     int32_t c_xmin = 0;
     int32_t c_xmax = 0;
 
-    if (!(c_ymax < cam->min_y || c_ymin > cam->max_y)) {
-        c_xmin = unpack_i32_le(&node_buf[4]);
-        c_xmax = unpack_i32_le(&node_buf[12]);
 
-        if (cam->min_x <= cam->max_x) {
-            passes = (c_xmax >= cam->min_x && c_xmin <= cam->max_x);
-        } else {
-            passes = (c_xmin <= cam->max_x || c_xmax >= cam->min_x);
-        }
+    if (
+        !(c_ymax < cam->min_y ||
+          c_ymin > cam->max_y)
+    ) {
+        c_xmin =
+            unpack_i32_le(
+                &node_buf[4]
+            );
+
+
+        c_xmax =
+            unpack_i32_le(
+                &node_buf[12]
+            );
+
+
+        passes =
+            bbox_intersects_camera(
+                c_xmin,
+                c_ymin,
+                c_xmax,
+                c_ymax,
+                cam
+            );
     }
 
 
@@ -979,20 +1275,43 @@ static void parse_node(
         diag != NULL &&
         diag->nodes_logged < 10
     ) {
-        if (c_ymax < cam->min_y || c_ymin > cam->max_y) {
-            c_xmin = unpack_i32_le(&node_buf[4]);
-            c_xmax = unpack_i32_le(&node_buf[12]);
+        if (
+            c_ymax < cam->min_y ||
+            c_ymin > cam->max_y
+        ) {
+            c_xmin =
+                unpack_i32_le(
+                    &node_buf[4]
+                );
+
+
+            c_xmax =
+                unpack_i32_le(
+                    &node_buf[12]
+                );
         }
+
 
         PURRGO_LOG(
             "MAP: NAV "
             "raw=(%08x,%08x,%08x,%08x) "
             "int=(%d,%d,%d,%d)\n",
 
-            unpack_u32_le(&node_buf[4]),
-            unpack_u32_le(&node_buf[8]),
-            unpack_u32_le(&node_buf[12]),
-            unpack_u32_le(&node_buf[16]),
+            unpack_u32_le(
+                &node_buf[4]
+            ),
+
+            unpack_u32_le(
+                &node_buf[8]
+            ),
+
+            unpack_u32_le(
+                &node_buf[12]
+            ),
+
+            unpack_u32_le(
+                &node_buf[16]
+            ),
 
             c_xmin,
             c_ymin,
@@ -1006,23 +1325,29 @@ static void parse_node(
 
 
     uint32_t nav_level =
-        unpack_u32_le(&node_buf[20]);
+        unpack_u32_le(
+            &node_buf[20]
+        );
 
 
     uint32_t obj_count =
-        unpack_u32_le(&node_buf[24]);
+        unpack_u32_le(
+            &node_buf[24]
+        );
 
 
     /*
-     * Если BBox NAV node не пересекается с camera,
-     * можно пропустить всё его поддерево.
+     * Если NAV BBox не пересекается с camera,
+     * всё дочернее subtree можно пропустить.
      *
-     * v3_jump содержит размер перехода с учётом уже
-     * считанных 8 байт node header.
+     * К этому моменту 28-byte NAV node уже прочитан.
      *
-     * Поэтому используется:
+     * Согласно формату v3_jump содержит размер перехода
+     * с учётом уже прочитанных 8 bytes.
      *
-     *     v3_jump - 8
+     * Поэтому:
+     *
+     *     remaining_jump = v3_jump - 8
      */
     if (!passes) {
         if (v3_jump > 8) {
@@ -1048,11 +1373,10 @@ static void parse_node(
 
 
     /*
-     * Если nav_level > 0, непосредственные дети являются
-     * Navigation Nodes.
+     * NAV level определяет тип непосредственных children:
      *
-     * Если nav_level == 0, непосредственные дети являются
-     * Data Nodes.
+     *     level > 0 -> NAV children
+     *     level == 0 -> DATA children
      */
     bool child_is_nav =
         (nav_level > 0);
@@ -1090,6 +1414,11 @@ void purrgo_map_render_layer(
     const purrgo_viewport_t *viewport,
     bool is_polygon_layer
 ) {
+    /*
+     * На текущем этапе renderer работает только с IDX + MLP.
+     *
+     * .db и POI здесь намеренно отсутствуют.
+     */
     if (
         idx_fs == NULL ||
         mlp_fs == NULL ||
@@ -1113,6 +1442,7 @@ void purrgo_map_render_layer(
 
         (long)camera->min_x,
         (long)camera->min_y,
+
         (long)camera->max_x,
         (long)camera->max_y
     );
@@ -1125,6 +1455,7 @@ void purrgo_map_render_layer(
 
         (int)viewport->offset_x,
         (int)viewport->offset_y,
+
         (unsigned)viewport->width,
         (unsigned)viewport->height
     );
@@ -1144,8 +1475,14 @@ void purrgo_map_render_layer(
     uint32_t current_idx_offset = 0;
 
 
+    /* ---------------------------------------------------------------------- */
+    /* YZL header                                                              */
+    /* ---------------------------------------------------------------------- */
+
     /*
-     * YZL header занимает первые 32 байта IDX.
+     * Global YZL header:
+     *
+     *     32 bytes
      */
     uint8_t yzl_header[32];
 
@@ -1161,6 +1498,7 @@ void purrgo_map_render_layer(
             "MAP: ERROR reading YZL header\n"
         );
 
+
         return;
     }
 
@@ -1169,7 +1507,7 @@ void purrgo_map_render_layer(
 
 
     /*
-     * Проверяем magic.
+     * YZL magic.
      */
     if (
         yzl_header[0] != 'Y' ||
@@ -1180,13 +1518,23 @@ void purrgo_map_render_layer(
             "MAP: ERROR invalid YZL header\n"
         );
 
+
         return;
     }
 
 
+    /* ---------------------------------------------------------------------- */
+    /* SQT sections                                                            */
+    /* ---------------------------------------------------------------------- */
+
     /*
-     * Последовательно читаем SQT blocks
-     * до EOF или invalid block.
+     * Читаем SQT sections последовательно.
+     *
+     * На текущем этапе, как и в старой реализации,
+     * используется только первая SQT section.
+     *
+     * Это сознательное ограничение LOD/Z-culling и не относится
+     * к изменению coordinate representation V1 -> V2.
      */
     while (true) {
         uint8_t sqt_header[16];
@@ -1207,12 +1555,9 @@ void purrgo_map_render_layer(
 
 
         /*
-         * SQT header:
+         * SQT magic:
          *
-         *     0x00 'S'
-         *     0x01 'Q'
-         *     0x02 'T'
-         *     0x03 0x01
+         *     "SQT\x01"
          */
         if (
             sqt_header[0] != 'S' ||
@@ -1220,22 +1565,33 @@ void purrgo_map_render_layer(
             sqt_header[2] != 'T' ||
             sqt_header[3] != 0x01
         ) {
+            PURRGO_LOG(
+                "MAP: ERROR invalid SQT header\n"
+            );
+
+
             break;
         }
 
 
-        // Временный отказ от LOD (Z-Culling).
-        // Читаем только первую SQT секцию (LOD 0).
+        /*
+         * Пока используем только первую SQT section.
+         *
+         * Это сохраняет прежнюю стратегию LOD.
+         */
         if (diag.sqt_blocks > 0) {
             break;
         }
+
 
         diag.sqt_blocks++;
 
 
         /*
-         * SQT:
+         * SQT header:
          *
+         *     +0x00 magic
+         *     +0x04 topology marker
          *     +0x08 mode
          *     +0x0C count
          */
@@ -1259,8 +1615,8 @@ void purrgo_map_render_layer(
         /*
          * Root node type:
          *
-         *     mode > 0 -> Navigation Node
-         *     mode == 0 -> Data Node
+         *     mode > 0  -> NAV
+         *     mode == 0 -> DATA
          */
         bool is_nav =
             (mode > 0);
@@ -1286,6 +1642,10 @@ void purrgo_map_render_layer(
     }
 
 
+    /* ---------------------------------------------------------------------- */
+    /* Diagnostics                                                             */
+    /* ---------------------------------------------------------------------- */
+
     PURRGO_LOG(
         "MAP: "
         "SQT=%u "
@@ -1297,13 +1657,13 @@ void purrgo_map_render_layer(
         "POLYGONS=%u "
         "SKIPPED=%u\n",
 
-        diag.sqt_blocks,
-        diag.nav_visited,
-        diag.data_visited,
-        diag.data_passed,
-        diag.data_culled,
-        diag.lines_drawn,
-        diag.polygons_filled,
-        diag.polygons_skipped
+        (unsigned)diag.sqt_blocks,
+        (unsigned)diag.nav_visited,
+        (unsigned)diag.data_visited,
+        (unsigned)diag.data_passed,
+        (unsigned)diag.data_culled,
+        (unsigned)diag.lines_drawn,
+        (unsigned)diag.polygons_filled,
+        (unsigned)diag.polygons_skipped
     );
 }
