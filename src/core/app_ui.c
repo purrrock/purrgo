@@ -3,12 +3,15 @@
 #include <purrgo/app_ui.h>
 #include <purrgo/app_fsm.h>
 #include <purrgo/gfx_text.h>
+#include <purrgo/gfx_rect.h>
 #include <purrgo/geo.h>
 #include <purrgo/map.h>
 #include <purrgo/fs_hal.h>
 #include <purrgo/config.h>
 #include "purrgo/logger.h"
 #include <string.h>
+
+int dbg_map_render_calls = 0;
 
 // Локальные обертки для согласования сигнатур fs_hal.h и purrgo_fs_t
 static uint32_t core_fs_read_wrapper(void* handle, void* buffer, uint32_t size) {
@@ -40,6 +43,8 @@ void purrgo_app_ui_render(
 
     switch (purrgo_app_get_state()) {
         case APP_STATE_MENU_CONFIG: {
+            gfx_set_color(gfx, 0, 3);
+            gfx_clear(gfx);
             gfx_set_color(
                 gfx,
                 0,
@@ -144,6 +149,9 @@ void purrgo_app_ui_render(
         }
 
         case APP_STATE_TRIP_COMPUTER: {
+            gfx_set_color(gfx, 0, 3);
+            gfx_clear(gfx);
+
             int y_pos = 10;
 
             snprintf(
@@ -464,6 +472,13 @@ void purrgo_app_ui_render(
         case APP_STATE_MAP: {
             static bool map_screen_logged = false;
 
+            // Clear top status area (0 to offset_y)
+            gfx_set_color(gfx, 0, 3);
+            gfx_fill_rect(gfx, 0, 0, PURRGO_HW_DISPLAY_WIDTH_PX, map_vp.offset_y);
+
+            // Clear bottom status area
+            gfx_fill_rect(gfx, 0, map_vp.offset_y + map_vp.height, PURRGO_HW_DISPLAY_WIDTH_PX, PURRGO_HW_DISPLAY_HEIGHT_PX - (map_vp.offset_y + map_vp.height));
+
             if (!map_screen_logged) {
                 PURRGO_LOG(
 
@@ -493,122 +508,140 @@ void purrgo_app_ui_render(
             gfx_draw_string(
                 gfx,
                 5,
-                5,
+                1,
                 "TOP STATUS AREA"
             );
 
-            /*
-             * Динамическое формирование путей к файлам карт на основе app_config.map_dir.
-             * Используется snprintf для предотвращения переполнения буфера (buffer overflow prevention).
-             * Размер буфера 64 байта достаточен для путей, состоящих из базовой директории
-             * и стандартного имени файла.
-             */
-            char landuse_idx_path[64];
-            char landuse_mlp_path[64];
-            char idx_path[64];
-            char mlp_path[64];
-            char name_path[64];
+            static char map_name_buf[65] = {0};
 
-            snprintf(landuse_idx_path, sizeof(landuse_idx_path), "%s/landuse.idx", app_config.map_dir);
-            snprintf(landuse_mlp_path, sizeof(landuse_mlp_path), "%s/landuse.mlp", app_config.map_dir);
-            snprintf(idx_path, sizeof(idx_path), "%s/roads.idx", app_config.map_dir);
-            snprintf(mlp_path, sizeof(mlp_path), "%s/roads.mlp", app_config.map_dir);
-            snprintf(name_path, sizeof(name_path), "%s/map.name", app_config.map_dir);
+            if (purrgo_app_map_is_dirty()) {
+                // Clear map viewport
+                gfx_set_color(gfx, 0, 3);
+                gfx_fill_rect(gfx, map_vp.offset_x, map_vp.offset_y, map_vp.width, map_vp.height);
 
-            purrgo_file_t* landuse_idx_file = purrgo_fs_open(landuse_idx_path, FS_READ);
-            purrgo_file_t* landuse_mlp_file = purrgo_fs_open(landuse_mlp_path, FS_READ);
+                /*
+                 * Динамическое формирование путей к файлам карт на основе app_config.map_dir.
+                 * Используется snprintf для предотвращения переполнения буфера (buffer overflow prevention).
+                 * Размер буфера 64 байта достаточен для путей, состоящих из базовой директории
+                 * и стандартного имени файла.
+                 */
+                char landuse_idx_path[64];
+                char landuse_mlp_path[64];
+                char idx_path[64];
+                char mlp_path[64];
 
-            if (landuse_idx_file && landuse_mlp_file) {
-                purrgo_fs_t landuse_idx_fs = {
-                    .handle = landuse_idx_file,
-                    .read = core_fs_read_wrapper,
-                    .seek = core_fs_seek_wrapper
-                };
+                snprintf(landuse_idx_path, sizeof(landuse_idx_path), "%s/landuse.idx", app_config.map_dir);
+                snprintf(landuse_mlp_path, sizeof(landuse_mlp_path), "%s/landuse.mlp", app_config.map_dir);
+                snprintf(idx_path, sizeof(idx_path), "%s/roads.idx", app_config.map_dir);
+                snprintf(mlp_path, sizeof(mlp_path), "%s/roads.mlp", app_config.map_dir);
 
-                purrgo_fs_t landuse_mlp_fs = {
-                    .handle = landuse_mlp_file,
-                    .read = core_fs_read_wrapper,
-                    .seek = core_fs_seek_wrapper
-                };
+                purrgo_file_t* landuse_idx_file = purrgo_fs_open(landuse_idx_path, FS_READ);
+                purrgo_file_t* landuse_mlp_file = purrgo_fs_open(landuse_mlp_path, FS_READ);
 
-                gfx_set_color(
-                    gfx,
-                    2,
-                    3
-                );
+                bool landuse_success = false;
+                if (landuse_idx_file && landuse_mlp_file) {
+                    purrgo_fs_t landuse_idx_fs = {
+                        .handle = landuse_idx_file,
+                        .read = core_fs_read_wrapper,
+                        .seek = core_fs_seek_wrapper
+                    };
 
-                purrgo_map_render_layer(
-                    &landuse_idx_fs,
-                    &landuse_mlp_fs,
-                    gfx,
-                    &dynamic_cam,
-                    &map_vp,
-					true // Слой landuse состоит из полигонов
-                );
+                    purrgo_fs_t landuse_mlp_fs = {
+                        .handle = landuse_mlp_file,
+                        .read = core_fs_read_wrapper,
+                        .seek = core_fs_seek_wrapper
+                    };
 
-                purrgo_fs_close(landuse_idx_file);
-                purrgo_fs_close(landuse_mlp_file);
-            } else {
-                if (landuse_idx_file) purrgo_fs_close(landuse_idx_file);
-                if (landuse_mlp_file) purrgo_fs_close(landuse_mlp_file);
-            }
-
-            purrgo_file_t* idx_file = purrgo_fs_open(idx_path, FS_READ);
-            purrgo_file_t* mlp_file = purrgo_fs_open(mlp_path, FS_READ);
-
-            if (idx_file && mlp_file) {
-                purrgo_fs_t idx_fs = {
-                    .handle = idx_file,
-                    .read = core_fs_read_wrapper,
-                    .seek = core_fs_seek_wrapper
-                };
-
-                purrgo_fs_t mlp_fs = {
-                    .handle = mlp_file,
-                    .read = core_fs_read_wrapper,
-                    .seek = core_fs_seek_wrapper
-                };
-
-                gfx_set_color(
-                    gfx,
-                    1,
-                    3
-                );
-
-                purrgo_map_render_layer(
-                    &idx_fs,
-                    &mlp_fs,
-                    gfx,
-                    &dynamic_cam,
-                    &map_vp,
-					false // Слой дорог состоит из линий
-                );
-
-                purrgo_fs_close(idx_file);
-                purrgo_fs_close(mlp_file);
-            } else {
-                if (idx_file) purrgo_fs_close(idx_file);
-                if (mlp_file) purrgo_fs_close(mlp_file);
-            }
-
-            purrgo_file_t* name_file = purrgo_fs_open(name_path, FS_READ);
-
-            if (name_file) {
-                char name_buf[65];
-
-                uint32_t n =
-                    purrgo_fs_read(
-                        name_file,
-                        (uint8_t*)name_buf,
-                        64
+                    gfx_set_color(
+                        gfx,
+                        2,
+                        3
                     );
 
-                if (n > 64)
-                    n = 64;
+                    purrgo_map_render_layer(
+                        &landuse_idx_fs,
+                        &landuse_mlp_fs,
+                        gfx,
+                        &dynamic_cam,
+                        &map_vp,
+                        true // Слой landuse состоит из полигонов
+                    );
 
-                name_buf[n] = '\0';
+                    purrgo_fs_close(landuse_idx_file);
+                    purrgo_fs_close(landuse_mlp_file);
+                    landuse_success = true;
+                } else {
+                    if (landuse_idx_file) purrgo_fs_close(landuse_idx_file);
+                    if (landuse_mlp_file) purrgo_fs_close(landuse_mlp_file);
+                }
 
-                purrgo_fs_close(name_file);
+                purrgo_file_t* idx_file = purrgo_fs_open(idx_path, FS_READ);
+                purrgo_file_t* mlp_file = purrgo_fs_open(mlp_path, FS_READ);
+
+                bool roads_success = false;
+                if (idx_file && mlp_file) {
+                    purrgo_fs_t idx_fs = {
+                        .handle = idx_file,
+                        .read = core_fs_read_wrapper,
+                        .seek = core_fs_seek_wrapper
+                    };
+
+                    purrgo_fs_t mlp_fs = {
+                        .handle = mlp_file,
+                        .read = core_fs_read_wrapper,
+                        .seek = core_fs_seek_wrapper
+                    };
+
+                    gfx_set_color(
+                        gfx,
+                        1,
+                        3
+                    );
+
+                    purrgo_map_render_layer(
+                        &idx_fs,
+                        &mlp_fs,
+                        gfx,
+                        &dynamic_cam,
+                        &map_vp,
+                        false // Слой дорог состоит из линий
+                    );
+
+                    purrgo_fs_close(idx_file);
+                    purrgo_fs_close(mlp_file);
+                    roads_success = true;
+                } else {
+                    if (idx_file) purrgo_fs_close(idx_file);
+                    if (mlp_file) purrgo_fs_close(mlp_file);
+                }
+
+                char name_path[64];
+                snprintf(name_path, sizeof(name_path), "%s/map.name", app_config.map_dir);
+                purrgo_file_t* name_file = purrgo_fs_open(name_path, FS_READ);
+
+                if (name_file) {
+                    uint32_t n =
+                        purrgo_fs_read(
+                            name_file,
+                            (uint8_t*)map_name_buf,
+                            64
+                        );
+
+                    if (n > 64)
+                        n = 64;
+
+                    map_name_buf[n] = '\0';
+
+                    purrgo_fs_close(name_file);
+                } else {
+                    map_name_buf[0] = '\0';
+                }
+
+                if (landuse_success || roads_success) {
+                    purrgo_app_map_clear_dirty();
+                }
+
+                dbg_map_render_calls++;
             }
 
             gfx_set_color(
@@ -637,6 +670,7 @@ void purrgo_app_ui_render(
 
         case APP_STATE_MENU_DIR_SELECT: {
             gfx_set_color(gfx, 0, 3);
+            gfx_clear(gfx);
             gfx_draw_string(gfx, 10, 10, "=== SELECT DIR ===");
 
             purrgo_fs_dirent_t* dir_list;

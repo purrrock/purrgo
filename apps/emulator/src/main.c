@@ -38,6 +38,8 @@
 
 static gfx_context_t global_gfx_ctx;
 
+extern int dbg_map_render_calls;
+
 /*
  * Callback GFX -> framebuffer emulator.
  *
@@ -218,16 +220,19 @@ int main(int argc, char* argv[]) {
         /*
          * 2. Отрисовка framebuffer с частотой 3 FPS.
          *
-         * display_clear() выполняется каждый refresh.
-         * Парсинг и отрисовка карты должны выполняться в каждом
-         * кадре, где активно состояние APP_STATE_MAP.
+         * Парсинг и отрисовка карты должны выполняться только если
+         * карта помечена как dirty в APP_STATE_MAP.
          */
         if (current_time - last_eink_refresh >= EINK_REFRESH_PERIOD_MS) {
             last_eink_refresh = current_time;
 
-            display_clear(3);
+            int last_calls = dbg_map_render_calls;
 
             purrgo_app_ui_render(&global_gfx_ctx, &gnss_solution, first_fix_obtained ? &sun_info : NULL);
+
+            if (last_calls != dbg_map_render_calls) {
+                printf("MAP RENDER EXECUTED. Total renders: %d\n", dbg_map_render_calls);
+            }
 
             emu_window_render(renderer, fb_texture);
         }
