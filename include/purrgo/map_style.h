@@ -91,7 +91,7 @@ typedef struct {
  *
  * Неизвестный feature code возвращает PURRGO_STYLE_NONE.
  */
-purrgo_map_style_t purrgo_map_style_get(
+purrgo_map_style_t purrgo_map_style_from_feature(
     uint32_t feature_code
 );
 

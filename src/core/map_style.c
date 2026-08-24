@@ -96,7 +96,7 @@ static const purrgo_map_style_entry_t s_style_table[] = {
     (sizeof(s_style_table) / sizeof(s_style_table[0]))
 
 
-purrgo_map_style_t purrgo_map_style_get(
+purrgo_map_style_t purrgo_map_style_from_feature(
     uint32_t feature_code
 ) {
     /*
@@ -134,6 +134,6 @@ bool purrgo_map_style_is_visible(
     uint32_t feature_code
 ) {
     return
-        purrgo_map_style_get(feature_code) !=
+        purrgo_map_style_from_feature(feature_code) !=
         PURRGO_STYLE_NONE;
 }
