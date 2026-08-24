@@ -272,11 +272,18 @@ if (step_m == 0) step_m = 1;
 
 // Перевод метров в градусы (10^7).
 // 1 градус широты ≈ 111195 метров. Следовательно, 1 метр ≈ 10^7 / 111195 ≈ 90 единиц 1e7.
-int32_t step_y = (step_m * 90);
+int64_t step_y_64 = (int64_t)step_m * 90;
 
 int32_t cos_val = purrgo_geo_cos_10k(map_center_lat_1e7);
 if (cos_val < 100) cos_val = 100; // prevent division by zero near poles
-int32_t step_x = (step_y * 10000) / cos_val;
+int64_t step_x_64 = (step_y_64 * 10000) / cos_val;
+
+// Safety clamping before casting to int32_t
+if (step_y_64 > 2147483647LL) step_y_64 = 2147483647LL;
+if (step_x_64 > 2147483647LL) step_x_64 = 2147483647LL;
+
+int32_t step_y = (int32_t)step_y_64;
+int32_t step_x = (int32_t)step_x_64;
 
         if (button == PURRGO_BTN_UP) {
             map_center_lat_1e7 += step_y;
