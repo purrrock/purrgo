@@ -693,6 +693,19 @@ The parser converts fixed-point coordinates to display coordinates only when req
 
 # 11. INTERNAL RENDERING MODEL
 
+## Geometry type by layer
+
+The map compiler guarantees that geometry types are consistent with the target layer. This is a format-level invariant and may therefore be relied upon by the PurrGO navigator renderer:
+
+* `roads` — **line geometry only**;
+* `landuse` — **polygon geometry only**;
+* `water` — **polygon geometry only**;
+* `pois` — **point geometry only**.
+
+The navigator does not need to detect or validate geometry type at runtime. A violation of this invariant indicates an invalid map produced by the map compiler and is outside the normal runtime data contract.
+
+## Rendering model
+
 The binary map does not contain textual OSM feature definitions.
 
 The firmware works with compact numeric PurrGO feature codes.
@@ -750,11 +763,11 @@ This applies to:
 * geometry BBoxes;
 * Data Node BBoxes;
 * Navigation Node BBoxes;
-* native POI coordinates.
+* POI coordinates.
 
 ---
 
-## 12.4. Native POI Representation
+## 12.4. POI Representation
 
 POIs do not use geometry records in `.mlp`.
 
