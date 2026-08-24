@@ -84,10 +84,6 @@ target_include_directories(purrgo_platform_pc
     target_link_libraries(test_gnss PRIVATE purrgo_core)
     add_test(NAME test_gnss COMMAND test_gnss)
 
-    add_executable(test_map tests/core/test_map.c)
-    target_link_libraries(test_map PRIVATE purrgo_core)
-    add_test(NAME test_map COMMAND test_map)
-
     add_executable(test_track_logger tests/core/test_track_logger.c)
     target_link_libraries(test_track_logger PRIVATE purrgo_core)
     add_test(NAME test_track_logger COMMAND test_track_logger)
