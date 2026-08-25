@@ -123,17 +123,15 @@ void gfx_draw_vline(gfx_context_t *ctx, int16_t x, int16_t y_start, int16_t y_en
 void gfx_draw_dotted_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1, int16_t y1);
 
 /**
- * @brief Отрисовка железнодорожной линии (чередование цветов).
+ * @brief Отрисовка железнодорожной линии.
  *
  * @param ctx Контекст графического ядра.
  * @param x0 Начальная координата x.
  * @param y0 Начальная координата y.
  * @param x1 Конечная координата x.
  * @param y1 Конечная координата y.
- * @param color_dark Темный цвет для паттерна (например, шпалы).
- * @param color_light Светлый цвет для паттерна (например, просветы).
  */
-void gfx_draw_railway_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1, int16_t y1, uint8_t color_dark, uint8_t color_light);
+void gfx_draw_railway_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1, int16_t y1);
 
 
 #endif /* GFX_RENDERER_H */
