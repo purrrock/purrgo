@@ -163,6 +163,93 @@ static bool test_draw_polygon_clipping() {
     return passed;
 }
 
+static bool test_draw_polygon_clipping_horizontal() {
+    printf("Running test_draw_polygon_clipping_horizontal...\n");
+    gfx_context_t ctx;
+    gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, draw_pixel);
+    reset_framebuffer(&ctx);
+
+    gfx_set_clip(&ctx, 10, 0, WIDTH - 20, HEIGHT);
+
+    // Large polygon that covers the whole screen horizontally
+    gfx_point_t points[] = {
+        {-10, 50},
+        {WIDTH + 10, 50},
+        {WIDTH + 10, 150},
+        {-10, 150}
+    };
+    uint32_t parts[] = {0};
+
+    gfx_fill_compound_polygon(&ctx, points, 4, parts, 1);
+
+    bool passed = true;
+
+    // Check protected left/right areas
+    for (int y = 50; y < 150; y++) {
+        if (!check_pixel(5, y, 0)) passed = false;
+        if (!check_pixel(WIDTH - 5, y, 0)) passed = false;
+    }
+
+    // Inside the map area should be filled
+    if (!check_pixel(64, 100, 1)) passed = false;
+
+    if (passed) printf("PASSED test_draw_polygon_clipping_horizontal\n");
+    return passed;
+}
+
+static bool test_draw_rect_clipping() {
+    printf("Running test_draw_rect_clipping...\n");
+    gfx_context_t ctx;
+    gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, draw_pixel);
+    reset_framebuffer(&ctx);
+
+    gfx_set_clip(&ctx, 10, 10, WIDTH - 20, HEIGHT - 20);
+
+    ctx.color_bg = 1;
+    // Draw a rect that overlaps the clipping bounds
+    gfx_fill_rect(&ctx, 0, 0, WIDTH, HEIGHT);
+
+    bool passed = true;
+
+    // Check corners outside the clip
+    if (!check_pixel(5, 5, 0)) passed = false;
+    if (!check_pixel(WIDTH - 5, HEIGHT - 5, 0)) passed = false;
+
+    // Check inside the clip
+    if (!check_pixel(20, 20, 1)) passed = false;
+
+    if (passed) printf("PASSED test_draw_rect_clipping\n");
+    return passed;
+}
+
+static bool test_draw_hv_line_clipping() {
+    printf("Running test_draw_hv_line_clipping...\n");
+    gfx_context_t ctx;
+    gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, draw_pixel);
+    reset_framebuffer(&ctx);
+
+    gfx_set_clip(&ctx, 10, 10, WIDTH - 20, HEIGHT - 20);
+
+    // Draw lines that overlap the boundaries
+    gfx_draw_hline(&ctx, 0, WIDTH, 50);
+    gfx_draw_vline(&ctx, 50, 0, HEIGHT);
+
+    bool passed = true;
+
+    // Outside clip
+    if (!check_pixel(5, 50, 0)) passed = false;
+    if (!check_pixel(WIDTH - 5, 50, 0)) passed = false;
+    if (!check_pixel(50, 5, 0)) passed = false;
+    if (!check_pixel(50, HEIGHT - 5, 0)) passed = false;
+
+    // Inside clip
+    if (!check_pixel(20, 50, 1)) passed = false;
+    if (!check_pixel(50, 20, 1)) passed = false;
+
+    if (passed) printf("PASSED test_draw_hv_line_clipping\n");
+    return passed;
+}
+
 
 int main() {
     bool success = true;
@@ -171,6 +258,9 @@ int main() {
     if (!test_draw_pixel_clipping()) success = false;
     if (!test_draw_line_clipping()) success = false;
     if (!test_draw_polygon_clipping()) success = false;
+    if (!test_draw_polygon_clipping_horizontal()) success = false;
+    if (!test_draw_rect_clipping()) success = false;
+    if (!test_draw_hv_line_clipping()) success = false;
 
     if (success) {
         printf("All tests passed!\n");
