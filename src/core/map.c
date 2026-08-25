@@ -74,34 +74,34 @@ void purrgo_map_render_layer(
     uint32_t current_idx_offset = 0;
 
     /* ---------------------------------------------------------------------- */
-    /* YZL header                                                              */
+    /* PGO header                                                              */
     /* ---------------------------------------------------------------------- */
 
-    uint8_t yzl_header[32];
+    uint8_t pgo_header[32];
 
     if (
         idx_fs->read(
             idx_fs->handle,
-            yzl_header,
-            sizeof(yzl_header)
-        ) != sizeof(yzl_header)
+            pgo_header,
+            sizeof(pgo_header)
+        ) != sizeof(pgo_header)
     ) {
-        PURRGO_LOG("MAP: ERROR reading YZL header\n");
+        PURRGO_LOG("MAP: ERROR reading PGO header\n");
         return;
     }
 
     current_idx_offset += 32;
 
     if (
-        yzl_header[0] != 'Y' ||
-        yzl_header[1] != 'Z' ||
-        yzl_header[2] != 'L'
+        pgo_header[0] != 'P' ||
+        pgo_header[1] != 'G' ||
+        pgo_header[2] != 'O'
     ) {
-        PURRGO_LOG("MAP: ERROR invalid YZL header\n");
+        PURRGO_LOG("MAP: ERROR invalid PGO header\n");
         return;
     }
 
-    uint32_t payload_size = unpack_u32_le(&yzl_header[4]);
+    uint32_t payload_size = unpack_u32_le(&pgo_header[4]);
     uint32_t max_idx_offset = 32 + payload_size;
 
     /* ---------------------------------------------------------------------- */
