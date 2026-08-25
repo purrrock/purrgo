@@ -84,62 +84,78 @@ void setup_test_map() {
     uint8_t yzl[32] = {'Y','Z','L'};
     append_bytes(yzl, 32);
 
-    // Three SQT blocks (LOD 0, 1, 2)
-    for (int i = 0; i < 3; i++) {
-        uint8_t sqt[16] = {'S','Q','T', 0x01}; // magic
-        // Set mode = 0 (data nodes), count = 1
-        sqt[8] = 0; sqt[9] = 0; sqt[10] = 0; sqt[11] = 0; // mode
-        sqt[12] = 1; sqt[13] = 0; sqt[14] = 0; sqt[15] = 0; // count
+    // LOD 0: Standard SQT block with one Data Node (44 bytes total)
+    uint8_t sqt0[16] = {'S','Q','T', 0x01, 0,0,0,0, 0,0,0,0, 1,0,0,0}; // mode = 0, count = 1
+    append_bytes(sqt0, 16);
+    append_u32((uint32_t) -100); // xmin
+    append_u32((uint32_t) -100); // ymin
+    append_u32((uint32_t) 100);  // xmax
+    append_u32((uint32_t) 100);  // ymax
+    append_u32(0);               // code
+    append_u32(0);               // v1
+    append_u32(0);               // v2
 
-        append_bytes(sqt, 16);
+    // LOD 1: SQT block with a Nav Node to test subtree skipping (mode = 1)
+    // SQT header: 16 bytes
+    uint8_t sqt1[16] = {'S','Q','T', 0x01, 0,0,0,0, 1,0,0,0, 1,0,0,0}; // mode = 1, count = 1
+    append_bytes(sqt1, 16);
 
-        // One Data Node (28 bytes)
-        // bbox (xmin, ymin, xmax, ymax)
-        append_u32((uint32_t) -100);
-        append_u32((uint32_t) -100);
-        append_u32((uint32_t) 100);
-        append_u32((uint32_t) 100);
+    // Nav Node (28 bytes)
+    // v3_jump = size of children (1 Data Node = 28) + 8 = 36
+    append_u32(36);
+    append_u32((uint32_t) -100); // xmin
+    append_u32((uint32_t) -100); // ymin
+    append_u32((uint32_t) 100);  // xmax
+    append_u32((uint32_t) 100);  // ymax
+    append_u32(0);               // level
+    append_u32(1);               // child count
 
-        // code = i (to identify LOD)
-        append_u32(i);
-        // v1 = 0, v2 = 0
-        append_u32(0);
-        append_u32(0);
-    }
+    // Child Data Node (28 bytes, skipped during Nav jump when inactive)
+    append_u32((uint32_t) -10);
+    append_u32((uint32_t) -10);
+    append_u32((uint32_t) 10);
+    append_u32((uint32_t) 10);
+    append_u32(1);
+    append_u32(0);
+    append_u32(0);
+
+    // LOD 2: Standard SQT block with one Data Node (44 bytes total)
+    uint8_t sqt2[16] = {'S','Q','T', 0x01, 0,0,0,0, 0,0,0,0, 1,0,0,0}; // mode = 0, count = 1
+    append_bytes(sqt2, 16);
+    append_u32((uint32_t) -100);
+    append_u32((uint32_t) -100);
+    append_u32((uint32_t) 100);
+    append_u32((uint32_t) 100);
+    append_u32(2);
+    append_u32(0);
+    append_u32(0);
 }
 
-// Track visited codes
-int visited_codes[10];
-int visited_count = 0;
+void setup_test_map_malformed_nav() {
+    mock_idx_size = 0;
+    mock_idx_pos = 0;
 
-// Override purrgo_map_style_from_feature for the test to just track what we visited
-#include "purrgo/map_style.h"
+    // YZL header (32 bytes)
+    uint8_t yzl[32] = {'Y','Z','L'};
+    append_bytes(yzl, 32);
 
-purrgo_map_style_t purrgo_map_style_from_feature(uint32_t code) {
-    if (visited_count < 10) {
-        visited_codes[visited_count++] = code;
-    }
-    return PURRGO_STYLE_NONE; // return none to avoid full render loop
+    // LOD 0: Malformed NAV node (v3_jump = 4000, outside of stream)
+    uint8_t sqt[16] = {'S','Q','T', 0x01, 0,0,0,0, 1,0,0,0, 1,0,0,0}; // mode = 1, count = 1
+    append_bytes(sqt, 16);
+
+    append_u32(4000); // Malformed v3_jump causing out of bounds
+    append_u32((uint32_t) -100); // xmin
+    append_u32((uint32_t) -100); // ymin
+    append_u32((uint32_t) 100);  // xmax
+    append_u32((uint32_t) 100);  // ymax
+    append_u32(0);               // level
+    append_u32(1);               // child count
 }
-
-// Let's replace purrgo_map_style_from_feature properly by overriding it.
-// The real one is in map_style.c, but if we link map_style.c it might complain about multiple definitions.
-// Let's just inspect diag.data_visited? Wait, diag counts total nodes visited.
-// But we want to know WHICH LOD was visited.
-// We can use a trick: the diagnostic struct counts nodes visited, but we can't get the code.
-// Instead, since the Data Node bbox contains xmin, etc., maybe we can just make `purrgo_map_render_layer` run
-// and since it's a test, we can just intercept `purrgo_app_get_map_zoom_level`.
-// Since we used `map.c` which calls `map_idx_parse_node` which calls `purrgo_map_style_from_feature`,
-// if we link to map.o and map_idx.o, we DO link to map_style.o. So we shouldn't redefine it.
-// Let's verify by checking the diag output or by counting the bytes processed.
-// Actually, `mock_idx_pos` tells us how far it read!
-// LOD 0 uses 1st block: YZL (32) + SQT (16) + Node (28) = 76 bytes.
-// LOD 1 uses 1st block skip (16+28), 2nd block parse (16+28) = 32 + 44 + 44 = 120 bytes.
-// LOD 2 uses 1st skip, 2nd skip, 3rd parse = 32 + 44 + 44 + 44 = 164 bytes.
 
 void test_lod_0() {
     setup_test_map();
     mock_zoom_level = PURRGO_MAP_SCALE_500M;
+    mock_mlp_pos = 0;
 
     purrgo_fs_t idx = { .handle = NULL, .read = mock_read, .seek = mock_seek };
     purrgo_fs_t mlp = { .handle = NULL, .read = mock_mlp_read, .seek = mock_mlp_seek };
@@ -150,43 +166,78 @@ void test_lod_0() {
 
     purrgo_map_render_layer(&idx, &mlp, &gfx, &cam, &vp, false);
 
+    // YZL (32) + LOD0 SQT (16) + LOD0 Data Node (28) = 76
     assert(mock_idx_pos == 76);
+    // MLP never read
+    assert(mock_mlp_pos == 0);
 }
 
 void test_lod_1_1km() {
     setup_test_map();
     mock_zoom_level = PURRGO_MAP_SCALE_1KM;
+    mock_mlp_pos = 0;
+
     purrgo_fs_t idx = { .handle = NULL, .read = mock_read, .seek = mock_seek };
     purrgo_fs_t mlp = { .handle = NULL, .read = mock_mlp_read, .seek = mock_mlp_seek };
     gfx_context_t gfx;
     purrgo_bbox_t cam = { -200, -200, 200, 200 };
     purrgo_viewport_t vp = { 0, 0, 100, 100 };
     purrgo_map_render_layer(&idx, &mlp, &gfx, &cam, &vp, false);
-    assert(mock_idx_pos == 120);
+
+    // YZL (32) + LOD0 Skip (16+28=44) + LOD1 SQT (16) + LOD1 Nav Node (28) + LOD1 Child Node (28) = 148
+    assert(mock_idx_pos == 148);
+    assert(mock_mlp_pos == 0);
 }
 
 void test_lod_1_5km() {
     setup_test_map();
     mock_zoom_level = PURRGO_MAP_SCALE_5KM;
+    mock_mlp_pos = 0;
+
     purrgo_fs_t idx = { .handle = NULL, .read = mock_read, .seek = mock_seek };
     purrgo_fs_t mlp = { .handle = NULL, .read = mock_mlp_read, .seek = mock_mlp_seek };
     gfx_context_t gfx;
     purrgo_bbox_t cam = { -200, -200, 200, 200 };
     purrgo_viewport_t vp = { 0, 0, 100, 100 };
     purrgo_map_render_layer(&idx, &mlp, &gfx, &cam, &vp, false);
-    assert(mock_idx_pos == 120);
+
+    assert(mock_idx_pos == 148);
+    assert(mock_mlp_pos == 0);
 }
 
 void test_lod_2_10km() {
     setup_test_map();
     mock_zoom_level = PURRGO_MAP_SCALE_10KM;
+    mock_mlp_pos = 0;
+
     purrgo_fs_t idx = { .handle = NULL, .read = mock_read, .seek = mock_seek };
     purrgo_fs_t mlp = { .handle = NULL, .read = mock_mlp_read, .seek = mock_mlp_seek };
     gfx_context_t gfx;
     purrgo_bbox_t cam = { -200, -200, 200, 200 };
     purrgo_viewport_t vp = { 0, 0, 100, 100 };
     purrgo_map_render_layer(&idx, &mlp, &gfx, &cam, &vp, false);
-    assert(mock_idx_pos == 164);
+
+    // YZL (32) + LOD0 Skip (44) + LOD1 Skip (16+28 + v3_jump_seek(36-8=28) = 72) + LOD2 SQT (16) + LOD2 Data Node (28) = 192
+    assert(mock_idx_pos == 192);
+    assert(mock_mlp_pos == 0);
+}
+
+void test_malformed_v3_jump() {
+    setup_test_map_malformed_nav();
+    mock_zoom_level = PURRGO_MAP_SCALE_10KM; // Try to skip LOD 0 which is malformed
+    mock_mlp_pos = 0;
+
+    purrgo_fs_t idx = { .handle = NULL, .read = mock_read, .seek = mock_seek };
+    purrgo_fs_t mlp = { .handle = NULL, .read = mock_mlp_read, .seek = mock_mlp_seek };
+    gfx_context_t gfx;
+    purrgo_bbox_t cam = { -200, -200, 200, 200 };
+    purrgo_viewport_t vp = { 0, 0, 100, 100 };
+
+    // Should abort immediately without crashing
+    purrgo_map_render_layer(&idx, &mlp, &gfx, &cam, &vp, false);
+
+    // It stopped at YZL (32) + SQT (16) + Nav Node (28) = 76 before aborting due to failed seek
+    assert(mock_idx_pos == 76);
 }
 
 int main() {
@@ -194,6 +245,7 @@ int main() {
     test_lod_1_1km();
     test_lod_1_5km();
     test_lod_2_10km();
+    test_malformed_v3_jump();
 
     printf("LOD tests passed!\n");
     return 0;

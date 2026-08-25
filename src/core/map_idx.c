@@ -241,6 +241,12 @@ bool map_idx_skip_sqt_block(purrgo_fs_t *idx_fs, uint32_t *current_idx_offset) {
             uint32_t v3_jump = unpack_u32_le(&node_buf[0]);
             if (v3_jump > 8) {
                 uint32_t jump_amount = v3_jump - 8;
+
+                // Protect against unsigned overflow
+                if (UINT32_MAX - *current_idx_offset < jump_amount) {
+                    return false;
+                }
+
                 if (idx_fs->seek(idx_fs->handle, *current_idx_offset + jump_amount)) {
                     *current_idx_offset += jump_amount;
                 } else {
