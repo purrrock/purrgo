@@ -66,27 +66,27 @@ void map_render_feature(
                 gfx_color_t prev_fg = gfx->color_fg;
                 switch (style) {
                     case PURRGO_STYLE_DARK_GRAY_THICK_LINE:
-                        gfx_set_color(gfx, 1, gfx->color_bg);
+                        gfx_set_color(gfx, DARK_GRAY, gfx->color_bg);
                         gfx_draw_thick_line(gfx, prev_sx, prev_sy, sx, sy, 3);
                         break;
                     case PURRGO_STYLE_DARK_GRAY_SEMITHICK_LINE:
-                        gfx_set_color(gfx, 1, gfx->color_bg);
+                        gfx_set_color(gfx, DARK_GRAY, gfx->color_bg);
                         gfx_draw_thick_line(gfx, prev_sx, prev_sy, sx, sy, 2);
                         break;
                     case PURRGO_STYLE_DARK_GRAY_LINE:
-                        gfx_set_color(gfx, 1, gfx->color_bg);
+                        gfx_set_color(gfx, DARK_GRAY, gfx->color_bg);
                         gfx_draw_line(gfx, prev_sx, prev_sy, sx, sy);
                         break;
                     case PURRGO_STYLE_DARK_GRAY_DASHED_LINE:
-                        gfx_set_color(gfx, 1, gfx->color_bg);
+                        gfx_set_color(gfx, DARK_GRAY, gfx->color_bg);
                         gfx_draw_dashed_line(gfx, prev_sx, prev_sy, sx, sy);
                         break;
                     case PURRGO_STYLE_DARK_GRAY_DOTTED_LINE:
-                        gfx_set_color(gfx, 1, gfx->color_bg);
+                        gfx_set_color(gfx, DARK_GRAY, gfx->color_bg);
                         gfx_draw_dotted_line(gfx, prev_sx, prev_sy, sx, sy);
                         break;
                     case PURRGO_STYLE_RAILWAY_LINE:
-                        gfx_draw_railway_line(gfx, prev_sx, prev_sy, sx, sy, 1, 3);
+                        gfx_draw_railway_line(gfx, prev_sx, prev_sy, sx, sy);
                         break;
                     default:
                         break;
@@ -133,9 +133,9 @@ void map_render_feature(
 
         gfx_color_t prev_fg = gfx->color_fg;
         if (style == PURRGO_STYLE_LIGHT_GRAY_FILL) {
-            gfx_set_color(gfx, 2, gfx->color_bg);
+            gfx_set_color(gfx, LIGHT_GRAY, gfx->color_bg);
         } else if (style == PURRGO_STYLE_DARK_GRAY_FILL) {
-            gfx_set_color(gfx, 1, gfx->color_bg);
+            gfx_set_color(gfx, DARK_GRAY, gfx->color_bg);
         }
 
         gfx_fill_compound_polygon(
