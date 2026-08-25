@@ -53,7 +53,13 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
         gfx_set_color(gfx, 0, 3);
         gfx_fill_rect(gfx, map_vp.offset_x, map_vp.offset_y, map_vp.width, map_vp.height);
 
+        // Limit rendering strictly to the map viewport to protect the status bars
+        gfx_set_clip(gfx, map_vp.offset_x, map_vp.offset_y, map_vp.width, map_vp.height);
+
         bool map_success = purrgo_map_render_viewport(gfx, &map_vp, &dynamic_cam, app_config.map_dir);
+
+        // Restore clipping so status UI can be drawn
+        gfx_reset_clip(gfx);
 
         if (map_success) {
             purrgo_app_map_clear_dirty();

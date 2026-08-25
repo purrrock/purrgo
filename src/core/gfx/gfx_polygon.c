@@ -213,7 +213,7 @@ void gfx_fill_compound_polygon(
      * Это также защищает от случая, когда после clipping
      * диапазон scanline становится пустым.
      */
-    if (max_y < 0 || min_y >= ctx->height) {
+    if (max_y < ctx->clip_y || min_y >= ctx->clip_y + ctx->clip_h) {
         return;
     }
 
@@ -221,12 +221,12 @@ void gfx_fill_compound_polygon(
     /*
      * Ограничиваем scanline диапазоном framebuffer.
      */
-    if (min_y < 0) {
-        min_y = 0;
+    if (min_y < ctx->clip_y) {
+        min_y = ctx->clip_y;
     }
 
-    if (max_y >= ctx->height) {
-        max_y = ctx->height - 1;
+    if (max_y >= ctx->clip_y + ctx->clip_h) {
+        max_y = ctx->clip_y + ctx->clip_h - 1;
     }
 
 

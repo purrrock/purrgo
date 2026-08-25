@@ -17,15 +17,15 @@ static inline int16_t gfx_abs(int16_t a) {
 // Вычисление кода зоны для точки относительно границ экрана
 static uint8_t compute_outcode(gfx_context_t *ctx, int16_t x, int16_t y) {
     uint8_t code = INSIDE;
-    if (x < 0) {
+    if (x < ctx->clip_x) {
         code |= LEFT;
-    } else if (x >= ctx->width) {
+    } else if (x >= ctx->clip_x + ctx->clip_w) {
         code |= RIGHT;
     }
     
-    if (y < 0) {
+    if (y < ctx->clip_y) {
         code |= BOTTOM;
-    } else if (y >= ctx->height) {
+    } else if (y >= ctx->clip_y + ctx->clip_h) {
         code |= TOP;
     }
     return code;
@@ -54,17 +54,17 @@ void gfx_draw_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1, int16
             int32_t dy = y1 - y0;
 
             if (outcodeOut & TOP) {
-                x = x0 + dx * (ctx->height - 1 - y0) / dy;
-                y = ctx->height - 1;
+                x = x0 + dx * (ctx->clip_y + ctx->clip_h - 1 - y0) / dy;
+                y = ctx->clip_y + ctx->clip_h - 1;
             } else if (outcodeOut & BOTTOM) {
-                x = x0 + dx * (0 - y0) / dy;
-                y = 0;
+                x = x0 + dx * (ctx->clip_y - y0) / dy;
+                y = ctx->clip_y;
             } else if (outcodeOut & RIGHT) {
-                y = y0 + dy * (ctx->width - 1 - x0) / dx;
-                x = ctx->width - 1;
+                y = y0 + dy * (ctx->clip_x + ctx->clip_w - 1 - x0) / dx;
+                x = ctx->clip_x + ctx->clip_w - 1;
             } else if (outcodeOut & LEFT) {
-                y = y0 + dy * (0 - x0) / dx;
-                x = 0;
+                y = y0 + dy * (ctx->clip_x - x0) / dx;
+                x = ctx->clip_x;
             }
 
             if (outcodeOut == outcode0) {
@@ -93,7 +93,7 @@ void gfx_draw_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1, int16
     int16_t e2;
 
     while (true) {
-        ctx->draw_pixel(ctx->framebuffer, x0, y0, ctx->color_fg);
+        gfx_draw_pixel(ctx, x0, y0);
 
         if (x0 == x1 && y0 == y1) {
             break;
@@ -139,17 +139,17 @@ void gfx_draw_dashed_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1
             int32_t dy = y1 - y0;
 
             if (outcodeOut & TOP) {
-                x = x0 + dx * (ctx->height - 1 - y0) / dy;
-                y = ctx->height - 1;
+                x = x0 + dx * (ctx->clip_y + ctx->clip_h - 1 - y0) / dy;
+                y = ctx->clip_y + ctx->clip_h - 1;
             } else if (outcodeOut & BOTTOM) {
-                x = x0 + dx * (0 - y0) / dy;
-                y = 0;
+                x = x0 + dx * (ctx->clip_y - y0) / dy;
+                y = ctx->clip_y;
             } else if (outcodeOut & RIGHT) {
-                y = y0 + dy * (ctx->width - 1 - x0) / dx;
-                x = ctx->width - 1;
+                y = y0 + dy * (ctx->clip_x + ctx->clip_w - 1 - x0) / dx;
+                x = ctx->clip_x + ctx->clip_w - 1;
             } else if (outcodeOut & LEFT) {
-                y = y0 + dy * (0 - x0) / dx;
-                x = 0;
+                y = y0 + dy * (ctx->clip_x - x0) / dx;
+                x = ctx->clip_x;
             }
 
             if (outcodeOut == outcode0) {
@@ -194,7 +194,7 @@ void gfx_draw_dashed_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1
 
     while (true) {
         if (dash_counter < dash_len) {
-            ctx->draw_pixel(ctx->framebuffer, x0, y0, ctx->color_fg);
+            gfx_draw_pixel(ctx, x0, y0);
         }
 
         dash_counter++;
@@ -253,17 +253,17 @@ void gfx_draw_thick_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1,
             int32_t dy = y1 - y0;
 
             if (outcodeOut & TOP) {
-                x = x0 + dx * (ctx->height - 1 - y0) / dy;
-                y = ctx->height - 1;
+                x = x0 + dx * (ctx->clip_y + ctx->clip_h - 1 - y0) / dy;
+                y = ctx->clip_y + ctx->clip_h - 1;
             } else if (outcodeOut & BOTTOM) {
-                x = x0 + dx * (0 - y0) / dy;
-                y = 0;
+                x = x0 + dx * (ctx->clip_y - y0) / dy;
+                y = ctx->clip_y;
             } else if (outcodeOut & RIGHT) {
-                y = y0 + dy * (ctx->width - 1 - x0) / dx;
-                x = ctx->width - 1;
+                y = y0 + dy * (ctx->clip_x + ctx->clip_w - 1 - x0) / dx;
+                x = ctx->clip_x + ctx->clip_w - 1;
             } else if (outcodeOut & LEFT) {
-                y = y0 + dy * (0 - x0) / dx;
-                x = 0;
+                y = y0 + dy * (ctx->clip_x - x0) / dx;
+                x = ctx->clip_x;
             }
 
             if (outcodeOut == outcode0) {
@@ -399,17 +399,17 @@ void gfx_draw_dotted_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1
             int32_t dy = y1 - y0;
 
             if (outcodeOut & TOP) {
-                x = x0 + dx * (ctx->height - 1 - y0) / dy;
-                y = ctx->height - 1;
+                x = x0 + dx * (ctx->clip_y + ctx->clip_h - 1 - y0) / dy;
+                y = ctx->clip_y + ctx->clip_h - 1;
             } else if (outcodeOut & BOTTOM) {
-                x = x0 + dx * (0 - y0) / dy;
-                y = 0;
+                x = x0 + dx * (ctx->clip_y - y0) / dy;
+                y = ctx->clip_y;
             } else if (outcodeOut & RIGHT) {
-                y = y0 + dy * (ctx->width - 1 - x0) / dx;
-                x = ctx->width - 1;
+                y = y0 + dy * (ctx->clip_x + ctx->clip_w - 1 - x0) / dx;
+                x = ctx->clip_x + ctx->clip_w - 1;
             } else if (outcodeOut & LEFT) {
-                y = y0 + dy * (0 - x0) / dx;
-                x = 0;
+                y = y0 + dy * (ctx->clip_x - x0) / dx;
+                x = ctx->clip_x;
             }
 
             if (outcodeOut == outcode0) {
@@ -497,17 +497,17 @@ void gfx_draw_railway_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x
             int32_t dy = y1 - y0;
 
             if (outcodeOut & TOP) {
-                x = x0 + dx * (ctx->height - 1 - y0) / dy;
-                y = ctx->height - 1;
+                x = x0 + dx * (ctx->clip_y + ctx->clip_h - 1 - y0) / dy;
+                y = ctx->clip_y + ctx->clip_h - 1;
             } else if (outcodeOut & BOTTOM) {
-                x = x0 + dx * (0 - y0) / dy;
-                y = 0;
+                x = x0 + dx * (ctx->clip_y - y0) / dy;
+                y = ctx->clip_y;
             } else if (outcodeOut & RIGHT) {
-                y = y0 + dy * (ctx->width - 1 - x0) / dx;
-                x = ctx->width - 1;
+                y = y0 + dy * (ctx->clip_x + ctx->clip_w - 1 - x0) / dx;
+                x = ctx->clip_x + ctx->clip_w - 1;
             } else if (outcodeOut & LEFT) {
-                y = y0 + dy * (0 - x0) / dx;
-                x = 0;
+                y = y0 + dy * (ctx->clip_x - x0) / dx;
+                x = ctx->clip_x;
             }
 
             if (outcodeOut == outcode0) {

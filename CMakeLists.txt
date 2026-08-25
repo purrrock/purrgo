@@ -124,6 +124,10 @@ target_include_directories(purrgo_platform_pc
     target_link_libraries(test_gfx_polygon PRIVATE purrgo_core)
     add_test(NAME test_gfx_polygon COMMAND test_gfx_polygon)
 
+    add_executable(test_gfx_clipping tests/core/test_gfx_clipping.c)
+    target_link_libraries(test_gfx_clipping PRIVATE purrgo_core)
+    add_test(NAME test_gfx_clipping COMMAND test_gfx_clipping)
+
     add_executable(test_config tests/core/test_config.c)
     target_link_libraries(test_config PRIVATE purrgo_core)
     add_test(NAME test_config COMMAND test_config)
