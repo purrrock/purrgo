@@ -187,3 +187,68 @@ void map_idx_parse_node(
         );
     }
 }
+
+bool map_idx_skip_sqt_block(purrgo_fs_t *idx_fs, uint32_t *current_idx_offset) {
+    uint8_t sqt_header[16];
+
+    if (
+        idx_fs->read(
+            idx_fs->handle,
+            sqt_header,
+            sizeof(sqt_header)
+        ) != sizeof(sqt_header)
+    ) {
+        return false;
+    }
+
+    *current_idx_offset += 16;
+
+    if (
+        sqt_header[0] != 'S' ||
+        sqt_header[1] != 'Q' ||
+        sqt_header[2] != 'T' ||
+        sqt_header[3] != 0x01
+    ) {
+        PURRGO_LOG("MAP: ERROR invalid SQT header during skip\n");
+        return false;
+    }
+
+    uint32_t mode = unpack_u32_le(&sqt_header[8]);
+    uint32_t count = unpack_u32_le(&sqt_header[12]);
+
+    if (count == 0) {
+        return true;
+    }
+
+    bool is_nav = (mode > 0);
+
+    for (uint32_t i = 0; i < count; i++) {
+        uint8_t node_buf[28];
+
+        if (
+            idx_fs->read(
+                idx_fs->handle,
+                node_buf,
+                sizeof(node_buf)
+            ) != sizeof(node_buf)
+        ) {
+            return false;
+        }
+
+        *current_idx_offset += 28;
+
+        if (is_nav) {
+            uint32_t v3_jump = unpack_u32_le(&node_buf[0]);
+            if (v3_jump > 8) {
+                uint32_t jump_amount = v3_jump - 8;
+                if (idx_fs->seek(idx_fs->handle, *current_idx_offset + jump_amount)) {
+                    *current_idx_offset += jump_amount;
+                } else {
+                    return false;
+                }
+            }
+        }
+    }
+
+    return true;
+}

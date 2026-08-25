@@ -1,5 +1,6 @@
 #include "purrgo/map.h"
 #include "purrgo/logger.h"
+#include "purrgo/app_fsm.h"
 #include "map_internal.h"
 #include "map_idx.h"
 #include "purrgo/fs_hal.h"
@@ -104,7 +105,28 @@ void purrgo_map_render_layer(
     /* SQT sections                                                            */
     /* ---------------------------------------------------------------------- */
 
+    purrgo_map_scale_t current_scale = purrgo_app_get_map_zoom_level();
+    int target_lod = 0;
+
+    if (current_scale <= PURRGO_MAP_SCALE_500M) {
+        target_lod = 0;
+    } else if (current_scale <= PURRGO_MAP_SCALE_5KM) {
+        target_lod = 1;
+    } else {
+        target_lod = 2;
+    }
+
+    int current_lod = 0;
+
     while (true) {
+        if (current_lod < target_lod) {
+            if (!map_idx_skip_sqt_block(idx_fs, &current_idx_offset)) {
+                break;
+            }
+            current_lod++;
+            continue;
+        }
+
         uint8_t sqt_header[16];
 
         if (
@@ -129,34 +151,31 @@ void purrgo_map_render_layer(
             break;
         }
 
-        if (diag.sqt_blocks > 0) {
-            break;
-        }
-
         diag.sqt_blocks++;
 
         uint32_t mode = unpack_u32_le(&sqt_header[8]);
         uint32_t count = unpack_u32_le(&sqt_header[12]);
 
-        if (count == 0) {
-            continue;
+        if (count > 0) {
+            bool is_nav = (mode > 0);
+
+            for (uint32_t i = 0; i < count; i++) {
+                map_idx_parse_node(
+                    idx_fs,
+                    &current_idx_offset,
+                    mlp_fs,
+                    is_nav,
+                    camera,
+                    viewport,
+                    gfx,
+                    is_polygon_layer,
+                    &diag
+                );
+            }
         }
 
-        bool is_nav = (mode > 0);
-
-        for (uint32_t i = 0; i < count; i++) {
-            map_idx_parse_node(
-                idx_fs,
-                &current_idx_offset,
-                mlp_fs,
-                is_nav,
-                camera,
-                viewport,
-                gfx,
-                is_polygon_layer,
-                &diag
-            );
-        }
+        // Target LOD block has been processed. Break immediately to avoid reading next LOD blocks.
+        break;
     }
 
     /* ---------------------------------------------------------------------- */

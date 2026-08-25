@@ -139,6 +139,10 @@ target_include_directories(purrgo_platform_pc
     add_executable(test_purrgo_time tests/core/test_purrgo_time.c)
     target_link_libraries(test_purrgo_time PRIVATE purrgo_core)
     add_test(NAME test_purrgo_time COMMAND test_purrgo_time)
+
+    add_executable(test_map_lod tests/core/test_map_lod.c)
+    target_link_libraries(test_map_lod PRIVATE purrgo_core)
+    add_test(NAME test_map_lod COMMAND test_map_lod)
 endif()
 
 # Подключение директории эмулятора перенесено в конец дерева сборки, 
