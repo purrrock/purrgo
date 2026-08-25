@@ -470,108 +470,19 @@ void gfx_draw_dotted_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1
     }
 }
 
-void gfx_draw_railway_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1, int16_t y1, uint8_t color_dark, uint8_t color_light)
+void gfx_draw_railway_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1, int16_t y1)
 {
     if (ctx == NULL || ctx->draw_pixel == NULL) return;
 
-    // Сохраняем геометрическое начало линии для синхронизации фазы
-    int16_t orig_x0 = x0;
-    int16_t orig_y0 = y0;
+    gfx_color_t original_fg = ctx->color_fg;
 
-    // 1. Отсечение отрезка (Cohen-Sutherland)
-    uint8_t outcode0 = compute_outcode(ctx, x0, y0);
-    uint8_t outcode1 = compute_outcode(ctx, x1, y1);
-    bool accept = false;
+    // Отрисовка сплошной 3-пиксельной черной линии
+    ctx->color_fg = BLACK;
+    gfx_draw_thick_line(ctx, x0, y0, x1, y1, 3);
 
-    while (true) {
-        if (!(outcode0 | outcode1)) {
-            accept = true;
-            break;
-        } else if (outcode0 & outcode1) {
-            break;
-        } else {
-            int16_t x, y;
-            uint8_t outcodeOut = outcode0 ? outcode0 : outcode1;
+    // Отрисовка 1-пиксельной белой прерывистой линии поверх
+    ctx->color_fg = WHITE;
+    gfx_draw_dashed_line(ctx, x0, y0, x1, y1);
 
-            int32_t dx = x1 - x0;
-            int32_t dy = y1 - y0;
-
-            if (outcodeOut & TOP) {
-                x = x0 + dx * (ctx->clip_y + ctx->clip_h - 1 - y0) / dy;
-                y = ctx->clip_y + ctx->clip_h - 1;
-            } else if (outcodeOut & BOTTOM) {
-                x = x0 + dx * (ctx->clip_y - y0) / dy;
-                y = ctx->clip_y;
-            } else if (outcodeOut & RIGHT) {
-                y = y0 + dy * (ctx->clip_x + ctx->clip_w - 1 - x0) / dx;
-                x = ctx->clip_x + ctx->clip_w - 1;
-            } else if (outcodeOut & LEFT) {
-                y = y0 + dy * (ctx->clip_x - x0) / dx;
-                x = ctx->clip_x;
-            }
-
-            if (outcodeOut == outcode0) {
-                x0 = x;
-                y0 = y;
-                outcode0 = compute_outcode(ctx, x0, y0);
-            } else {
-                x1 = x;
-                y1 = y;
-                outcode1 = compute_outcode(ctx, x1, y1);
-            }
-        }
-    }
-
-    if (!accept) {
-        return;
-    }
-
-    // Параметры паттерна железной дороги
-    const int16_t dark_len = 4;
-    const int16_t light_len = 4;
-    const int16_t pattern_len = dark_len + light_len; // 8 пикселей
-
-    // Вычисляем количество пропущенных пикселей (Chebyshev distance)
-    int16_t dx_clip = gfx_abs(x0 - orig_x0);
-    int16_t dy_clip = gfx_abs(y0 - orig_y0);
-    int16_t clipped_steps = (dx_clip > dy_clip) ? dx_clip : dy_clip;
-
-    // Инициализируем счетчик с учетом отсеченной части.
-    // Так как pattern_len = 8 (степень двойки), используем & 7.
-    int16_t rail_counter = clipped_steps & 7;
-
-    // 2. Отрисовка видимой части (Bresenham optimized)
-    int16_t dx = gfx_abs(x1 - x0);
-    int16_t sx = x0 < x1 ? 1 : -1;
-    int16_t dy = -gfx_abs(y1 - y0);
-    int16_t sy = y0 < y1 ? 1 : -1;
-
-    int16_t err = dx + dy;
-    int16_t e2;
-
-    while (true) {
-        // Используем gfx_draw_pixel через подмену цвета, так как она
-        // безопасно делает clipping внутри или обращается напрямую
-        gfx_color_t old_color = ctx->color_fg;
-        ctx->color_fg = (rail_counter < dark_len) ? color_dark : color_light;
-        gfx_draw_pixel(ctx, x0, y0);
-        ctx->color_fg = old_color;
-
-        rail_counter = (rail_counter + 1) & 7;
-
-        if (x0 == x1 && y0 == y1) {
-            break;
-        }
-
-        e2 = err * 2;
-
-        if (e2 >= dy) {
-            err += dy;
-            x0 += sx;
-        }
-        if (e2 <= dx) {
-            err += dx;
-            y0 += sy;
-        }
-    }
+    ctx->color_fg = original_fg;
 }
