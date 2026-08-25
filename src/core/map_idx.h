@@ -18,4 +18,6 @@ void map_idx_parse_node(
     map_diag_t *diag
 );
 
+bool map_idx_skip_sqt_block(purrgo_fs_t *idx_fs, uint32_t *current_idx_offset);
+
 #endif // PURRGO_MAP_IDX_H
