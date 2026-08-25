@@ -18,7 +18,63 @@ bool gfx_init(gfx_context_t *ctx,
     ctx->color_fg = 1;
     ctx->color_bg = 0;
 
+    ctx->clip_x = 0;
+    ctx->clip_y = 0;
+    ctx->clip_w = width;
+    ctx->clip_h = height;
+
     return true;
+}
+
+void gfx_set_clip(gfx_context_t *ctx, int16_t x, int16_t y, int16_t w, int16_t h)
+{
+    if (ctx == NULL) return;
+
+    if (w < 0) w = 0;
+    if (h < 0) h = 0;
+
+    if (x < 0) {
+        w += x;
+        x = 0;
+    }
+    if (y < 0) {
+        h += y;
+        y = 0;
+    }
+
+    if (w < 0) w = 0;
+    if (h < 0) h = 0;
+
+    if (x >= ctx->width) {
+        x = ctx->width;
+        w = 0;
+    }
+    if (y >= ctx->height) {
+        y = ctx->height;
+        h = 0;
+    }
+
+    if (x + w > ctx->width) {
+        w = ctx->width - x;
+    }
+    if (y + h > ctx->height) {
+        h = ctx->height - y;
+    }
+
+    ctx->clip_x = x;
+    ctx->clip_y = y;
+    ctx->clip_w = w;
+    ctx->clip_h = h;
+}
+
+void gfx_reset_clip(gfx_context_t *ctx)
+{
+    if (ctx == NULL) return;
+
+    ctx->clip_x = 0;
+    ctx->clip_y = 0;
+    ctx->clip_w = ctx->width;
+    ctx->clip_h = ctx->height;
 }
 
 void gfx_set_color(gfx_context_t *ctx, gfx_color_t fg, gfx_color_t bg)
@@ -33,8 +89,9 @@ void gfx_draw_pixel(gfx_context_t *ctx, int16_t x, int16_t y)
 {
     if (ctx == NULL || ctx->draw_pixel == NULL) return;
 
-    // Software clipping
-    if (x >= 0 && x < ctx->width && y >= 0 && y < ctx->height) {
+    // Software clipping against clipping region
+    if (x >= ctx->clip_x && x < ctx->clip_x + ctx->clip_w &&
+        y >= ctx->clip_y && y < ctx->clip_y + ctx->clip_h) {
         ctx->draw_pixel(ctx->framebuffer, x, y, ctx->color_fg);
     }
 }
@@ -61,7 +118,7 @@ void gfx_draw_hline(gfx_context_t *ctx, int16_t x_start, int16_t x_end, int16_t 
     if (ctx == NULL || ctx->draw_pixel == NULL) return;
 
     // Отсечение невидимых строк по оси Y
-    if (y < 0 || y >= ctx->height) return;
+    if (y < ctx->clip_y || y >= ctx->clip_y + ctx->clip_h) return;
 
     if (x_start > x_end) {
         int16_t temp = x_start;
@@ -70,10 +127,10 @@ void gfx_draw_hline(gfx_context_t *ctx, int16_t x_start, int16_t x_end, int16_t 
     }
 
     // Отсечение невидимых отрезков по оси X
-    if (x_end < 0 || x_start >= ctx->width) return;
+    if (x_end < ctx->clip_x || x_start >= ctx->clip_x + ctx->clip_w) return;
 
-    if (x_start < 0) x_start = 0;
-    if (x_end >= ctx->width) x_end = ctx->width - 1;
+    if (x_start < ctx->clip_x) x_start = ctx->clip_x;
+    if (x_end >= ctx->clip_x + ctx->clip_w) x_end = ctx->clip_x + ctx->clip_w - 1;
 
     // Прямой вызов платформенного коллбэка. Используется цвет переднего плана (color_fg)
     for (int16_t x = x_start; x <= x_end; x++) {
@@ -86,7 +143,7 @@ void gfx_draw_vline(gfx_context_t *ctx, int16_t x, int16_t y_start, int16_t y_en
     if (ctx == NULL || ctx->draw_pixel == NULL) return;
 
     // Отсечение невидимых столбцов по оси X
-    if (x < 0 || x >= ctx->width) return;
+    if (x < ctx->clip_x || x >= ctx->clip_x + ctx->clip_w) return;
 
     if (y_start > y_end) {
         int16_t temp = y_start;
@@ -95,10 +152,10 @@ void gfx_draw_vline(gfx_context_t *ctx, int16_t x, int16_t y_start, int16_t y_en
     }
 
     // Отсечение невидимых отрезков по оси Y
-    if (y_end < 0 || y_start >= ctx->height) return;
+    if (y_end < ctx->clip_y || y_start >= ctx->clip_y + ctx->clip_h) return;
 
-    if (y_start < 0) y_start = 0;
-    if (y_end >= ctx->height) y_end = ctx->height - 1;
+    if (y_start < ctx->clip_y) y_start = ctx->clip_y;
+    if (y_end >= ctx->clip_y + ctx->clip_h) y_end = ctx->clip_y + ctx->clip_h - 1;
 
     // Прямой вызов платформенного коллбэка. Используется цвет переднего плана (color_fg)
     for (int16_t y = y_start; y <= y_end; y++) {
