@@ -40,6 +40,11 @@ static bool map_parse_pgo_header(purrgo_fs_t *fs, pgo_header_info_t *info) {
     info->lod_offset[2] = unpack_u32_le(&pgo_header[16]);
 
     uint32_t payload_start = 32;
+
+    // Prevent uint32_t overflow for payload_end
+    if (UINT32_MAX - payload_start < info->payload_size) {
+        return false;
+    }
     uint32_t payload_end = payload_start + info->payload_size;
 
     if (info->file_type == 1) { // .idx
