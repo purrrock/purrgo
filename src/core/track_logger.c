@@ -21,6 +21,8 @@ static int32_t last_recorded_lat = 0;
 static int32_t last_recorded_lon = 0;
 static uint32_t last_recorded_time = 0;
 
+static uint32_t last_sync_time = 0;
+
 static char write_buffer[GPX_BUFFER_SIZE];
 static size_t buffer_pos = 0;
 // Стандартный заголовок файла GPX 1.1
@@ -45,7 +47,11 @@ void purrgo_logger_set_mode(track_logger_mode_t mode) {
 static void flush_buffer(void) {
     if (buffer_pos > 0 && active_file != NULL) {
         purrgo_fs_write(active_file, (const uint8_t*)write_buffer, buffer_pos);
-        purrgo_fs_sync(active_file); // <-- Критически важно для выживания файла
+        // Reduce write amplification: only sync once every 5 minutes
+        if (last_recorded_time == 0 || (last_recorded_time - last_sync_time) >= 300) {
+            purrgo_fs_sync(active_file); // <-- Критически важно для выживания файла
+            last_sync_time = last_recorded_time;
+        }
         buffer_pos = 0;
     }
 }
@@ -96,6 +102,7 @@ bool purrgo_logger_start(const purrgo_gnss_solution_t* first_fix) {
 
     buffer_pos = 0;
     is_first_point = true;
+    last_sync_time = 0;
     
     write_to_buffer(GPX_HEADER);
     current_state = LOGGER_STATE_RECORDING;
@@ -171,8 +178,11 @@ void purrgo_logger_stop(void) {
     if (current_state == LOGGER_STATE_RECORDING) {
         write_to_buffer(GPX_FOOTER);
         flush_buffer();
-        purrgo_fs_close(active_file);
-        active_file = NULL;
+        if (active_file != NULL) {
+            purrgo_fs_sync(active_file); // Ensure final data is written before closing
+            purrgo_fs_close(active_file);
+            active_file = NULL;
+        }
     }
     current_state = LOGGER_STATE_IDLE;
 }
