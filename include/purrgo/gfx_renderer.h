@@ -20,6 +20,11 @@
  */
 typedef uint8_t gfx_color_t;
 
+#define BLACK      0
+#define DARK_GRAY  1
+#define LIGHT_GRAY 2
+#define WHITE      3
+
 /* * Базовая структура точки. 
  * Знаковый int16_t позволяет координатам уходить за границы экрана (clipping),
  * при этом занимая всего 4 байта на структуру.

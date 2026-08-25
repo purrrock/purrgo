@@ -477,11 +477,11 @@ void gfx_draw_railway_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x
     gfx_color_t original_fg = ctx->color_fg;
 
     // Отрисовка сплошной 3-пиксельной черной линии
-    ctx->color_fg = 0; // Black
+    ctx->color_fg = BLACK;
     gfx_draw_thick_line(ctx, x0, y0, x1, y1, 3);
 
     // Отрисовка 1-пиксельной белой прерывистой линии поверх
-    ctx->color_fg = 3; // White
+    ctx->color_fg = WHITE;
     gfx_draw_dashed_line(ctx, x0, y0, x1, y1);
 
     ctx->color_fg = original_fg;
