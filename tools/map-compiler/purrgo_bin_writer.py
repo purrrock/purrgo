@@ -4,7 +4,6 @@
 import json
 import math
 import struct
-import hashlib
 from typing import List, Tuple, Any
 
 from purrgo_models import MapFeature, RTreeNode, HWConfig, safe_encode
@@ -15,15 +14,31 @@ class MapCompiler:
     """Generator of  binary structures (PGO/SQT/DBF)."""
 
     @staticmethod
-    def _write_pgo_container(filepath: str, payload: bytes, is_idx: bool, lod2_size: int = 0) -> None:
-        """Encapsulate data in the system PGO container with hardware MD5 validation."""
-        payload_size = len(payload)
-        md5_hash = hashlib.md5(payload).digest()
+    def _write_pgo_container(filepath: str, payload: bytes, file_type: int, lod_offsets: Tuple[int, int, int]) -> None:
+        """Encapsulate data in the new V3 PGO container."""
+        if file_type not in (1, 2, 3):
+            raise ValueError(f"Invalid file_type: {file_type}. Must be 1, 2, or 3.")
 
-        if is_idx:
-            header = b'PGO\x08' + struct.pack("<I", payload_size) + b'\x02\x00\x00\x04' + struct.pack(">I", lod2_size) + md5_hash
-        else:
-            header = b'PGO\x00' + struct.pack("<I", payload_size) + b'\x00\x00\x00\x04\x00\x00\x00\x00' + md5_hash
+        payload_size = len(payload)
+        if payload_size > 0xFFFFFFFF:
+            raise ValueError("Payload size exceeds uint32 limit.")
+
+        for offset in lod_offsets:
+            if offset < 0 or offset > 0xFFFFFFFF:
+                raise ValueError("LOD offset must fit in uint32.")
+
+        header = bytearray(b'PGO')
+        header.append(file_type)
+        header.extend(struct.pack("<I", payload_size))
+        header.extend(struct.pack("<I", lod_offsets[0]))
+        header.extend(struct.pack("<I", lod_offsets[1]))
+        header.extend(struct.pack("<I", lod_offsets[2]))
+        header.extend(struct.pack("<I", 0)) # Future extension 1
+        header.extend(struct.pack("<I", 0)) # Future extension 2
+        header.extend(struct.pack("<I", 0)) # Future extension 3
+
+        if len(header) != HWConfig.PGO_HEADER_SIZE:
+            raise ValueError(f"Generated header size {len(header)} != 32")
 
         with open(filepath, 'wb') as f:
             f.write(header)
@@ -68,7 +83,7 @@ class MapCompiler:
             bin_records += record_bin
             record_number += 1
 
-        cls._write_pgo_container(filepath, bin_records, is_idx=False)
+        cls._write_pgo_container(filepath, bin_records, file_type=2, lod_offsets=(0, 0, 0))
 
     @classmethod
     def compile_db(cls, features: List[MapFeature], filepath: str, is_poi: bool = False) -> None:
@@ -108,7 +123,7 @@ class MapCompiler:
             + cls._desc("name", 100)
             + b'\x0D'
         )
-        cls._write_pgo_container(filepath, dbf_header + bin_records, is_idx=False)
+        cls._write_pgo_container(filepath, dbf_header + bin_records, file_type=3, lod_offsets=(0, 0, 0))
 
     @classmethod
     def _build_str_layer(cls, items: List[Any], level: int) -> List[RTreeNode]:
@@ -182,11 +197,11 @@ class MapCompiler:
             lambda f: f.lod >= 2
         ]
 
-        lod2_size = 0
+        lod_offsets = [0, 0, 0]
         prev_len = -1
         cached_packed = b""
         for lod_index, condition in enumerate(lod_filters):
-            start_len = len(idx_buffer)
+            lod_offsets[lod_index] = HWConfig.PGO_HEADER_SIZE + len(idx_buffer)
             lod_records = [f for f in features if condition(f)]
 
             if not lod_records:
@@ -208,22 +223,24 @@ class MapCompiler:
                     cached_packed = packed_data
                     prev_len = len(lod_records)
 
-            if lod_index == 2:
-                lod2_size = len(idx_buffer) - start_len
+        cls._write_pgo_container(filepath, idx_buffer, file_type=1, lod_offsets=tuple(lod_offsets))
 
-        # POIs use the same LOD logic but are encapsulated with is_idx=False because their magic extension is 0x00 and RAM type is 0x04000000
-        cls._write_pgo_container(filepath, idx_buffer, is_idx=not is_poi, lod2_size=lod2_size)
-
-    @staticmethod
-    def create_empty_layer(layer_prefix: str) -> None:
+    @classmethod
+    def create_empty_layer(cls, layer_prefix: str) -> None:
         """Generates system dummy layers for missing geometry types."""
-        print(f"[>] Creating system Hex dummy: {layer_prefix}...")
-        mlp_hex = "50474F00000000000000000400000000D41D8CD98F00B204E9800998ECF8427E"
-        idx_hex = "50474F10300000000000000400000010E5F9D2228804251B5F9E3EAB298C30E5535154010100000000000000000000005351540101000000000000000000000053515401010000000000000000000000"
-        with open(f"{layer_prefix}.mlp", "wb") as f:
-            f.write(bytearray.fromhex(mlp_hex))
-        with open(f"{layer_prefix}.idx", "wb") as f:
-            f.write(bytearray.fromhex(idx_hex))
+        print(f"[>] Creating system dummy layers: {layer_prefix}...")
+
+        cls._write_pgo_container(f"{layer_prefix}.mlp", b'', file_type=2, lod_offsets=(0, 0, 0))
+
+        idx_buffer = bytearray()
+        lod_offsets = [0, 0, 0]
+        empty_sqt = b'SQT\x01\x01\x00\x00\x00' + struct.pack("<II", 0, 0)
+
+        for i in range(3):
+            lod_offsets[i] = HWConfig.PGO_HEADER_SIZE + len(idx_buffer)
+            idx_buffer.extend(empty_sqt)
+
+        cls._write_pgo_container(f"{layer_prefix}.idx", idx_buffer, file_type=1, lod_offsets=tuple(lod_offsets))
 
     @staticmethod
     def create_map_name(name: str, meta_records: List[MapFeature], out_file: str = "map.name") -> None:
