@@ -259,7 +259,7 @@ Contains the technical specification of the current binary map format.
 
 ## Map Format
 
-The compiler currently generates the existing map format. The format consists of three primary file types:
+The compiler currently generates the PurrGO V3 map format. The format consists of three primary file types:
 
 ### `.idx`
 
@@ -276,7 +276,8 @@ dBase III-compatible attribute database containing object names and related meta
 See:
 
 ```text
-docs/dtg1_map_specification.md
+docs/purrgo_map_specification_v3.md
+docs/New_Global_Header.md
 ```
 
 for the detailed binary format specification.
@@ -285,13 +286,12 @@ for the detailed binary format specification.
 
 ## Important Limitations
 
-The compiler currently targets the existing PurrGO map format.
+The compiler targets the PurrGO V3 map format.
 
 In particular:
 
-* the binary map format is not changed by the compiler;
-* LOD 0/1/2 are generated, although PurrGO does not currently process all LOD levels;
-* the compiler currently uses the coordinate representation defined by the existing format;
+* LOD 0/1/2 are generated;
+* the compiler uses the coordinate representation defined by the format;
 * map rendering behaviour is determined by the PurrGO firmware.
 
 The compiler should therefore be considered a build-time component of the PurrGO project rather than a general-purpose OSM conversion tool.
