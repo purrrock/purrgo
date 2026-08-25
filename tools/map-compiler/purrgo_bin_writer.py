@@ -12,18 +12,18 @@ from purrgo_lookup import LookupTables
 
 
 class MapCompiler:
-    """Generator of hardware binary structures (YZL/SQT/DBF) for ATS3085S platform."""
+    """Generator of hardware binary structures (PGO/SQT/DBF) for ATS3085S platform."""
 
     @staticmethod
-    def _write_yzl_container(filepath: str, payload: bytes, is_idx: bool, lod2_size: int = 0) -> None:
-        """Encapsulate data in the system YZL container with hardware MD5 validation."""
+    def _write_pgo_container(filepath: str, payload: bytes, is_idx: bool, lod2_size: int = 0) -> None:
+        """Encapsulate data in the system PGO container with hardware MD5 validation."""
         payload_size = len(payload)
         md5_hash = hashlib.md5(payload).digest()
 
         if is_idx:
-            header = b'YZL\x08' + struct.pack("<I", payload_size) + b'\x02\x00\x00\x04' + struct.pack(">I", lod2_size) + md5_hash
+            header = b'PGO\x08' + struct.pack("<I", payload_size) + b'\x02\x00\x00\x04' + struct.pack(">I", lod2_size) + md5_hash
         else:
-            header = b'YZL\x00' + struct.pack("<I", payload_size) + b'\x00\x00\x00\x04\x00\x00\x00\x00' + md5_hash
+            header = b'PGO\x00' + struct.pack("<I", payload_size) + b'\x00\x00\x00\x04\x00\x00\x00\x00' + md5_hash
 
         with open(filepath, 'wb') as f:
             f.write(header)
@@ -68,11 +68,11 @@ class MapCompiler:
             bin_records += record_bin
             record_number += 1
 
-        cls._write_yzl_container(filepath, bin_records, is_idx=False)
+        cls._write_pgo_container(filepath, bin_records, is_idx=False)
 
     @classmethod
     def compile_db(cls, features: List[MapFeature], filepath: str, is_poi: bool = False) -> None:
-        """Serializes text attributes into a dBase III (.db) format encapsulated in YZL."""
+        """Serializes text attributes into a dBase III (.db) format encapsulated in PGO."""
         if not is_poi and not any(f.name for f in features):
             print(f"[~] Layer {filepath} contains no named objects. .db file creation skipped.")
             for f in features:
@@ -108,7 +108,7 @@ class MapCompiler:
             + cls._desc("name", 100)
             + b'\x0D'
         )
-        cls._write_yzl_container(filepath, dbf_header + bin_records, is_idx=False)
+        cls._write_pgo_container(filepath, dbf_header + bin_records, is_idx=False)
 
     @classmethod
     def _build_str_layer(cls, items: List[Any], level: int) -> List[RTreeNode]:
@@ -212,14 +212,14 @@ class MapCompiler:
                 lod2_size = len(idx_buffer) - start_len
 
         # POIs use the same LOD logic but are encapsulated with is_idx=False because their magic extension is 0x00 and RAM type is 0x04000000
-        cls._write_yzl_container(filepath, idx_buffer, is_idx=not is_poi, lod2_size=lod2_size)
+        cls._write_pgo_container(filepath, idx_buffer, is_idx=not is_poi, lod2_size=lod2_size)
 
     @staticmethod
     def create_empty_layer(layer_prefix: str) -> None:
         """Generates system dummy layers for missing geometry types."""
         print(f"[>] Creating system Hex dummy: {layer_prefix}...")
-        mlp_hex = "595A4C00000000000000000400000000D41D8CD98F00B204E9800998ECF8427E"
-        idx_hex = "595A4C10300000000000000400000010E5F9D2228804251B5F9E3EAB298C30E5535154010100000000000000000000005351540101000000000000000000000053515401010000000000000000000000"
+        mlp_hex = "50474F00000000000000000400000000D41D8CD98F00B204E9800998ECF8427E"
+        idx_hex = "50474F10300000000000000400000010E5F9D2228804251B5F9E3EAB298C30E5535154010100000000000000000000005351540101000000000000000000000053515401010000000000000000000000"
         with open(f"{layer_prefix}.mlp", "wb") as f:
             f.write(bytearray.fromhex(mlp_hex))
         with open(f"{layer_prefix}.idx", "wb") as f:
