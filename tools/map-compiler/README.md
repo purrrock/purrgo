@@ -115,37 +115,6 @@ maps/
 
 It defines how OSM objects are classified and which objects are included in the generated map.
 
-The current table contains the following fields:
-
-```text
-Code;fclass;Color;LOD;Layer;OSM_Tags;Description;Remap_Code;Remap_Color;Remap_LOD;Enabled;;Shape
-```
-
-Important fields include:
-
-### `Code`
-
-The object class code written into the generated map.
-
-### `fclass`
-
-The logical feature class used by the compiler.
-
-### `LOD`
-
-The default Level of Detail assigned to the feature.
-
-### `Layer`
-
-The target map layer:
-
-```text
-roads
-landuse
-water
-pois
-```
-
 ### `OSM_Tags`
 
 OSM tag matching rules used to classify objects.
@@ -157,18 +126,6 @@ shop=bicycle
 ```
 
 can be used to identify bicycle shops.
-
-### `Remap_Code`
-
-Allows an object to be converted to another map class.
-
-### `Remap_Color`
-
-Overrides the default style color.
-
-### `Remap_LOD`
-
-Overrides the Level of Detail assigned to the object.
 
 ### `Enabled`
 
@@ -251,10 +208,6 @@ Contains the feature classification and OSM tag lookup logic.
 
 Configurable feature/style lookup table.
 
-### `docs/`
-
-Contains the technical specification of the current binary map format.
-
 ---
 
 ## Map Format
@@ -277,7 +230,6 @@ See:
 
 ```text
 docs/purrgo_map_specification_v3.md
-docs/New_Global_Header.md
 ```
 
 for the detailed binary format specification.
