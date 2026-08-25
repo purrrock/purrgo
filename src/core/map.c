@@ -101,6 +101,9 @@ void purrgo_map_render_layer(
         return;
     }
 
+    uint32_t payload_size = unpack_u32_le(&yzl_header[4]);
+    uint32_t max_idx_offset = 32 + payload_size;
+
     /* ---------------------------------------------------------------------- */
     /* SQT sections                                                            */
     /* ---------------------------------------------------------------------- */
@@ -120,7 +123,7 @@ void purrgo_map_render_layer(
 
     while (true) {
         if (current_lod < target_lod) {
-            if (!map_idx_skip_sqt_block(idx_fs, &current_idx_offset)) {
+            if (!map_idx_skip_sqt_block(idx_fs, &current_idx_offset, max_idx_offset)) {
                 break;
             }
             current_lod++;

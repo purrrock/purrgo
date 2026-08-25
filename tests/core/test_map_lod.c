@@ -28,19 +28,10 @@ static bool mock_seek(void* handle, uint32_t offset) {
     return true;
 }
 
-static int render_calls = 0;
-void mock_draw_pixel(void *fb, int16_t x, int16_t y, gfx_color_t color) {
-    render_calls++;
-}
-
 static purrgo_map_scale_t mock_zoom_level = PURRGO_MAP_SCALE_500M;
 purrgo_map_scale_t purrgo_app_get_map_zoom_level(void) {
     return mock_zoom_level;
 }
-
-// Ensure other mock stubs exist for what map_idx needs to not crash during rendering tests
-// e.g., the map render mock that calls draw_pixel etc. But since we use map_idx_parse_node which calls map_render_feature,
-// we just provide a basic mock geometry.
 
 static uint8_t mock_mlp_data[1024];
 static uint32_t mock_mlp_size = 0;
@@ -82,6 +73,15 @@ void setup_test_map() {
 
     // YZL header (32 bytes)
     uint8_t yzl[32] = {'Y','Z','L'};
+
+    // We append the payload size so map.c can correctly bound max_idx_offset
+    // Payload size = LOD0 (44) + LOD1 (72) + LOD2 (44) = 160
+    uint32_t payload_size = 160;
+    yzl[4] = payload_size & 0xFF;
+    yzl[5] = (payload_size >> 8) & 0xFF;
+    yzl[6] = (payload_size >> 16) & 0xFF;
+    yzl[7] = (payload_size >> 24) & 0xFF;
+
     append_bytes(yzl, 32);
 
     // LOD 0: Standard SQT block with one Data Node (44 bytes total)
@@ -137,9 +137,16 @@ void setup_test_map_malformed_nav() {
 
     // YZL header (32 bytes)
     uint8_t yzl[32] = {'Y','Z','L'};
+
+    uint32_t payload_size = 160;
+    yzl[4] = payload_size & 0xFF;
+    yzl[5] = (payload_size >> 8) & 0xFF;
+    yzl[6] = (payload_size >> 16) & 0xFF;
+    yzl[7] = (payload_size >> 24) & 0xFF;
+
     append_bytes(yzl, 32);
 
-    // LOD 0: Malformed NAV node (v3_jump = 4000, outside of stream)
+    // LOD 0: Malformed NAV node (v3_jump = 4000, outside of stream, stream length max 160)
     uint8_t sqt[16] = {'S','Q','T', 0x01, 0,0,0,0, 1,0,0,0, 1,0,0,0}; // mode = 1, count = 1
     append_bytes(sqt, 16);
 
