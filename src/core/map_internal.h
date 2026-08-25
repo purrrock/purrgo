@@ -13,6 +13,12 @@
 #define PURRGO_MAP_POINTS_PER_CHUNK (PURRGO_MAP_READ_CHUNK_SIZE / 8)
 
 typedef struct {
+    uint8_t  file_type;
+    uint32_t payload_size;
+    uint32_t lod_offset[3];
+} pgo_header_info_t;
+
+typedef struct {
     uint32_t sqt_blocks;
 
     uint32_t nav_visited;
