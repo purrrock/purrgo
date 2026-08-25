@@ -15,7 +15,8 @@ void map_idx_parse_node(
     const purrgo_viewport_t *vp,
     gfx_context_t *gfx,
     bool is_polygon_layer,
-    map_diag_t *diag
+    map_diag_t *diag,
+    uint32_t lod_end
 );
 
 #endif // PURRGO_MAP_IDX_H
