@@ -49,6 +49,15 @@ typedef struct {
     
     gfx_color_t color_fg;       /* Текущий цвет переднего плана (линии, текст, контуры) */
     gfx_color_t color_bg;       /* Текущий цвет фона (заливка, очистка экрана) */
+
+    /* Clipping region.
+     * x >= clip_x && x < clip_x + clip_w
+     * y >= clip_y && y < clip_y + clip_h
+     */
+    int16_t clip_x;
+    int16_t clip_y;
+    int16_t clip_w;
+    int16_t clip_h;
 } gfx_context_t;
 
 /*
@@ -60,6 +69,17 @@ bool gfx_init(gfx_context_t *ctx,
               int16_t height, 
               void *framebuffer, 
               gfx_draw_pixel_fn draw_pixel_cb);
+
+/*
+ * Установка области отсечения (clipping).
+ * Защищает от выхода за пределы физического экрана.
+ */
+void gfx_set_clip(gfx_context_t *ctx, int16_t x, int16_t y, int16_t w, int16_t h);
+
+/*
+ * Сброс области отсечения (clipping) на весь физический экран.
+ */
+void gfx_reset_clip(gfx_context_t *ctx);
 
 /*
  * Установка текущих цветов контекста.
