@@ -5,14 +5,7 @@
 Geometry helpers for PurrGO map compiler.
 
 Contains:
-- POIGeometryFactory: generator of low-polygon POI primitives
-  (triangle, rhombus, cross, etc.)
-- PERSPECTIVE_Y_MULTIPLIER constant (1.5) for ATS3085S compensation
-- is_clockwise(points): CW winding rule checker
-
-API mirrors original usage in purrgo_map_compiler.py:
-POIGeometryFactory.generate_polygon(shape_type, center_lon, center_lat)
-and is_clockwise(points) which accepts a sequence of (lon, lat) tuples
+is_clockwise(points) which accepts a sequence of (lon, lat) tuples
 (closed or open) and returns True if ring is clockwise.
 """
 
@@ -20,7 +13,7 @@ from typing import List, Tuple
 from math import radians, cos, pi
 
 EARTH_RADIUS = 6378137.0
-PERSPECTIVE_Y_MULTIPLIER = 1.5
+PERSPECTIVE_Y_MULTIPLIER = 1
 R = 4.1
 
 

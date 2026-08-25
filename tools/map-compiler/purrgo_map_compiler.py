@@ -2,11 +2,9 @@
 # -*- coding: utf-8 -*-
 
 """
-PurrGO Map Compiler (Platform ATS3085S)
-===============================================
-v1.5.0 (Fully Modular Architecture)
-Main orchestrator. Converts OpenStreetMap (XML) data into closed binary formats
-of ATS3085S smartwatches (.mlp, .idx, .db).
+PurrGO Map Compiler
+Main orchestrator. Converts OpenStreetMap (XML) data into binary formats
+(.mlp, .idx, .db).
 """
 
 import sys
@@ -30,7 +28,7 @@ def get_base_directory() -> str:
 
 
 def main() -> None:
-    cli_parser = argparse.ArgumentParser(description="PurrGO Map Compiler (Platform ATS3085S)")
+    cli_parser = argparse.ArgumentParser(description="PurrGO Map Compiler")
     args = cli_parser.parse_args()
 
     # Initialize hardware-independent paths

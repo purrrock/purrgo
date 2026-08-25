@@ -25,7 +25,7 @@ V3 rules implemented here:
 
     v3_jump:
         Exact byte size of the complete child subtree.
-        No DT G1 / hardware prefetch compensation.
+        No prefetch compensation.
 
     Coordinates:
         signed int32

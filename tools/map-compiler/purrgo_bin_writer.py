@@ -12,7 +12,7 @@ from purrgo_lookup import LookupTables
 
 
 class MapCompiler:
-    """Generator of hardware binary structures (PGO/SQT/DBF) for ATS3085S platform."""
+    """Generator of  binary structures (PGO/SQT/DBF)."""
 
     @staticmethod
     def _write_pgo_container(filepath: str, payload: bytes, is_idx: bool, lod2_size: int = 0) -> None:
