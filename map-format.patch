@@ -1,0 +1,93 @@
+--- a/tools/map-compiler/docs/purrgo_map_specification.md
++++ b/tools/map-compiler/docs/purrgo_map_specification.md
+@@
+-# PurrGO MAP FORMAT TECHNICAL SPECIFICATION — V2
++# PurrGO MAP FORMAT TECHNICAL SPECIFICATION
+
+ ---
+
+-## 1. GLOBAL LAYER HEADER (YZL HEADER)
++## 1. GLOBAL LAYER HEADER (PGO HEADER)
+
+-Each binary map layer file (`.idx`, `.mlp`, `.db`) must begin with a global system header with a fixed length of **32 bytes**.
++Each binary map layer file (`.idx`, `.mlp`, `.db`) must begin with a PurrGO global header.
+
+-The header is used by the firmware bootloader for memory mapping and integrity checking via the MD5 algorithm.
++The header uses the PurrGO magic signature `PGO`.
+ 
+-### 1.1. YZL Header Byte Structure
++### 1.1. PGO Header Byte Structure
+ 
+ | Offset | Size | Data Type | Field Description | Value / Format |
+ | :----- | :--- | :-------- | :---------------- | :-------------- |
+-| `0x00` | 3    | `char[3]`  | **Magic Signature (Magic)** | Strictly `b'YZL'` (`59 5A 4C`) |
++| `0x00` | 3    | `char[3]`  | **Magic Signature (Magic)** | Strictly `b'PGO'` (`50 47 4F`) |
+ | `0x03` | 1    | `uint8`    | **File Magic Extension**    | For `.mlp` and `.db` = `0x00`. For `.idx` variable (`0x08`, `0x10`, `0x0C`, etc.) |
+ | `0x04` | 4    | `uint32`   | **Payload Size**            | In bytes (Little-Endian). Formula: `File Size - 32` |
+ | `0x08` | 4    | `uint32`   | **RAM Load Type**           | For `.mlp`/`.db`/`pois.idx` = `0x04000000` (LE: `b'\x00\x00\x00\x04'`). For `.idx` = `0x04000002` (LE: `b'\x02\x00\x00\x04'`) |
+ | `0x0C` | 4    | `uint32`   | **LOD 2 Section Size**      | In bytes (Big-Endian). Used for fast pointer calculation from EOF. For `.mlp` and `.db` = `0x00000000` |
+ | `0x10` | 16   | `byte[16]` | **MD5 Checksum**            | Computed from the payload body (`0x20` to EOF) |
+ 
+-> **Exception for the POI layer (`pois.idx`):**
++> **Note:** The exact PGO header layout is subject to the remaining P0 header redesign.
++> The fields above that are DT G1-specific will be removed or redesigned separately.
++
++> **Current migration rule:** The legacy `32-byte YZL` header must not be treated as a
++> permanent PurrGO format requirement.
++
++> **Exception for the POI layer (`pois.idx`):**
+@@
+-## 3.2. Data Node
++## 3.2. Data Node
+ 
+ A Data Node represents one cartographic feature.
+ 
+ Binary unpacking format:
+ 
+ ```text
+-<iiiiIII
++<iiiiBII
+````
+
+| Offset        | Size          | Type       | Description                     |                                               |
+| :------------ | :------------ | :--------- | :------------------------------ | --------------------------------------------- |
+| `0x00 - 0x0F` | 16            | `int32[4]` | BBox `[xmin, ymin, xmax, ymax]` |                                               |
+| -             | `0x10 - 0x13` | 4          | `uint32`                        | **Type** — PurrGO feature code                |
+| -             | `0x14 - 0x17` | 4          | `uint32`                        | **v1** — pointer to geometry record in `.mlp` |
+| -             | `0x18 - 0x1B` | 4          | `uint32`                        | **v2** — record index in `.db`                |
+| +             | `0x10`        | 1          | `uint8`                         | **Type** — PurrGO feature code                |
+| +             | `0x11 - 0x14` | 4          | `uint32`                        | **v1** — pointer to geometry record in `.mlp` |
+| +             | `0x15 - 0x18` | 4          | `uint32`                        | **v2** — record index in `.db`                |
+
+*
+
++The feature code is stored as a single unsigned byte.
++
++`text
++0 = NO_CLASS
++`
++
++The remaining feature-code values are defined by `features.csv`.
+@@
+-## 5.1. `v3_jump`
++## 5.1. `v3_jump`
+
+`v3_jump` is used for fast subtree skipping during BBox culling.
+
+## -`v3_jump` includes an 8-byte hardware prefetch compensation.
+
+## -Therefore, when the current Navigation Node is culled, the parser advances by:
+
+## -`v3_jump - 8`
+
+-bytes relative to the position immediately after the node.
++`v3_jump` is the exact physical size of the subtree being skipped, in bytes.
+
+When a Navigation Node is invisible, the parser performs the corresponding jump over the entire child subtree.
+
+-The exact compensation must remain consistent between the map compiler and firmware parser.
++There is no DT G1-specific prefetch compensation.
++
++The value is therefore used directly by the parser as the number of bytes to skip
++relative to the position immediately after the current Navigation Node.
+
