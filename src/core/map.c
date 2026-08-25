@@ -176,6 +176,11 @@ void purrgo_map_render_layer(
 
     current_idx_offset = target_lod_offset;
 
+    if (current_idx_offset + 16 > lod_end) {
+        PURRGO_LOG("MAP: ERROR SQT header exceeds LOD boundary\n");
+        return;
+    }
+
     uint8_t sqt_header[16];
 
     if (
@@ -209,7 +214,7 @@ void purrgo_map_render_layer(
         bool is_nav = (mode > 0);
 
         for (uint32_t i = 0; i < count; i++) {
-            map_idx_parse_node(
+            if (!map_idx_parse_node(
                 idx_fs,
                 &current_idx_offset,
                 mlp_fs,
@@ -220,7 +225,10 @@ void purrgo_map_render_layer(
                 is_polygon_layer,
                 &diag,
                 lod_end
-            );
+            )) {
+                PURRGO_LOG("MAP: ERROR failed to parse node\n");
+                return;
+            }
         }
     }
 
