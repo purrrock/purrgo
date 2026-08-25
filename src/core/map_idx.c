@@ -5,7 +5,7 @@
 #include "purrgo/map_style.h"
 #include <stddef.h>
 
-void map_idx_parse_node(
+bool map_idx_parse_node(
     purrgo_fs_t *idx_fs,
     uint32_t *current_idx_offset,
     purrgo_fs_t *mlp_fs,
@@ -14,10 +14,15 @@ void map_idx_parse_node(
     const purrgo_viewport_t *vp,
     gfx_context_t *gfx,
     bool is_polygon_layer,
-    map_diag_t *diag
+    map_diag_t *diag,
+    uint32_t lod_end
 ) {
     uint8_t node_buf[28];
     uint32_t node_size = is_nav_node ? 28 : 25;
+
+    if (*current_idx_offset + node_size > lod_end) {
+        return false;
+    }
 
     if (
         idx_fs->read(
@@ -26,7 +31,7 @@ void map_idx_parse_node(
             node_size
         ) != node_size
     ) {
-        return;
+        return false;
     }
 
     *current_idx_offset += node_size;
@@ -78,7 +83,7 @@ void map_idx_parse_node(
             if (diag != NULL) {
                 diag->data_culled++;
             }
-            return;
+            return true;
         }
 
         if (diag != NULL) {
@@ -114,7 +119,7 @@ void map_idx_parse_node(
             }
         }
 
-        return;
+        return true;
     }
 
 
@@ -167,19 +172,28 @@ void map_idx_parse_node(
         if (v3_jump > 0) {
             uint32_t jump_amount = v3_jump;
 
-            if (UINT32_MAX - *current_idx_offset >= jump_amount) {
-                if (idx_fs->seek(idx_fs->handle, *current_idx_offset + jump_amount)) {
-                    *current_idx_offset += jump_amount;
-                }
+            if (UINT32_MAX - *current_idx_offset < jump_amount) {
+                PURRGO_LOG("MAP: ERROR v3_jump overflow\n");
+                return false;
+            }
+            if (*current_idx_offset + jump_amount > lod_end) {
+                PURRGO_LOG("MAP: ERROR v3_jump exceeds LOD boundary\n");
+                return false;
+            }
+
+            if (idx_fs->seek(idx_fs->handle, *current_idx_offset + jump_amount)) {
+                *current_idx_offset += jump_amount;
+            } else {
+                return false;
             }
         }
-        return;
+        return true;
     }
 
     bool child_is_nav = (nav_level > 0);
 
     for (uint32_t i = 0; i < obj_count; i++) {
-        map_idx_parse_node(
+        if (!map_idx_parse_node(
             idx_fs,
             current_idx_offset,
             mlp_fs,
@@ -188,82 +202,10 @@ void map_idx_parse_node(
             vp,
             gfx,
             is_polygon_layer,
-            diag
-        );
-    }
-}
-
-bool map_idx_skip_sqt_block(purrgo_fs_t *idx_fs, uint32_t *current_idx_offset, uint32_t max_idx_offset) {
-    uint8_t sqt_header[16];
-
-    if (
-        idx_fs->read(
-            idx_fs->handle,
-            sqt_header,
-            sizeof(sqt_header)
-        ) != sizeof(sqt_header)
-    ) {
-        return false;
-    }
-
-    *current_idx_offset += 16;
-
-    if (
-        sqt_header[0] != 'S' ||
-        sqt_header[1] != 'Q' ||
-        sqt_header[2] != 'T' ||
-        sqt_header[3] != 0x01
-    ) {
-        PURRGO_LOG("MAP: ERROR invalid SQT header during skip\n");
-        return false;
-    }
-
-    uint32_t mode = unpack_u32_le(&sqt_header[8]);
-    uint32_t count = unpack_u32_le(&sqt_header[12]);
-
-    if (count == 0) {
-        return true;
-    }
-
-    bool is_nav = (mode > 0);
-
-    for (uint32_t i = 0; i < count; i++) {
-        uint8_t node_buf[28];
-        uint32_t node_size = is_nav ? 28 : 25;
-
-        if (
-            idx_fs->read(
-                idx_fs->handle,
-                node_buf,
-                node_size
-            ) != node_size
-        ) {
+            diag,
+            lod_end
+        )) {
             return false;
-        }
-
-        *current_idx_offset += node_size;
-
-        if (is_nav) {
-            uint32_t v3_jump = unpack_u32_le(&node_buf[0]);
-            if (v3_jump > 0) {
-                uint32_t jump_amount = v3_jump;
-
-                // Protect against unsigned overflow
-                if (UINT32_MAX - *current_idx_offset < jump_amount) {
-                    return false;
-                }
-
-                // Ensure we do not seek beyond the maximum valid payload stream size
-                if (*current_idx_offset + jump_amount > max_idx_offset) {
-                    return false;
-                }
-
-                if (idx_fs->seek(idx_fs->handle, *current_idx_offset + jump_amount)) {
-                    *current_idx_offset += jump_amount;
-                } else {
-                    return false;
-                }
-            }
         }
     }
 
