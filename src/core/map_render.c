@@ -86,7 +86,7 @@ void map_render_feature(
                         gfx_draw_dotted_line(gfx, prev_sx, prev_sy, sx, sy);
                         break;
                     case PURRGO_STYLE_RAILWAY_LINE:
-                        gfx_draw_railway_line(gfx, prev_sx, prev_sy, sx, sy, 1, 3);
+                        gfx_draw_railway_line(gfx, prev_sx, prev_sy, sx, sy);
                         break;
                     default:
                         break;
