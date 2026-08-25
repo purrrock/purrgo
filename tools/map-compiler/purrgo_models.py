@@ -8,8 +8,9 @@ from typing import List, Tuple, Any, Sequence
 
 class HWConfig:
     """Hardware and system constants for the ATS3085S platform"""
-    YZL_HEADER_SIZE = 32
-    NODE_SIZE = 28           # Unified node size (Data Node / Nav Node)
+    PGO_HEADER_SIZE = 32
+    DATA_NODE_SIZE = 25      # Data Node size
+    NAV_NODE_SIZE = 28       # Nav Node size
     CHUNK_SIZE = 14          # Maximum number of objects in a cluster
     DBF_HEADER_LEN = 129     # dBase III header
     DBF_RECORD_LEN = 117     # Fixed-length dBase III record
@@ -76,11 +77,11 @@ class MapFeature:
 
     def pack_data_node(self) -> bytes:
         """
-        Packing a Data Node (strictly 28 bytes).
-        Format (C-Union): [BBox 16b] [Type 4b] [v1 4b] [v2 4b]
+        Packing a Data Node (strictly 25 bytes).
+        Format: [BBox 16b] [Type 1b] [v1 4b] [v2 4b]
         """
         return struct.pack(
-            "<iiiiIII",
+            "<iiiiBII",
             self.bbox[0], self.bbox[1],
             self.bbox[2], self.bbox[3],
             self.code, self.v1, self.v2
@@ -104,8 +105,8 @@ class RTreeNode:
         # [MEMORY OPTIMIZATION 4]: Аналогичный O(N) проход для Macro-Nodes
         if not self.children:
             self.bbox = (0, 0, 0, 0)
-            self.v3_jump = 8
-            self.bin_size = HWConfig.NODE_SIZE
+            self.v3_jump = 0
+            self.bin_size = HWConfig.NAV_NODE_SIZE
             return
 
         c0_bbox = self.children[0].bbox
@@ -123,15 +124,15 @@ class RTreeNode:
         # 2. Calculating the size of the child subtree in bytes
         if self.level == 0:
             # Level 0 (Bottom of the tree): Children are raw geometry (Data Nodes)
-            child_payload_size = len(self.children) * HWConfig.NODE_SIZE
+            child_payload_size = len(self.children) * HWConfig.DATA_NODE_SIZE
         else:
             # Level > 0 (Macro-nodes): Children are other RTreeNodes
             child_payload_size = sum(c.bin_size for c in self.children)
 
-        # Hardware jump = size of the entire tree under this node + 8 bytes of compensation
-        self.v3_jump = child_payload_size + 8
-        # Own size in binary = 28 bytes (the node itself) + the whole subtree
-        self.bin_size = HWConfig.NODE_SIZE + child_payload_size
+        # Hardware jump = size of the entire tree under this node
+        self.v3_jump = child_payload_size
+        # Own size in binary = 28 bytes (the Nav Node itself) + the whole subtree
+        self.bin_size = HWConfig.NAV_NODE_SIZE + child_payload_size
 
     def pack(self) -> bytes:
         """
