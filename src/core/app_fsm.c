@@ -18,6 +18,7 @@ static int32_t map_center_lon_1e7;
 static purrgo_map_scale_t map_zoom_level;
 static bool manual_pan_active;
 static bool map_dirty = true;
+static bool ui_dirty = true;
 
 // Значения физической ширины BBox в метрах для расчета координат.
 static const uint32_t scale_widths_m[PURRGO_MAP_SCALE_COUNT] = {
@@ -102,6 +103,18 @@ void purrgo_app_init(void) {
     map_dirty = true;
 }
 
+void purrgo_app_ui_mark_dirty(void) {
+    ui_dirty = true;
+}
+
+bool purrgo_app_ui_is_dirty(void) {
+    return ui_dirty;
+}
+
+void purrgo_app_ui_clear_dirty(void) {
+    ui_dirty = false;
+}
+
 void purrgo_app_map_mark_dirty(void) {
     map_dirty = true;
 }
@@ -160,6 +173,8 @@ bool purrgo_app_is_manual_pan_active(void) {
 }
 
 void purrgo_app_handle_button(purrgo_btn_t button) {
+    ui_dirty = true; // Любое нажатие кнопки требует перерисовки UI
+
     // 1. Обработка ввода в режиме редактирования настроек
     if (current_state == APP_STATE_MENU_CONFIG) {
         switch (button) {
@@ -294,7 +309,7 @@ if (step_m == 0) step_m = 1;
 
 // Перевод метров в градусы (10^7).
 // 1 градус широты ≈ 111195 метров. Следовательно, 1 метр ≈ 10^7 / 111195 ≈ 90 единиц 1e7.
-int64_t step_y_64 = (int64_t)step_m * 90;
+int64_t step_y_64 = (int64_t)step_m * PURRGO_1E7_PER_METER;
 
 int32_t cos_val = purrgo_geo_cos_10k(map_center_lat_1e7);
 if (cos_val < 100) cos_val = 100; // prevent division by zero near poles
@@ -377,7 +392,23 @@ int32_t step_x = (int32_t)step_x_64;
     }
 }
 
+static purrgo_gnss_solution_t prev_fix = {0};
+
 void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
+    // Check if relevant navigation data has changed to trigger a UI redraw
+    if (current_fix->valid != prev_fix.valid ||
+        current_fix->minutes != prev_fix.minutes ||
+        current_fix->hours != prev_fix.hours ||
+        current_fix->lat_1e7 != prev_fix.lat_1e7 ||
+        current_fix->lon_1e7 != prev_fix.lon_1e7 ||
+        current_fix->alt_m != prev_fix.alt_m ||
+        current_fix->speed_knots != prev_fix.speed_knots ||
+        current_fix->satellites_tracked != prev_fix.satellites_tracked) {
+
+        ui_dirty = true;
+        prev_fix = *current_fix;
+    }
+
     purrgo_gnss_solution_t display_fix;
 
     // Пересчет UTC времени в локальное с использованием специализированного модуля purrgo_time

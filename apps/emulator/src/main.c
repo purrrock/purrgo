@@ -226,15 +226,18 @@ int main(int argc, char* argv[]) {
         if (current_time - last_eink_refresh >= EINK_REFRESH_PERIOD_MS) {
             last_eink_refresh = current_time;
 
-            int last_calls = dbg_map_render_calls;
+            if (purrgo_app_ui_is_dirty() || purrgo_app_map_is_dirty()) {
+                int last_calls = dbg_map_render_calls;
 
-            purrgo_app_ui_render(&global_gfx_ctx, &gnss_solution, first_fix_obtained ? &sun_info : NULL);
+                purrgo_app_ui_render(&global_gfx_ctx, &gnss_solution, first_fix_obtained ? &sun_info : NULL);
+                purrgo_app_ui_clear_dirty();
 
-            if (last_calls != dbg_map_render_calls) {
-                printf("MAP RENDER EXECUTED. Total renders: %d\n", dbg_map_render_calls);
+                if (last_calls != dbg_map_render_calls) {
+                    printf("MAP RENDER EXECUTED. Total renders: %d\n", dbg_map_render_calls);
+                }
+
+                emu_window_render(renderer, fb_texture);
             }
-
-            emu_window_render(renderer, fb_texture);
         }
 
         /*

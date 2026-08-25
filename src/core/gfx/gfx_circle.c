@@ -28,8 +28,8 @@ void gfx_draw_circle(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t r)
             err += (y << 1) + 1;
         } else {
             x--;
-            // Оптимизация: 2 * (y - x) заменено на битовый сдвиг влево
-            err += ((y - x) << 1) + 1;
+            // Avoid UB with negative shifts by using multiplication
+            err += ((y - x) * 2) + 1;
         }
     }
 }
@@ -62,7 +62,8 @@ void gfx_fill_circle(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t r)
             err += (y << 1) + 1;
         } else {
             x--;
-            err += ((y - x) << 1) + 1;
+            // Avoid UB with negative shifts by using multiplication
+            err += ((y - x) * 2) + 1;
         }
     }
 
