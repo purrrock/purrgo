@@ -17,18 +17,19 @@ void map_idx_parse_node(
     map_diag_t *diag
 ) {
     uint8_t node_buf[28];
+    uint32_t node_size = is_nav_node ? 28 : 25;
 
     if (
         idx_fs->read(
             idx_fs->handle,
             node_buf,
-            sizeof(node_buf)
-        ) != sizeof(node_buf)
+            node_size
+        ) != node_size
     ) {
         return;
     }
 
-    *current_idx_offset += 28;
+    *current_idx_offset += node_size;
 
     /* ---------------------------------------------------------------------- */
     /* DATA NODE                                                              */
@@ -84,10 +85,11 @@ void map_idx_parse_node(
             diag->data_passed++;
         }
 
-        uint32_t obj_type = unpack_u32_le(&node_buf[16]);
-        uint32_t v1 = unpack_u32_le(&node_buf[20]);
+        uint8_t obj_type = node_buf[16];
+        uint32_t v1 = unpack_u32_le(&node_buf[17]);
+        // v2 is not currently used, but would be: unpack_u32_le(&node_buf[21])
 
-        purrgo_map_style_t style = purrgo_map_style_from_feature(obj_type);
+        purrgo_map_style_t style = purrgo_map_style_from_feature((uint32_t)obj_type);
 
         if (style == PURRGO_STYLE_NONE) {
             if (diag != NULL) {
@@ -127,6 +129,8 @@ void map_idx_parse_node(
     uint32_t v3_jump = unpack_u32_le(&node_buf[0]);
     int32_t c_ymin = unpack_i32_le(&node_buf[8]);
     int32_t c_ymax = unpack_i32_le(&node_buf[16]);
+    uint32_t nav_level = unpack_u32_le(&node_buf[20]);
+    uint32_t obj_count = unpack_u32_le(&node_buf[24]);
 
     bool passes = false;
     int32_t c_xmin = 0;
@@ -158,12 +162,10 @@ void map_idx_parse_node(
         diag->nodes_logged++;
     }
 
-    uint32_t nav_level = unpack_u32_le(&node_buf[20]);
-    uint32_t obj_count = unpack_u32_le(&node_buf[24]);
 
     if (!passes) {
-        if (v3_jump > 8) {
-            uint32_t jump_amount = v3_jump - 8;
+        if (v3_jump > 0) {
+            uint32_t jump_amount = v3_jump;
 
             if (UINT32_MAX - *current_idx_offset >= jump_amount) {
                 if (idx_fs->seek(idx_fs->handle, *current_idx_offset + jump_amount)) {
@@ -227,23 +229,24 @@ bool map_idx_skip_sqt_block(purrgo_fs_t *idx_fs, uint32_t *current_idx_offset, u
 
     for (uint32_t i = 0; i < count; i++) {
         uint8_t node_buf[28];
+        uint32_t node_size = is_nav ? 28 : 25;
 
         if (
             idx_fs->read(
                 idx_fs->handle,
                 node_buf,
-                sizeof(node_buf)
-            ) != sizeof(node_buf)
+                node_size
+            ) != node_size
         ) {
             return false;
         }
 
-        *current_idx_offset += 28;
+        *current_idx_offset += node_size;
 
         if (is_nav) {
             uint32_t v3_jump = unpack_u32_le(&node_buf[0]);
-            if (v3_jump > 8) {
-                uint32_t jump_amount = v3_jump - 8;
+            if (v3_jump > 0) {
+                uint32_t jump_amount = v3_jump;
 
                 // Protect against unsigned overflow
                 if (UINT32_MAX - *current_idx_offset < jump_amount) {
