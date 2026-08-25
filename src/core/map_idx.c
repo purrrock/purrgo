@@ -164,8 +164,11 @@ void map_idx_parse_node(
     if (!passes) {
         if (v3_jump > 8) {
             uint32_t jump_amount = v3_jump - 8;
-            if (idx_fs->seek(idx_fs->handle, *current_idx_offset + jump_amount)) {
-                *current_idx_offset += jump_amount;
+
+            if (UINT32_MAX - *current_idx_offset >= jump_amount) {
+                if (idx_fs->seek(idx_fs->handle, *current_idx_offset + jump_amount)) {
+                    *current_idx_offset += jump_amount;
+                }
             }
         }
         return;
@@ -188,7 +191,7 @@ void map_idx_parse_node(
     }
 }
 
-bool map_idx_skip_sqt_block(purrgo_fs_t *idx_fs, uint32_t *current_idx_offset) {
+bool map_idx_skip_sqt_block(purrgo_fs_t *idx_fs, uint32_t *current_idx_offset, uint32_t max_idx_offset) {
     uint8_t sqt_header[16];
 
     if (
@@ -244,6 +247,11 @@ bool map_idx_skip_sqt_block(purrgo_fs_t *idx_fs, uint32_t *current_idx_offset) {
 
                 // Protect against unsigned overflow
                 if (UINT32_MAX - *current_idx_offset < jump_amount) {
+                    return false;
+                }
+
+                // Ensure we do not seek beyond the maximum valid payload stream size
+                if (*current_idx_offset + jump_amount > max_idx_offset) {
                     return false;
                 }
 
