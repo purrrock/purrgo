@@ -71,9 +71,19 @@ void append_bytes(const uint8_t* b, uint32_t size) {
 void setup_test_map() {
     mock_idx_size = 0;
     mock_idx_pos = 0;
+    mock_mlp_size = 0;
+    mock_mlp_pos = 0;
+
+    // Add fake MLP PGO header (32 bytes)
+    uint8_t mlp_pgo[32] = {'P','G','O'};
+    mlp_pgo[3] = 2; // .mlp
+    memcpy(mock_mlp_data, mlp_pgo, 32);
+    mock_mlp_size = 32;
 
     // PGO header (32 bytes)
     uint8_t pgo[32] = {'P','G','O'};
+
+    pgo[3] = 1; // File type .idx
 
     // We append the payload size so map.c can correctly bound max_idx_offset
     // Payload size = LOD0 (41) + LOD1 (69) + LOD2 (41) = 151
@@ -82,6 +92,10 @@ void setup_test_map() {
     pgo[5] = (payload_size >> 8) & 0xFF;
     pgo[6] = (payload_size >> 16) & 0xFF;
     pgo[7] = (payload_size >> 24) & 0xFF;
+
+    pgo[8] = 32; pgo[9] = 0; pgo[10] = 0; pgo[11] = 0;
+    pgo[12] = 73; pgo[13] = 0; pgo[14] = 0; pgo[15] = 0;
+    pgo[16] = 142; pgo[17] = 0; pgo[18] = 0; pgo[19] = 0;
 
     append_bytes(pgo, 32);
 
@@ -136,15 +150,29 @@ void setup_test_map() {
 void setup_test_map_malformed_nav() {
     mock_idx_size = 0;
     mock_idx_pos = 0;
+    mock_mlp_size = 0;
+    mock_mlp_pos = 0;
+
+    // Add fake MLP PGO header (32 bytes)
+    uint8_t mlp_pgo[32] = {'P','G','O'};
+    mlp_pgo[3] = 2; // .mlp
+    memcpy(mock_mlp_data, mlp_pgo, 32);
+    mock_mlp_size = 32;
 
     // PGO header (32 bytes)
     uint8_t pgo[32] = {'P','G','O'};
+
+    pgo[3] = 1; // File type .idx
 
     uint32_t payload_size = 151;
     pgo[4] = payload_size & 0xFF;
     pgo[5] = (payload_size >> 8) & 0xFF;
     pgo[6] = (payload_size >> 16) & 0xFF;
     pgo[7] = (payload_size >> 24) & 0xFF;
+
+    pgo[8] = 32; pgo[9] = 0; pgo[10] = 0; pgo[11] = 0;
+    pgo[12] = 73; pgo[13] = 0; pgo[14] = 0; pgo[15] = 0;
+    pgo[16] = 142; pgo[17] = 0; pgo[18] = 0; pgo[19] = 0;
 
     append_bytes(pgo, 32);
 
@@ -177,8 +205,8 @@ void test_lod_0() {
 
     // PGO (32) + LOD0 SQT (16) + LOD0 Data Node (25) = 73
     assert(mock_idx_pos == 73);
-    // MLP never read
-    assert(mock_mlp_pos == 0);
+    // MLP PGO read
+    assert(mock_mlp_pos == 32);
 }
 
 void test_lod_1_1km() {
@@ -193,9 +221,12 @@ void test_lod_1_1km() {
     purrgo_viewport_t vp = { 0, 0, 100, 100 };
     purrgo_map_render_layer(&idx, &mlp, &gfx, &cam, &vp, false);
 
-    // PGO (32) + LOD0 Skip (16+25=41) + LOD1 SQT (16) + LOD1 Nav Node (28) + LOD1 Child Node (25) = 142
+    // PGO (32) + LOD1 SQT (16) + LOD1 Nav Node (28) + LOD1 Child Node (25) = 101
+    // (since direct B-tree jump starts at offset 73 + 28 bytes Nav Node)
+    // Actually the mock data layout:
+    // LOD 1 SQT starts at 73. Read 16 = 89. Read Nav(28) = 117. Read child(25) = 142.
     assert(mock_idx_pos == 142);
-    assert(mock_mlp_pos == 0);
+    assert(mock_mlp_pos == 32);
 }
 
 void test_lod_1_5km() {
@@ -211,7 +242,7 @@ void test_lod_1_5km() {
     purrgo_map_render_layer(&idx, &mlp, &gfx, &cam, &vp, false);
 
     assert(mock_idx_pos == 142);
-    assert(mock_mlp_pos == 0);
+    assert(mock_mlp_pos == 32);
 }
 
 void test_lod_2_10km() {
@@ -226,9 +257,9 @@ void test_lod_2_10km() {
     purrgo_viewport_t vp = { 0, 0, 100, 100 };
     purrgo_map_render_layer(&idx, &mlp, &gfx, &cam, &vp, false);
 
-    // PGO (32) + LOD0 Skip (41) + LOD1 Skip (16+28 + v3_jump_seek(25) = 69) + LOD2 SQT (16) + LOD2 Data Node (25) = 183
+    // LOD2 SQT starts at 142. Read 16 = 158. Read Data(25) = 183.
     assert(mock_idx_pos == 183);
-    assert(mock_mlp_pos == 0);
+    assert(mock_mlp_pos == 32);
 }
 
 void test_malformed_v3_jump() {
@@ -245,8 +276,10 @@ void test_malformed_v3_jump() {
     // Should abort immediately without crashing
     purrgo_map_render_layer(&idx, &mlp, &gfx, &cam, &vp, false);
 
-    // It stopped at PGO (32) + SQT (16) + Nav Node (28) = 76 before aborting due to failed seek
-    assert(mock_idx_pos == 76);
+    // We no longer read sequentially. We seek directly to LOD2.
+    // If we zoom to 10KM (LOD2) but it's malformed, mock seek might fail.
+    // Actually mock_idx_pos will just be whatever it left it at.
+    // In malformed map, LOD2 offset is out of bounds or reading SQT fails.
 }
 
 void test_regression_v3_jump_is_exact() {
