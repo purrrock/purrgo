@@ -5,7 +5,7 @@
 #include "purrgo/map_style.h"
 #include <stddef.h>
 
-void map_idx_parse_node(
+bool map_idx_parse_node(
     purrgo_fs_t *idx_fs,
     uint32_t *current_idx_offset,
     purrgo_fs_t *mlp_fs,
@@ -20,6 +20,10 @@ void map_idx_parse_node(
     uint8_t node_buf[28];
     uint32_t node_size = is_nav_node ? 28 : 25;
 
+    if (*current_idx_offset + node_size > lod_end) {
+        return false;
+    }
+
     if (
         idx_fs->read(
             idx_fs->handle,
@@ -27,7 +31,7 @@ void map_idx_parse_node(
             node_size
         ) != node_size
     ) {
-        return;
+        return false;
     }
 
     *current_idx_offset += node_size;
@@ -79,7 +83,7 @@ void map_idx_parse_node(
             if (diag != NULL) {
                 diag->data_culled++;
             }
-            return;
+            return true;
         }
 
         if (diag != NULL) {
@@ -115,7 +119,7 @@ void map_idx_parse_node(
             }
         }
 
-        return;
+        return true;
     }
 
 
@@ -170,24 +174,26 @@ void map_idx_parse_node(
 
             if (UINT32_MAX - *current_idx_offset < jump_amount) {
                 PURRGO_LOG("MAP: ERROR v3_jump overflow\n");
-                return;
+                return false;
             }
             if (*current_idx_offset + jump_amount > lod_end) {
                 PURRGO_LOG("MAP: ERROR v3_jump exceeds LOD boundary\n");
-                return;
+                return false;
             }
 
             if (idx_fs->seek(idx_fs->handle, *current_idx_offset + jump_amount)) {
                 *current_idx_offset += jump_amount;
+            } else {
+                return false;
             }
         }
-        return;
+        return true;
     }
 
     bool child_is_nav = (nav_level > 0);
 
     for (uint32_t i = 0; i < obj_count; i++) {
-        map_idx_parse_node(
+        if (!map_idx_parse_node(
             idx_fs,
             current_idx_offset,
             mlp_fs,
@@ -198,7 +204,10 @@ void map_idx_parse_node(
             is_polygon_layer,
             diag,
             lod_end
-        );
+        )) {
+            return false;
+        }
     }
-}
 
+    return true;
+}
