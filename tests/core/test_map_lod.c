@@ -1,4 +1,5 @@
 #include "purrgo/map.h"
+#include "purrgo/map.h"
 #include "purrgo/app_fsm.h"
 #include "..//../src/core/map_idx.h"
 #include <stdio.h>
@@ -147,7 +148,7 @@ void setup_test_map_malformed_nav() {
 
     append_bytes(pgo, 32);
 
-    // LOD 0: Malformed NAV node (v3_jump = 4000, outside of stream, stream length max 160)
+    // LOD 0: Malformed NAV node
     uint8_t sqt[16] = {'S','Q','T', 0x01, 0,0,0,0, 1,0,0,0, 1,0,0,0}; // mode = 1, count = 1
     append_bytes(sqt, 16);
 
