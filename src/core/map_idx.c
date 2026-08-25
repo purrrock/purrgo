@@ -14,7 +14,8 @@ void map_idx_parse_node(
     const purrgo_viewport_t *vp,
     gfx_context_t *gfx,
     bool is_polygon_layer,
-    map_diag_t *diag
+    map_diag_t *diag,
+    uint32_t lod_end
 ) {
     uint8_t node_buf[28];
     uint32_t node_size = is_nav_node ? 28 : 25;
@@ -167,10 +168,17 @@ void map_idx_parse_node(
         if (v3_jump > 0) {
             uint32_t jump_amount = v3_jump;
 
-            if (UINT32_MAX - *current_idx_offset >= jump_amount) {
-                if (idx_fs->seek(idx_fs->handle, *current_idx_offset + jump_amount)) {
-                    *current_idx_offset += jump_amount;
-                }
+            if (UINT32_MAX - *current_idx_offset < jump_amount) {
+                PURRGO_LOG("MAP: ERROR v3_jump overflow\n");
+                return;
+            }
+            if (*current_idx_offset + jump_amount > lod_end) {
+                PURRGO_LOG("MAP: ERROR v3_jump exceeds LOD boundary\n");
+                return;
+            }
+
+            if (idx_fs->seek(idx_fs->handle, *current_idx_offset + jump_amount)) {
+                *current_idx_offset += jump_amount;
             }
         }
         return;
@@ -188,7 +196,8 @@ void map_idx_parse_node(
             vp,
             gfx,
             is_polygon_layer,
-            diag
+            diag,
+            lod_end
         );
     }
 }

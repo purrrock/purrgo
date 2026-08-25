@@ -180,7 +180,7 @@ void setup_test_map_malformed_nav() {
     uint8_t sqt[16] = {'S','Q','T', 0x01, 0,0,0,0, 1,0,0,0, 1,0,0,0}; // mode = 1, count = 1
     append_bytes(sqt, 16);
 
-    append_u32(4000); // Malformed v3_jump causing out of bounds
+    append_u32(4000); // Malformed v3_jump causing out of bounds (LOD 0 ends at 73)
     append_u32((uint32_t) -100); // xmin
     append_u32((uint32_t) -100); // ymin
     append_u32((uint32_t) 100);  // xmax
@@ -264,22 +264,21 @@ void test_lod_2_10km() {
 
 void test_malformed_v3_jump() {
     setup_test_map_malformed_nav();
-    mock_zoom_level = PURRGO_MAP_SCALE_10KM; // Try to skip LOD 0 which is malformed
+    mock_zoom_level = PURRGO_MAP_SCALE_500M; // Target LOD0 where the malformed Nav node is
     mock_mlp_pos = 0;
 
     purrgo_fs_t idx = { .handle = NULL, .read = mock_read, .seek = mock_seek };
     purrgo_fs_t mlp = { .handle = NULL, .read = mock_mlp_read, .seek = mock_mlp_seek };
     gfx_context_t gfx;
-    purrgo_bbox_t cam = { -200, -200, 200, 200 };
+    // Set camera outside BBox to trigger v3_jump
+    purrgo_bbox_t cam = { 500, 500, 1000, 1000 };
     purrgo_viewport_t vp = { 0, 0, 100, 100 };
 
-    // Should abort immediately without crashing
+    // Should detect out-of-bounds jump and stop without moving offset by 4000
     purrgo_map_render_layer(&idx, &mlp, &gfx, &cam, &vp, false);
 
-    // We no longer read sequentially. We seek directly to LOD2.
-    // If we zoom to 10KM (LOD2) but it's malformed, mock seek might fail.
-    // Actually mock_idx_pos will just be whatever it left it at.
-    // In malformed map, LOD2 offset is out of bounds or reading SQT fails.
+    // It should stop at PGO(32) + SQT(16) + NavNode(28) = 76 and NOT seek forward by 4000
+    assert(mock_idx_pos == 76);
 }
 
 void test_regression_v3_jump_is_exact() {

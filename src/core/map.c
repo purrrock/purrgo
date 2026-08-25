@@ -158,6 +158,15 @@ void purrgo_map_render_layer(
     }
 
     uint32_t target_lod_offset = idx_header.lod_offset[target_lod];
+    uint32_t lod_end = 0;
+
+    if (target_lod == 0) {
+        lod_end = idx_header.lod_offset[1];
+    } else if (target_lod == 1) {
+        lod_end = idx_header.lod_offset[2];
+    } else {
+        lod_end = 32 + idx_header.payload_size;
+    }
 
     // LOD offsets are absolute file offsets. We seek directly to target LOD.
     if (!idx_fs->seek(idx_fs->handle, target_lod_offset)) {
@@ -209,7 +218,8 @@ void purrgo_map_render_layer(
                 viewport,
                 gfx,
                 is_polygon_layer,
-                &diag
+                &diag,
+                lod_end
             );
         }
     }
