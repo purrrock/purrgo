@@ -6,7 +6,7 @@
 #include "purrgo/map.h"
 #include "map_internal.h"
 
-void map_idx_parse_node(
+bool map_idx_parse_node(
     purrgo_fs_t *idx_fs,
     uint32_t *current_idx_offset,
     purrgo_fs_t *mlp_fs,
@@ -15,9 +15,8 @@ void map_idx_parse_node(
     const purrgo_viewport_t *vp,
     gfx_context_t *gfx,
     bool is_polygon_layer,
-    map_diag_t *diag
+    map_diag_t *diag,
+    uint32_t lod_end
 );
-
-bool map_idx_skip_sqt_block(purrgo_fs_t *idx_fs, uint32_t *current_idx_offset, uint32_t max_idx_offset);
 
 #endif // PURRGO_MAP_IDX_H

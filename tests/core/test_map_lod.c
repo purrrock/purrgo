@@ -71,17 +71,32 @@ void append_bytes(const uint8_t* b, uint32_t size) {
 void setup_test_map() {
     mock_idx_size = 0;
     mock_idx_pos = 0;
+    mock_mlp_size = 0;
+    mock_mlp_pos = 0;
+
+    // Add fake MLP PGO header (32 bytes)
+    uint8_t mlp_pgo[32] = {'P','G','O'};
+    mlp_pgo[3] = 2; // .mlp
+    memcpy(mock_mlp_data, mlp_pgo, 32);
+    mock_mlp_size = 32;
 
     // PGO header (32 bytes)
     uint8_t pgo[32] = {'P','G','O'};
 
+    pgo[3] = 1; // File type .idx
+
     // We append the payload size so map.c can correctly bound max_idx_offset
-    // Payload size = LOD0 (41) + LOD1 (69) + LOD2 (41) = 151
-    uint32_t payload_size = 151;
+    // Payload size = LOD0 (44) + LOD1 (69) + LOD2 (41) = 154
+    uint32_t payload_size = 154;
     pgo[4] = payload_size & 0xFF;
     pgo[5] = (payload_size >> 8) & 0xFF;
     pgo[6] = (payload_size >> 16) & 0xFF;
     pgo[7] = (payload_size >> 24) & 0xFF;
+
+    pgo[8] = 32; pgo[9] = 0; pgo[10] = 0; pgo[11] = 0;
+    // NOTE: LOD1 must start at 76 now, which means we must insert 3 bytes of padding into LOD0
+    pgo[12] = 76; pgo[13] = 0; pgo[14] = 0; pgo[15] = 0; // Make it exactly 76 so node read passes
+    pgo[16] = 145; pgo[17] = 0; pgo[18] = 0; pgo[19] = 0; // Shift LOD2 start by +3 as well (142+3 = 145)
 
     append_bytes(pgo, 32);
 
@@ -96,6 +111,11 @@ void setup_test_map() {
     mock_idx_data[mock_idx_size++] = 0; // code
     append_u32(0);               // v1
     append_u32(0);               // v2
+
+    // Add 3 bytes padding to make LOD0 size 44 (starts at 32, ends at 76)
+    mock_idx_data[mock_idx_size++] = 0;
+    mock_idx_data[mock_idx_size++] = 0;
+    mock_idx_data[mock_idx_size++] = 0;
 
     // LOD 1: SQT block with a Nav Node to test subtree skipping (mode = 1)
     // SQT header: 16 bytes
@@ -121,6 +141,9 @@ void setup_test_map() {
     append_u32(0); // v1
     append_u32(0); // v2
 
+    // Add 0 bytes padding to LOD1 because it doesn't need to be shifted?
+    // Wait, LOD 1 was size 69. 76 + 69 = 145. So it starts at 145 exactly.
+
     // LOD 2: Standard SQT block with one Data Node (41 bytes total)
     uint8_t sqt2[16] = {'S','Q','T', 0x01, 0,0,0,0, 0,0,0,0, 1,0,0,0}; // mode = 0, count = 1
     append_bytes(sqt2, 16);
@@ -136,15 +159,29 @@ void setup_test_map() {
 void setup_test_map_malformed_nav() {
     mock_idx_size = 0;
     mock_idx_pos = 0;
+    mock_mlp_size = 0;
+    mock_mlp_pos = 0;
+
+    // Add fake MLP PGO header (32 bytes)
+    uint8_t mlp_pgo[32] = {'P','G','O'};
+    mlp_pgo[3] = 2; // .mlp
+    memcpy(mock_mlp_data, mlp_pgo, 32);
+    mock_mlp_size = 32;
 
     // PGO header (32 bytes)
     uint8_t pgo[32] = {'P','G','O'};
 
-    uint32_t payload_size = 151;
+    pgo[3] = 1; // File type .idx
+
+    uint32_t payload_size = 154;
     pgo[4] = payload_size & 0xFF;
     pgo[5] = (payload_size >> 8) & 0xFF;
     pgo[6] = (payload_size >> 16) & 0xFF;
     pgo[7] = (payload_size >> 24) & 0xFF;
+
+    pgo[8] = 32; pgo[9] = 0; pgo[10] = 0; pgo[11] = 0;
+    pgo[12] = 76; pgo[13] = 0; pgo[14] = 0; pgo[15] = 0; // Set to 76 so node read passes
+    pgo[16] = 142; pgo[17] = 0; pgo[18] = 0; pgo[19] = 0;
 
     append_bytes(pgo, 32);
 
@@ -152,7 +189,7 @@ void setup_test_map_malformed_nav() {
     uint8_t sqt[16] = {'S','Q','T', 0x01, 0,0,0,0, 1,0,0,0, 1,0,0,0}; // mode = 1, count = 1
     append_bytes(sqt, 16);
 
-    append_u32(4000); // Malformed v3_jump causing out of bounds
+    append_u32(4000); // Malformed v3_jump causing out of bounds (LOD 0 ends at 76)
     append_u32((uint32_t) -100); // xmin
     append_u32((uint32_t) -100); // ymin
     append_u32((uint32_t) 100);  // xmax
@@ -175,10 +212,11 @@ void test_lod_0() {
 
     purrgo_map_render_layer(&idx, &mlp, &gfx, &cam, &vp, false);
 
-    // PGO (32) + LOD0 SQT (16) + LOD0 Data Node (25) = 73
+    // PGO (32) + LOD0 SQT (16) + LOD0 Data Node (25) = 73 (stops reading after the 1 count)
+    // Actually the mock size of LOD0 is 44 now, but it only reads 41
     assert(mock_idx_pos == 73);
-    // MLP never read
-    assert(mock_mlp_pos == 0);
+    // MLP PGO read
+    assert(mock_mlp_pos == 32);
 }
 
 void test_lod_1_1km() {
@@ -193,9 +231,12 @@ void test_lod_1_1km() {
     purrgo_viewport_t vp = { 0, 0, 100, 100 };
     purrgo_map_render_layer(&idx, &mlp, &gfx, &cam, &vp, false);
 
-    // PGO (32) + LOD0 Skip (16+25=41) + LOD1 SQT (16) + LOD1 Nav Node (28) + LOD1 Child Node (25) = 142
-    assert(mock_idx_pos == 142);
-    assert(mock_mlp_pos == 0);
+    // PGO (32) + LOD1 SQT (16) + LOD1 Nav Node (28) + LOD1 Child Node (25) = 101
+    // (since direct B-tree jump starts at offset 76 + 28 bytes Nav Node)
+    // Actually the mock data layout:
+    // LOD 1 SQT starts at 76. Read 16 = 92. Read Nav(28) = 120. Read child(25) = 145.
+    assert(mock_idx_pos == 145);
+    assert(mock_mlp_pos == 32);
 }
 
 void test_lod_1_5km() {
@@ -210,8 +251,8 @@ void test_lod_1_5km() {
     purrgo_viewport_t vp = { 0, 0, 100, 100 };
     purrgo_map_render_layer(&idx, &mlp, &gfx, &cam, &vp, false);
 
-    assert(mock_idx_pos == 142);
-    assert(mock_mlp_pos == 0);
+    assert(mock_idx_pos == 145);
+    assert(mock_mlp_pos == 32);
 }
 
 void test_lod_2_10km() {
@@ -226,26 +267,27 @@ void test_lod_2_10km() {
     purrgo_viewport_t vp = { 0, 0, 100, 100 };
     purrgo_map_render_layer(&idx, &mlp, &gfx, &cam, &vp, false);
 
-    // PGO (32) + LOD0 Skip (41) + LOD1 Skip (16+28 + v3_jump_seek(25) = 69) + LOD2 SQT (16) + LOD2 Data Node (25) = 183
-    assert(mock_idx_pos == 183);
-    assert(mock_mlp_pos == 0);
+    // LOD2 SQT starts at 145. Read 16 = 161. Read Data(25) = 186.
+    assert(mock_idx_pos == 186);
+    assert(mock_mlp_pos == 32);
 }
 
 void test_malformed_v3_jump() {
     setup_test_map_malformed_nav();
-    mock_zoom_level = PURRGO_MAP_SCALE_10KM; // Try to skip LOD 0 which is malformed
+    mock_zoom_level = PURRGO_MAP_SCALE_500M; // Target LOD0 where the malformed Nav node is
     mock_mlp_pos = 0;
 
     purrgo_fs_t idx = { .handle = NULL, .read = mock_read, .seek = mock_seek };
     purrgo_fs_t mlp = { .handle = NULL, .read = mock_mlp_read, .seek = mock_mlp_seek };
     gfx_context_t gfx;
-    purrgo_bbox_t cam = { -200, -200, 200, 200 };
+    // Set camera outside BBox to trigger v3_jump
+    purrgo_bbox_t cam = { 500, 500, 1000, 1000 };
     purrgo_viewport_t vp = { 0, 0, 100, 100 };
 
-    // Should abort immediately without crashing
+    // Should detect out-of-bounds jump and stop without moving offset by 4000
     purrgo_map_render_layer(&idx, &mlp, &gfx, &cam, &vp, false);
 
-    // It stopped at PGO (32) + SQT (16) + Nav Node (28) = 76 before aborting due to failed seek
+    // It should stop at PGO(32) + SQT(16) + NavNode(28) = 76 and NOT seek forward by 4000
     assert(mock_idx_pos == 76);
 }
 
@@ -272,7 +314,7 @@ void test_regression_v3_jump_is_exact() {
     purrgo_map_render_layer(&idx, &mlp, &gfx, &cam, &vp, false);
 
     // Check that it reaches the exact same final offset successfully
-    assert(mock_idx_pos == 183);
+    assert(mock_idx_pos == 186);
 }
 
 int main() {

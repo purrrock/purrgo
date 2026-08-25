@@ -19,6 +19,49 @@ static bool core_fs_seek_wrapper(void* handle, uint32_t offset) {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Internal Helpers                                                           */
+/* -------------------------------------------------------------------------- */
+
+static bool map_parse_pgo_header(purrgo_fs_t *fs, pgo_header_info_t *info) {
+    uint8_t pgo_header[32];
+
+    if (fs->read(fs->handle, pgo_header, sizeof(pgo_header)) != sizeof(pgo_header)) {
+        return false;
+    }
+
+    if (pgo_header[0] != 'P' || pgo_header[1] != 'G' || pgo_header[2] != 'O') {
+        return false;
+    }
+
+    info->file_type = pgo_header[3];
+    info->payload_size = unpack_u32_le(&pgo_header[4]);
+    info->lod_offset[0] = unpack_u32_le(&pgo_header[8]);
+    info->lod_offset[1] = unpack_u32_le(&pgo_header[12]);
+    info->lod_offset[2] = unpack_u32_le(&pgo_header[16]);
+
+    uint32_t payload_start = 32;
+
+    // Prevent uint32_t overflow for payload_end
+    if (UINT32_MAX - payload_start < info->payload_size) {
+        return false;
+    }
+    uint32_t payload_end = payload_start + info->payload_size;
+
+    if (info->file_type == 1) { // .idx
+        // Validate LOD offsets are inside file payload boundaries
+        if (info->lod_offset[0] < payload_start || info->lod_offset[0] >= payload_end) return false;
+        if (info->lod_offset[1] < payload_start || info->lod_offset[1] >= payload_end) return false;
+        if (info->lod_offset[2] < payload_start || info->lod_offset[2] >= payload_end) return false;
+
+        // Validate LOD offsets form a valid increasing sequence
+        if (info->lod_offset[0] >= info->lod_offset[1]) return false;
+        if (info->lod_offset[1] >= info->lod_offset[2]) return false;
+    }
+
+    return true;
+}
+
+/* -------------------------------------------------------------------------- */
 /* Public API                                                                 */
 /* -------------------------------------------------------------------------- */
 
@@ -77,35 +120,30 @@ void purrgo_map_render_layer(
     /* PGO header                                                              */
     /* ---------------------------------------------------------------------- */
 
-    uint8_t pgo_header[32];
-
-    if (
-        idx_fs->read(
-            idx_fs->handle,
-            pgo_header,
-            sizeof(pgo_header)
-        ) != sizeof(pgo_header)
-    ) {
-        PURRGO_LOG("MAP: ERROR reading PGO header\n");
+    pgo_header_info_t idx_header = {0};
+    if (!map_parse_pgo_header(idx_fs, &idx_header)) {
+        PURRGO_LOG("MAP: ERROR failed to parse IDX PGO header\n");
         return;
     }
 
-    current_idx_offset += 32;
-
-    if (
-        pgo_header[0] != 'P' ||
-        pgo_header[1] != 'G' ||
-        pgo_header[2] != 'O'
-    ) {
-        PURRGO_LOG("MAP: ERROR invalid PGO header\n");
+    if (idx_header.file_type != 1) {
+        PURRGO_LOG("MAP: ERROR IDX file type != 1\n");
         return;
     }
 
-    uint32_t payload_size = unpack_u32_le(&pgo_header[4]);
-    uint32_t max_idx_offset = 32 + payload_size;
+    pgo_header_info_t mlp_header = {0};
+    if (!map_parse_pgo_header(mlp_fs, &mlp_header)) {
+        PURRGO_LOG("MAP: ERROR failed to parse MLP PGO header\n");
+        return;
+    }
+
+    if (mlp_header.file_type != 2) {
+        PURRGO_LOG("MAP: ERROR MLP file type != 2\n");
+        return;
+    }
 
     /* ---------------------------------------------------------------------- */
-    /* SQT sections                                                            */
+    /* Direct LOD Seek                                                         */
     /* ---------------------------------------------------------------------- */
 
     purrgo_map_scale_t current_scale = purrgo_app_get_map_zoom_level();
@@ -119,66 +157,79 @@ void purrgo_map_render_layer(
         target_lod = 2;
     }
 
-    int current_lod = 0;
+    uint32_t target_lod_offset = idx_header.lod_offset[target_lod];
+    uint32_t lod_end = 0;
 
-    while (true) {
-        if (current_lod < target_lod) {
-            if (!map_idx_skip_sqt_block(idx_fs, &current_idx_offset, max_idx_offset)) {
-                break;
+    if (target_lod == 0) {
+        lod_end = idx_header.lod_offset[1];
+    } else if (target_lod == 1) {
+        lod_end = idx_header.lod_offset[2];
+    } else {
+        lod_end = 32 + idx_header.payload_size;
+    }
+
+    // LOD offsets are absolute file offsets. We seek directly to target LOD.
+    if (!idx_fs->seek(idx_fs->handle, target_lod_offset)) {
+        PURRGO_LOG("MAP: ERROR failed to seek to target LOD\n");
+        return;
+    }
+
+    current_idx_offset = target_lod_offset;
+
+    if (current_idx_offset + 16 > lod_end) {
+        PURRGO_LOG("MAP: ERROR SQT header exceeds LOD boundary\n");
+        return;
+    }
+
+    uint8_t sqt_header[16];
+
+    if (
+        idx_fs->read(
+            idx_fs->handle,
+            sqt_header,
+            sizeof(sqt_header)
+        ) != sizeof(sqt_header)
+    ) {
+        return;
+    }
+
+    current_idx_offset += 16;
+
+    if (
+        sqt_header[0] != 'S' ||
+        sqt_header[1] != 'Q' ||
+        sqt_header[2] != 'T' ||
+        sqt_header[3] != 0x01
+    ) {
+        PURRGO_LOG("MAP: ERROR invalid SQT header\n");
+        return;
+    }
+
+    diag.sqt_blocks++;
+
+    uint32_t mode = unpack_u32_le(&sqt_header[8]);
+    uint32_t count = unpack_u32_le(&sqt_header[12]);
+
+    if (count > 0) {
+        bool is_nav = (mode > 0);
+
+        for (uint32_t i = 0; i < count; i++) {
+            if (!map_idx_parse_node(
+                idx_fs,
+                &current_idx_offset,
+                mlp_fs,
+                is_nav,
+                camera,
+                viewport,
+                gfx,
+                is_polygon_layer,
+                &diag,
+                lod_end
+            )) {
+                PURRGO_LOG("MAP: ERROR failed to parse node\n");
+                return;
             }
-            current_lod++;
-            continue;
         }
-
-        uint8_t sqt_header[16];
-
-        if (
-            idx_fs->read(
-                idx_fs->handle,
-                sqt_header,
-                sizeof(sqt_header)
-            ) != sizeof(sqt_header)
-        ) {
-            break;
-        }
-
-        current_idx_offset += 16;
-
-        if (
-            sqt_header[0] != 'S' ||
-            sqt_header[1] != 'Q' ||
-            sqt_header[2] != 'T' ||
-            sqt_header[3] != 0x01
-        ) {
-            PURRGO_LOG("MAP: ERROR invalid SQT header\n");
-            break;
-        }
-
-        diag.sqt_blocks++;
-
-        uint32_t mode = unpack_u32_le(&sqt_header[8]);
-        uint32_t count = unpack_u32_le(&sqt_header[12]);
-
-        if (count > 0) {
-            bool is_nav = (mode > 0);
-
-            for (uint32_t i = 0; i < count; i++) {
-                map_idx_parse_node(
-                    idx_fs,
-                    &current_idx_offset,
-                    mlp_fs,
-                    is_nav,
-                    camera,
-                    viewport,
-                    gfx,
-                    is_polygon_layer,
-                    &diag
-                );
-            }
-        }
-
-        // Target LOD block has been processed. Break immediately to avoid reading next LOD blocks.
-        break;
     }
 
     /* ---------------------------------------------------------------------- */
