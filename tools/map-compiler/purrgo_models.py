@@ -7,7 +7,6 @@ from typing import List, Tuple, Any, Sequence
 
 
 class HWConfig:
-    """Hardware and system constants for the ATS3085S platform"""
     PGO_HEADER_SIZE = 32
     DATA_NODE_SIZE = 25      # Data Node size
     NAV_NODE_SIZE = 28       # Nav Node size
