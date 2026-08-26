@@ -403,10 +403,10 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
                        (new_marker_state.lon_1e7 != prev_marker_state.lon_1e7);
 
         if (changed) {
-            int16_t min_x = map_vp.offset_x + map_vp.width;
-            int16_t max_x = map_vp.offset_x;
-            int16_t min_y = map_vp.offset_y + map_vp.height;
-            int16_t max_y = map_vp.offset_y;
+            int16_t min_x = 32767;
+            int16_t max_x = -32768;
+            int16_t min_y = 32767;
+            int16_t max_y = -32768;
 
             if (prev_marker_state.rendered) {
                 if (prev_marker_state.min_x < min_x) min_x = prev_marker_state.min_x;
