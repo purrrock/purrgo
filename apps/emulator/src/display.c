@@ -29,6 +29,18 @@ void  display_set_pixel(int16_t x, int16_t y, uint8_t color) {
     framebuffer[byte_idx] |= (color << bit_shift); // Set new
 }
 
+uint8_t display_get_pixel(int16_t x, int16_t y) {
+    if (x < 0 || x >= DISPLAY_WIDTH || y < 0 || y >= DISPLAY_HEIGHT) {
+        return 0;
+    }
+
+    int pixel_idx = y * DISPLAY_WIDTH + x;
+    int byte_idx = pixel_idx / 4;
+    int bit_shift = (3 - (pixel_idx % 4)) * 2; // MSB first for pixels
+
+    return (framebuffer[byte_idx] >> bit_shift) & 0x03;
+}
+
 const uint8_t* display_get_framebuffer(void) {
     return framebuffer;
 }

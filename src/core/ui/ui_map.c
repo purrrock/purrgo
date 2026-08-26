@@ -27,6 +27,7 @@ typedef struct {
 } marker_state_t;
 
 static marker_state_t prev_marker_state;
+
 #include "purrgo/gfx_polygon.h"
 #include "purrgo/sun_tables.h"
 #include "../map_projection.h"
@@ -36,6 +37,15 @@ static marker_state_t prev_marker_state;
 #define PURRGO_MAP_POS_MARK_SIZE_PX 10
 #define PURRGO_MAP_POS_MARK_DIRECTION_HALF_WIDTH_PX 4
 #define PURRGO_MAP_POS_MARK_OCTAGON_CUT_PX           2
+
+#define MARKER_BG_SAVE_MAX_W (PURRGO_MAP_POS_MARK_SIZE_PX * 2 + 8)
+#define MARKER_BG_SAVE_MAX_H (PURRGO_MAP_POS_MARK_SIZE_PX * 2 + 8)
+static gfx_color_t bg_save_buf[MARKER_BG_SAVE_MAX_H][MARKER_BG_SAVE_MAX_W];
+static int16_t bg_save_x = 0;
+static int16_t bg_save_y = 0;
+static int16_t bg_save_w = 0;
+static int16_t bg_save_h = 0;
+static bool bg_is_saved = false;
 
 extern int dbg_map_render_calls;
 
@@ -380,7 +390,27 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
 
         marker_state_t new_marker_state;
         ui_calc_marker_state(gnss, &map_vp, &dynamic_cam, &new_marker_state);
-        ui_draw_marker(gfx, &new_marker_state);
+
+        if (new_marker_state.rendered) {
+            bg_save_x = new_marker_state.min_x;
+            bg_save_y = new_marker_state.min_y;
+            bg_save_w = new_marker_state.max_x - new_marker_state.min_x + 1;
+            bg_save_h = new_marker_state.max_y - new_marker_state.min_y + 1;
+
+            if (bg_save_w > MARKER_BG_SAVE_MAX_W) bg_save_w = MARKER_BG_SAVE_MAX_W;
+            if (bg_save_h > MARKER_BG_SAVE_MAX_H) bg_save_h = MARKER_BG_SAVE_MAX_H;
+
+            for (int16_t y = 0; y < bg_save_h; y++) {
+                for (int16_t x = 0; x < bg_save_w; x++) {
+                    bg_save_buf[y][x] = gfx_read_pixel(gfx, bg_save_x + x, bg_save_y + y);
+                }
+            }
+            bg_is_saved = true;
+            ui_draw_marker(gfx, &new_marker_state);
+        } else {
+            bg_is_saved = false;
+        }
+
         prev_marker_state = new_marker_state;
 
         // Restore clipping so status UI can be drawn
@@ -403,6 +433,36 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
                        (new_marker_state.lon_1e7 != prev_marker_state.lon_1e7);
 
         if (changed) {
+            if (bg_is_saved) {
+                gfx_color_t old_fg = gfx->color_fg;
+                for (int16_t y = 0; y < bg_save_h; y++) {
+                    for (int16_t x = 0; x < bg_save_w; x++) {
+                        gfx->color_fg = bg_save_buf[y][x];
+                        gfx_draw_pixel(gfx, bg_save_x + x, bg_save_y + y);
+                    }
+                }
+                gfx->color_fg = old_fg;
+                bg_is_saved = false;
+            }
+
+            if (new_marker_state.rendered) {
+                bg_save_x = new_marker_state.min_x;
+                bg_save_y = new_marker_state.min_y;
+                bg_save_w = new_marker_state.max_x - new_marker_state.min_x + 1;
+                bg_save_h = new_marker_state.max_y - new_marker_state.min_y + 1;
+
+                if (bg_save_w > MARKER_BG_SAVE_MAX_W) bg_save_w = MARKER_BG_SAVE_MAX_W;
+                if (bg_save_h > MARKER_BG_SAVE_MAX_H) bg_save_h = MARKER_BG_SAVE_MAX_H;
+
+                for (int16_t y = 0; y < bg_save_h; y++) {
+                    for (int16_t x = 0; x < bg_save_w; x++) {
+                        bg_save_buf[y][x] = gfx_read_pixel(gfx, bg_save_x + x, bg_save_y + y);
+                    }
+                }
+                bg_is_saved = true;
+                ui_draw_marker(gfx, &new_marker_state);
+            }
+
             int16_t min_x = 32767;
             int16_t max_x = -32768;
             int16_t min_y = 32767;
@@ -433,11 +493,6 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
                 int16_t clip_h = max_y - min_y + 1;
 
                 if (clip_w > 0 && clip_h > 0) {
-                    gfx_set_clip(gfx, min_x, min_y, clip_w, clip_h);
-                    purrgo_map_render_viewport(gfx, &map_vp, &dynamic_cam, app_config.map_dir);
-                    ui_draw_marker(gfx, &new_marker_state);
-                    gfx_reset_clip(gfx);
-
                     display_refresh_region(min_x, min_y, clip_w, clip_h);
                 }
             }

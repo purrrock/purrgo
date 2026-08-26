@@ -83,35 +83,6 @@ void purrgo_map_render_layer(
         return;
     }
 
-    PURRGO_LOG("MAP: IDX opened\n");
-
-    PURRGO_LOG(
-        "MAP: CAMERA "
-        "min=(%ld,%ld) "
-        "max=(%ld,%ld)\n",
-        (long)camera->min_x,
-        (long)camera->min_y,
-        (long)camera->max_x,
-        (long)camera->max_y
-    );
-
-    PURRGO_LOG(
-        "MAP: VIEWPORT "
-        "offset=(%d,%d) "
-        "size=(%u,%u)\n",
-        (int)viewport->offset_x,
-        (int)viewport->offset_y,
-        (unsigned)viewport->width,
-        (unsigned)viewport->height
-    );
-
-    PURRGO_LOG(
-        "MAP: GEOMETRY TYPE=%s\n",
-        is_polygon_layer
-            ? "POLYGON"
-            : "LINE"
-    );
-
     map_diag_t diag = {0};
 
     uint32_t current_idx_offset = 0;
@@ -232,30 +203,6 @@ void purrgo_map_render_layer(
         }
     }
 
-    /* ---------------------------------------------------------------------- */
-    /* Diagnostics                                                             */
-    /* ---------------------------------------------------------------------- */
-
-    PURRGO_LOG(
-        "MAP: "
-        "SQT=%u "
-        "NAV=%u "
-        "DATA=%u "
-        "PASS=%u "
-        "CULL=%u "
-        "LINES=%u "
-        "POLYGONS=%u "
-        "SKIPPED=%u\n",
-
-        (unsigned)diag.sqt_blocks,
-        (unsigned)diag.nav_visited,
-        (unsigned)diag.data_visited,
-        (unsigned)diag.data_passed,
-        (unsigned)diag.data_culled,
-        (unsigned)diag.lines_drawn,
-        (unsigned)diag.polygons_filled,
-        (unsigned)diag.polygons_skipped
-    );
 }
 
 bool purrgo_map_render_viewport(

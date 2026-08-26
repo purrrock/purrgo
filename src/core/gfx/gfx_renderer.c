@@ -15,6 +15,7 @@ bool gfx_init(gfx_context_t *ctx,
     ctx->height = height;
     ctx->framebuffer = framebuffer;
     ctx->draw_pixel = draw_pixel_cb;
+    ctx->read_pixel = NULL;
     ctx->color_fg = 1;
     ctx->color_bg = 0;
 
@@ -94,6 +95,18 @@ void gfx_draw_pixel(gfx_context_t *ctx, int16_t x, int16_t y)
         y >= ctx->clip_y && y < ctx->clip_y + ctx->clip_h) {
         ctx->draw_pixel(ctx->framebuffer, x, y, ctx->color_fg);
     }
+}
+
+gfx_color_t gfx_read_pixel(gfx_context_t *ctx, int16_t x, int16_t y)
+{
+    if (ctx == NULL || ctx->read_pixel == NULL) return ctx ? ctx->color_bg : 0;
+
+    // Software clipping against clipping region
+    if (x >= ctx->clip_x && x < ctx->clip_x + ctx->clip_w &&
+        y >= ctx->clip_y && y < ctx->clip_y + ctx->clip_h) {
+        return ctx->read_pixel(ctx->framebuffer, x, y);
+    }
+    return ctx->color_bg;
 }
 
 void gfx_clear(gfx_context_t *ctx)

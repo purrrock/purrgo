@@ -40,6 +40,7 @@ typedef struct {
  * выполняя необходимые битовые операции (read-modify-write) для Framebuffer.
  */
 typedef void (*gfx_draw_pixel_fn)(void *fb, int16_t x, int16_t y, gfx_color_t color);
+typedef gfx_color_t (*gfx_read_pixel_fn)(void *fb, int16_t x, int16_t y);
 
 /*
  * Контекст графического ядра.
@@ -51,6 +52,7 @@ typedef struct {
     
     void *framebuffer;          /* Opaque-указатель на массив пикселей платформы */
     gfx_draw_pixel_fn draw_pixel; /* Указатель на платформенно-зависимую функцию вывода */
+    gfx_read_pixel_fn read_pixel; /* Указатель на платформенно-зависимую функцию чтения */
     
     gfx_color_t color_fg;       /* Текущий цвет переднего плана (линии, текст, контуры) */
     gfx_color_t color_bg;       /* Текущий цвет фона (заливка, очистка экрана) */
@@ -97,6 +99,11 @@ void gfx_set_color(gfx_context_t *ctx, gfx_color_t fg, gfx_color_t bg);
  * но здесь оставлена как прототип для вызова внутри gfx_line.c / gfx_polygon.c
  */
 void gfx_draw_pixel(gfx_context_t *ctx, int16_t x, int16_t y);
+
+/*
+ * Базовый примитив: чтение цвета точки с проверкой границ (clipping).
+ */
+gfx_color_t gfx_read_pixel(gfx_context_t *ctx, int16_t x, int16_t y);
 
 /*
  * Очистка всего Framebuffer текущим цветом фона (color_bg).
