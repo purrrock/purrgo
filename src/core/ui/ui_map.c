@@ -7,13 +7,119 @@
 #include "purrgo/config.h"
 #include "purrgo/logger.h"
 #include "purrgo/hardware_config.h"
+#include "purrgo/gfx_polygon.h"
+#include "purrgo/sun_tables.h"
+#include "../map_projection.h"
 #include <stdio.h>
 #include <string.h>
 
+#define PURRGO_MAP_POS_MARK_SIZE_PX 12
+
 extern int dbg_map_render_calls;
 
+// Helper: Get sine * 10000 for angle in degrees
+static int32_t get_sin_10k(int16_t deg) {
+    deg = deg % 360;
+    if (deg < 0) deg += 360;
+    if (deg <= 90) return sin_lut[deg];
+    if (deg <= 180) return sin_lut[180 - deg];
+    if (deg <= 270) return -sin_lut[deg - 180];
+    return -sin_lut[360 - deg];
+}
+
+// Helper: Get cosine * 10000 for angle in degrees
+static int32_t get_cos_10k(int16_t deg) {
+    deg = deg % 360;
+    if (deg < 0) deg += 360;
+    if (deg <= 90) return cos_lut[deg];
+    if (deg <= 180) return -cos_lut[180 - deg];
+    if (deg <= 270) return -cos_lut[deg - 180];
+    return cos_lut[360 - deg];
+}
+
+/*
+ * Calculates the marker geometry using integer math based on GNSS state,
+ * projects the geographical position to screen, checks if the entire shape's
+ * bounding box falls inside the viewport, and renders it in black.
+ */
+static void ui_render_marker(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const purrgo_viewport_t* map_vp, const purrgo_bbox_t* dynamic_cam) {
+    int32_t lat, lon;
+    if (gnss->valid) {
+        lat = gnss->lat_1e7;
+        lon = gnss->lon_1e7;
+    } else {
+        lat = app_config.last_lat_1e7;
+        lon = app_config.last_lon_1e7;
+    }
+
+    int16_t cx, cy;
+    project_to_screen(lon, lat, dynamic_cam, map_vp, &cx, &cy);
+
+    int32_t r = PURRGO_MAP_POS_MARK_SIZE_PX / 2;
+    gfx_point_t pts[3];
+
+    if (gnss->valid && gnss->course_valid) {
+        // Isosceles triangle, pointing up in local coordinates
+        int32_t p0x = 0, p0y = -r;
+        int32_t p1x = -r / 2, p1y = r;
+        int32_t p2x = r / 2, p2y = r;
+
+        int16_t course_deg = (gnss->course_deg_100 / 100) % 360;
+        int32_t s = get_sin_10k(course_deg);
+        int32_t c = get_cos_10k(course_deg);
+
+        // Rotate by course_deg
+        pts[0].x = (int16_t)(cx + (p0x * c - p0y * s) / 10000);
+        pts[0].y = (int16_t)(cy + (p0x * s + p0y * c) / 10000);
+
+        pts[1].x = (int16_t)(cx + (p1x * c - p1y * s) / 10000);
+        pts[1].y = (int16_t)(cy + (p1x * s + p1y * c) / 10000);
+
+        pts[2].x = (int16_t)(cx + (p2x * c - p2y * s) / 10000);
+        pts[2].y = (int16_t)(cy + (p2x * s + p2y * c) / 10000);
+    } else {
+        // Equilateral triangle, fixed orientation (pointing up)
+        int32_t w = (r * 8660) / 10000;
+        int32_t base_y = r / 2;
+
+        pts[0].x = (int16_t)cx;
+        pts[0].y = (int16_t)(cy - r);
+
+        pts[1].x = (int16_t)(cx - w);
+        pts[1].y = (int16_t)(cy + base_y);
+
+        pts[2].x = (int16_t)(cx + w);
+        pts[2].y = (int16_t)(cy + base_y);
+    }
+
+    int16_t min_x = pts[0].x, max_x = pts[0].x;
+    int16_t min_y = pts[0].y, max_y = pts[0].y;
+
+    for (int i = 1; i < 3; i++) {
+        if (pts[i].x < min_x) min_x = pts[i].x;
+        if (pts[i].x > max_x) max_x = pts[i].x;
+        if (pts[i].y < min_y) min_y = pts[i].y;
+        if (pts[i].y > max_y) max_y = pts[i].y;
+    }
+
+    // Render ONLY if the COMPLETE triangle bounding box fits inside the map viewport
+    if (min_x >= map_vp->offset_x && max_x < map_vp->offset_x + map_vp->width &&
+        min_y >= map_vp->offset_y && max_y < map_vp->offset_y + map_vp->height) {
+
+        gfx_color_t old_fg = gfx->color_fg;
+        gfx_set_color(gfx, BLACK, gfx->color_bg);
+
+        if (gnss->valid) {
+            gfx_fill_polygon(gfx, pts, 3);
+        } else {
+            gfx_draw_polygon(gfx, pts, 3);
+        }
+
+        gfx_set_color(gfx, old_fg, gfx->color_bg);
+    }
+}
+
 void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const purrgo_sun_info_t* sun) {
-    (void)gnss; // Currently unused in map view
     (void)sun;  // Currently unused in map view
 
     purrgo_viewport_t map_vp = {
@@ -57,6 +163,8 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
         gfx_set_clip(gfx, map_vp.offset_x, map_vp.offset_y, map_vp.width, map_vp.height);
 
         bool map_success = purrgo_map_render_viewport(gfx, &map_vp, &dynamic_cam, app_config.map_dir);
+
+        ui_render_marker(gfx, gnss, &map_vp, &dynamic_cam);
 
         // Restore clipping so status UI can be drawn
         gfx_reset_clip(gfx);
