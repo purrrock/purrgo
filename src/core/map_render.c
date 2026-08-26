@@ -52,17 +52,6 @@ void map_render_feature(
             uint32_t current_part_offset = (iter.num_parts > 0) ? iter.parts[iter.current_part_idx] : 0;
 
             if (point_index > current_part_offset) {
-                if (diag != NULL && diag->lines_drawn == 0) {
-                    PURRGO_LOG(
-                        "MAP: FIRST LINE "
-                        "screen=(%d,%d)->(%d,%d) "
-                        "viewport=(%d,%d,%u,%u)\n",
-                        (int)prev_sx, (int)prev_sy, (int)sx, (int)sy,
-                        (int)vp->offset_x, (int)vp->offset_y,
-                        (unsigned)vp->width, (unsigned)vp->height
-                    );
-                }
-
                 gfx_color_t prev_fg = gfx->color_fg;
                 switch (style) {
                     case PURRGO_STYLE_DARK_GRAY_THICK_LINE:

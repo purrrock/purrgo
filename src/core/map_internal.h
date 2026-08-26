@@ -34,8 +34,6 @@ typedef struct {
 
     uint32_t styles_unknown;
     uint32_t style_none;
-
-    uint32_t nodes_logged;
 } map_diag_t;
 
 /* Little-endian helpers */

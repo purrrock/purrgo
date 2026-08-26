@@ -59,26 +59,6 @@ bool map_idx_parse_node(
             passes = bbox_intersects_camera(xmin, ymin, xmax, ymax, cam);
         }
 
-        if (diag != NULL && diag->nodes_logged < 10) {
-            if (ymax < cam->min_y || ymin > cam->max_y) {
-                xmin = unpack_i32_le(&node_buf[0]);
-                xmax = unpack_i32_le(&node_buf[8]);
-            }
-
-            PURRGO_LOG(
-                "MAP: DATA "
-                "raw=(%08x,%08x,%08x,%08x) "
-                "int=(%d,%d,%d,%d)\n",
-                unpack_u32_le(&node_buf[0]),
-                unpack_u32_le(&node_buf[4]),
-                unpack_u32_le(&node_buf[8]),
-                unpack_u32_le(&node_buf[12]),
-                xmin, ymin, xmax, ymax
-            );
-
-            diag->nodes_logged++;
-        }
-
         if (!passes) {
             if (diag != NULL) {
                 diag->data_culled++;
@@ -146,27 +126,6 @@ bool map_idx_parse_node(
         c_xmax = unpack_i32_le(&node_buf[12]);
         passes = bbox_intersects_camera(c_xmin, c_ymin, c_xmax, c_ymax, cam);
     }
-
-    if (diag != NULL && diag->nodes_logged < 10) {
-        if (c_ymax < cam->min_y || c_ymin > cam->max_y) {
-            c_xmin = unpack_i32_le(&node_buf[4]);
-            c_xmax = unpack_i32_le(&node_buf[12]);
-        }
-
-        PURRGO_LOG(
-            "MAP: NAV "
-            "raw=(%08x,%08x,%08x,%08x) "
-            "int=(%d,%d,%d,%d)\n",
-            unpack_u32_le(&node_buf[4]),
-            unpack_u32_le(&node_buf[8]),
-            unpack_u32_le(&node_buf[12]),
-            unpack_u32_le(&node_buf[16]),
-            c_xmin, c_ymin, c_xmax, c_ymax
-        );
-
-        diag->nodes_logged++;
-    }
-
 
     if (!passes) {
         if (v3_jump > 0) {
