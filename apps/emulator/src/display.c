@@ -35,13 +35,23 @@ const uint8_t* display_get_framebuffer(void) {
 
 #include "purrgo/display_hal.h"
 #include <stdio.h>
+#include <stdbool.h>
+
+static bool emu_full_refresh_pending = false;
+static bool emu_partial_refresh_pending = false;
+static int16_t emu_partial_x = 0;
+static int16_t emu_partial_y = 0;
+static int16_t emu_partial_w = 0;
+static int16_t emu_partial_h = 0;
 
 void display_refresh(void) {
-    // Emulator tracks full refresh requests for diagnostics
-    // printf("EMU: display_refresh() called\n");
+    emu_full_refresh_pending = true;
 }
 
 void display_refresh_region(int16_t x, int16_t y, int16_t w, int16_t h) {
-    // Emulator tracks partial refresh requests for diagnostics
-    // printf("EMU: display_refresh_region(x=%d, y=%d, w=%d, h=%d) called\n", x, y, w, h);
+    emu_partial_refresh_pending = true;
+    emu_partial_x = x;
+    emu_partial_y = y;
+    emu_partial_w = w;
+    emu_partial_h = h;
 }
