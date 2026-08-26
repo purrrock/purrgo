@@ -109,39 +109,39 @@ target_include_directories(purrgo_platform_pc
     enable_testing()
 
     add_executable(test_geo tests/core/test_geo.c)
-    target_link_libraries(test_geo PRIVATE purrgo_core)
+    target_link_libraries(test_geo PRIVATE purrgo_core purrgo_platform_pc)
     add_test(NAME test_geo COMMAND test_geo)
 
     add_executable(test_gnss tests/core/test_gnss.c)
-    target_link_libraries(test_gnss PRIVATE purrgo_core)
+    target_link_libraries(test_gnss PRIVATE purrgo_core purrgo_platform_pc)
     add_test(NAME test_gnss COMMAND test_gnss)
 
     add_executable(test_track_logger tests/core/test_track_logger.c)
-    target_link_libraries(test_track_logger PRIVATE purrgo_core)
+    target_link_libraries(test_track_logger PRIVATE purrgo_core purrgo_platform_pc)
     add_test(NAME test_track_logger COMMAND test_track_logger)
 
     add_executable(test_gfx_polygon tests/core/test_gfx_polygon.c)
-    target_link_libraries(test_gfx_polygon PRIVATE purrgo_core)
+    target_link_libraries(test_gfx_polygon PRIVATE purrgo_core purrgo_platform_pc)
     add_test(NAME test_gfx_polygon COMMAND test_gfx_polygon)
 
     add_executable(test_gfx_clipping tests/core/test_gfx_clipping.c)
-    target_link_libraries(test_gfx_clipping PRIVATE purrgo_core)
+    target_link_libraries(test_gfx_clipping PRIVATE purrgo_core purrgo_platform_pc)
     add_test(NAME test_gfx_clipping COMMAND test_gfx_clipping)
 
     add_executable(test_config tests/core/test_config.c)
-    target_link_libraries(test_config PRIVATE purrgo_core)
+    target_link_libraries(test_config PRIVATE purrgo_core purrgo_platform_pc)
     add_test(NAME test_config COMMAND test_config)
 
     add_executable(test_app_fsm tests/core/test_app_fsm.c)
-    target_link_libraries(test_app_fsm PRIVATE purrgo_core)
+    target_link_libraries(test_app_fsm PRIVATE purrgo_core purrgo_platform_pc)
     add_test(NAME test_app_fsm COMMAND test_app_fsm)
 
     add_executable(test_purrgo_time tests/core/test_purrgo_time.c)
-    target_link_libraries(test_purrgo_time PRIVATE purrgo_core)
+    target_link_libraries(test_purrgo_time PRIVATE purrgo_core purrgo_platform_pc)
     add_test(NAME test_purrgo_time COMMAND test_purrgo_time)
 
     add_executable(test_map_lod tests/core/test_map_lod.c)
-    target_link_libraries(test_map_lod PRIVATE purrgo_core)
+    target_link_libraries(test_map_lod PRIVATE purrgo_core purrgo_platform_pc)
     add_test(NAME test_map_lod COMMAND test_map_lod)
 endif()
 
