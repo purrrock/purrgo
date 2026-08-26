@@ -82,7 +82,10 @@ void purrgo_gnss_process_nmea(const char *nmea_line, purrgo_gnss_solution_t *sol
 
                     // Масштабирование курса (градусы * 100)
                     if (frame.course.scale != 0) {
+                        solution->course_valid = true;
                         solution->course_deg_100 = (int32_t)(((int64_t)frame.course.value * 100) / frame.course.scale);
+                    } else {
+                        solution->course_valid = false;
                     }
                     
                     solution->hours = frame.time.hours;

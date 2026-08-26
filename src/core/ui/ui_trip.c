@@ -109,6 +109,27 @@ void ui_render_trip_computer(gfx_context_t* gfx, const purrgo_gnss_solution_t* g
     gfx_draw_string(gfx, 10, y_pos, buf);
     y_pos += 12;
 
+    if (gnss->course_valid) {
+        int course_deg = gnss->course_deg_100 / 100;
+        int course_frac = (gnss->course_deg_100 > 0 ? gnss->course_deg_100 : -gnss->course_deg_100) % 100;
+        snprintf(
+            buf,
+            sizeof(buf),
+            "CRS: %d.%02d",
+            course_deg,
+            course_frac
+        );
+    } else {
+        snprintf(
+            buf,
+            sizeof(buf),
+            "CRS: N/A"
+        );
+    }
+
+    gfx_draw_string(gfx, 10, y_pos, buf);
+    y_pos += 12;
+
     if (sun != NULL) {
         if (sun->status == SUN_STATUS_NORMAL) {
             snprintf(
