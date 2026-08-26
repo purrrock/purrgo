@@ -77,7 +77,7 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
     int text_width = label_len * 6;
 
     int16_t scale_x = map_vp.offset_x + map_vp.width - text_width - 5;
-    int16_t scale_y = map_vp.offset_y + map_vp.height - 8 - 5;
+    int16_t scale_y = map_vp.offset_y + map_vp.height + 1;
 
     gfx_draw_string(gfx, scale_x, scale_y, scale_label);
 }
