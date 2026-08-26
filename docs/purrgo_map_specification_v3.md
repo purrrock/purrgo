@@ -455,12 +455,12 @@ Each section begins with a 16-byte SQT header.
 
 The section header contains:
 
-| Field                      | Size | Description            |
-| :------------------------- | :--- | :--------------------- |
-| Magic                      | 4    | `SQT\x01`              |
-| Reserved / topology marker | 4    | Current section marker |
-| Depth                      | 4    | R-tree depth           |
-| Root count                 | 4    | Number of root nodes   |
+| Offset | Size | Поле         | Значение                                       |
+| ------ | ---: | ------------ | ---------------------------------------------- |
+| `0x00` |    4 | Magic        | `SQT\x01`                                      |
+| `0x04` |    4 | Topology     | `1` — PurrGO SQT topology                      |
+| `0x08` |    4 | Mode / Depth | `0` = flat, `1` = one-level, `>1` = tree depth |
+| `0x0C` |    4 | Root count   | Количество root nodes                          |
 
 Conceptually:
 
