@@ -55,14 +55,17 @@ static void ui_render_marker(gfx_context_t* gfx, const purrgo_gnss_solution_t* g
     int16_t cx, cy;
     project_to_screen(lon, lat, dynamic_cam, map_vp, &cx, &cy);
 
-    int32_t r = PURRGO_MAP_POS_MARK_SIZE_PX / 2;
+    int32_t size = PURRGO_MAP_POS_MARK_SIZE_PX;
+    int32_t top_y = -(size / 2);
+    int32_t bot_y = size + top_y;
     gfx_point_t pts[3];
 
     if (gnss->valid && gnss->course_valid) {
         // Isosceles triangle, pointing up in local coordinates
-        int32_t p0x = 0, p0y = -r;
-        int32_t p1x = -r / 2, p1y = r;
-        int32_t p2x = r / 2, p2y = r;
+        int32_t hw = size / 2;
+        int32_t p0x = 0, p0y = top_y;
+        int32_t p1x = -hw, p1y = bot_y;
+        int32_t p2x = hw, p2y = bot_y;
 
         int16_t course_deg = (gnss->course_deg_100 / 100) % 360;
         int32_t s = get_sin_10k(course_deg);
@@ -79,17 +82,16 @@ static void ui_render_marker(gfx_context_t* gfx, const purrgo_gnss_solution_t* g
         pts[2].y = (int16_t)(cy + (p2x * s + p2y * c) / 10000);
     } else {
         // Equilateral triangle, fixed orientation (pointing up)
-        int32_t w = (r * 8660) / 10000;
-        int32_t base_y = r / 2;
+        int32_t w = (size * 5774 + 5000) / 10000; // tan(30) = 0.57735...
 
         pts[0].x = (int16_t)cx;
-        pts[0].y = (int16_t)(cy - r);
+        pts[0].y = (int16_t)(cy + top_y);
 
         pts[1].x = (int16_t)(cx - w);
-        pts[1].y = (int16_t)(cy + base_y);
+        pts[1].y = (int16_t)(cy + bot_y);
 
         pts[2].x = (int16_t)(cx + w);
-        pts[2].y = (int16_t)(cy + base_y);
+        pts[2].y = (int16_t)(cy + bot_y);
     }
 
     int16_t min_x = pts[0].x, max_x = pts[0].x;
