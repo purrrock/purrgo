@@ -1,5 +1,8 @@
 #include "purrgo/app_fsm.h"
 #include "purrgo/config.h"
+#include "purrgo/map.h"
+#include "purrgo/geo.h"
+#include "purrgo/hardware_config.h"
 #include <stdio.h>
 #include <assert.h>
 
@@ -147,41 +150,47 @@ void test_map_dirty_state() {
     purrgo_app_map_clear_dirty();
 
     // Deterministic testing for the three hysteresis zones
-    // For 10KM scale: width_m = 10000.
-    // Screen is roughly 128x110 (varies by hw profile, but width is typically 128, height ~110-130).
-    // Let's rely on the geographic distance vs step_m / screen proportions.
-    // 10000m width in 1e7 is 10000 * 90 = 900,000 units.
-    // 1/16 of width is 900000 / 16 = ~56,250 units.
-    // 1/8 of width is 900000 / 8 = ~112,500 units.
+    purrgo_viewport_t map_vp = {
+        .width = PURRGO_HW_DISPLAY_WIDTH_PX,
+        .height = PURRGO_HW_DISPLAY_HEIGHT_PX - 18,
+        .offset_x = 0,
+        .offset_y = 9
+    };
+    purrgo_bbox_t dynamic_cam;
+    purrgo_geo_bbox_from_center(0, 0, purrgo_app_get_map_scale_width_m(), &map_vp, &dynamic_cam);
 
-    // 1. INSIDE FOLLOW_STOP: Move GNSS by a small amount (e.g. 1/32 of screen)
-    // 900000 / 32 = ~28125.
-    fix.lon_1e7 = 28000;
+    // Calculate exact geographic span to derive deterministic test coordinates
+    int64_t geo_width = (int64_t)dynamic_cam.max_x - (int64_t)dynamic_cam.min_x;
+
+    // 1. INSIDE FOLLOW_STOP: e.g. 1/32 of screen width
+    // geographic width maps to map_vp.width. So 1/32 of geo_width is 1/32 screen.
+    int32_t dist_stop_zone = geo_width / 32;
+    fix.lon_1e7 = dist_stop_zone;
     fix.lat_1e7 = 0;
     purrgo_app_update(&fix);
     assert(purrgo_app_map_is_dirty() == false); // Should remain clean, inside STOP
     assert(purrgo_app_get_map_center_lon() == 0);
 
-    // 2. BETWEEN FOLLOW_STOP AND FOLLOW_START: Move GNSS by ~3/32 of screen
-    // 900000 * 3 / 32 = ~84375.
-    fix.lon_1e7 = 84000;
+    // 2. BETWEEN FOLLOW_STOP AND FOLLOW_START: e.g. 3/32 of screen width (between 1/16=2/32 and 1/8=4/32)
+    int32_t dist_between_zone = (geo_width * 3) / 32;
+    fix.lon_1e7 = dist_between_zone;
     fix.lat_1e7 = 0;
     purrgo_app_update(&fix);
     assert(purrgo_app_map_is_dirty() == false); // Should remain clean, between STOP and START
     assert(purrgo_app_get_map_center_lon() == 0);
 
-    // 3. AT/OVER FOLLOW_START: Move GNSS by ~1/4 of screen
-    // 900000 / 4 = 225000.
-    fix.lon_1e7 = 225000;
+    // 3. AT/OVER FOLLOW_START: e.g. 1/4 of screen width (2/8)
+    int32_t dist_start_zone = geo_width / 4;
+    fix.lon_1e7 = dist_start_zone;
     fix.lat_1e7 = 0;
     purrgo_app_update(&fix);
     assert(purrgo_app_map_is_dirty() == true); // Should trigger auto-follow
-    assert(purrgo_app_get_map_center_lon() == 225000); // Recentered exactly
+    assert(purrgo_app_get_map_center_lon() == dist_start_zone); // Recentered exactly
     purrgo_app_map_clear_dirty();
 
     // After recentering, the position is at screen center, therefore inside FOLLOW_STOP.
     // Moving it again by a small amount (1/32) relative to the new center.
-    fix.lon_1e7 = 225000 + 28000;
+    fix.lon_1e7 = dist_start_zone + dist_stop_zone;
     purrgo_app_update(&fix);
     assert(purrgo_app_map_is_dirty() == false); // Does not trigger redraw again
 
@@ -190,7 +199,7 @@ void test_map_dirty_state() {
     assert(purrgo_app_is_manual_pan_active() == true);
     purrgo_app_map_clear_dirty(); // clear the pan dirty flag
 
-    fix.lon_1e7 = 5000000; // Far movement
+    fix.lon_1e7 = dist_start_zone + geo_width * 2; // Far movement
     purrgo_app_update(&fix);
     assert(purrgo_app_map_is_dirty() == false);
 
@@ -198,7 +207,7 @@ void test_map_dirty_state() {
     purrgo_app_handle_button(PURRGO_BTN_OK); // reset manual pan
     assert(purrgo_app_is_manual_pan_active() == false);
     assert(purrgo_app_map_is_dirty() == true);
-    assert(purrgo_app_get_map_center_lon() == 5000000);
+    assert(purrgo_app_get_map_center_lon() == dist_start_zone + geo_width * 2);
     purrgo_app_map_clear_dirty();
 
     // Cancel pan when GNSS is inside FOLLOW_START -> does not set dirty
