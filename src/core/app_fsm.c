@@ -5,6 +5,7 @@
 #include "purrgo/geo.h"
 #include <stdio.h>
 #include "purrgo/hardware_config.h"
+#include "map_projection.h"
 
 // Глобальный экземпляр конфигурации устройства
 // purrgo_config_t app_config; // declared in config.c
@@ -27,6 +28,9 @@ static const uint32_t scale_widths_m[PURRGO_MAP_SCALE_COUNT] = {
 };
 
 // Строковые метки для UI.
+static purrgo_gnss_solution_t prev_fix = {0};
+static void apply_auto_follow(const purrgo_gnss_solution_t* fix);
+
 static const char* scale_labels[PURRGO_MAP_SCALE_COUNT] = {
     "10M", "20M", "50M", "100M", "200M", "500M", "1KM", "2KM", "5KM", "10KM",
     "20KM", "50KM", "100KM", "200KM", "500KM", "1000KM", "2000KM", "5000KM", "10000KM"
@@ -364,7 +368,7 @@ int32_t step_x = (int32_t)step_x_64;
         if (button == PURRGO_BTN_OK) {
             if (manual_pan_active) {
                 manual_pan_active = false;
-                map_dirty = true;
+                apply_auto_follow(&prev_fix);
             }
             return;
         }
@@ -392,7 +396,65 @@ int32_t step_x = (int32_t)step_x_64;
     }
 }
 
-static purrgo_gnss_solution_t prev_fix = {0};
+static void apply_auto_follow(const purrgo_gnss_solution_t* fix) {
+    if (!fix->valid || manual_pan_active) {
+        return;
+    }
+
+    purrgo_viewport_t map_vp = {
+        .width = PURRGO_HW_DISPLAY_WIDTH_PX,
+        .height = PURRGO_HW_DISPLAY_HEIGHT_PX - 18,
+        .offset_x = 0,
+        .offset_y = 9
+    };
+
+    purrgo_bbox_t dynamic_cam;
+    purrgo_geo_bbox_from_center(
+        map_center_lat_1e7,
+        map_center_lon_1e7,
+        purrgo_app_get_map_scale_width_m(),
+        &map_vp,
+        &dynamic_cam
+    );
+
+    int16_t sx, sy;
+    project_to_screen(
+        fix->lon_1e7,
+        fix->lat_1e7,
+        &dynamic_cam,
+        &map_vp,
+        &sx,
+        &sy
+    );
+
+    int16_t center_x = map_vp.offset_x + map_vp.width / 2;
+    int16_t center_y = map_vp.offset_y + map_vp.height / 2;
+
+    int32_t dx = (int32_t)sx - center_x;
+    if (dx < 0) dx = -dx;
+
+    int32_t dy = (int32_t)sy - center_y;
+    if (dy < 0) dy = -dy;
+
+    int32_t follow_start_x = map_vp.width / 8;
+    int32_t follow_start_y = map_vp.height / 8;
+
+    int32_t follow_stop_x = map_vp.width / 16;
+    int32_t follow_stop_y = map_vp.height / 16;
+
+    if (dx <= follow_stop_x && dy <= follow_stop_y) {
+        // Inside FOLLOW_STOP zone: no camera change
+        return;
+    } else if (dx < follow_start_x && dy < follow_start_y) {
+        // Between FOLLOW_STOP and FOLLOW_START zones: no camera change
+        return;
+    } else {
+        // Reached or exceeded FOLLOW_START zone: recenter exactly to GNSS position
+        map_center_lat_1e7 = fix->lat_1e7;
+        map_center_lon_1e7 = fix->lon_1e7;
+        map_dirty = true;
+    }
+}
 
 void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
     // Check if relevant navigation data has changed to trigger a UI redraw
@@ -421,14 +483,7 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
     switch (current_state) {
         case APP_STATE_MAP:
             // Фоновые расчеты для карты (панорамирование, проверке BBox, подгрузка кластеров)
-            if (current_fix->valid && !manual_pan_active) {
-                if (map_center_lat_1e7 != current_fix->lat_1e7 ||
-                    map_center_lon_1e7 != current_fix->lon_1e7) {
-                    map_center_lat_1e7 = current_fix->lat_1e7;
-                    map_center_lon_1e7 = current_fix->lon_1e7;
-                    map_dirty = true;
-                }
-            }
+            apply_auto_follow(current_fix);
             break;
 
         case APP_STATE_TRIP_COMPUTER:
