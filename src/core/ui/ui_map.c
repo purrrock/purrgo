@@ -33,7 +33,7 @@ static marker_state_t prev_marker_state;
 #include <stdio.h>
 #include <string.h>
 
-#define PURRGO_MAP_POS_MARK_SIZE_PX 12
+#define PURRGO_MAP_POS_MARK_SIZE_PX 10
 #define PURRGO_MAP_POS_MARK_DIRECTION_HALF_WIDTH_PX 4
 #define PURRGO_MAP_POS_MARK_OCTAGON_CUT_PX           2
 
