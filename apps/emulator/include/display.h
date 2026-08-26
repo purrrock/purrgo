@@ -37,6 +37,12 @@ void display_clear(uint8_t color);
  */
 void display_set_pixel(int16_t x, int16_t y, uint8_t color);
 
+/*
+ * Чтение пикселя из кадрового буфера.
+ * Возвращает цвет пикселя или COLOR_BLACK (0) в случае выхода за пределы экрана.
+ */
+uint8_t display_get_pixel(int16_t x, int16_t y);
+
 const uint8_t* display_get_framebuffer(void);
 
 #endif // EMULATOR_DISPLAY_H

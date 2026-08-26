@@ -56,6 +56,15 @@ static void emulator_draw_pixel_cb(
     display_set_pixel(x, y, color);
 }
 
+static gfx_color_t emulator_read_pixel_cb(
+    void *fb,
+    int16_t x,
+    int16_t y
+) {
+    (void)fb;
+    return display_get_pixel(x, y);
+}
+
 int main(int argc, char* argv[]) {
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) < 0) {
         fprintf(
@@ -117,7 +126,8 @@ int main(int argc, char* argv[]) {
         DISPLAY_WIDTH,
         DISPLAY_HEIGHT,
         (void*)1,
-        emulator_draw_pixel_cb
+        emulator_draw_pixel_cb,
+        emulator_read_pixel_cb
     );
 
     purrgo_sun_info_t sun_info;

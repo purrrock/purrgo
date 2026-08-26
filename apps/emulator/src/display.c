@@ -33,3 +33,14 @@ const uint8_t* display_get_framebuffer(void) {
     return framebuffer;
 }
 
+uint8_t display_get_pixel(int16_t x, int16_t y) {
+    if (x < 0 || x >= DISPLAY_WIDTH || y < 0 || y >= DISPLAY_HEIGHT) {
+        return 0; // COLOR_BLACK
+    }
+
+    int pixel_idx = y * DISPLAY_WIDTH + x;
+    int byte_idx = pixel_idx / 4;
+    int bit_shift = (3 - (pixel_idx % 4)) * 2;
+
+    return (framebuffer[byte_idx] >> bit_shift) & 0x03;
+}

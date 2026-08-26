@@ -17,6 +17,13 @@ static void draw_pixel(void *user_data, int16_t x, int16_t y, gfx_color_t color)
     }
 }
 
+static gfx_color_t read_pixel(void *user_data, int16_t x, int16_t y) {
+    if (x >= 0 && x < WIDTH && y >= 0 && y < HEIGHT) {
+        return framebuffer[y * WIDTH + x];
+    }
+    return 0;
+}
+
 static void reset_framebuffer(gfx_context_t *ctx) {
     memset(framebuffer, 0, sizeof(framebuffer));
     ctx->color_bg = 0;
@@ -58,7 +65,7 @@ static bool check_pixel(int16_t x, int16_t y, uint8_t expected) {
 static bool test_clipping_bounds() {
     printf("Running test_clipping_bounds...\n");
     gfx_context_t ctx;
-    gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, draw_pixel);
+    gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, draw_pixel, read_pixel);
     reset_framebuffer(&ctx);
 
     // Initial state check
@@ -94,7 +101,7 @@ static bool test_clipping_bounds() {
 static bool test_draw_pixel_clipping() {
     printf("Running test_draw_pixel_clipping...\n");
     gfx_context_t ctx;
-    gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, draw_pixel);
+    gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, draw_pixel, read_pixel);
     reset_framebuffer(&ctx);
 
     gfx_set_clip(&ctx, 0, 9, WIDTH, HEIGHT - 18);
@@ -113,7 +120,7 @@ static bool test_draw_pixel_clipping() {
 static bool test_draw_line_clipping() {
     printf("Running test_draw_line_clipping...\n");
     gfx_context_t ctx;
-    gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, draw_pixel);
+    gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, draw_pixel, read_pixel);
     reset_framebuffer(&ctx);
 
     gfx_set_clip(&ctx, 0, 9, WIDTH, HEIGHT - 18);
@@ -138,7 +145,7 @@ static bool test_draw_line_clipping() {
 static bool test_draw_polygon_clipping() {
     printf("Running test_draw_polygon_clipping...\n");
     gfx_context_t ctx;
-    gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, draw_pixel);
+    gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, draw_pixel, read_pixel);
     reset_framebuffer(&ctx);
 
     gfx_set_clip(&ctx, 0, 9, WIDTH, HEIGHT - 18);
@@ -166,7 +173,7 @@ static bool test_draw_polygon_clipping() {
 static bool test_draw_polygon_clipping_horizontal() {
     printf("Running test_draw_polygon_clipping_horizontal...\n");
     gfx_context_t ctx;
-    gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, draw_pixel);
+    gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, draw_pixel, read_pixel);
     reset_framebuffer(&ctx);
 
     gfx_set_clip(&ctx, 10, 0, WIDTH - 20, HEIGHT);
@@ -200,7 +207,7 @@ static bool test_draw_polygon_clipping_horizontal() {
 static bool test_draw_rect_clipping() {
     printf("Running test_draw_rect_clipping...\n");
     gfx_context_t ctx;
-    gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, draw_pixel);
+    gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, draw_pixel, read_pixel);
     reset_framebuffer(&ctx);
 
     gfx_set_clip(&ctx, 10, 10, WIDTH - 20, HEIGHT - 20);
@@ -225,7 +232,7 @@ static bool test_draw_rect_clipping() {
 static bool test_draw_hv_line_clipping() {
     printf("Running test_draw_hv_line_clipping...\n");
     gfx_context_t ctx;
-    gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, draw_pixel);
+    gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, draw_pixel, read_pixel);
     reset_framebuffer(&ctx);
 
     gfx_set_clip(&ctx, 10, 10, WIDTH - 20, HEIGHT - 20);
