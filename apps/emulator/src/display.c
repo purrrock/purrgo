@@ -32,3 +32,16 @@ void  display_set_pixel(int16_t x, int16_t y, uint8_t color) {
 const uint8_t* display_get_framebuffer(void) {
     return framebuffer;
 }
+
+#include "purrgo/display_hal.h"
+#include <stdio.h>
+
+void display_refresh(void) {
+    // Emulator tracks full refresh requests for diagnostics
+    // printf("EMU: display_refresh() called\n");
+}
+
+void display_refresh_region(int16_t x, int16_t y, int16_t w, int16_t h) {
+    // Emulator tracks partial refresh requests for diagnostics
+    // printf("EMU: display_refresh_region(x=%d, y=%d, w=%d, h=%d) called\n", x, y, w, h);
+}
