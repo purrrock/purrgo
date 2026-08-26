@@ -138,20 +138,34 @@ void test_map_dirty_state() {
     assert(purrgo_app_map_is_dirty() == true);
     purrgo_app_map_clear_dirty();
 
-    // Leaving manual pan state sets dirty
+    // Leaving manual pan state sets dirty if GNSS is outside FOLLOW_START
+    purrgo_gnss_solution_t fix = {0};
+    fix.valid = true;
+    // Map center is at some location after panning. Let's provide a GNSS fix that is far away.
+    fix.lat_1e7 = 500000000; // Very far away (50 degrees)
+    fix.lon_1e7 = 500000000;
+    purrgo_app_update(&fix);
+    // Since manual pan is active, update should not have auto-followed.
+    assert(purrgo_app_map_is_dirty() == false);
+
+    // Now cancel pan. Since the fix is far away, auto-follow should snap to it and set dirty.
     assert(purrgo_app_is_manual_pan_active() == true);
     purrgo_app_handle_button(PURRGO_BTN_OK);
     assert(purrgo_app_is_manual_pan_active() == false);
     assert(purrgo_app_map_is_dirty() == true);
+    assert(purrgo_app_get_map_center_lat() == 500000000);
     purrgo_app_map_clear_dirty();
 
-    // GNSS change without manual pan sets dirty
-    purrgo_gnss_solution_t fix = {0};
-    fix.valid = true;
-    fix.lat_1e7 = 1000;
-    fix.lon_1e7 = 1000;
+    // GNSS change small (within FOLLOW_STOP) does not set dirty
+    fix.lat_1e7 = 500000000 + 10; // Tiny movement
+    purrgo_app_update(&fix);
+    assert(purrgo_app_map_is_dirty() == false); // Should remain clean
+
+    // GNSS change large (outside FOLLOW_START) sets dirty
+    fix.lat_1e7 = 600000000; // Far movement
     purrgo_app_update(&fix);
     assert(purrgo_app_map_is_dirty() == true);
+    assert(purrgo_app_get_map_center_lat() == 600000000);
     purrgo_app_map_clear_dirty();
 
     // GNSS change with manual pan DOES NOT set dirty
@@ -159,12 +173,31 @@ void test_map_dirty_state() {
     assert(purrgo_app_is_manual_pan_active() == true);
     purrgo_app_map_clear_dirty(); // clear the pan dirty flag
 
-    fix.lat_1e7 = 2000;
+    fix.lat_1e7 = 700000000;
     purrgo_app_update(&fix); // should ignore gnss change for map follow
     assert(purrgo_app_map_is_dirty() == false);
 
+    // Cancel pan when GNSS is far away -> sets dirty and centers
     purrgo_app_handle_button(PURRGO_BTN_OK); // reset manual pan
+    assert(purrgo_app_is_manual_pan_active() == false);
+    assert(purrgo_app_map_is_dirty() == true);
+    assert(purrgo_app_get_map_center_lat() == 700000000);
     purrgo_app_map_clear_dirty();
+
+    // Cancel pan when GNSS is inside FOLLOW_START -> does not set dirty
+    purrgo_app_handle_button(PURRGO_BTN_UP); // enter manual pan mode
+    assert(purrgo_app_is_manual_pan_active() == true);
+    purrgo_app_map_clear_dirty(); // clear the pan dirty flag
+    // Currently centered slightly UP from 700000000. GNSS is at 700000000.
+    // The pan was 1 step. 1 step is 1/4 screen. FOLLOW_START is 1/8 screen.
+    // So the GNSS is 1/4 screen away, which IS outside FOLLOW_START!
+    // We need to move the GNSS close to the new center to test the "not dirty" path.
+    fix.lat_1e7 = purrgo_app_get_map_center_lat();
+    purrgo_app_update(&fix); // still no auto-follow because pan active
+    purrgo_app_handle_button(PURRGO_BTN_OK); // cancel pan
+    assert(purrgo_app_is_manual_pan_active() == false);
+    // Since fix is exactly at center, dx=0, dy=0 < FOLLOW_START. Should not be dirty.
+    assert(purrgo_app_map_is_dirty() == false);
 
     // State transition sets dirty
     purrgo_app_handle_button(PURRGO_BTN_MENU); // goto trip computer
