@@ -1,5 +1,8 @@
 #include "purrgo/app_fsm.h"
 #include "purrgo/config.h"
+#include "purrgo/map.h"
+#include "purrgo/geo.h"
+#include "purrgo/hardware_config.h"
 #include <stdio.h>
 #include <assert.h>
 
@@ -138,33 +141,91 @@ void test_map_dirty_state() {
     assert(purrgo_app_map_is_dirty() == true);
     purrgo_app_map_clear_dirty();
 
-    // Leaving manual pan state sets dirty
-    assert(purrgo_app_is_manual_pan_active() == true);
-    purrgo_app_handle_button(PURRGO_BTN_OK);
-    assert(purrgo_app_is_manual_pan_active() == false);
-    assert(purrgo_app_map_is_dirty() == true);
-    purrgo_app_map_clear_dirty();
-
-    // GNSS change without manual pan sets dirty
+    // Leaving manual pan state sets dirty if GNSS is outside FOLLOW_START
     purrgo_gnss_solution_t fix = {0};
     fix.valid = true;
-    fix.lat_1e7 = 1000;
-    fix.lon_1e7 = 1000;
-    purrgo_app_update(&fix);
-    assert(purrgo_app_map_is_dirty() == true);
+
+    // Current center is modified by previous tests, so we need to reset it deterministically.
+    setup_test_state(0, 0, PURRGO_MAP_SCALE_10KM);
     purrgo_app_map_clear_dirty();
 
-    // GNSS change with manual pan DOES NOT set dirty
+    // Deterministic testing for the three hysteresis zones
+    purrgo_viewport_t map_vp = {
+        .width = PURRGO_HW_DISPLAY_WIDTH_PX,
+        .height = PURRGO_HW_DISPLAY_HEIGHT_PX - 18,
+        .offset_x = 0,
+        .offset_y = 9
+    };
+    purrgo_bbox_t dynamic_cam;
+    purrgo_geo_bbox_from_center(0, 0, purrgo_app_get_map_scale_width_m(), &map_vp, &dynamic_cam);
+
+    // Calculate exact geographic span to derive deterministic test coordinates
+    int64_t geo_width = (int64_t)dynamic_cam.max_x - (int64_t)dynamic_cam.min_x;
+
+    // 1. INSIDE FOLLOW_STOP: e.g. 1/32 of screen width
+    // geographic width maps to map_vp.width. So 1/32 of geo_width is 1/32 screen.
+    int32_t dist_stop_zone = geo_width / 32;
+    fix.lon_1e7 = dist_stop_zone;
+    fix.lat_1e7 = 0;
+    purrgo_app_update(&fix);
+    assert(purrgo_app_map_is_dirty() == false); // Should remain clean, inside STOP
+    assert(purrgo_app_get_map_center_lon() == 0);
+
+    // 2. BETWEEN FOLLOW_STOP AND FOLLOW_START: e.g. 3/32 of screen width (between 1/16=2/32 and 1/8=4/32)
+    int32_t dist_between_zone = (geo_width * 3) / 32;
+    fix.lon_1e7 = dist_between_zone;
+    fix.lat_1e7 = 0;
+    purrgo_app_update(&fix);
+    assert(purrgo_app_map_is_dirty() == false); // Should remain clean, between STOP and START
+    assert(purrgo_app_get_map_center_lon() == 0);
+
+    // 3. AT/OVER FOLLOW_START: e.g. 1/4 of screen width (2/8)
+    int32_t dist_start_zone = geo_width / 4;
+    fix.lon_1e7 = dist_start_zone;
+    fix.lat_1e7 = 0;
+    purrgo_app_update(&fix);
+    assert(purrgo_app_map_is_dirty() == true); // Should trigger auto-follow
+    assert(purrgo_app_get_map_center_lon() == dist_start_zone); // Recentered exactly
+    purrgo_app_map_clear_dirty();
+
+    // After recentering, the position is at screen center, therefore inside FOLLOW_STOP.
+    // Moving it again by a small amount (1/32) relative to the new center.
+    fix.lon_1e7 = dist_start_zone + dist_stop_zone;
+    purrgo_app_update(&fix);
+    assert(purrgo_app_map_is_dirty() == false); // Does not trigger redraw again
+
+    // GNSS change with manual pan DOES NOT set dirty, even if far away
     purrgo_app_handle_button(PURRGO_BTN_UP); // enter manual pan mode
     assert(purrgo_app_is_manual_pan_active() == true);
     purrgo_app_map_clear_dirty(); // clear the pan dirty flag
 
-    fix.lat_1e7 = 2000;
-    purrgo_app_update(&fix); // should ignore gnss change for map follow
+    fix.lon_1e7 = dist_start_zone + geo_width * 2; // Far movement
+    purrgo_app_update(&fix);
     assert(purrgo_app_map_is_dirty() == false);
 
+    // Cancel pan when GNSS is far away -> sets dirty and centers
     purrgo_app_handle_button(PURRGO_BTN_OK); // reset manual pan
+    assert(purrgo_app_is_manual_pan_active() == false);
+    assert(purrgo_app_map_is_dirty() == true);
+    assert(purrgo_app_get_map_center_lon() == dist_start_zone + geo_width * 2);
     purrgo_app_map_clear_dirty();
+
+    // Cancel pan when GNSS is inside FOLLOW_START -> does not set dirty
+    purrgo_app_handle_button(PURRGO_BTN_UP); // enter manual pan mode
+    assert(purrgo_app_is_manual_pan_active() == true);
+    purrgo_app_map_clear_dirty(); // clear the pan dirty flag
+
+    // After panning, GNSS is now outside FOLLOW_START again because pan moves by 1/4 screen.
+    // We update the fix to be exactly at the current map center so it's inside FOLLOW_STOP.
+    fix.lat_1e7 = purrgo_app_get_map_center_lat();
+    fix.lon_1e7 = purrgo_app_get_map_center_lon();
+    purrgo_app_update(&fix); // no auto-follow because pan active
+
+    purrgo_app_handle_button(PURRGO_BTN_OK); // cancel pan
+    assert(purrgo_app_is_manual_pan_active() == false);
+
+    // Since fix is exactly at center, dx=0, dy=0 which is <= FOLLOW_STOP.
+    assert(purrgo_app_map_is_dirty() == false);
 
     // State transition sets dirty
     purrgo_app_handle_button(PURRGO_BTN_MENU); // goto trip computer
