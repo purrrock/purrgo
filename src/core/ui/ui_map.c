@@ -27,6 +27,7 @@ typedef struct {
 } marker_state_t;
 
 static marker_state_t prev_marker_state;
+static bool prev_marker_state_valid = false;
 
 static void log_marker_diagnostic(const char* reason, const marker_state_t* m) {
     if (m->rendered) {
@@ -399,8 +400,10 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
         marker_state_t new_marker_state;
         ui_calc_marker_state(gnss, &map_vp, &dynamic_cam, &new_marker_state);
 
-        const char* reason = "MARKER: initial";
-        if (prev_marker_state.lat_1e7 != 0 || prev_marker_state.lon_1e7 != 0) {
+        if (!prev_marker_state_valid) {
+            log_marker_diagnostic("MARKER: initial", &new_marker_state);
+            prev_marker_state_valid = true;
+        } else {
             bool changed = (new_marker_state.rendered != prev_marker_state.rendered) ||
                            (new_marker_state.gnss_valid != prev_marker_state.gnss_valid) ||
                            (new_marker_state.course_valid != prev_marker_state.course_valid) ||
@@ -408,19 +411,20 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
                            (new_marker_state.lat_1e7 != prev_marker_state.lat_1e7) ||
                            (new_marker_state.lon_1e7 != prev_marker_state.lon_1e7);
 
-            if (!changed) {
-                reason = "MARKER: no change";
-            } else if (new_marker_state.gnss_valid != prev_marker_state.gnss_valid) {
-                reason = "MARKER: validity changed";
-            } else if (new_marker_state.lat_1e7 != prev_marker_state.lat_1e7 || new_marker_state.lon_1e7 != prev_marker_state.lon_1e7) {
-                reason = "MARKER: position changed";
-            } else if (new_marker_state.course_valid != prev_marker_state.course_valid || new_marker_state.course_deg != prev_marker_state.course_deg) {
-                reason = "MARKER: course changed";
-            } else if (new_marker_state.rendered != prev_marker_state.rendered) {
-                reason = "MARKER: visibility changed";
+            if (changed) {
+                const char* reason = "MARKER: unknown";
+                if (new_marker_state.gnss_valid != prev_marker_state.gnss_valid) {
+                    reason = "MARKER: validity changed";
+                } else if (new_marker_state.lat_1e7 != prev_marker_state.lat_1e7 || new_marker_state.lon_1e7 != prev_marker_state.lon_1e7) {
+                    reason = "MARKER: position changed";
+                } else if (new_marker_state.course_valid != prev_marker_state.course_valid || new_marker_state.course_deg != prev_marker_state.course_deg) {
+                    reason = "MARKER: course changed";
+                } else if (new_marker_state.rendered != prev_marker_state.rendered) {
+                    reason = "MARKER: visibility changed";
+                }
+                log_marker_diagnostic(reason, &new_marker_state);
             }
         }
-        log_marker_diagnostic(reason, &new_marker_state);
 
         ui_draw_marker(gfx, &new_marker_state);
         prev_marker_state = new_marker_state;
