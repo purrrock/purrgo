@@ -496,8 +496,9 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
                     display_refresh_region(min_x, min_y, clip_w, clip_h);
                 }
             }
-            prev_marker_state = new_marker_state;
         }
+
+        prev_marker_state = new_marker_state;
     }
 
     gfx_set_color(gfx, 0, 3);
