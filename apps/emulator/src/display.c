@@ -32,3 +32,26 @@ void  display_set_pixel(int16_t x, int16_t y, uint8_t color) {
 const uint8_t* display_get_framebuffer(void) {
     return framebuffer;
 }
+
+#include "purrgo/display_hal.h"
+#include <stdio.h>
+#include <stdbool.h>
+
+static bool emu_full_refresh_pending = false;
+static bool emu_partial_refresh_pending = false;
+static int16_t emu_partial_x = 0;
+static int16_t emu_partial_y = 0;
+static int16_t emu_partial_w = 0;
+static int16_t emu_partial_h = 0;
+
+void display_refresh(void) {
+    emu_full_refresh_pending = true;
+}
+
+void display_refresh_region(int16_t x, int16_t y, int16_t w, int16_t h) {
+    emu_partial_refresh_pending = true;
+    emu_partial_x = x;
+    emu_partial_y = y;
+    emu_partial_w = w;
+    emu_partial_h = h;
+}
