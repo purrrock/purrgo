@@ -17,6 +17,10 @@ void purrgo_gnss_mock_init(purrgo_gnss_solution_t* state) {
     state->alt_m = 150;
     state->satellites_tracked = 9;
 
+    // Set course to valid and 45.00 degrees initially
+    state->course_valid = true;
+    state->course_deg_100 = 4500;
+
     // Static time and date
     state->hours = 12;
     state->minutes = 34;
@@ -53,4 +57,15 @@ void purrgo_gnss_mock_update(purrgo_gnss_solution_t* state) {
     state->lat_1e7 += 10;
     // Adding 15 to longitude (approx 1.5 meters)
     state->lon_1e7 += 15;
+
+    // Toggle course_valid based on seconds to simulate GPS loss of course
+    if (state->seconds % 10 == 0) {
+        state->course_valid = !state->course_valid;
+    }
+
+    // Increment course slightly, wrapping around 360 degrees
+    state->course_deg_100 += 150; // Add 1.5 degrees
+    if (state->course_deg_100 >= 36000) {
+        state->course_deg_100 -= 36000;
+    }
 }
