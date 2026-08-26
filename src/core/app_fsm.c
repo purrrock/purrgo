@@ -439,7 +439,17 @@ static void apply_auto_follow(const purrgo_gnss_solution_t* fix) {
     int32_t follow_start_x = map_vp.width / 8;
     int32_t follow_start_y = map_vp.height / 8;
 
-    if (dx >= follow_start_x || dy >= follow_start_y) {
+    int32_t follow_stop_x = map_vp.width / 16;
+    int32_t follow_stop_y = map_vp.height / 16;
+
+    if (dx <= follow_stop_x && dy <= follow_stop_y) {
+        // Inside FOLLOW_STOP zone: no camera change
+        return;
+    } else if (dx < follow_start_x && dy < follow_start_y) {
+        // Between FOLLOW_STOP and FOLLOW_START zones: no camera change
+        return;
+    } else {
+        // Reached or exceeded FOLLOW_START zone: recenter exactly to GNSS position
         map_center_lat_1e7 = fix->lat_1e7;
         map_center_lon_1e7 = fix->lon_1e7;
         map_dirty = true;
