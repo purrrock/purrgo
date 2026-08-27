@@ -42,6 +42,12 @@ typedef struct {
 typedef void (*gfx_draw_pixel_fn)(void *fb, int16_t x, int16_t y, gfx_color_t color);
 
 /*
+ * Сигнатура callback-функции для чтения пикселя.
+ * Возвращает текущий цвет пикселя или 0, если координаты за пределами экрана.
+ */
+typedef gfx_color_t (*gfx_read_pixel_fn)(void *fb, int16_t x, int16_t y);
+
+/*
  * Контекст графического ядра.
  * Передается по указателю во все функции отрисовки.
  */
@@ -51,6 +57,7 @@ typedef struct {
     
     void *framebuffer;          /* Opaque-указатель на массив пикселей платформы */
     gfx_draw_pixel_fn draw_pixel; /* Указатель на платформенно-зависимую функцию вывода */
+    gfx_read_pixel_fn read_pixel; /* Указатель на платформенно-зависимую функцию чтения */
     
     gfx_color_t color_fg;       /* Текущий цвет переднего плана (линии, текст, контуры) */
     gfx_color_t color_bg;       /* Текущий цвет фона (заливка, очистка экрана) */
@@ -73,7 +80,8 @@ bool gfx_init(gfx_context_t *ctx,
               int16_t width, 
               int16_t height, 
               void *framebuffer, 
-              gfx_draw_pixel_fn draw_pixel_cb);
+              gfx_draw_pixel_fn draw_pixel_cb,
+              gfx_read_pixel_fn read_pixel_cb);
 
 /*
  * Установка области отсечения (clipping).
@@ -97,6 +105,12 @@ void gfx_set_color(gfx_context_t *ctx, gfx_color_t fg, gfx_color_t bg);
  * но здесь оставлена как прототип для вызова внутри gfx_line.c / gfx_polygon.c
  */
 void gfx_draw_pixel(gfx_context_t *ctx, int16_t x, int16_t y);
+
+/*
+ * Чтение пикселя из Framebuffer с проверкой границ (clipping).
+ * Если пиксель за пределами clipping region, возвращается 0 (Black).
+ */
+gfx_color_t gfx_read_pixel(gfx_context_t *ctx, int16_t x, int16_t y);
 
 /*
  * Очистка всего Framebuffer текущим цветом фона (color_bg).

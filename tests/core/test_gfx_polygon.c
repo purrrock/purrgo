@@ -19,6 +19,13 @@ static void draw_pixel(void *user_data, int16_t x, int16_t y, gfx_color_t color)
     }
 }
 
+static gfx_color_t read_pixel(void *user_data, int16_t x, int16_t y) {
+    if (x >= 0 && x < WIDTH && y >= 0 && y < HEIGHT) {
+        return framebuffer[y * WIDTH + x];
+    }
+    return 0;
+}
+
 static void reset_framebuffer(gfx_context_t *ctx) {
     memset(framebuffer, 0, sizeof(framebuffer));
     pixels_drawn = 0;
@@ -45,7 +52,7 @@ static bool check_pixel(int16_t x, int16_t y, uint8_t expected) {
 static bool test_simple_polygon() {
     printf("Running test_simple_polygon...\n");
     gfx_context_t ctx;
-    gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, draw_pixel);
+    gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, draw_pixel, read_pixel);
     reset_framebuffer(&ctx);
 
     gfx_point_t points[] = {
@@ -95,7 +102,7 @@ static bool test_simple_polygon() {
 static bool test_polygon_with_one_hole() {
     printf("Running test_polygon_with_one_hole...\n");
     gfx_context_t ctx;
-    gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, draw_pixel);
+    gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, draw_pixel, read_pixel);
     reset_framebuffer(&ctx);
 
     gfx_point_t points[] = {
@@ -146,7 +153,7 @@ static bool test_polygon_with_one_hole() {
 static bool test_polygon_with_multiple_holes() {
     printf("Running test_polygon_with_multiple_holes...\n");
     gfx_context_t ctx;
-    gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, draw_pixel);
+    gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, draw_pixel, read_pixel);
     reset_framebuffer(&ctx);
 
     gfx_point_t points[] = {
@@ -193,7 +200,7 @@ static bool test_polygon_with_multiple_holes() {
 static bool test_hole_partially_out_of_viewport() {
     printf("Running test_hole_partially_out_of_viewport...\n");
     gfx_context_t ctx;
-    gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, draw_pixel);
+    gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, draw_pixel, read_pixel);
     reset_framebuffer(&ctx);
 
     gfx_point_t points[] = {
@@ -232,7 +239,7 @@ static bool test_hole_partially_out_of_viewport() {
 static bool test_polygon_too_many_nodes() {
     printf("Running test_polygon_too_many_nodes...\n");
     gfx_context_t ctx;
-    gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, draw_pixel);
+    gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, draw_pixel, read_pixel);
     reset_framebuffer(&ctx);
 
     // To hit >64 intersections on a single horizontal scanline,
@@ -282,7 +289,7 @@ static bool test_polygon_too_many_nodes() {
 static bool test_even_odd_winding() {
     printf("Running test_even_odd_winding...\n");
     gfx_context_t ctx;
-    gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, draw_pixel);
+    gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, draw_pixel, read_pixel);
     reset_framebuffer(&ctx);
 
     gfx_point_t points[] = {
