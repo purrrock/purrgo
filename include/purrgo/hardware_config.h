@@ -92,7 +92,7 @@
 
 #elif PURRGO_HW_PROFILE == PURRGO_HW_PROFILE_RELEASE
 
-/* Release: E-Ink 2.9" SPI */
+/* Release: E-Ink 2.7" SPI */
 #define PURRGO_HW_DISPLAY_WIDTH_PX      176
 #define PURRGO_HW_DISPLAY_HEIGHT_PX     264
 
@@ -114,7 +114,7 @@
 #elif PURRGO_HW_PROFILE == PURRGO_HW_PROFILE_PROTOTYPE
 #define PURRGO_HW_DISPLAY_DIAGONAL_MM   61 /* 2.4 дюйма = ~60.96 мм */
 #elif PURRGO_HW_PROFILE == PURRGO_HW_PROFILE_RELEASE
-#define PURRGO_HW_DISPLAY_DIAGONAL_MM   74 /* 2.9 дюйма = ~73.66 мм */
+#define PURRGO_HW_DISPLAY_DIAGONAL_MM   74 /* 2.7 дюйма = ~73.66 мм */
 #else
 #error "PURRGO_HW_DISPLAY_DIAGONAL_MM must be defined"
 #endif

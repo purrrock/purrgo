@@ -873,7 +873,7 @@ Prototype:
 
 Release:
     176 × 264
-    2.9" E-Ink
+    2.7" E-Ink
 ```
 
 The release display is intended to provide a low-static-power reflective interface suitable for long battery operation.
@@ -1086,7 +1086,7 @@ GNSS:
     modern u-blox M10-class receiver
 
 Display:
-    2.9" E-Ink
+    2.7" E-Ink
     176 × 264
     2 bpp / 4 logical grayscale levels
 
