@@ -46,16 +46,16 @@ void purrgo_logger_set_mode(track_logger_mode_t mode) {
 // Вспомогательная функция для сброса данных на файловую систему
 static void flush_buffer(void) {
     if (buffer_pos > 0 && active_file != NULL) {
+        // Физическая запись накопленных данных (до 512 байт)
         purrgo_fs_write(active_file, (const uint8_t*)write_buffer, buffer_pos);
-        // Reduce write amplification: only sync once every 5 minutes
-        if (last_recorded_time == 0 || (last_recorded_time - last_sync_time) >= 300) {
-            purrgo_fs_sync(active_file); // <-- Критически важно для выживания файла
-            last_sync_time = last_recorded_time;
-        }
+        
+        // Обязательная синхронизация FAT-таблицы при каждом сбросе буфера.
+        // Гарантирует выживание файла при внезапном отключении аккумулятора.
+        purrgo_fs_sync(active_file); 
+        
         buffer_pos = 0;
     }
 }
-
 // Запись строки в буфер с проверкой переполнения
 static void write_to_buffer(const char* str) {
     size_t len = strlen(str);
