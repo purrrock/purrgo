@@ -864,7 +864,7 @@ The current hardware profiles are:
 
 ```text
 Development:
-    128 × 296
+    176 × 264
     E-Ink emulator geometry
 
 Prototype:
@@ -872,7 +872,7 @@ Prototype:
     2.4" ST7789 TFT
 
 Release:
-    128 × 296
+    176 × 264
     2.9" E-Ink
 ```
 
@@ -1087,7 +1087,7 @@ GNSS:
 
 Display:
     2.9" E-Ink
-    128 × 296
+    176 × 264
     2 bpp / 4 logical grayscale levels
 
 Storage:

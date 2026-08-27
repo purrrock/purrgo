@@ -6,8 +6,8 @@
 #include <string.h>
 #include <stdbool.h>
 
-#define WIDTH 128
-#define HEIGHT 296
+#define WIDTH 176
+#define HEIGHT 264
 
 static uint8_t framebuffer[WIDTH * HEIGHT];
 
