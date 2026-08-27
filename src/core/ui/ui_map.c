@@ -33,8 +33,8 @@ static bool prev_marker_state_valid = false;
  * Background cache to avoid re-rendering the whole map when marker changes.
  * Size 24x24 is enough for the marker size + safety margin.
  */
-#define MARKER_BG_CACHE_W 32
-#define MARKER_BG_CACHE_H 32
+#define MARKER_BG_CACHE_W 16
+#define MARKER_BG_CACHE_H 16
 
 static struct {
     int16_t x;
