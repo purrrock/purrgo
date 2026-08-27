@@ -7,15 +7,22 @@
 #include <stdio.h>
 #include <assert.h>
 
-void setup_test_state(int32_t lat, int32_t lon, purrgo_map_scale_t scale) {
-    purrgo_app_init();
+#include <string.h>
 
-    // Simulate setting internal state (not directly exposed via public API setters for these tests,
-    // but we can manipulate config to some extent and rely on initial values if needed,
-    // or just let the button handlers move it and verify).
-    // Let's use GPS fix update to set position initially.
-    extern void purrgo_app_set_map_center_for_test(int32_t lat, int32_t lon);
-    purrgo_app_set_map_center_for_test(lat, lon);
+bool mock_config_exists = false;
+purrgo_config_t mock_config_data;
+
+void setup_test_state(int32_t lat, int32_t lon, purrgo_map_scale_t scale) {
+    mock_config_exists = true;
+    mock_config_data.tz_offset_minutes = 180;
+    mock_config_data.log_mode = 0;
+    mock_config_data.backlight_on = true;
+    strcpy(mock_config_data.map_dir, "test");
+    mock_config_data.last_lat_1e7 = lat;
+    mock_config_data.last_lon_1e7 = lon;
+
+    purrgo_app_init();
+    purrgo_app_map_clear_dirty();
 
     // adjust scale
     purrgo_map_scale_t curr_scale = purrgo_app_get_map_zoom_level();
@@ -78,34 +85,30 @@ void test_pan_large_scale_high_latitude() {
 
 void test_pan_coordinate_bounds_clamping() {
     // To ensure next_lat and next_lon clamp safely at INT32_MAX / INT32_MIN boundaries,
-    // we set the initial state very close to INT32_MAX and attempt to move beyond it.
-    setup_test_state(2000000000, 2000000000, PURRGO_MAP_SCALE_10000KM);
+    // we start at 900,000,000 (max valid WGS84 for purrgo_config_load) and move UP/RIGHT
+    // repeatedly. 6 presses of 225,000,000 (10000KM scale) exceeds 2.14B.
+    setup_test_state(900000000, 1800000000, PURRGO_MAP_SCALE_10000KM);
 
-    purrgo_app_handle_button(PURRGO_BTN_UP);
+    for (int i=0; i<6; i++) {
+        purrgo_app_handle_button(PURRGO_BTN_UP);
+        purrgo_app_handle_button(PURRGO_BTN_RIGHT);
+    }
     int32_t new_lat = purrgo_app_get_map_center_lat();
-
-    // 2000000000 + 225000000 = 2225000000, which is > INT32_MAX (2147483647).
-    // The coordinate clamp logic should catch it.
     assert(new_lat == 2147483647);
 
-    purrgo_app_handle_button(PURRGO_BTN_RIGHT);
     int32_t new_lon = purrgo_app_get_map_center_lon();
-    // step_x clamped to INT32_MAX already, so 2B + 2.14B > INT32_MAX -> Clamped.
     assert(new_lon == 2147483647);
 
     // Same for negative bounds (INT32_MIN)
-    setup_test_state(-2000000000, -2000000000, PURRGO_MAP_SCALE_10000KM);
-    purrgo_app_handle_button(PURRGO_BTN_DOWN);
+    setup_test_state(-900000000, -1800000000, PURRGO_MAP_SCALE_10000KM);
+
+    for (int i=0; i<6; i++) {
+        purrgo_app_handle_button(PURRGO_BTN_DOWN);
+        purrgo_app_handle_button(PURRGO_BTN_LEFT);
+    }
+
     int32_t current_lat = purrgo_app_get_map_center_lat();
-    // Comparing with INT32_MIN macro directly
     assert(current_lat == INT32_MIN);
-
-    // Restore the map state again for LON, because sometimes the button down state modifies step behavior unexpectedly
-    setup_test_state(-2000000000, -2000000000, PURRGO_MAP_SCALE_10000KM);
-
-    // Move LEFT directly.
-    // step_x at -2B lat is large, so -2000000000 - large > INT32_MIN -> Clamps to INT32_MIN.
-    purrgo_app_handle_button(PURRGO_BTN_LEFT);
 
     int32_t current_lon = purrgo_app_get_map_center_lon();
 
@@ -182,7 +185,7 @@ void test_map_dirty_state() {
     fix.lon_1e7 = dist_start_zone;
     fix.lat_1e7 = 0;
 
-    // We expect it to calculate opposite side, so the new center will be different, but we check dirty flag here
+    // Check dirty flag to ensure auto-follow is triggered
     purrgo_app_update(&fix);
     assert(purrgo_app_map_is_dirty() == true); // Should trigger auto-follow
 
@@ -339,7 +342,7 @@ void test_auto_follow_opposite_side() {
     int32_t dx = (int32_t)new_sx - center_x;
     if (dx < 0) dx = -dx;
     int32_t follow_start_x = (map_vp.width / 2) - 16;
-    assert(dx <= follow_start_x + 1);
+    assert(dx <= follow_start_x);
     // It should be definitely on the left half (since it was on the right edge)
     assert(new_sx < center_x);
     // Y should be unchanged at center_y
@@ -362,11 +365,40 @@ int main() {
 }
 
 // Mock filesystem dependencies required by purrgo_core
+#include <string.h>
+
+
+
 purrgo_dir_t* purrgo_fs_opendir(const char* path) { return NULL; }
 bool purrgo_fs_readdir(purrgo_dir_t* dir, purrgo_fs_dirent_t* entry) { return false; }
 void purrgo_fs_closedir(purrgo_dir_t* dir) {}
-purrgo_file_t* purrgo_fs_open(const char* path, fs_mode_t mode) { return NULL; }
-uint32_t purrgo_fs_read(purrgo_file_t* file, uint8_t* buffer, uint32_t size) { return 0; }
+
+purrgo_file_t* purrgo_fs_open(const char* path, fs_mode_t mode) {
+    if (strcmp(path, "PURRGO.CFG") == 0 && mock_config_exists) {
+        return (purrgo_file_t*)1; // valid handle
+    }
+    return NULL;
+}
+
+uint32_t purrgo_fs_read(purrgo_file_t* file, uint8_t* buffer, uint32_t size) {
+    if (file == (purrgo_file_t*)1) {
+        // serialize mock_config_data into string
+        int len = snprintf((char*)buffer, size,
+            "TZ_MIN=%d\n"
+            "MAP_DIR=%s\n"
+            "LAST_LAT_1E7=%d\n"
+            "LAST_LON_1E7=%d\n",
+
+            mock_config_data.tz_offset_minutes,
+            mock_config_data.map_dir,
+            mock_config_data.last_lat_1e7,
+            mock_config_data.last_lon_1e7
+        );
+        return (uint32_t)len;
+    }
+    return 0;
+}
+
 uint32_t purrgo_fs_write(purrgo_file_t* file, const uint8_t* buffer, uint32_t size) { return size; }
 void purrgo_fs_close(purrgo_file_t* file) {}
 void purrgo_fs_sync(purrgo_file_t* file) {}

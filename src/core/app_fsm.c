@@ -456,15 +456,15 @@ static void apply_auto_follow(const purrgo_gnss_solution_t* fix) {
         int32_t target_x = 2 * center_x - sx;
         int32_t target_y = 2 * center_y - sy;
 
-        // Clamp target_x to safe area
-        int32_t min_x = center_x - follow_start_x;
-        int32_t max_x = center_x + follow_start_x;
+        // Clamp target_x to safe area (shifted inward by 1 pixel to guarantee boundary adherence against integer rounding)
+        int32_t min_x = center_x - follow_start_x + 1;
+        int32_t max_x = center_x + follow_start_x - 1;
         if (target_x < min_x) target_x = min_x;
         if (target_x > max_x) target_x = max_x;
 
         // Clamp target_y to safe area
-        int32_t min_y = center_y - follow_start_y;
-        int32_t max_y = center_y + follow_start_y;
+        int32_t min_y = center_y - follow_start_y + 1;
+        int32_t max_y = center_y + follow_start_y - 1;
         if (target_y < min_y) target_y = min_y;
         if (target_y > max_y) target_y = max_y;
 
@@ -526,7 +526,8 @@ static void apply_auto_follow(const purrgo_gnss_solution_t* fix) {
         int32_t new_dy = (int32_t)new_sy - center_y;
         if (new_dy < 0) new_dy = -new_dy;
 
-        if (new_dx <= follow_start_x + 1 && new_dy <= follow_start_y + 1) {
+
+        if (new_dx <= follow_start_x && new_dy <= follow_start_y) {
             printf("AUTO-FOLLOW: marker=(%d,%d) target=(%d,%d) result=(%d,%d)\n", sx, sy, (int)target_x, (int)target_y, new_sx, new_sy);
 
             if (map_center_lat_1e7 != (int32_t)candidate_lat || map_center_lon_1e7 != (int32_t)candidate_lon) {
@@ -534,11 +535,6 @@ static void apply_auto_follow(const purrgo_gnss_solution_t* fix) {
                 map_center_lon_1e7 = (int32_t)candidate_lon;
                 map_dirty = true;
             }
-        } else {
-            // Fallback (should theoretically not happen, but safe practice)
-            map_center_lat_1e7 = fix->lat_1e7;
-            map_center_lon_1e7 = fix->lon_1e7;
-            map_dirty = true;
         }
     }
 }
@@ -583,9 +579,4 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
         case APP_STATE_MENU_DIR_SELECT:
             break;
     }
-}
-void purrgo_app_set_map_center_for_test(int32_t lat, int32_t lon) {
-    map_center_lat_1e7 = lat;
-    map_center_lon_1e7 = lon;
-    map_dirty = true;
 }
