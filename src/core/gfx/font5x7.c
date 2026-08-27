@@ -1,19 +1,6 @@
-// ADAFRUIT GFX FONT WITH CYRILLIC BY ALEX (VERSION 1.0)
+#include "purrgo/font5x7.h"
 
-#ifndef FONT5X7_H
-#define FONT5X7_H
-
-#ifdef __AVR__
- #include <avr/io.h>
- #include <avr/pgmspace.h>
-#elif defined(ESP8266)
- #include <pgmspace.h>
-#else
- #define PROGMEM
-#endif
-
-//Standard ASCII 5x7 font
-static const unsigned char font[] PROGMEM = {
+const unsigned char font5x7[256][5] = {
 0x00, 0x00, 0x00, 0x00, 0x00, 
 0x3E, 0x55, 0x51, 0x55, 0x3E, 
 0x3E, 0x6B, 0x6F, 0x6B, 0x3E, 
@@ -276,4 +263,3 @@ static const unsigned char font[] PROGMEM = {
 0x7F, 0x08, 0x3E, 0x41, 0x3E, 
 0x46, 0x29, 0x19, 0x09, 0x7F
 };
-#endif //FONT5X7_H

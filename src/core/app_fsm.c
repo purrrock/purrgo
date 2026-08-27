@@ -541,19 +541,25 @@ static void apply_auto_follow(const purrgo_gnss_solution_t* fix) {
 
 void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
     // Check if relevant navigation data has changed to trigger a UI redraw
-    if (current_fix->valid != prev_fix.valid ||
-        current_fix->minutes != prev_fix.minutes ||
-        current_fix->hours != prev_fix.hours ||
-        current_fix->lat_1e7 != prev_fix.lat_1e7 ||
-        current_fix->lon_1e7 != prev_fix.lon_1e7 ||
-        current_fix->alt_m != prev_fix.alt_m ||
-        current_fix->speed_knots != prev_fix.speed_knots ||
-        current_fix->satellites_tracked != prev_fix.satellites_tracked) {
+if (current_fix->valid != prev_fix.valid ||
+    current_fix->minutes != prev_fix.minutes ||
+    current_fix->hours != prev_fix.hours ||
+    current_fix->lat_1e7 != prev_fix.lat_1e7 ||
+    current_fix->lon_1e7 != prev_fix.lon_1e7 ||
+    current_fix->alt_m != prev_fix.alt_m ||
+    current_fix->speed_knots != prev_fix.speed_knots ||
+    current_fix->satellites_tracked != prev_fix.satellites_tracked) {
 
-        ui_dirty = true;
-        prev_fix = *current_fix;
-    }
+    ui_dirty = true;
+}
 
+/*
+ * Always keep the latest GNSS solution.
+ *
+ * prev_fix is also used when manual pan is cancelled with OK,
+ * therefore it must not depend on whether a UI redraw was needed.
+ */
+prev_fix = *current_fix;
     purrgo_gnss_solution_t display_fix;
 
     // Пересчет UTC времени в локальное с использованием специализированного модуля purrgo_time

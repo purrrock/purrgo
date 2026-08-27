@@ -53,10 +53,10 @@ void purrgo_gnss_mock_update(purrgo_gnss_solution_t* state) {
     }
 
     // Simulate movement by slightly changing coordinates.
-    // Adding 100 to latitude (approx 10 meter)
-    state->lat_1e7 += 100;
-    // Adding 150 to longitude (approx 15 meters)
-    state->lon_1e7 += 150;
+    // Adding 200 to latitude (approx 20 meter)
+    state->lat_1e7 += 200;
+    // Adding 150 to longitude (approx 25 meters)
+    state->lon_1e7 += 250;
 
     // Toggle course_valid based on seconds to simulate GPS loss of course
     if (state->seconds % 10 == 0) {
