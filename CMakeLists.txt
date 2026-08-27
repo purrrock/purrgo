@@ -33,6 +33,7 @@ set(CORE_SOURCES
     src/core/ui/ui_dir_select.c
     src/core/config.c
     src/core/geo.c
+    src/core/gfx/font5x7.c
     src/core/gfx/gfx_circle.c
     src/core/gfx/gfx_line.c
     src/core/gfx/gfx_polygon.c
