@@ -7,6 +7,8 @@
 #include <stdio.h>
 #include <assert.h>
 
+void purrgo_app_set_map_center_for_test(int32_t lat, int32_t lon);
+
 void setup_test_state(int32_t lat, int32_t lon, purrgo_map_scale_t scale) {
     purrgo_app_init();
 
@@ -14,7 +16,7 @@ void setup_test_state(int32_t lat, int32_t lon, purrgo_map_scale_t scale) {
     // but we can manipulate config to some extent and rely on initial values if needed,
     // or just let the button handlers move it and verify).
     // Let's use GPS fix update to set position initially.
-    extern void purrgo_app_set_map_center_for_test(int32_t lat, int32_t lon);
+
     purrgo_app_set_map_center_for_test(lat, lon);
 
     // adjust scale
@@ -188,7 +190,7 @@ void test_map_dirty_state() {
 
     // Auto-follow now moves it so the marker is on the opposite side.
     // So the map center lon is NOT dist_start_zone anymore.
-    // Instead of exactly matching the number here, we just know it moved.
+    // We just assert that it moved to a new offset center.
     assert(purrgo_app_get_map_center_lon() != dist_start_zone);
     assert(purrgo_app_get_map_center_lon() != 0);
 
@@ -213,7 +215,7 @@ void test_map_dirty_state() {
     purrgo_app_handle_button(PURRGO_BTN_OK); // reset manual pan
     assert(purrgo_app_is_manual_pan_active() == false);
     assert(purrgo_app_map_is_dirty() == true);
-    // Again, it shouldn't exactly recenter to the marker anymore.
+    // Again, it calculates an opposite-side center instead of snapping directly to the marker.
     assert(purrgo_app_get_map_center_lon() != dist_start_zone + geo_width * 2);
     purrgo_app_map_clear_dirty();
 
