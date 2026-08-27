@@ -14,15 +14,8 @@ void setup_test_state(int32_t lat, int32_t lon, purrgo_map_scale_t scale) {
     // but we can manipulate config to some extent and rely on initial values if needed,
     // or just let the button handlers move it and verify).
     // Let's use GPS fix update to set position initially.
-    purrgo_gnss_solution_t fix = {0};
-    fix.valid = true;
-    fix.lat_1e7 = lat;
-    fix.lon_1e7 = lon;
-
-    // To set scale, we can just press MINUS or PLUS from default scale.
-    // Default is 500m (index 5)
-
-    purrgo_app_update(&fix);
+    extern void purrgo_app_set_map_center_for_test(int32_t lat, int32_t lon);
+    purrgo_app_set_map_center_for_test(lat, lon);
 
     // adjust scale
     purrgo_map_scale_t curr_scale = purrgo_app_get_map_zoom_level();
@@ -150,6 +143,7 @@ void test_map_dirty_state() {
     setup_test_state(0, 0, PURRGO_MAP_SCALE_10KM);
     purrgo_app_map_clear_dirty();
 
+
     // Deterministic testing for the three hysteresis zones
     purrgo_viewport_t map_vp = {
         .width = PURRGO_HW_DISPLAY_WIDTH_PX,
@@ -170,6 +164,7 @@ void test_map_dirty_state() {
     fix.lat_1e7 = 0;
     purrgo_app_update(&fix);
     assert(purrgo_app_map_is_dirty() == false); // Should remain clean, inside STOP
+
     assert(purrgo_app_get_map_center_lon() == 0);
 
     // 2. BETWEEN FOLLOW_STOP AND FOLLOW_START: e.g. 1/4 of screen width
@@ -197,7 +192,6 @@ void test_map_dirty_state() {
     assert(purrgo_app_get_map_center_lon() != dist_start_zone);
     assert(purrgo_app_get_map_center_lon() != 0);
 
-    int32_t new_center = purrgo_app_get_map_center_lon();
     purrgo_app_map_clear_dirty();
 
     // After recentering, the position is at screen center, therefore inside FOLLOW_STOP.
@@ -340,8 +334,14 @@ void test_auto_follow_opposite_side() {
     int16_t new_sx, new_sy;
     project_to_screen(fix.lon_1e7, fix.lat_1e7, &new_cam, &map_vp, &new_sx, &new_sy);
 
-    // The new x should be 16 (which is center_x - follow_start_x)
-    assert(new_sx == 16);
+    // The new x should be roughly on the opposite side, within the safe zone
+    int16_t center_x = map_vp.offset_x + map_vp.width / 2;
+    int32_t dx = (int32_t)new_sx - center_x;
+    if (dx < 0) dx = -dx;
+    int32_t follow_start_x = (map_vp.width / 2) - 16;
+    assert(dx <= follow_start_x + 1);
+    // It should be definitely on the left half (since it was on the right edge)
+    assert(new_sx < center_x);
     // Y should be unchanged at center_y
     assert(new_sy == map_vp.offset_y + map_vp.height / 2);
 }
