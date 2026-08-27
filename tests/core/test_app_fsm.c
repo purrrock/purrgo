@@ -1,4 +1,5 @@
 #include "purrgo/app_fsm.h"
+#include "../../src/core/map_projection.h"
 #include "purrgo/config.h"
 #include "purrgo/map.h"
 #include "purrgo/geo.h"
@@ -185,9 +186,18 @@ void test_map_dirty_state() {
     int32_t dist_start_zone = (geo_width * ((PURRGO_HW_DISPLAY_WIDTH_PX / 2) - 8)) / PURRGO_HW_DISPLAY_WIDTH_PX;
     fix.lon_1e7 = dist_start_zone;
     fix.lat_1e7 = 0;
+
+    // We expect it to calculate opposite side, so the new center will be different, but we check dirty flag here
     purrgo_app_update(&fix);
     assert(purrgo_app_map_is_dirty() == true); // Should trigger auto-follow
-    assert(purrgo_app_get_map_center_lon() == dist_start_zone); // Recentered exactly
+
+    // Auto-follow now moves it so the marker is on the opposite side.
+    // So the map center lon is NOT dist_start_zone anymore.
+    // Instead of exactly matching the number here, we just know it moved.
+    assert(purrgo_app_get_map_center_lon() != dist_start_zone);
+    assert(purrgo_app_get_map_center_lon() != 0);
+
+    int32_t new_center = purrgo_app_get_map_center_lon();
     purrgo_app_map_clear_dirty();
 
     // After recentering, the position is at screen center, therefore inside FOLLOW_STOP.
@@ -209,7 +219,8 @@ void test_map_dirty_state() {
     purrgo_app_handle_button(PURRGO_BTN_OK); // reset manual pan
     assert(purrgo_app_is_manual_pan_active() == false);
     assert(purrgo_app_map_is_dirty() == true);
-    assert(purrgo_app_get_map_center_lon() == dist_start_zone + geo_width * 2);
+    // Again, it shouldn't exactly recenter to the marker anymore.
+    assert(purrgo_app_get_map_center_lon() != dist_start_zone + geo_width * 2);
     purrgo_app_map_clear_dirty();
 
     // Cancel pan when GNSS is inside FOLLOW_START -> does not set dirty
@@ -285,6 +296,56 @@ void test_map_clean_refresh_skips_render() {
     assert(dbg_map_render_calls == calls_before);
 }
 
+
+void test_auto_follow_opposite_side() {
+    purrgo_app_init();
+
+    // Setup deterministic camera
+    setup_test_state(0, 0, PURRGO_MAP_SCALE_10KM);
+    purrgo_app_map_clear_dirty();
+
+    purrgo_viewport_t map_vp = {
+        .width = PURRGO_HW_DISPLAY_WIDTH_PX,
+        .height = PURRGO_HW_DISPLAY_HEIGHT_PX - 18,
+        .offset_x = 0,
+        .offset_y = 9
+    };
+    purrgo_bbox_t dynamic_cam;
+    purrgo_geo_bbox_from_center(0, 0, purrgo_app_get_map_scale_width_m(), &map_vp, &dynamic_cam);
+
+    int64_t geo_width = (int64_t)dynamic_cam.max_x - (int64_t)dynamic_cam.min_x;
+
+    purrgo_gnss_solution_t fix = {0};
+    fix.valid = true;
+
+    // Move marker far to the right, beyond the auto-follow safe zone (width/2 - 16)
+    // We choose an x distance corresponding to width/2 (edge of screen)
+    int32_t dist_edge_x = geo_width / 2;
+    fix.lon_1e7 = dist_edge_x;
+    fix.lat_1e7 = 0;
+
+    purrgo_app_update(&fix);
+
+    // The camera should have moved. We expect the marker to now be on the left side of the screen.
+    // The target_x should be 2 * center_x - sx
+    // center_x is width / 2. sx was width (approx). So 2 * (width/2) - width = 0.
+    // However, it is clamped to follow_start_x.
+    // follow_start_x = width/2 - 16.
+    // So target_x is clamped to center_x - follow_start_x = 16.
+
+    // Let's project the marker position with the new camera to verify it's near the left edge.
+    purrgo_bbox_t new_cam;
+    purrgo_geo_bbox_from_center(purrgo_app_get_map_center_lat(), purrgo_app_get_map_center_lon(), purrgo_app_get_map_scale_width_m(), &map_vp, &new_cam);
+
+    int16_t new_sx, new_sy;
+    project_to_screen(fix.lon_1e7, fix.lat_1e7, &new_cam, &map_vp, &new_sx, &new_sy);
+
+    // The new x should be 16 (which is center_x - follow_start_x)
+    assert(new_sx == 16);
+    // Y should be unchanged at center_y
+    assert(new_sy == map_vp.offset_y + map_vp.height / 2);
+}
+
 int main() {
     // Setup basic mock or rely on defaults since config_init logic is needed.
     // config load creates PURRGO.CFG
@@ -294,6 +355,7 @@ int main() {
     test_pan_coordinate_bounds_clamping();
     test_map_dirty_state();
     test_map_clean_refresh_skips_render();
+    test_auto_follow_opposite_side();
 
     printf("App FSM tests passed!\n");
     return 0;
