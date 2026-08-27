@@ -468,19 +468,38 @@ static void apply_auto_follow(const purrgo_gnss_solution_t* fix) {
         if (target_y < min_y) target_y = min_y;
         if (target_y > max_y) target_y = max_y;
 
-        int64_t geo_width = camera_span_x(&dynamic_cam);
+        // Exact inverse projection from GNSS coordinate to find new camera center
+        // From project_to_screen:
+        // projected_y = vp.height - (lat - min_y) * vp.height / height + vp.offset_y
+        // By substituting min_y = candidate_lat - rad_y and solving for candidate_lat:
+
         int64_t geo_height = (int64_t)dynamic_cam.max_y - (int64_t)dynamic_cam.min_y;
+        int64_t rad_y = geo_height / 2;
+        int64_t y_term = (int64_t)map_vp.height - target_y + map_vp.offset_y;
+        int64_t candidate_lat = (int64_t)fix->lat_1e7 - (y_term * geo_height + map_vp.height / 2) / map_vp.height + rad_y;
 
-        int64_t delta_lon = ((int64_t)(sx - target_x) * geo_width) / map_vp.width;
-        int64_t delta_lat = ((int64_t)(target_y - sy) * geo_height) / map_vp.height;
-
-        int64_t candidate_lon = (int64_t)map_center_lon_1e7 + delta_lon;
-        int64_t candidate_lat = (int64_t)map_center_lat_1e7 + delta_lat;
-
-        if (candidate_lon > INT32_MAX) candidate_lon = INT32_MAX;
-        if (candidate_lon < INT32_MIN) candidate_lon = INT32_MIN;
         if (candidate_lat > 900000000LL) candidate_lat = 900000000LL;
         if (candidate_lat < -900000000LL) candidate_lat = -900000000LL;
+
+        // Calculate exact width at the new latitude to handle correct longitudinal scaling
+        purrgo_bbox_t temp_cam;
+        purrgo_geo_bbox_from_center(
+            (int32_t)candidate_lat,
+            map_center_lon_1e7, // Lon doesn't matter for width calculation
+            purrgo_app_get_map_scale_width_m(),
+            &map_vp,
+            &temp_cam
+        );
+
+        int64_t geo_width = camera_span_x(&temp_cam);
+        int64_t rad_x = geo_width / 2;
+        int64_t x_term = (int64_t)target_x - map_vp.offset_x;
+        int64_t candidate_lon = (int64_t)fix->lon_1e7 - (x_term * geo_width + map_vp.width / 2) / map_vp.width + rad_x;
+
+        // Wrap candidate_lon cleanly within WGS84 +/- 180 (1.8e9) if needed, or simply clamp
+        // Consistent with manual panning clamping:
+        if (candidate_lon > INT32_MAX) candidate_lon = INT32_MAX;
+        if (candidate_lon < INT32_MIN) candidate_lon = INT32_MIN;
 
         purrgo_bbox_t candidate_cam;
         purrgo_geo_bbox_from_center(
@@ -507,7 +526,7 @@ static void apply_auto_follow(const purrgo_gnss_solution_t* fix) {
         int32_t new_dy = (int32_t)new_sy - center_y;
         if (new_dy < 0) new_dy = -new_dy;
 
-        if (new_dx <= follow_start_x && new_dy <= follow_start_y) {
+        if (new_dx <= follow_start_x + 1 && new_dy <= follow_start_y + 1) {
             printf("AUTO-FOLLOW: marker=(%d,%d) target=(%d,%d) result=(%d,%d)\n", sx, sy, (int)target_x, (int)target_y, new_sx, new_sy);
 
             if (map_center_lat_1e7 != (int32_t)candidate_lat || map_center_lon_1e7 != (int32_t)candidate_lon) {
@@ -564,4 +583,9 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
         case APP_STATE_MENU_DIR_SELECT:
             break;
     }
+}
+void purrgo_app_set_map_center_for_test(int32_t lat, int32_t lon) {
+    map_center_lat_1e7 = lat;
+    map_center_lon_1e7 = lon;
+    map_dirty = true;
 }
