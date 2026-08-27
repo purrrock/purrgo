@@ -31,13 +31,9 @@ static uint8_t compute_outcode(gfx_context_t *ctx, int16_t x, int16_t y) {
     return code;
 }
 
-void gfx_draw_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1, int16_t y1)
-{
-    if (ctx == NULL || ctx->draw_pixel == NULL) return;
-
-    // 1. Отсечение отрезка (Cohen-Sutherland)
-    uint8_t outcode0 = compute_outcode(ctx, x0, y0);
-    uint8_t outcode1 = compute_outcode(ctx, x1, y1);
+static bool clip_line(gfx_context_t *ctx, int16_t *x0, int16_t *y0, int16_t *x1, int16_t *y1) {
+    uint8_t outcode0 = compute_outcode(ctx, *x0, *y0);
+    uint8_t outcode1 = compute_outcode(ctx, *x1, *y1);
     bool accept = false;
 
     while (true) {
@@ -47,40 +43,47 @@ void gfx_draw_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1, int16
         } else if (outcode0 & outcode1) {
             break;
         } else {
-            int16_t x, y;
+            int16_t x = 0, y = 0;
             uint8_t outcodeOut = outcode0 ? outcode0 : outcode1;
 
-            int32_t dx = x1 - x0;
-            int32_t dy = y1 - y0;
+            int32_t dx = *x1 - *x0;
+            int32_t dy = *y1 - *y0;
 
             if (outcodeOut & TOP) {
-                x = x0 + dx * (ctx->clip_y + ctx->clip_h - 1 - y0) / dy;
+                x = *x0 + dx * (ctx->clip_y + ctx->clip_h - 1 - *y0) / dy;
                 y = ctx->clip_y + ctx->clip_h - 1;
             } else if (outcodeOut & BOTTOM) {
-                x = x0 + dx * (ctx->clip_y - y0) / dy;
+                x = *x0 + dx * (ctx->clip_y - *y0) / dy;
                 y = ctx->clip_y;
             } else if (outcodeOut & RIGHT) {
-                y = y0 + dy * (ctx->clip_x + ctx->clip_w - 1 - x0) / dx;
+                y = *y0 + dy * (ctx->clip_x + ctx->clip_w - 1 - *x0) / dx;
                 x = ctx->clip_x + ctx->clip_w - 1;
             } else if (outcodeOut & LEFT) {
-                y = y0 + dy * (ctx->clip_x - x0) / dx;
+                y = *y0 + dy * (ctx->clip_x - *x0) / dx;
                 x = ctx->clip_x;
             }
 
             if (outcodeOut == outcode0) {
-                x0 = x;
-                y0 = y;
-                outcode0 = compute_outcode(ctx, x0, y0);
+                *x0 = x;
+                *y0 = y;
+                outcode0 = compute_outcode(ctx, *x0, *y0);
             } else {
-                x1 = x;
-                y1 = y;
-                outcode1 = compute_outcode(ctx, x1, y1);
+                *x1 = x;
+                *y1 = y;
+                outcode1 = compute_outcode(ctx, *x1, *y1);
             }
         }
     }
+    return accept;
+}
 
-    if (!accept) {
-        return; 
+void gfx_draw_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1, int16_t y1)
+{
+    if (ctx == NULL || ctx->draw_pixel == NULL) return;
+
+    // 1. Отсечение отрезка (Cohen-Sutherland)
+    if (!clip_line(ctx, &x0, &y0, &x1, &y1)) {
+        return;
     }
 
     // 2. Отрисовка видимой части (Bresenham optimized)
@@ -121,50 +124,7 @@ void gfx_draw_dashed_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1
     int16_t orig_y0 = y0;
 
     // 1. Отсечение отрезка (Cohen-Sutherland)
-    uint8_t outcode0 = compute_outcode(ctx, x0, y0);
-    uint8_t outcode1 = compute_outcode(ctx, x1, y1);
-    bool accept = false;
-
-    while (true) {
-        if (!(outcode0 | outcode1)) {
-            accept = true;
-            break;
-        } else if (outcode0 & outcode1) {
-            break;
-        } else {
-            int16_t x, y;
-            uint8_t outcodeOut = outcode0 ? outcode0 : outcode1;
-
-            int32_t dx = x1 - x0;
-            int32_t dy = y1 - y0;
-
-            if (outcodeOut & TOP) {
-                x = x0 + dx * (ctx->clip_y + ctx->clip_h - 1 - y0) / dy;
-                y = ctx->clip_y + ctx->clip_h - 1;
-            } else if (outcodeOut & BOTTOM) {
-                x = x0 + dx * (ctx->clip_y - y0) / dy;
-                y = ctx->clip_y;
-            } else if (outcodeOut & RIGHT) {
-                y = y0 + dy * (ctx->clip_x + ctx->clip_w - 1 - x0) / dx;
-                x = ctx->clip_x + ctx->clip_w - 1;
-            } else if (outcodeOut & LEFT) {
-                y = y0 + dy * (ctx->clip_x - x0) / dx;
-                x = ctx->clip_x;
-            }
-
-            if (outcodeOut == outcode0) {
-                x0 = x;
-                y0 = y;
-                outcode0 = compute_outcode(ctx, x0, y0);
-            } else {
-                x1 = x;
-                y1 = y;
-                outcode1 = compute_outcode(ctx, x1, y1);
-            }
-        }
-    }
-
-    if (!accept) {
+    if (!clip_line(ctx, &x0, &y0, &x1, &y1)) {
         return;
     }
 
@@ -235,50 +195,7 @@ void gfx_draw_thick_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1,
     int16_t orig_y1 = y1;
 
     // 1. Отсечение отрезка (Cohen-Sutherland)
-    uint8_t outcode0 = compute_outcode(ctx, x0, y0);
-    uint8_t outcode1 = compute_outcode(ctx, x1, y1);
-    bool accept = false;
-
-    while (true) {
-        if (!(outcode0 | outcode1)) {
-            accept = true;
-            break;
-        } else if (outcode0 & outcode1) {
-            break;
-        } else {
-            int16_t x, y;
-            uint8_t outcodeOut = outcode0 ? outcode0 : outcode1;
-
-            int32_t dx = x1 - x0;
-            int32_t dy = y1 - y0;
-
-            if (outcodeOut & TOP) {
-                x = x0 + dx * (ctx->clip_y + ctx->clip_h - 1 - y0) / dy;
-                y = ctx->clip_y + ctx->clip_h - 1;
-            } else if (outcodeOut & BOTTOM) {
-                x = x0 + dx * (ctx->clip_y - y0) / dy;
-                y = ctx->clip_y;
-            } else if (outcodeOut & RIGHT) {
-                y = y0 + dy * (ctx->clip_x + ctx->clip_w - 1 - x0) / dx;
-                x = ctx->clip_x + ctx->clip_w - 1;
-            } else if (outcodeOut & LEFT) {
-                y = y0 + dy * (ctx->clip_x - x0) / dx;
-                x = ctx->clip_x;
-            }
-
-            if (outcodeOut == outcode0) {
-                x0 = x;
-                y0 = y;
-                outcode0 = compute_outcode(ctx, x0, y0);
-            } else {
-                x1 = x;
-                y1 = y;
-                outcode1 = compute_outcode(ctx, x1, y1);
-            }
-        }
-    }
-
-    if (!accept) {
+    if (!clip_line(ctx, &x0, &y0, &x1, &y1)) {
         return;
     }
 
@@ -381,50 +298,7 @@ void gfx_draw_dotted_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1
     int16_t orig_y0 = y0;
 
     // 1. Отсечение отрезка (Cohen-Sutherland)
-    uint8_t outcode0 = compute_outcode(ctx, x0, y0);
-    uint8_t outcode1 = compute_outcode(ctx, x1, y1);
-    bool accept = false;
-
-    while (true) {
-        if (!(outcode0 | outcode1)) {
-            accept = true;
-            break;
-        } else if (outcode0 & outcode1) {
-            break;
-        } else {
-            int16_t x, y;
-            uint8_t outcodeOut = outcode0 ? outcode0 : outcode1;
-
-            int32_t dx = x1 - x0;
-            int32_t dy = y1 - y0;
-
-            if (outcodeOut & TOP) {
-                x = x0 + dx * (ctx->clip_y + ctx->clip_h - 1 - y0) / dy;
-                y = ctx->clip_y + ctx->clip_h - 1;
-            } else if (outcodeOut & BOTTOM) {
-                x = x0 + dx * (ctx->clip_y - y0) / dy;
-                y = ctx->clip_y;
-            } else if (outcodeOut & RIGHT) {
-                y = y0 + dy * (ctx->clip_x + ctx->clip_w - 1 - x0) / dx;
-                x = ctx->clip_x + ctx->clip_w - 1;
-            } else if (outcodeOut & LEFT) {
-                y = y0 + dy * (ctx->clip_x - x0) / dx;
-                x = ctx->clip_x;
-            }
-
-            if (outcodeOut == outcode0) {
-                x0 = x;
-                y0 = y;
-                outcode0 = compute_outcode(ctx, x0, y0);
-            } else {
-                x1 = x;
-                y1 = y;
-                outcode1 = compute_outcode(ctx, x1, y1);
-            }
-        }
-    }
-
-    if (!accept) {
+    if (!clip_line(ctx, &x0, &y0, &x1, &y1)) {
         return;
     }
 
