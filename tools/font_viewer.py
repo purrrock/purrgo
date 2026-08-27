@@ -4,7 +4,7 @@ import re
 
 # --- Конфигурация ---
 # Укажите путь к вашему файлу (например, "include/purrgo/font5x7.h")
-FONT_FILE = "font5x7.h" 
+FONT_FILE = "font5x7.c" 
 SCALE = 5                # Масштаб (1 пиксель шрифта = 5 пикселей на экране)
 GLYPH_W, GLYPH_H = 5, 7  # Размер глифа
 MARGIN = 2               # Отступ между глифами в сетке
