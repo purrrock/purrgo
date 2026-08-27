@@ -1,23 +1,4 @@
-# TODO: Доработка и оптимизация PurrGO
-
-Roadmap проекта PurrGO: собственный бинарный формат карт, PC-конвертер, map parser/renderer, GNSS-навигация и последующий перенос на энергоэффективный STM32.
-
-## Уже реализовано
-
-### C Map parser / renderer
-
-### GNSS position marker
-
-### Автоматическое ведение карты
-
-### Map styles
-
-### Бинарный формат карт V3
-
-### Python компилятор карт OSM XML -> PurrGO
-
-### Python Converter validator/renderer 
-
+# TODO: Roadmap проекта PurrGO
 
 ### Ещё не реализовано
 
@@ -72,31 +53,12 @@ Roadmap проекта PurrGO: собственный бинарный форм�
 
 Map parser / renderer audit
 
-- [x] Integer-only coordinates.
-- [x] Integer-only BBox.
-- [x] Streaming line geometry.
-- [x] AABB culling.
-- [x] Antimeridian handling.
-- [x] Feature code → style.
-- [x] LOD selection.
-- [x] Direct LOD seek.
-- [x] LOD boundary validation.
-- [ ] Полностью проверить отсутствие `float`.
-- [ ] Проверить отсутствие `double`.
-- [ ] Проверить отсутствие `malloc`.
-- [ ] Проверить отсутствие `calloc`.
-- [ ] Проверить отсутствие `realloc`.
-- [ ] Проверить отсутствие `free`.
-- [ ] Проверить stack-heavy локальные buffers.
-- [ ] Проверить переполнение integer координат.
-- [ ] Проверить geometry за пределами viewport.
-- [ ] Проверить antimeridian regression cases.
 - [ ] Сократить диагностическое logging для production build.
 
 
 # POI
 
-POI не является частью базового map rendering path и не должен блокировать стабилизацию формата.
+Реализовать слой POI.
 
 * [ ] Определить, нужен ли отдельный geometry type.
 * [ ] Добавить обработку POI feature codes.
@@ -200,11 +162,6 @@ POI не является частью базового map rendering path и н
 
 # Event-driven display updates
 
-* [X] Перерисовывать карту только при изменении camera/scale.
-* [ ] Перерисовывать marker только при изменении позиции/курса.
-* [X] Перерисовывать UI только при изменении данных.
-* [X] Исключить постоянный framebuffer refresh.
-* [ ] Подготовить dirty-region механизм.
 * [ ] Проверить возможность partial refresh после выбора конкретного E-Ink controller.
 
 
@@ -325,9 +282,6 @@ POI не является частью базового map rendering path и н
 
 Выполняется только после завершения и проверки формата.
 
-* [X] Зафиксировать версию бинарного формата.
-* [x] Зафиксировать текущую спецификацию Global Header V3.
-* [ ] Зафиксировать Python converter как reference implementation.
 * [ ] Создать окончательный regression dataset.
 * [ ] Перегенерировать эталонные карты.
 * [ ] Проверить все regression tests.
@@ -371,15 +325,6 @@ POI не является частью базового map rendering path и н
 
 До появления STM32 выполнить:
 
-1. [x] PurrGO global header.
-2. [X] Финальная структура Data Node.
-3. [x] Финальная семантика Nav Node traversal / `v3_jump`.
-4. [x] Финальная семантика `v3_jump`.
-5. [X] Финальная структура SQT.
-6. [X] Финальный feature code.
-7. [x] Обновление Python converter.
-8. [x] Обновление C parser.
-9. [ ] Validation `.idx/.mlp`.
 10. [ ] Эталонный regression dataset.
 11. [ ] Line chunking.
 12. [ ] Polygon subdivision/clipping.

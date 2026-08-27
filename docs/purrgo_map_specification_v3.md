@@ -180,9 +180,9 @@ LOD 2
 
 The spatial index uses a hierarchical R-tree structure based on Sort-Tile-Recursive (STR) bulk loading.
 
-### 3.1. Not-Unified Nodes
+### 3.1. Nodes
 
-Узлы больше не унифицированы по размеру. Navigation Node занимает 28 байт, а Data Node занимает 25 байт. Единая структура на C (с массивом `payload[5]`) более не применима и исключается из спецификации.
+Navigation Node занимает 28 байт, а Data Node занимает 25 байт.
 
 The last 8 bytes have a fixed interpretation depending on node type and allow the parser to traverse the tree.
 
