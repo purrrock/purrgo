@@ -7,7 +7,7 @@
 #include "purrgo/hardware_config.h"
 #include "map_projection.h"
 
-#define AUTO_FOLLOW_START_MARGIN_DIV 8
+#define AUTO_FOLLOW_EDGE_MARGIN_PX 16
 #define AUTO_FOLLOW_STOP_MARGIN_DIV 16
 
 // Глобальный экземпляр конфигурации устройства
@@ -439,8 +439,8 @@ static void apply_auto_follow(const purrgo_gnss_solution_t* fix) {
     int32_t dy = (int32_t)sy - center_y;
     if (dy < 0) dy = -dy;
 
-    int32_t follow_start_x = map_vp.width / AUTO_FOLLOW_START_MARGIN_DIV;
-    int32_t follow_start_y = map_vp.height / AUTO_FOLLOW_START_MARGIN_DIV;
+    int32_t follow_start_x = (map_vp.width / 2) - AUTO_FOLLOW_EDGE_MARGIN_PX;
+    int32_t follow_start_y = (map_vp.height / 2) - AUTO_FOLLOW_EDGE_MARGIN_PX;
 
     int32_t follow_stop_x = map_vp.width / AUTO_FOLLOW_STOP_MARGIN_DIV;
     int32_t follow_stop_y = map_vp.height / AUTO_FOLLOW_STOP_MARGIN_DIV;

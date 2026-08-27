@@ -171,16 +171,18 @@ void test_map_dirty_state() {
     assert(purrgo_app_map_is_dirty() == false); // Should remain clean, inside STOP
     assert(purrgo_app_get_map_center_lon() == 0);
 
-    // 2. BETWEEN FOLLOW_STOP AND FOLLOW_START: e.g. 3/32 of screen width (between 1/16=2/32 and 1/8=4/32)
-    int32_t dist_between_zone = (geo_width * 3) / 32;
+    // 2. BETWEEN FOLLOW_STOP AND FOLLOW_START: e.g. 1/4 of screen width
+    // STOP is at 1/16, START is at (width/2)-16. 1/4 is well between them.
+    int32_t dist_between_zone = geo_width / 4;
     fix.lon_1e7 = dist_between_zone;
     fix.lat_1e7 = 0;
     purrgo_app_update(&fix);
     assert(purrgo_app_map_is_dirty() == false); // Should remain clean, between STOP and START
     assert(purrgo_app_get_map_center_lon() == 0);
 
-    // 3. AT/OVER FOLLOW_START: e.g. 1/4 of screen width (2/8)
-    int32_t dist_start_zone = geo_width / 4;
+    // 3. AT/OVER FOLLOW_START: just outside the start margin
+    // Start is at (width/2)-16 px. We choose a distance mapped to (width/2)-8 px.
+    int32_t dist_start_zone = (geo_width * ((PURRGO_HW_DISPLAY_WIDTH_PX / 2) - 8)) / PURRGO_HW_DISPLAY_WIDTH_PX;
     fix.lon_1e7 = dist_start_zone;
     fix.lat_1e7 = 0;
     purrgo_app_update(&fix);
