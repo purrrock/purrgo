@@ -26,6 +26,9 @@ add_subdirectory(third_party)
 # Автоматический рекурсивный поиск всех .c файлов в директории src/core/.
 set(CORE_SOURCES
     src/core/app_fsm.c
+    src/core/map_controller.c
+    src/core/config_controller.c
+    src/core/trip_computer.c
     src/core/app_ui.c
     src/core/ui/ui_map.c
     src/core/ui/ui_trip.c
