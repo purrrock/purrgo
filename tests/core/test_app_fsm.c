@@ -7,8 +7,6 @@
 #include <stdio.h>
 #include <assert.h>
 
-void purrgo_app_set_map_center_for_test(int32_t lat, int32_t lon);
-
 void setup_test_state(int32_t lat, int32_t lon, purrgo_map_scale_t scale) {
     purrgo_app_init();
 
@@ -16,7 +14,7 @@ void setup_test_state(int32_t lat, int32_t lon, purrgo_map_scale_t scale) {
     // but we can manipulate config to some extent and rely on initial values if needed,
     // or just let the button handlers move it and verify).
     // Let's use GPS fix update to set position initially.
-
+    extern void purrgo_app_set_map_center_for_test(int32_t lat, int32_t lon);
     purrgo_app_set_map_center_for_test(lat, lon);
 
     // adjust scale
