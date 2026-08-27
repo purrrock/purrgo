@@ -92,7 +92,7 @@
 
 #elif PURRGO_HW_PROFILE == PURRGO_HW_PROFILE_RELEASE
 
-/* Release: E-Ink 2.9" 128x296 SPI */
+/* Release: E-Ink 2.9" SPI */
 #define PURRGO_HW_DISPLAY_WIDTH_PX      176
 #define PURRGO_HW_DISPLAY_HEIGHT_PX     264
 

@@ -105,7 +105,7 @@ PurrGo currently uses three conceptual hardware profiles.
 |---|---|---|---|
 | Development | PC | Mock / USB GNSS | Emulator |
 | Prototype | NUCLEO-F446RE | GY-NEO6MV2 / u-blox NEO-6M | 2.4" 240×320 ST7789 |
-| Release | STM32U5-class | u-blox M10-class | 2.9" 128×296 E-Ink |
+| Release | STM32U5-class | u-blox M10-class | 2.9" 176×264 E-Ink |
 
 The release device is planned around:
 
