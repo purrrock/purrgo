@@ -452,10 +452,75 @@ static void apply_auto_follow(const purrgo_gnss_solution_t* fix) {
         // Between FOLLOW_STOP and FOLLOW_START zones: no camera change
         return;
     } else {
-        // Reached or exceeded FOLLOW_START zone: recenter exactly to GNSS position
-        map_center_lat_1e7 = fix->lat_1e7;
-        map_center_lon_1e7 = fix->lon_1e7;
-        map_dirty = true;
+        // Reached or exceeded FOLLOW_START zone: calculate target opposite position
+        int32_t target_x = 2 * center_x - sx;
+        int32_t target_y = 2 * center_y - sy;
+
+        // Clamp target_x to safe area
+        int32_t min_x = center_x - follow_start_x;
+        int32_t max_x = center_x + follow_start_x;
+        if (target_x < min_x) target_x = min_x;
+        if (target_x > max_x) target_x = max_x;
+
+        // Clamp target_y to safe area
+        int32_t min_y = center_y - follow_start_y;
+        int32_t max_y = center_y + follow_start_y;
+        if (target_y < min_y) target_y = min_y;
+        if (target_y > max_y) target_y = max_y;
+
+        int64_t geo_width = camera_span_x(&dynamic_cam);
+        int64_t geo_height = (int64_t)dynamic_cam.max_y - (int64_t)dynamic_cam.min_y;
+
+        int64_t delta_lon = ((int64_t)(sx - target_x) * geo_width) / map_vp.width;
+        int64_t delta_lat = ((int64_t)(target_y - sy) * geo_height) / map_vp.height;
+
+        int64_t candidate_lon = (int64_t)map_center_lon_1e7 + delta_lon;
+        int64_t candidate_lat = (int64_t)map_center_lat_1e7 + delta_lat;
+
+        if (candidate_lon > INT32_MAX) candidate_lon = INT32_MAX;
+        if (candidate_lon < INT32_MIN) candidate_lon = INT32_MIN;
+        if (candidate_lat > 900000000LL) candidate_lat = 900000000LL;
+        if (candidate_lat < -900000000LL) candidate_lat = -900000000LL;
+
+        purrgo_bbox_t candidate_cam;
+        purrgo_geo_bbox_from_center(
+            (int32_t)candidate_lat,
+            (int32_t)candidate_lon,
+            purrgo_app_get_map_scale_width_m(),
+            &map_vp,
+            &candidate_cam
+        );
+
+        int16_t new_sx, new_sy;
+        project_to_screen(
+            fix->lon_1e7,
+            fix->lat_1e7,
+            &candidate_cam,
+            &map_vp,
+            &new_sx,
+            &new_sy
+        );
+
+        int32_t new_dx = (int32_t)new_sx - center_x;
+        if (new_dx < 0) new_dx = -new_dx;
+
+        int32_t new_dy = (int32_t)new_sy - center_y;
+        if (new_dy < 0) new_dy = -new_dy;
+
+        if (new_dx <= follow_start_x && new_dy <= follow_start_y) {
+            printf("AUTO-FOLLOW: marker=(%d,%d) target=(%d,%d) result=(%d,%d)\n", sx, sy, (int)target_x, (int)target_y, new_sx, new_sy);
+
+            if (map_center_lat_1e7 != (int32_t)candidate_lat || map_center_lon_1e7 != (int32_t)candidate_lon) {
+                map_center_lat_1e7 = (int32_t)candidate_lat;
+                map_center_lon_1e7 = (int32_t)candidate_lon;
+                map_dirty = true;
+            }
+        } else {
+            // Fallback (should theoretically not happen, but safe practice)
+            map_center_lat_1e7 = fix->lat_1e7;
+            map_center_lon_1e7 = fix->lon_1e7;
+            map_dirty = true;
+        }
     }
 }
 
