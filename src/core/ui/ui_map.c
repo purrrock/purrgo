@@ -29,6 +29,22 @@ typedef struct {
 static marker_state_t prev_marker_state;
 static bool prev_marker_state_valid = false;
 
+/*
+ * Background cache to avoid re-rendering the whole map when marker changes.
+ * Size 24x24 is enough for the marker size + safety margin.
+ */
+#define MARKER_BG_CACHE_W 32
+#define MARKER_BG_CACHE_H 32
+
+static struct {
+    int16_t x;
+    int16_t y;
+    int16_t w;
+    int16_t h;
+    bool valid;
+    gfx_color_t pixels[MARKER_BG_CACHE_W * MARKER_BG_CACHE_H];
+} marker_bg_cache = {0};
+
 static void log_marker_diagnostic(const char* reason, const marker_state_t* m) {
     if (m->rendered) {
         PURRGO_LOG(
@@ -334,6 +350,90 @@ static void ui_calc_marker_state(
     out_state->rendered = true;
 }
 
+static void ui_save_marker_bg(gfx_context_t* gfx, const marker_state_t* state) {
+    if (!state->rendered) {
+        marker_bg_cache.valid = false;
+        return;
+    }
+
+    // Safety margin is important to cover anti-aliasing or slight rounding errors
+    int margin = 2;
+    int16_t x = state->min_x - margin;
+    int16_t y = state->min_y - margin;
+    int16_t w = (state->max_x - state->min_x + 1) + 2 * margin;
+    int16_t h = (state->max_y - state->min_y + 1) + 2 * margin;
+
+    // Clip to screen to prevent buffer overflow
+    // Map viewport offset_y is 9 and height is HEIGHT - 18
+    // So viewport bounds are y: 9 to HEIGHT - 9.
+    int16_t map_vp_offset_y = 9;
+    int16_t map_vp_height = PURRGO_HW_DISPLAY_HEIGHT_PX - 18;
+
+    if (x < 0) { w += x; x = 0; }
+    if (y < map_vp_offset_y) { h -= (map_vp_offset_y - y); y = map_vp_offset_y; }
+    if (x + w > PURRGO_HW_DISPLAY_WIDTH_PX) { w = PURRGO_HW_DISPLAY_WIDTH_PX - x; }
+    if (y + h > map_vp_offset_y + map_vp_height) { h = map_vp_offset_y + map_vp_height - y; }
+
+    if (w <= 0 || h <= 0 || w > MARKER_BG_CACHE_W || h > MARKER_BG_CACHE_H) {
+        // Can't fit in cache or invalid size, invalidate cache
+        marker_bg_cache.valid = false;
+        return;
+    }
+
+    marker_bg_cache.x = x;
+    marker_bg_cache.y = y;
+    marker_bg_cache.w = w;
+    marker_bg_cache.h = h;
+    marker_bg_cache.valid = true;
+
+    int idx = 0;
+
+    // We need to bypass the current clipping area of gfx_context to read background
+    // because it might be clipped to the union region during a partial refresh.
+    // However, we just clamped the read rectangle to the map viewport, so we are safe
+    // to read directly.
+    int16_t old_clip_x = gfx->clip_x;
+    int16_t old_clip_y = gfx->clip_y;
+    int16_t old_clip_w = gfx->clip_w;
+    int16_t old_clip_h = gfx->clip_h;
+    gfx_reset_clip(gfx);
+
+    for (int16_t cy = 0; cy < h; cy++) {
+        for (int16_t cx = 0; cx < w; cx++) {
+            marker_bg_cache.pixels[idx++] = gfx_read_pixel(gfx, x + cx, y + cy);
+        }
+    }
+
+    gfx_set_clip(gfx, old_clip_x, old_clip_y, old_clip_w, old_clip_h);
+
+    PURRGO_LOG("MARKER BG SAVE x=%d y=%d w=%d h=%d\n", x, y, w, h);
+}
+
+static void ui_restore_marker_bg(gfx_context_t* gfx) {
+    if (!marker_bg_cache.valid) return;
+
+    gfx_color_t old_fg = gfx->color_fg;
+
+    int idx = 0;
+    int16_t old_clip_x = gfx->clip_x;
+    int16_t old_clip_y = gfx->clip_y;
+    int16_t old_clip_w = gfx->clip_w;
+    int16_t old_clip_h = gfx->clip_h;
+    gfx_reset_clip(gfx);
+
+    for (int16_t cy = 0; cy < marker_bg_cache.h; cy++) {
+        for (int16_t cx = 0; cx < marker_bg_cache.w; cx++) {
+            gfx->color_fg = marker_bg_cache.pixels[idx++];
+            gfx_draw_pixel(gfx, marker_bg_cache.x + cx, marker_bg_cache.y + cy);
+        }
+    }
+
+    gfx_set_clip(gfx, old_clip_x, old_clip_y, old_clip_w, old_clip_h);
+
+    gfx->color_fg = old_fg;
+    PURRGO_LOG("MARKER BG RESTORE x=%d y=%d w=%d h=%d\n", marker_bg_cache.x, marker_bg_cache.y, marker_bg_cache.w, marker_bg_cache.h);
+}
+
 static void ui_draw_marker(gfx_context_t* gfx, const marker_state_t* state) {
     if (!state->rendered) return;
 
@@ -426,6 +526,7 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
             }
         }
 
+        ui_save_marker_bg(gfx, &new_marker_state);
         ui_draw_marker(gfx, &new_marker_state);
         prev_marker_state = new_marker_state;
 
@@ -461,6 +562,9 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
             }
             log_marker_diagnostic(reason, &new_marker_state);
 
+            // Restore the old background
+            ui_restore_marker_bg(gfx);
+
             int16_t min_x = 32767;
             int16_t max_x = -32768;
             int16_t min_y = 32767;
@@ -480,6 +584,9 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
                 if (new_marker_state.max_y > max_y) max_y = new_marker_state.max_y;
             }
 
+            ui_save_marker_bg(gfx, &new_marker_state);
+            ui_draw_marker(gfx, &new_marker_state);
+
             if (min_x <= max_x && min_y <= max_y) {
                 // Clamp to viewport
                 if (min_x < map_vp.offset_x) min_x = map_vp.offset_x;
@@ -491,11 +598,6 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
                 int16_t clip_h = max_y - min_y + 1;
 
                 if (clip_w > 0 && clip_h > 0) {
-                    gfx_set_clip(gfx, min_x, min_y, clip_w, clip_h);
-                    purrgo_map_render_viewport(gfx, &map_vp, &dynamic_cam, app_config.map_dir);
-                    ui_draw_marker(gfx, &new_marker_state);
-                    gfx_reset_clip(gfx);
-
                     display_refresh_region(min_x, min_y, clip_w, clip_h);
                 }
             }

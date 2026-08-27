@@ -18,7 +18,7 @@
  */
 #define DISPLAY_FB_SIZE     ((DISPLAY_WIDTH * DISPLAY_HEIGHT * DISPLAY_BPP) / 8)
 
-/* 
+/*
  * 2-битная палитра градаций серого (логические уровни):
  * 00b = Black, 01b = Dark Gray, 10b = Light Gray, 11b = White
  */
@@ -36,12 +36,6 @@ void display_clear(uint8_t color);
  * неявных приведений типов и корректной работы знакового отсечения (clipping).
  */
 void display_set_pixel(int16_t x, int16_t y, uint8_t color);
-
-/*
- * Чтение пикселя из кадрового буфера.
- * Возвращает цвет пикселя или COLOR_BLACK (0) в случае выхода за пределы экрана.
- */
-uint8_t display_get_pixel(int16_t x, int16_t y);
 
 const uint8_t* display_get_framebuffer(void);
 

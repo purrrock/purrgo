@@ -242,12 +242,17 @@ void dummy_draw_pixel(void *fb, int16_t x, int16_t y, gfx_color_t color) {
     // mock
 }
 
+static gfx_color_t dummy_read_pixel(void *fb, int16_t x, int16_t y) {
+    // mock
+    return 0;
+}
+
 void test_map_clean_refresh_skips_render() {
     purrgo_app_init();
 
     // Create dummy gfx context
     gfx_context_t gfx;
-    gfx_init(&gfx, 400, 300, (void*)1, dummy_draw_pixel);
+    gfx_init(&gfx, 400, 300, (void*)1, dummy_draw_pixel, dummy_read_pixel);
 
     purrgo_gnss_solution_t gnss = {0};
     purrgo_sun_info_t sun = {0};
