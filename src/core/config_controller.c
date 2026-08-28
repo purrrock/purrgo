@@ -2,7 +2,7 @@
 #include "purrgo/config.h"
 #include <stdio.h>
 
-#define MAX_DIRS_COUNT 16
+#define MAX_DIRS_COUNT 64
 static purrgo_fs_dirent_t dir_list[MAX_DIRS_COUNT];
 static int dir_list_count = 0;
 static int dir_cursor_idx = 0;
