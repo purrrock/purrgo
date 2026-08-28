@@ -148,7 +148,7 @@ static void apply_auto_follow(const purrgo_gnss_solution_t* fix) {
         int64_t geo_height = (int64_t)dynamic_cam.max_y - (int64_t)dynamic_cam.min_y;
         int64_t rad_y = geo_height / 2;
         int64_t y_term = (int64_t)map_vp.height - target_y + map_vp.offset_y;
-        int64_t candidate_lat = (int64_t)fix->lat_1e7 - (y_term * geo_height + map_vp.height / 2) / map_vp.height - rad_y;
+        int64_t candidate_lat = (int64_t)fix->lat_1e7 - (y_term * geo_height + map_vp.height / 2) / map_vp.height + rad_y;
 
         if (candidate_lat > 900000000LL) candidate_lat = 900000000LL;
         if (candidate_lat < -900000000LL) candidate_lat = -900000000LL;
