@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6" generator="PurrGO_Test_Suite">
+  <bounds minlat="53.7085360" minlon="28.4143615" maxlat="53.7185360" maxlon="28.4243615"/>
+
+  <!-- Узлы, симметрично расположенные вокруг центра Lat: 53.713536, Lon: 28.4193615 -->
+  <node id="1" visible="true" version="1" lat="53.7125360" lon="28.4183615"/>
+  <node id="2" visible="true" version="1" lat="53.7145360" lon="28.4203615"/>
+
+  <!-- Объект с вымышленным feature code -->
+  <way id="3" visible="true" version="1">
+    <nd ref="1"/>
+    <nd ref="2"/>
+    <tag k="highway" v="galactic_hyperlane"/>
+    <tag k="name" v="Неизвестный путь"/>
+  </way>
+</osm>

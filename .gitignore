@@ -41,7 +41,6 @@ venv/
 Thumbs.db
  
  *.exe
- *.osm
  ai_project_dump.txt
  
  build/

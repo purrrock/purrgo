@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6" generator="PurrGO_Test_Suite">
+  <!-- Ограничивающий прямоугольник (BBox) -->
+  <bounds minlat="53.7000000" minlon="28.3900000" maxlat="53.7250000" maxlon="28.4400000"/>
+
+  <!-- Слой 1: Внешний контур леса (Самый большой квадрат) -->
+  <node id="1" visible="true" version="1" lat="53.7035360" lon="28.4093615"/>
+  <node id="2" visible="true" version="1" lat="53.7035360" lon="28.4293615"/>
+  <node id="3" visible="true" version="1" lat="53.7235360" lon="28.4293615"/>
+  <node id="4" visible="true" version="1" lat="53.7235360" lon="28.4093615"/>
+
+  <!-- Слой 2: Озеро (Внутри леса) -->
+  <node id="5" visible="true" version="1" lat="53.7075360" lon="28.4133615"/>
+  <node id="6" visible="true" version="1" lat="53.7075360" lon="28.4253615"/>
+  <node id="7" visible="true" version="1" lat="53.7195360" lon="28.4253615"/>
+  <node id="8" visible="true" version="1" lat="53.7195360" lon="28.4133615"/>
+
+  <!-- Слой 3: Остров (Внутри озера) -->
+  <node id="9" visible="true" version="1" lat="53.7105360" lon="28.4163615"/>
+  <node id="10" visible="true" version="1" lat="53.7105360" lon="28.4223615"/>
+  <node id="11" visible="true" version="1" lat="53.7165360" lon="28.4223615"/>
+  <node id="12" visible="true" version="1" lat="53.7165360" lon="28.4163615"/>
+
+  <!-- Слой 4: Жилая застройка (Внутри острова) -->
+  <node id="13" visible="true" version="1" lat="53.7120000" lon="28.4180000"/>
+  <node id="14" visible="true" version="1" lat="53.7120000" lon="28.4205000"/>
+  <node id="15" visible="true" version="1" lat="53.7150000" lon="28.4205000"/>
+  <node id="16" visible="true" version="1" lat="53.7150000" lon="28.4180000"/>
+
+  <!-- Слой 5: Узлы дороги (Проходит через остров и застройку) -->
+  <node id="17" visible="true" version="1" lat="53.7090000" lon="28.4193615"/>
+  <node id="18" visible="true" version="1" lat="53.7180000" lon="28.4193615"/>
+
+  <!-- 1. Фоновый лес -->
+  <way id="101" visible="true" version="1">
+    <nd ref="1"/><nd ref="2"/><nd ref="3"/><nd ref="4"/><nd ref="1"/>
+    <tag k="natural" v="wood"/>
+    <tag k="name" v="Layer Forest"/>
+  </way>
+
+  <!-- 2. Озеро -->
+  <way id="102" visible="true" version="1">
+    <nd ref="5"/><nd ref="6"/><nd ref="7"/><nd ref="8"/><nd ref="5"/>
+    <tag k="natural" v="water"/>
+    <tag k="name" v="Layer Lake"/>
+  </way>
+
+  <!-- 3. Остров -->
+  <way id="103" visible="true" version="1">
+    <nd ref="9"/><nd ref="10"/><nd ref="11"/><nd ref="12"/><nd ref="9"/>
+    <tag k="place" v="island"/>
+    <tag k="name" v="Layer Island"/>
+  </way>
+
+  <!-- 4. Жилая зона -->
+  <way id="104" visible="true" version="1">
+    <nd ref="13"/><nd ref="14"/><nd ref="15"/><nd ref="16"/><nd ref="13"/>
+    <tag k="landuse" v="residential"/>
+    <tag k="name" v="Layer Village"/>
+  </way>
+
+  <!-- 5. Дорога поверх всего -->
+  <way id="105" visible="true" version="1">
+    <nd ref="17"/>
+    <nd ref="18"/>
+    <tag k="highway" v="residential"/>
+    <tag k="name" v="Layer Road"/>
+  </way>
+</osm>

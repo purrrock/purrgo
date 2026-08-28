@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6" generator="PurrGO_Test_Suite">
+  <!-- Внимание: minlon больше maxlon, что является стандартом OSM для антимеридиана -->
+  <bounds minlat="-0.0100000" minlon="179.9900000" maxlat="0.0100000" maxlon="-179.9900000"/>
+  
+  <!-- Узлы в восточном полушарии (вплотную к +180°) -->
+  <node id="1" visible="true" version="1" lat="-0.0050000" lon="179.9950000"/>
+  <node id="2" visible="true" version="1" lat="0.0050000" lon="179.9950000"/>
+  
+  <!-- Узлы в западном полушарии (вплотную к -180°) -->
+  <node id="3" visible="true" version="1" lat="0.0050000" lon="-179.9950000"/>
+  <node id="4" visible="true" version="1" lat="-0.0050000" lon="-179.9950000"/>
+
+  <!-- Линия (паромная переправа), пересекающая антимеридиан с запада на восток -->
+  <way id="5" visible="true" version="1">
+    <nd ref="1"/>
+    <nd ref="4"/>
+    <tag k="route" v="ferry"/>
+    <tag k="name" v="Antimeridian Ferry"/>
+  </way>
+
+  <!-- Полигон (морская зона), пересекающий антимеридиан -->
+  <way id="6" visible="true" version="1">
+    <nd ref="1"/>
+    <nd ref="2"/>
+    <nd ref="3"/>
+    <nd ref="4"/>
+    <nd ref="1"/>
+    <tag k="natural" v="water"/>
+    <tag k="name" v="Date Line Zone"/>
+  </way>
+</osm>

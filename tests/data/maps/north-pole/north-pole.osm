@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6" generator="PurrGO_Test_Suite">
+  <!-- Охват от 89.8° с.ш. до самого полюса 90.0° с.ш. -->
+  <bounds minlat="89.8000000" minlon="-90.0000000" maxlat="90.0000000" maxlon="90.0000000"/>
+
+  <!-- Объект 1: Малый полярный лес (Ширина 2 градуса долготы, высота 0.001 градуса широты) -->
+  <node id="1" visible="true" version="1" lat="89.9950000" lon="-1.0000000"/>
+  <node id="2" visible="true" version="1" lat="89.9950000" lon="1.0000000"/>
+  <node id="3" visible="true" version="1" lat="89.9960000" lon="1.0000000"/>
+  <node id="4" visible="true" version="1" lat="89.9960000" lon="-1.0000000"/>
+
+  <!-- Объект 2: Средний полярный лес (Ширина 20 градусов долготы, высота 0.01 градуса широты) -->
+  <node id="5" visible="true" version="1" lat="89.9800000" lon="-10.0000000"/>
+  <node id="6" visible="true" version="1" lat="89.9800000" lon="10.0000000"/>
+  <node id="7" visible="true" version="1" lat="89.9900000" lon="10.0000000"/>
+  <node id="8" visible="true" version="1" lat="89.9900000" lon="-10.0000000"/>
+
+  <!-- Объект 3: Большой полярный лес (Ширина 90 градусов долготы, высота 0.05 градуса широты) -->
+  <node id="9" visible="true" version="1" lat="89.9000000" lon="-45.0000000"/>
+  <node id="10" visible="true" version="1" lat="89.9000000" lon="45.0000000"/>
+  <node id="11" visible="true" version="1" lat="89.9500000" lon="45.0000000"/>
+  <node id="12" visible="true" version="1" lat="89.9500000" lon="-45.0000000"/>
+
+  <!-- Геометрия объектов -->
+  <way id="13" visible="true" version="1">
+    <nd ref="1"/>
+    <nd ref="2"/>
+    <nd ref="3"/>
+    <nd ref="4"/>
+    <nd ref="1"/>
+    <tag k="natural" v="wood"/>
+    <tag k="name" v="Малый лес"/>
+  </way>
+
+  <way id="14" visible="true" version="1">
+    <nd ref="5"/>
+    <nd ref="6"/>
+    <nd ref="7"/>
+    <nd ref="8"/>
+    <nd ref="5"/>
+    <tag k="natural" v="wood"/>
+    <tag k="name" v="Средний лес"/>
+  </way>
+
+  <way id="15" visible="true" version="1">
+    <nd ref="9"/>
+    <nd ref="10"/>
+    <nd ref="11"/>
+    <nd ref="12"/>
+    <nd ref="9"/>
+    <tag k="natural" v="wood"/>
+    <tag k="name" v="Большой лес"/>
+  </way>
+</osm>

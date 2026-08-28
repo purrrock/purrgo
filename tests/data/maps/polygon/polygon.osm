@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6" generator="PurrGO_Test_Suite">
+  <!-- Идеально симметричный BBox вокруг Lat: 53.713536, Lon: 28.4193615 -->
+  <bounds minlat="53.7085360" minlon="28.4143615" maxlat="53.7185360" maxlon="28.4243615"/>
+
+  <!-- Вершины квадрата (Северо-Запад, Юго-Запад, Юго-Восток, Северо-Восток) -->
+  <node id="1" visible="true" version="1" lat="53.7185360" lon="28.4143615"/>
+  <node id="2" visible="true" version="1" lat="53.7085360" lon="28.4143615"/>
+  <node id="3" visible="true" version="1" lat="53.7085360" lon="28.4243615"/>
+  <node id="4" visible="true" version="1" lat="53.7185360" lon="28.4243615"/>
+
+  <!-- Замкнутый контур (Polygon) без отверстий -->
+  <way id="5" visible="true" version="1">
+    <nd ref="1"/>
+    <nd ref="2"/>
+    <nd ref="3"/>
+    <nd ref="4"/>
+    <nd ref="1"/> <!-- Замыкание кольца -->
+    <tag k="natural" v="wood"/>
+    <tag k="name" v="Квадратный лес"/>
+  </way>
+</osm>

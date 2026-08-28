@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6" generator="PurrGO_Test_Suite">
+  <bounds minlat="53.7085360" minlon="28.4143615" maxlat="53.7285360" maxlon="28.4443615"/>
+
+  <!-- Общая точка схождения (стартовая позиция) в центре карты -->
+  <node id="1" visible="true" version="1" lat="53.7135360" lon="28.4193615"/>
+  
+  <!-- Конечные точки, задающие близкий угол расхождения -->
+  <node id="2" visible="true" version="1" lat="53.7235360" lon="28.4393615"/>
+  <node id="3" visible="true" version="1" lat="53.7220000" lon="28.4393615"/>
+  <node id="4" visible="true" version="1" lat="53.7205000" lon="28.4393615"/>
+
+  <!-- Автомагистраль (высший приоритет LOD) -->
+  <way id="5" visible="true" version="1">
+    <nd ref="1"/>
+    <nd ref="2"/>
+    <tag k="highway" v="motorway"/>
+    <tag k="name" v="Motorway LOD Test"/>
+  </way>
+
+  <!-- Местная дорога (средний приоритет LOD) -->
+  <way id="6" visible="true" version="1">
+    <nd ref="1"/>
+    <nd ref="3"/>
+    <tag k="highway" v="tertiary"/>
+    <tag k="name" v="Tertiary LOD Test"/>
+  </way>
+
+  <!-- Тропа (низший приоритет LOD) -->
+  <way id="7" visible="true" version="1">
+    <nd ref="1"/>
+    <nd ref="4"/>
+    <tag k="highway" v="path"/>
+    <tag k="name" v="Path LOD Test"/>
+  </way>
+</osm>

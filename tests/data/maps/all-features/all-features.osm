@@ -1,0 +1,1362 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6" generator="PurrGO_Test_Suite">
+  <bounds minlat="53.663536" minlon="28.3693615" maxlat="53.763535999999995" maxlon="28.4693615"/>
+  <node id="1" visible="true" version="1" lat="53.7005360" lon="28.4043615"/>
+  <node id="2" visible="true" version="1" lat="53.7010360" lon="28.4048615"/>
+  <way id="1000000" visible="true" version="1">
+    <nd ref="1"/>
+    <nd ref="2"/>
+    <tag k="highway" v="motorway"/>
+    <tag k="name" v="highway_motorway"/>
+  </way>
+  <node id="3" visible="true" version="1" lat="53.7005360" lon="28.4063615"/>
+  <node id="4" visible="true" version="1" lat="53.7010360" lon="28.4068615"/>
+  <way id="1000001" visible="true" version="1">
+    <nd ref="3"/>
+    <nd ref="4"/>
+    <tag k="highway" v="trunk"/>
+    <tag k="name" v="highway_trunk"/>
+  </way>
+  <node id="5" visible="true" version="1" lat="53.7005360" lon="28.4083615"/>
+  <node id="6" visible="true" version="1" lat="53.7010360" lon="28.4088615"/>
+  <way id="1000002" visible="true" version="1">
+    <nd ref="5"/>
+    <nd ref="6"/>
+    <tag k="highway" v="primary"/>
+    <tag k="name" v="highway_primary"/>
+  </way>
+  <node id="7" visible="true" version="1" lat="53.7005360" lon="28.4103615"/>
+  <node id="8" visible="true" version="1" lat="53.7010360" lon="28.4108615"/>
+  <way id="1000003" visible="true" version="1">
+    <nd ref="7"/>
+    <nd ref="8"/>
+    <tag k="highway" v="secondary"/>
+    <tag k="name" v="highway_secondary"/>
+  </way>
+  <node id="9" visible="true" version="1" lat="53.7005360" lon="28.4123615"/>
+  <node id="10" visible="true" version="1" lat="53.7010360" lon="28.4128615"/>
+  <way id="1000004" visible="true" version="1">
+    <nd ref="9"/>
+    <nd ref="10"/>
+    <tag k="highway" v="tertiary"/>
+    <tag k="name" v="highway_tertiary"/>
+  </way>
+  <node id="11" visible="true" version="1" lat="53.7005360" lon="28.4143615"/>
+  <node id="12" visible="true" version="1" lat="53.7010360" lon="28.4148615"/>
+  <way id="1000005" visible="true" version="1">
+    <nd ref="11"/>
+    <nd ref="12"/>
+    <tag k="highway" v="unclassified"/>
+    <tag k="name" v="highway_unclassified"/>
+  </way>
+  <node id="13" visible="true" version="1" lat="53.7005360" lon="28.4163615"/>
+  <node id="14" visible="true" version="1" lat="53.7010360" lon="28.4168615"/>
+  <way id="1000006" visible="true" version="1">
+    <nd ref="13"/>
+    <nd ref="14"/>
+    <tag k="highway" v="residential"/>
+    <tag k="name" v="highway_residential"/>
+  </way>
+  <node id="15" visible="true" version="1" lat="53.7005360" lon="28.4183615"/>
+  <node id="16" visible="true" version="1" lat="53.7010360" lon="28.4188615"/>
+  <way id="1000007" visible="true" version="1">
+    <nd ref="15"/>
+    <nd ref="16"/>
+    <tag k="highway" v="living_street"/>
+    <tag k="name" v="highway_living_street"/>
+  </way>
+  <node id="17" visible="true" version="1" lat="53.7005360" lon="28.4203615"/>
+  <node id="18" visible="true" version="1" lat="53.7010360" lon="28.4208615"/>
+  <way id="1000008" visible="true" version="1">
+    <nd ref="17"/>
+    <nd ref="18"/>
+    <tag k="highway" v="pedestrian"/>
+    <tag k="name" v="highway_pedestrian"/>
+  </way>
+  <node id="19" visible="true" version="1" lat="53.7005360" lon="28.4223615"/>
+  <node id="20" visible="true" version="1" lat="53.7010360" lon="28.4228615"/>
+  <way id="1000009" visible="true" version="1">
+    <nd ref="19"/>
+    <nd ref="20"/>
+    <tag k="highway" v="busway"/>
+    <tag k="name" v="highway_busway"/>
+  </way>
+  <node id="21" visible="true" version="1" lat="53.7005360" lon="28.4243615"/>
+  <node id="22" visible="true" version="1" lat="53.7010360" lon="28.4248615"/>
+  <way id="1000010" visible="true" version="1">
+    <nd ref="21"/>
+    <nd ref="22"/>
+    <tag k="highway" v="motorway_link"/>
+    <tag k="name" v="highway_motorway_link"/>
+  </way>
+  <node id="23" visible="true" version="1" lat="53.7005360" lon="28.4263615"/>
+  <node id="24" visible="true" version="1" lat="53.7010360" lon="28.4268615"/>
+  <way id="1000011" visible="true" version="1">
+    <nd ref="23"/>
+    <nd ref="24"/>
+    <tag k="highway" v="trunk_link"/>
+    <tag k="name" v="highway_trunk_link"/>
+  </way>
+  <node id="25" visible="true" version="1" lat="53.7005360" lon="28.4283615"/>
+  <node id="26" visible="true" version="1" lat="53.7010360" lon="28.4288615"/>
+  <way id="1000012" visible="true" version="1">
+    <nd ref="25"/>
+    <nd ref="26"/>
+    <tag k="highway" v="primary_link"/>
+    <tag k="name" v="highway_primary_link"/>
+  </way>
+  <node id="27" visible="true" version="1" lat="53.7005360" lon="28.4303615"/>
+  <node id="28" visible="true" version="1" lat="53.7010360" lon="28.4308615"/>
+  <way id="1000013" visible="true" version="1">
+    <nd ref="27"/>
+    <nd ref="28"/>
+    <tag k="highway" v="secondary_link"/>
+    <tag k="name" v="highway_secondary_link"/>
+  </way>
+  <node id="29" visible="true" version="1" lat="53.7005360" lon="28.4323615"/>
+  <node id="30" visible="true" version="1" lat="53.7010360" lon="28.4328615"/>
+  <way id="1000014" visible="true" version="1">
+    <nd ref="29"/>
+    <nd ref="30"/>
+    <tag k="highway" v="tertiary_link"/>
+    <tag k="name" v="highway_tertiary_link"/>
+  </way>
+  <node id="31" visible="true" version="1" lat="53.7025360" lon="28.4043615"/>
+  <node id="32" visible="true" version="1" lat="53.7030360" lon="28.4048615"/>
+  <way id="1000015" visible="true" version="1">
+    <nd ref="31"/>
+    <nd ref="32"/>
+    <tag k="highway" v="service"/>
+    <tag k="name" v="highway_service"/>
+  </way>
+  <node id="33" visible="true" version="1" lat="53.7025360" lon="28.4063615"/>
+  <node id="34" visible="true" version="1" lat="53.7030360" lon="28.4068615"/>
+  <way id="1000016" visible="true" version="1">
+    <nd ref="33"/>
+    <nd ref="34"/>
+    <tag k="highway" v="track"/>
+    <tag k="name" v="highway_track"/>
+  </way>
+  <node id="35" visible="true" version="1" lat="53.7025360" lon="28.4083615"/>
+  <node id="36" visible="true" version="1" lat="53.7030360" lon="28.4088615"/>
+  <way id="1000017" visible="true" version="1">
+    <nd ref="35"/>
+    <nd ref="36"/>
+    <tag k="highway" v="track"/>
+    <tag k="tracktype" v="grade1"/>
+    <tag k="name" v="tracktype_grade1"/>
+  </way>
+  <node id="37" visible="true" version="1" lat="53.7025360" lon="28.4103615"/>
+  <node id="38" visible="true" version="1" lat="53.7030360" lon="28.4108615"/>
+  <way id="1000018" visible="true" version="1">
+    <nd ref="37"/>
+    <nd ref="38"/>
+    <tag k="highway" v="track"/>
+    <tag k="tracktype" v="grade2"/>
+    <tag k="name" v="tracktype_grade2"/>
+  </way>
+  <node id="39" visible="true" version="1" lat="53.7025360" lon="28.4123615"/>
+  <node id="40" visible="true" version="1" lat="53.7030360" lon="28.4128615"/>
+  <way id="1000019" visible="true" version="1">
+    <nd ref="39"/>
+    <nd ref="40"/>
+    <tag k="highway" v="track"/>
+    <tag k="tracktype" v="grade3"/>
+    <tag k="name" v="tracktype_grade3"/>
+  </way>
+  <node id="41" visible="true" version="1" lat="53.7025360" lon="28.4143615"/>
+  <node id="42" visible="true" version="1" lat="53.7030360" lon="28.4148615"/>
+  <way id="1000020" visible="true" version="1">
+    <nd ref="41"/>
+    <nd ref="42"/>
+    <tag k="highway" v="track"/>
+    <tag k="tracktype" v="grade4"/>
+    <tag k="name" v="tracktype_grade4"/>
+  </way>
+  <node id="43" visible="true" version="1" lat="53.7025360" lon="28.4163615"/>
+  <node id="44" visible="true" version="1" lat="53.7030360" lon="28.4168615"/>
+  <way id="1000021" visible="true" version="1">
+    <nd ref="43"/>
+    <nd ref="44"/>
+    <tag k="highway" v="track"/>
+    <tag k="tracktype" v="grade5"/>
+    <tag k="name" v="tracktype_grade5"/>
+  </way>
+  <node id="45" visible="true" version="1" lat="53.7025360" lon="28.4183615"/>
+  <node id="46" visible="true" version="1" lat="53.7030360" lon="28.4188615"/>
+  <way id="1000022" visible="true" version="1">
+    <nd ref="45"/>
+    <nd ref="46"/>
+    <tag k="highway" v="bridleway"/>
+    <tag k="name" v="highway_bridleway"/>
+  </way>
+  <node id="47" visible="true" version="1" lat="53.7025360" lon="28.4203615"/>
+  <node id="48" visible="true" version="1" lat="53.7030360" lon="28.4208615"/>
+  <way id="1000023" visible="true" version="1">
+    <nd ref="47"/>
+    <nd ref="48"/>
+    <tag k="highway" v="cycleway"/>
+    <tag k="name" v="highway_cycleway"/>
+  </way>
+  <node id="49" visible="true" version="1" lat="53.7025360" lon="28.4223615"/>
+  <node id="50" visible="true" version="1" lat="53.7030360" lon="28.4228615"/>
+  <way id="1000024" visible="true" version="1">
+    <nd ref="49"/>
+    <nd ref="50"/>
+    <tag k="highway" v="footway"/>
+    <tag k="name" v="highway_footway"/>
+  </way>
+  <node id="51" visible="true" version="1" lat="53.7025360" lon="28.4243615"/>
+  <node id="52" visible="true" version="1" lat="53.7030360" lon="28.4248615"/>
+  <way id="1000025" visible="true" version="1">
+    <nd ref="51"/>
+    <nd ref="52"/>
+    <tag k="highway" v="path"/>
+    <tag k="name" v="highway_path"/>
+  </way>
+  <node id="53" visible="true" version="1" lat="53.7025360" lon="28.4263615"/>
+  <node id="54" visible="true" version="1" lat="53.7030360" lon="28.4268615"/>
+  <way id="1000026" visible="true" version="1">
+    <nd ref="53"/>
+    <nd ref="54"/>
+    <tag k="highway" v="steps"/>
+    <tag k="name" v="highway_steps"/>
+  </way>
+  <node id="55" visible="true" version="1" lat="53.7025360" lon="28.4283615"/>
+  <node id="56" visible="true" version="1" lat="53.7030360" lon="28.4288615"/>
+  <way id="1000027" visible="true" version="1">
+    <nd ref="55"/>
+    <nd ref="56"/>
+    <tag k="highway" v="road"/>
+    <tag k="name" v="highway_road"/>
+  </way>
+  <node id="57" visible="true" version="1" lat="53.7025360" lon="28.4303615"/>
+  <node id="58" visible="true" version="1" lat="53.7030360" lon="28.4308615"/>
+  <way id="1000028" visible="true" version="1">
+    <nd ref="57"/>
+    <nd ref="58"/>
+    <tag k="railway" v="rail"/>
+    <tag k="name" v="railway_rail"/>
+  </way>
+  <node id="59" visible="true" version="1" lat="53.7025360" lon="28.4323615"/>
+  <node id="60" visible="true" version="1" lat="53.7030360" lon="28.4328615"/>
+  <way id="1000029" visible="true" version="1">
+    <nd ref="59"/>
+    <nd ref="60"/>
+    <tag k="railway" v="construction"/>
+    <tag k="name" v="railway_construction"/>
+  </way>
+  <node id="61" visible="true" version="1" lat="53.7045360" lon="28.4043615"/>
+  <node id="62" visible="true" version="1" lat="53.7050360" lon="28.4048615"/>
+  <way id="1000030" visible="true" version="1">
+    <nd ref="61"/>
+    <nd ref="62"/>
+    <tag k="railway" v="disused"/>
+    <tag k="name" v="railway_disused"/>
+  </way>
+  <node id="63" visible="true" version="1" lat="53.7045360" lon="28.4063615"/>
+  <node id="64" visible="true" version="1" lat="53.7050360" lon="28.4068615"/>
+  <way id="1000031" visible="true" version="1">
+    <nd ref="63"/>
+    <nd ref="64"/>
+    <tag k="railway" v="funicular"/>
+    <tag k="name" v="railway_funicular"/>
+  </way>
+  <node id="65" visible="true" version="1" lat="53.7045360" lon="28.4083615"/>
+  <node id="66" visible="true" version="1" lat="53.7050360" lon="28.4088615"/>
+  <way id="1000032" visible="true" version="1">
+    <nd ref="65"/>
+    <nd ref="66"/>
+    <tag k="railway" v="light_rail"/>
+    <tag k="name" v="railway_light_rail"/>
+  </way>
+  <node id="67" visible="true" version="1" lat="53.7045360" lon="28.4103615"/>
+  <node id="68" visible="true" version="1" lat="53.7050360" lon="28.4108615"/>
+  <way id="1000033" visible="true" version="1">
+    <nd ref="67"/>
+    <nd ref="68"/>
+    <tag k="railway" v="miniature"/>
+    <tag k="name" v="railway_miniature"/>
+  </way>
+  <node id="69" visible="true" version="1" lat="53.7045360" lon="28.4123615"/>
+  <node id="70" visible="true" version="1" lat="53.7050360" lon="28.4128615"/>
+  <way id="1000034" visible="true" version="1">
+    <nd ref="69"/>
+    <nd ref="70"/>
+    <tag k="railway" v="monorail"/>
+    <tag k="name" v="railway_monorail"/>
+  </way>
+  <node id="71" visible="true" version="1" lat="53.7045360" lon="28.4143615"/>
+  <node id="72" visible="true" version="1" lat="53.7050360" lon="28.4148615"/>
+  <way id="1000035" visible="true" version="1">
+    <nd ref="71"/>
+    <nd ref="72"/>
+    <tag k="railway" v="narrow_gauge"/>
+    <tag k="name" v="railway_narrow_gauge"/>
+  </way>
+  <node id="73" visible="true" version="1" lat="53.7045360" lon="28.4163615"/>
+  <node id="74" visible="true" version="1" lat="53.7053360" lon="28.4163615"/>
+  <node id="75" visible="true" version="1" lat="53.7053360" lon="28.4171615"/>
+  <node id="76" visible="true" version="1" lat="53.7045360" lon="28.4171615"/>
+  <way id="1000036" visible="true" version="1">
+    <nd ref="73"/>
+    <nd ref="74"/>
+    <nd ref="75"/>
+    <nd ref="76"/>
+    <nd ref="73"/>
+    <tag k="landuse" v="forest"/>
+    <tag k="name" v="landuse_forest"/>
+  </way>
+  <node id="77" visible="true" version="1" lat="53.7045360" lon="28.4183615"/>
+  <node id="78" visible="true" version="1" lat="53.7053360" lon="28.4183615"/>
+  <node id="79" visible="true" version="1" lat="53.7053360" lon="28.4191615"/>
+  <node id="80" visible="true" version="1" lat="53.7045360" lon="28.4191615"/>
+  <way id="1000037" visible="true" version="1">
+    <nd ref="77"/>
+    <nd ref="78"/>
+    <nd ref="79"/>
+    <nd ref="80"/>
+    <nd ref="77"/>
+    <tag k="natural" v="wood"/>
+    <tag k="name" v="natural_wood"/>
+  </way>
+  <node id="81" visible="true" version="1" lat="53.7045360" lon="28.4203615"/>
+  <node id="82" visible="true" version="1" lat="53.7053360" lon="28.4203615"/>
+  <node id="83" visible="true" version="1" lat="53.7053360" lon="28.4211615"/>
+  <node id="84" visible="true" version="1" lat="53.7045360" lon="28.4211615"/>
+  <way id="1000038" visible="true" version="1">
+    <nd ref="81"/>
+    <nd ref="82"/>
+    <nd ref="83"/>
+    <nd ref="84"/>
+    <nd ref="81"/>
+    <tag k="leisure" v="park"/>
+    <tag k="name" v="leisure_park"/>
+  </way>
+  <node id="85" visible="true" version="1" lat="53.7045360" lon="28.4223615"/>
+  <node id="86" visible="true" version="1" lat="53.7053360" lon="28.4223615"/>
+  <node id="87" visible="true" version="1" lat="53.7053360" lon="28.4231615"/>
+  <node id="88" visible="true" version="1" lat="53.7045360" lon="28.4231615"/>
+  <way id="1000039" visible="true" version="1">
+    <nd ref="85"/>
+    <nd ref="86"/>
+    <nd ref="87"/>
+    <nd ref="88"/>
+    <nd ref="85"/>
+    <tag k="leisure" v="common"/>
+    <tag k="name" v="leisure_common"/>
+  </way>
+  <node id="89" visible="true" version="1" lat="53.7045360" lon="28.4243615"/>
+  <node id="90" visible="true" version="1" lat="53.7053360" lon="28.4243615"/>
+  <node id="91" visible="true" version="1" lat="53.7053360" lon="28.4251615"/>
+  <node id="92" visible="true" version="1" lat="53.7045360" lon="28.4251615"/>
+  <way id="1000040" visible="true" version="1">
+    <nd ref="89"/>
+    <nd ref="90"/>
+    <nd ref="91"/>
+    <nd ref="92"/>
+    <nd ref="89"/>
+    <tag k="landuse" v="residential"/>
+    <tag k="name" v="landuse_residential"/>
+  </way>
+  <node id="93" visible="true" version="1" lat="53.7045360" lon="28.4263615"/>
+  <node id="94" visible="true" version="1" lat="53.7053360" lon="28.4263615"/>
+  <node id="95" visible="true" version="1" lat="53.7053360" lon="28.4271615"/>
+  <node id="96" visible="true" version="1" lat="53.7045360" lon="28.4271615"/>
+  <way id="1000041" visible="true" version="1">
+    <nd ref="93"/>
+    <nd ref="94"/>
+    <nd ref="95"/>
+    <nd ref="96"/>
+    <nd ref="93"/>
+    <tag k="landuse" v="industrial"/>
+    <tag k="name" v="landuse_industrial"/>
+  </way>
+  <node id="97" visible="true" version="1" lat="53.7045360" lon="28.4283615"/>
+  <node id="98" visible="true" version="1" lat="53.7053360" lon="28.4283615"/>
+  <node id="99" visible="true" version="1" lat="53.7053360" lon="28.4291615"/>
+  <node id="100" visible="true" version="1" lat="53.7045360" lon="28.4291615"/>
+  <way id="1000042" visible="true" version="1">
+    <nd ref="97"/>
+    <nd ref="98"/>
+    <nd ref="99"/>
+    <nd ref="100"/>
+    <nd ref="97"/>
+    <tag k="landuse" v="cemetery"/>
+    <tag k="name" v="landuse_cemetery"/>
+  </way>
+  <node id="101" visible="true" version="1" lat="53.7045360" lon="28.4303615"/>
+  <node id="102" visible="true" version="1" lat="53.7053360" lon="28.4303615"/>
+  <node id="103" visible="true" version="1" lat="53.7053360" lon="28.4311615"/>
+  <node id="104" visible="true" version="1" lat="53.7045360" lon="28.4311615"/>
+  <way id="1000043" visible="true" version="1">
+    <nd ref="101"/>
+    <nd ref="102"/>
+    <nd ref="103"/>
+    <nd ref="104"/>
+    <nd ref="101"/>
+    <tag k="landuse" v="allotments"/>
+    <tag k="name" v="landuse_allotments"/>
+  </way>
+  <node id="105" visible="true" version="1" lat="53.7045360" lon="28.4323615"/>
+  <node id="106" visible="true" version="1" lat="53.7053360" lon="28.4323615"/>
+  <node id="107" visible="true" version="1" lat="53.7053360" lon="28.4331615"/>
+  <node id="108" visible="true" version="1" lat="53.7045360" lon="28.4331615"/>
+  <way id="1000044" visible="true" version="1">
+    <nd ref="105"/>
+    <nd ref="106"/>
+    <nd ref="107"/>
+    <nd ref="108"/>
+    <nd ref="105"/>
+    <tag k="landuse" v="meadow"/>
+    <tag k="name" v="landuse_meadow"/>
+  </way>
+  <node id="109" visible="true" version="1" lat="53.7065360" lon="28.4043615"/>
+  <node id="110" visible="true" version="1" lat="53.7073360" lon="28.4043615"/>
+  <node id="111" visible="true" version="1" lat="53.7073360" lon="28.4051615"/>
+  <node id="112" visible="true" version="1" lat="53.7065360" lon="28.4051615"/>
+  <way id="1000045" visible="true" version="1">
+    <nd ref="109"/>
+    <nd ref="110"/>
+    <nd ref="111"/>
+    <nd ref="112"/>
+    <nd ref="109"/>
+    <tag k="landuse" v="commercial"/>
+    <tag k="name" v="landuse_commercial"/>
+  </way>
+  <node id="113" visible="true" version="1" lat="53.7065360" lon="28.4063615"/>
+  <node id="114" visible="true" version="1" lat="53.7073360" lon="28.4063615"/>
+  <node id="115" visible="true" version="1" lat="53.7073360" lon="28.4071615"/>
+  <node id="116" visible="true" version="1" lat="53.7065360" lon="28.4071615"/>
+  <way id="1000046" visible="true" version="1">
+    <nd ref="113"/>
+    <nd ref="114"/>
+    <nd ref="115"/>
+    <nd ref="116"/>
+    <nd ref="113"/>
+    <tag k="leisure" v="nature_reserve"/>
+    <tag k="name" v="leisure_nature_reserve"/>
+  </way>
+  <node id="117" visible="true" version="1" lat="53.7065360" lon="28.4083615"/>
+  <node id="118" visible="true" version="1" lat="53.7073360" lon="28.4083615"/>
+  <node id="119" visible="true" version="1" lat="53.7073360" lon="28.4091615"/>
+  <node id="120" visible="true" version="1" lat="53.7065360" lon="28.4091615"/>
+  <way id="1000047" visible="true" version="1">
+    <nd ref="117"/>
+    <nd ref="118"/>
+    <nd ref="119"/>
+    <nd ref="120"/>
+    <nd ref="117"/>
+    <tag k="landuse" v="recreation_ground"/>
+    <tag k="name" v="landuse_recreation_ground"/>
+  </way>
+  <node id="121" visible="true" version="1" lat="53.7065360" lon="28.4103615"/>
+  <node id="122" visible="true" version="1" lat="53.7073360" lon="28.4103615"/>
+  <node id="123" visible="true" version="1" lat="53.7073360" lon="28.4111615"/>
+  <node id="124" visible="true" version="1" lat="53.7065360" lon="28.4111615"/>
+  <way id="1000048" visible="true" version="1">
+    <nd ref="121"/>
+    <nd ref="122"/>
+    <nd ref="123"/>
+    <nd ref="124"/>
+    <nd ref="121"/>
+    <tag k="landuse" v="retail"/>
+    <tag k="name" v="landuse_retail"/>
+  </way>
+  <node id="125" visible="true" version="1" lat="53.7065360" lon="28.4123615"/>
+  <node id="126" visible="true" version="1" lat="53.7073360" lon="28.4123615"/>
+  <node id="127" visible="true" version="1" lat="53.7073360" lon="28.4131615"/>
+  <node id="128" visible="true" version="1" lat="53.7065360" lon="28.4131615"/>
+  <way id="1000049" visible="true" version="1">
+    <nd ref="125"/>
+    <nd ref="126"/>
+    <nd ref="127"/>
+    <nd ref="128"/>
+    <nd ref="125"/>
+    <tag k="landuse" v="military"/>
+    <tag k="name" v="landuse_military"/>
+  </way>
+  <node id="129" visible="true" version="1" lat="53.7065360" lon="28.4143615"/>
+  <node id="130" visible="true" version="1" lat="53.7073360" lon="28.4143615"/>
+  <node id="131" visible="true" version="1" lat="53.7073360" lon="28.4151615"/>
+  <node id="132" visible="true" version="1" lat="53.7065360" lon="28.4151615"/>
+  <way id="1000050" visible="true" version="1">
+    <nd ref="129"/>
+    <nd ref="130"/>
+    <nd ref="131"/>
+    <nd ref="132"/>
+    <nd ref="129"/>
+    <tag k="landuse" v="quarry"/>
+    <tag k="name" v="landuse_quarry"/>
+  </way>
+  <node id="133" visible="true" version="1" lat="53.7065360" lon="28.4163615"/>
+  <node id="134" visible="true" version="1" lat="53.7073360" lon="28.4163615"/>
+  <node id="135" visible="true" version="1" lat="53.7073360" lon="28.4171615"/>
+  <node id="136" visible="true" version="1" lat="53.7065360" lon="28.4171615"/>
+  <way id="1000051" visible="true" version="1">
+    <nd ref="133"/>
+    <nd ref="134"/>
+    <nd ref="135"/>
+    <nd ref="136"/>
+    <nd ref="133"/>
+    <tag k="landuse" v="orchard"/>
+    <tag k="name" v="landuse_orchard"/>
+  </way>
+  <node id="137" visible="true" version="1" lat="53.7065360" lon="28.4183615"/>
+  <node id="138" visible="true" version="1" lat="53.7073360" lon="28.4183615"/>
+  <node id="139" visible="true" version="1" lat="53.7073360" lon="28.4191615"/>
+  <node id="140" visible="true" version="1" lat="53.7065360" lon="28.4191615"/>
+  <way id="1000052" visible="true" version="1">
+    <nd ref="137"/>
+    <nd ref="138"/>
+    <nd ref="139"/>
+    <nd ref="140"/>
+    <nd ref="137"/>
+    <tag k="landuse" v="vineyard"/>
+    <tag k="name" v="landuse_vineyard"/>
+  </way>
+  <node id="141" visible="true" version="1" lat="53.7065360" lon="28.4203615"/>
+  <node id="142" visible="true" version="1" lat="53.7073360" lon="28.4203615"/>
+  <node id="143" visible="true" version="1" lat="53.7073360" lon="28.4211615"/>
+  <node id="144" visible="true" version="1" lat="53.7065360" lon="28.4211615"/>
+  <way id="1000053" visible="true" version="1">
+    <nd ref="141"/>
+    <nd ref="142"/>
+    <nd ref="143"/>
+    <nd ref="144"/>
+    <nd ref="141"/>
+    <tag k="landuse" v="scrub"/>
+    <tag k="name" v="landuse_scrub"/>
+  </way>
+  <node id="145" visible="true" version="1" lat="53.7065360" lon="28.4223615"/>
+  <node id="146" visible="true" version="1" lat="53.7073360" lon="28.4223615"/>
+  <node id="147" visible="true" version="1" lat="53.7073360" lon="28.4231615"/>
+  <node id="148" visible="true" version="1" lat="53.7065360" lon="28.4231615"/>
+  <way id="1000054" visible="true" version="1">
+    <nd ref="145"/>
+    <nd ref="146"/>
+    <nd ref="147"/>
+    <nd ref="148"/>
+    <nd ref="145"/>
+    <tag k="landuse" v="grass"/>
+    <tag k="name" v="landuse_grass"/>
+  </way>
+  <node id="149" visible="true" version="1" lat="53.7065360" lon="28.4243615"/>
+  <node id="150" visible="true" version="1" lat="53.7073360" lon="28.4243615"/>
+  <node id="151" visible="true" version="1" lat="53.7073360" lon="28.4251615"/>
+  <node id="152" visible="true" version="1" lat="53.7065360" lon="28.4251615"/>
+  <way id="1000055" visible="true" version="1">
+    <nd ref="149"/>
+    <nd ref="150"/>
+    <nd ref="151"/>
+    <nd ref="152"/>
+    <nd ref="149"/>
+    <tag k="natural" v="heath"/>
+    <tag k="name" v="natural_heath"/>
+  </way>
+  <node id="153" visible="true" version="1" lat="53.7065360" lon="28.4263615"/>
+  <node id="154" visible="true" version="1" lat="53.7073360" lon="28.4263615"/>
+  <node id="155" visible="true" version="1" lat="53.7073360" lon="28.4271615"/>
+  <node id="156" visible="true" version="1" lat="53.7065360" lon="28.4271615"/>
+  <way id="1000056" visible="true" version="1">
+    <nd ref="153"/>
+    <nd ref="154"/>
+    <nd ref="155"/>
+    <nd ref="156"/>
+    <nd ref="153"/>
+    <tag k="landuse" v="farmland"/>
+    <tag k="name" v="landuse_farmland"/>
+  </way>
+  <node id="157" visible="true" version="1" lat="53.7065360" lon="28.4283615"/>
+  <node id="158" visible="true" version="1" lat="53.7073360" lon="28.4283615"/>
+  <node id="159" visible="true" version="1" lat="53.7073360" lon="28.4291615"/>
+  <node id="160" visible="true" version="1" lat="53.7065360" lon="28.4291615"/>
+  <way id="1000057" visible="true" version="1">
+    <nd ref="157"/>
+    <nd ref="158"/>
+    <nd ref="159"/>
+    <nd ref="160"/>
+    <nd ref="157"/>
+    <tag k="landuse" v="farmyard"/>
+    <tag k="name" v="landuse_farmyard"/>
+  </way>
+  <node id="161" visible="true" version="1" lat="53.7065360" lon="28.4303615"/>
+  <node id="162" visible="true" version="1" lat="53.7073360" lon="28.4303615"/>
+  <node id="163" visible="true" version="1" lat="53.7073360" lon="28.4311615"/>
+  <node id="164" visible="true" version="1" lat="53.7065360" lon="28.4311615"/>
+  <way id="1000058" visible="true" version="1">
+    <nd ref="161"/>
+    <nd ref="162"/>
+    <nd ref="163"/>
+    <nd ref="164"/>
+    <nd ref="161"/>
+    <tag k="landuse" v="landfill"/>
+    <tag k="name" v="landuse_landfill"/>
+  </way>
+  <node id="165" visible="true" version="1" lat="53.7065360" lon="28.4323615"/>
+  <node id="166" visible="true" version="1" lat="53.7073360" lon="28.4323615"/>
+  <node id="167" visible="true" version="1" lat="53.7073360" lon="28.4331615"/>
+  <node id="168" visible="true" version="1" lat="53.7065360" lon="28.4331615"/>
+  <way id="1000059" visible="true" version="1">
+    <nd ref="165"/>
+    <nd ref="166"/>
+    <nd ref="167"/>
+    <nd ref="168"/>
+    <nd ref="165"/>
+    <tag k="natural" v="water"/>
+    <tag k="name" v="natural_water"/>
+  </way>
+  <node id="169" visible="true" version="1" lat="53.7085360" lon="28.4043615"/>
+  <node id="170" visible="true" version="1" lat="53.7093360" lon="28.4043615"/>
+  <node id="171" visible="true" version="1" lat="53.7093360" lon="28.4051615"/>
+  <node id="172" visible="true" version="1" lat="53.7085360" lon="28.4051615"/>
+  <way id="1000060" visible="true" version="1">
+    <nd ref="169"/>
+    <nd ref="170"/>
+    <nd ref="171"/>
+    <nd ref="172"/>
+    <nd ref="169"/>
+    <tag k="landuse" v="reservoir"/>
+    <tag k="name" v="landuse_reservoir"/>
+  </way>
+  <node id="173" visible="true" version="1" lat="53.7085360" lon="28.4063615"/>
+  <node id="174" visible="true" version="1" lat="53.7090360" lon="28.4068615"/>
+  <way id="1000061" visible="true" version="1">
+    <nd ref="173"/>
+    <nd ref="174"/>
+    <tag k="waterway" v="riverbank"/>
+    <tag k="name" v="waterway_riverbank"/>
+  </way>
+  <node id="175" visible="true" version="1" lat="53.7085360" lon="28.4083615"/>
+  <node id="176" visible="true" version="1" lat="53.7093360" lon="28.4083615"/>
+  <node id="177" visible="true" version="1" lat="53.7093360" lon="28.4091615"/>
+  <node id="178" visible="true" version="1" lat="53.7085360" lon="28.4091615"/>
+  <way id="1000062" visible="true" version="1">
+    <nd ref="175"/>
+    <nd ref="176"/>
+    <nd ref="177"/>
+    <nd ref="178"/>
+    <nd ref="175"/>
+    <tag k="water" v="river"/>
+    <tag k="name" v="water_river"/>
+  </way>
+  <node id="179" visible="true" version="1" lat="53.7085360" lon="28.4103615"/>
+  <node id="180" visible="true" version="1" lat="53.7090360" lon="28.4108615"/>
+  <way id="1000063" visible="true" version="1">
+    <nd ref="179"/>
+    <nd ref="180"/>
+    <tag k="waterway" v="dock"/>
+    <tag k="name" v="waterway_dock"/>
+  </way>
+  <node id="181" visible="true" version="1" lat="53.7085360" lon="28.4123615"/>
+  <node id="182" visible="true" version="1" lat="53.7093360" lon="28.4123615"/>
+  <node id="183" visible="true" version="1" lat="53.7093360" lon="28.4131615"/>
+  <node id="184" visible="true" version="1" lat="53.7085360" lon="28.4131615"/>
+  <way id="1000064" visible="true" version="1">
+    <nd ref="181"/>
+    <nd ref="182"/>
+    <nd ref="183"/>
+    <nd ref="184"/>
+    <nd ref="181"/>
+    <tag k="natural" v="glacier"/>
+    <tag k="name" v="natural_glacier"/>
+  </way>
+  <node id="185" visible="true" version="1" lat="53.7085360" lon="28.4143615"/>
+  <node id="186" visible="true" version="1" lat="53.7093360" lon="28.4143615"/>
+  <node id="187" visible="true" version="1" lat="53.7093360" lon="28.4151615"/>
+  <node id="188" visible="true" version="1" lat="53.7085360" lon="28.4151615"/>
+  <way id="1000065" visible="true" version="1">
+    <nd ref="185"/>
+    <nd ref="186"/>
+    <nd ref="187"/>
+    <nd ref="188"/>
+    <nd ref="185"/>
+    <tag k="natural" v="wetland"/>
+    <tag k="name" v="natural_wetland"/>
+  </way>
+  <node id="189" visible="true" version="1" lat="53.7085360" lon="28.4163615">
+    <tag k="place" v="city"/>
+    <tag k="capital" v="yes"/>
+    <tag k="name" v="place_city__capital_yes"/>
+  </node>
+  <node id="190" visible="true" version="1" lat="53.7085360" lon="28.4183615">
+    <tag k="place" v="city"/>
+    <tag k="name" v="place_city"/>
+  </node>
+  <node id="191" visible="true" version="1" lat="53.7085360" lon="28.4203615">
+    <tag k="place" v="town"/>
+    <tag k="name" v="place_town"/>
+  </node>
+  <node id="192" visible="true" version="1" lat="53.7085360" lon="28.4223615">
+    <tag k="place" v="village"/>
+    <tag k="name" v="place_village"/>
+  </node>
+  <node id="193" visible="true" version="1" lat="53.7085360" lon="28.4243615">
+    <tag k="place" v="hamlet"/>
+    <tag k="name" v="place_hamlet"/>
+  </node>
+  <node id="194" visible="true" version="1" lat="53.7085360" lon="28.4263615">
+    <tag k="place" v="suburb"/>
+    <tag k="name" v="place_suburb"/>
+  </node>
+  <node id="195" visible="true" version="1" lat="53.7085360" lon="28.4283615">
+    <tag k="place" v="island"/>
+    <tag k="name" v="place_island"/>
+  </node>
+  <node id="196" visible="true" version="1" lat="53.7085360" lon="28.4303615">
+    <tag k="place" v="farm"/>
+    <tag k="name" v="place_farm"/>
+  </node>
+  <node id="197" visible="true" version="1" lat="53.7085360" lon="28.4323615">
+    <tag k="place" v="isolated_dwelling"/>
+    <tag k="name" v="place_isolated_dwelling"/>
+  </node>
+  <node id="198" visible="true" version="1" lat="53.7105360" lon="28.4043615">
+    <tag k="place" v="region"/>
+    <tag k="name" v="place_region"/>
+  </node>
+  <node id="199" visible="true" version="1" lat="53.7105360" lon="28.4063615">
+    <tag k="place" v="county"/>
+    <tag k="name" v="place_county"/>
+  </node>
+  <node id="200" visible="true" version="1" lat="53.7105360" lon="28.4083615">
+    <tag k="place" v="locality"/>
+    <tag k="name" v="place_locality"/>
+  </node>
+  <node id="201" visible="true" version="1" lat="53.7105360" lon="28.4103615">
+    <tag k="amenity" v="police"/>
+    <tag k="name" v="amenity_police"/>
+  </node>
+  <node id="202" visible="true" version="1" lat="53.7105360" lon="28.4123615">
+    <tag k="amenity" v="fire_station"/>
+    <tag k="name" v="amenity_fire_station"/>
+  </node>
+  <node id="203" visible="true" version="1" lat="53.7105360" lon="28.4143615">
+    <tag k="amenity" v="marketplace"/>
+    <tag k="name" v="amenity_marketplace"/>
+  </node>
+  <node id="204" visible="true" version="1" lat="53.7105360" lon="28.4163615">
+    <tag k="amenity" v="pharmacy"/>
+    <tag k="name" v="amenity_pharmacy"/>
+  </node>
+  <node id="205" visible="true" version="1" lat="53.7105360" lon="28.4183615">
+    <tag k="amenity" v="hospital"/>
+    <tag k="name" v="amenity_hospital"/>
+  </node>
+  <node id="206" visible="true" version="1" lat="53.7105360" lon="28.4203615">
+    <tag k="amenity" v="clinic"/>
+    <tag k="name" v="amenity_clinic"/>
+  </node>
+  <node id="207" visible="true" version="1" lat="53.7105360" lon="28.4223615">
+    <tag k="amenity" v="doctors"/>
+    <tag k="name" v="amenity_doctors"/>
+  </node>
+  <node id="208" visible="true" version="1" lat="53.7105360" lon="28.4243615"/>
+  <node id="209" visible="true" version="1" lat="53.7113360" lon="28.4243615"/>
+  <node id="210" visible="true" version="1" lat="53.7113360" lon="28.4251615"/>
+  <node id="211" visible="true" version="1" lat="53.7105360" lon="28.4251615"/>
+  <way id="1000066" visible="true" version="1">
+    <nd ref="208"/>
+    <nd ref="209"/>
+    <nd ref="210"/>
+    <nd ref="211"/>
+    <nd ref="208"/>
+    <tag k="leisure" v="park"/>
+    <tag k="name" v="leisure_park"/>
+  </way>
+  <node id="212" visible="true" version="1" lat="53.7105360" lon="28.4263615">
+    <tag k="amenity" v="restaurant"/>
+    <tag k="name" v="amenity_restaurant"/>
+  </node>
+  <node id="213" visible="true" version="1" lat="53.7105360" lon="28.4283615">
+    <tag k="amenity" v="fast_food"/>
+    <tag k="name" v="amenity_fast_food"/>
+  </node>
+  <node id="214" visible="true" version="1" lat="53.7105360" lon="28.4303615">
+    <tag k="amenity" v="cafe"/>
+    <tag k="name" v="amenity_cafe"/>
+  </node>
+  <node id="215" visible="true" version="1" lat="53.7105360" lon="28.4323615">
+    <tag k="amenity" v="pub"/>
+    <tag k="name" v="amenity_pub"/>
+  </node>
+  <node id="216" visible="true" version="1" lat="53.7125360" lon="28.4043615">
+    <tag k="amenity" v="bar"/>
+    <tag k="name" v="amenity_bar"/>
+  </node>
+  <node id="217" visible="true" version="1" lat="53.7125360" lon="28.4063615">
+    <tag k="amenity" v="food_court"/>
+    <tag k="name" v="amenity_food_court"/>
+  </node>
+  <node id="218" visible="true" version="1" lat="53.7125360" lon="28.4083615">
+    <tag k="amenity" v="biergarten"/>
+    <tag k="name" v="amenity_biergarten"/>
+  </node>
+  <node id="219" visible="true" version="1" lat="53.7125360" lon="28.4103615">
+    <tag k="tourism" v="hotel"/>
+    <tag k="name" v="tourism_hotel"/>
+  </node>
+  <node id="220" visible="true" version="1" lat="53.7125360" lon="28.4123615">
+    <tag k="tourism" v="motel"/>
+    <tag k="name" v="tourism_motel"/>
+  </node>
+  <node id="221" visible="true" version="1" lat="53.7125360" lon="28.4143615">
+    <tag k="tourism" v="bed_and_breakfast"/>
+    <tag k="name" v="tourism_bed_and_breakfast"/>
+  </node>
+  <node id="222" visible="true" version="1" lat="53.7125360" lon="28.4163615">
+    <tag k="tourism" v="guest_house"/>
+    <tag k="name" v="tourism_guest_house"/>
+  </node>
+  <node id="223" visible="true" version="1" lat="53.7125360" lon="28.4183615">
+    <tag k="tourism" v="hostel"/>
+    <tag k="name" v="tourism_hostel"/>
+  </node>
+  <node id="224" visible="true" version="1" lat="53.7125360" lon="28.4203615">
+    <tag k="tourism" v="chalet"/>
+    <tag k="name" v="tourism_chalet"/>
+  </node>
+  <node id="225" visible="true" version="1" lat="53.7125360" lon="28.4223615">
+    <tag k="amenity" v="shelter"/>
+    <tag k="shelter_type" v="lean_to"/>
+    <tag k="name" v="shelter_type_lean_to"/>
+  </node>
+  <node id="226" visible="true" version="1" lat="53.7125360" lon="28.4243615">
+    <tag k="amenity" v="shelter"/>
+    <tag k="shelter_type" v="picnic_shelter"/>
+    <tag k="name" v="shelter_type_picnic_shelter"/>
+  </node>
+  <node id="227" visible="true" version="1" lat="53.7125360" lon="28.4263615">
+    <tag k="amenity" v="shelter"/>
+    <tag k="shelter_type" v="basic_hut"/>
+    <tag k="name" v="shelter_type_basic_hut"/>
+  </node>
+  <node id="228" visible="true" version="1" lat="53.7125360" lon="28.4283615">
+    <tag k="amenity" v="shelter"/>
+    <tag k="shelter_type" v="weather_shelter"/>
+    <tag k="name" v="shelter_type_weather_shelter"/>
+  </node>
+  <node id="229" visible="true" version="1" lat="53.7125360" lon="28.4303615">
+    <tag k="amenity" v="shelter"/>
+    <tag k="name" v="amenity_shelter"/>
+  </node>
+  <node id="230" visible="true" version="1" lat="53.7125360" lon="28.4323615">
+    <tag k="tourism" v="camp_site"/>
+    <tag k="name" v="tourism_camp_site"/>
+  </node>
+  <node id="231" visible="true" version="1" lat="53.7145360" lon="28.4043615">
+    <tag k="tourism" v="alpine_hut"/>
+    <tag k="name" v="tourism_alpine_hut"/>
+  </node>
+  <node id="232" visible="true" version="1" lat="53.7145360" lon="28.4063615">
+    <tag k="tourism" v="wilderness_hut"/>
+    <tag k="name" v="tourism_wilderness_hut"/>
+  </node>
+  <node id="233" visible="true" version="1" lat="53.7145360" lon="28.4083615">
+    <tag k="tourism" v="caravan_site"/>
+    <tag k="name" v="tourism_caravan_site"/>
+  </node>
+  <node id="234" visible="true" version="1" lat="53.7145360" lon="28.4103615">
+    <tag k="shop" v="supermarket"/>
+    <tag k="name" v="shop_supermarket"/>
+  </node>
+  <node id="235" visible="true" version="1" lat="53.7145360" lon="28.4123615">
+    <tag k="shop" v="bakery"/>
+    <tag k="name" v="shop_bakery"/>
+  </node>
+  <node id="236" visible="true" version="1" lat="53.7145360" lon="28.4143615">
+    <tag k="shop" v="kiosk"/>
+    <tag k="name" v="shop_kiosk"/>
+  </node>
+  <node id="237" visible="true" version="1" lat="53.7145360" lon="28.4163615">
+    <tag k="shop" v="mall"/>
+    <tag k="name" v="shop_mall"/>
+  </node>
+  <node id="238" visible="true" version="1" lat="53.7145360" lon="28.4183615">
+    <tag k="shop" v="department_store"/>
+    <tag k="name" v="shop_department_store"/>
+  </node>
+  <node id="239" visible="true" version="1" lat="53.7145360" lon="28.4203615">
+    <tag k="shop" v="general"/>
+    <tag k="name" v="shop_general"/>
+  </node>
+  <node id="240" visible="true" version="1" lat="53.7145360" lon="28.4223615">
+    <tag k="shop" v="convenience"/>
+    <tag k="name" v="shop_convenience"/>
+  </node>
+  <node id="241" visible="true" version="1" lat="53.7145360" lon="28.4243615">
+    <tag k="shop" v="clothes"/>
+    <tag k="name" v="shop_clothes"/>
+  </node>
+  <node id="242" visible="true" version="1" lat="53.7145360" lon="28.4263615">
+    <tag k="shop" v="florist"/>
+    <tag k="name" v="shop_florist"/>
+  </node>
+  <node id="243" visible="true" version="1" lat="53.7145360" lon="28.4283615">
+    <tag k="shop" v="chemist"/>
+    <tag k="name" v="shop_chemist"/>
+  </node>
+  <node id="244" visible="true" version="1" lat="53.7145360" lon="28.4303615">
+    <tag k="shop" v="books"/>
+    <tag k="name" v="shop_books"/>
+  </node>
+  <node id="245" visible="true" version="1" lat="53.7145360" lon="28.4323615">
+    <tag k="shop" v="butcher"/>
+    <tag k="name" v="shop_butcher"/>
+  </node>
+  <node id="246" visible="true" version="1" lat="53.7165360" lon="28.4043615">
+    <tag k="shop" v="shoes"/>
+    <tag k="name" v="shop_shoes"/>
+  </node>
+  <node id="247" visible="true" version="1" lat="53.7165360" lon="28.4063615">
+    <tag k="shop" v="beverages"/>
+    <tag k="name" v="shop_beverages"/>
+  </node>
+  <node id="248" visible="true" version="1" lat="53.7165360" lon="28.4083615">
+    <tag k="shop" v="alcohol"/>
+    <tag k="name" v="shop_alcohol"/>
+  </node>
+  <node id="249" visible="true" version="1" lat="53.7165360" lon="28.4103615">
+    <tag k="shop" v="optician"/>
+    <tag k="name" v="shop_optician"/>
+  </node>
+  <node id="250" visible="true" version="1" lat="53.7165360" lon="28.4123615">
+    <tag k="shop" v="jewelry"/>
+    <tag k="name" v="shop_jewelry"/>
+  </node>
+  <node id="251" visible="true" version="1" lat="53.7165360" lon="28.4143615">
+    <tag k="shop" v="gift"/>
+    <tag k="name" v="shop_gift"/>
+  </node>
+  <node id="252" visible="true" version="1" lat="53.7165360" lon="28.4163615">
+    <tag k="shop" v="sports"/>
+    <tag k="name" v="shop_sports"/>
+  </node>
+  <node id="253" visible="true" version="1" lat="53.7165360" lon="28.4183615">
+    <tag k="shop" v="stationery"/>
+    <tag k="name" v="shop_stationery"/>
+  </node>
+  <node id="254" visible="true" version="1" lat="53.7165360" lon="28.4203615">
+    <tag k="shop" v="outdoor"/>
+    <tag k="name" v="shop_outdoor"/>
+  </node>
+  <node id="255" visible="true" version="1" lat="53.7165360" lon="28.4223615">
+    <tag k="shop" v="mobile_phone"/>
+    <tag k="name" v="shop_mobile_phone"/>
+  </node>
+  <node id="256" visible="true" version="1" lat="53.7165360" lon="28.4243615">
+    <tag k="shop" v="toys"/>
+    <tag k="name" v="shop_toys"/>
+  </node>
+  <node id="257" visible="true" version="1" lat="53.7165360" lon="28.4263615">
+    <tag k="shop" v="newsagent"/>
+    <tag k="name" v="shop_newsagent"/>
+  </node>
+  <node id="258" visible="true" version="1" lat="53.7165360" lon="28.4283615">
+    <tag k="shop" v="greengrocer"/>
+    <tag k="name" v="shop_greengrocer"/>
+  </node>
+  <node id="259" visible="true" version="1" lat="53.7165360" lon="28.4303615">
+    <tag k="shop" v="beauty"/>
+    <tag k="name" v="shop_beauty"/>
+  </node>
+  <node id="260" visible="true" version="1" lat="53.7165360" lon="28.4323615">
+    <tag k="shop" v="video"/>
+    <tag k="name" v="shop_video"/>
+  </node>
+  <node id="261" visible="true" version="1" lat="53.7185360" lon="28.4043615">
+    <tag k="shop" v="car"/>
+    <tag k="name" v="shop_car"/>
+  </node>
+  <node id="262" visible="true" version="1" lat="53.7185360" lon="28.4063615">
+    <tag k="shop" v="bicycle"/>
+    <tag k="name" v="shop_bicycle"/>
+  </node>
+  <node id="263" visible="true" version="1" lat="53.7185360" lon="28.4083615">
+    <tag k="shop" v="doityourself"/>
+    <tag k="name" v="shop_doityourself"/>
+  </node>
+  <node id="264" visible="true" version="1" lat="53.7185360" lon="28.4103615">
+    <tag k="shop" v="hardware"/>
+    <tag k="name" v="shop_hardware"/>
+  </node>
+  <node id="265" visible="true" version="1" lat="53.7185360" lon="28.4123615">
+    <tag k="shop" v="furniture"/>
+    <tag k="name" v="shop_furniture"/>
+  </node>
+  <node id="266" visible="true" version="1" lat="53.7185360" lon="28.4143615">
+    <tag k="shop" v="computer"/>
+    <tag k="name" v="shop_computer"/>
+  </node>
+  <node id="267" visible="true" version="1" lat="53.7185360" lon="28.4163615">
+    <tag k="shop" v="garden_centre"/>
+    <tag k="name" v="shop_garden_centre"/>
+  </node>
+  <node id="268" visible="true" version="1" lat="53.7185360" lon="28.4183615">
+    <tag k="shop" v="hairdresser"/>
+    <tag k="name" v="shop_hairdresser"/>
+  </node>
+  <node id="269" visible="true" version="1" lat="53.7185360" lon="28.4203615">
+    <tag k="shop" v="car_repair"/>
+    <tag k="name" v="shop_car_repair"/>
+  </node>
+  <node id="270" visible="true" version="1" lat="53.7185360" lon="28.4223615">
+    <tag k="amenity" v="car_rental"/>
+    <tag k="name" v="amenity_car_rental"/>
+  </node>
+  <node id="271" visible="true" version="1" lat="53.7185360" lon="28.4243615">
+    <tag k="amenity" v="car_wash"/>
+    <tag k="name" v="amenity_car_wash"/>
+  </node>
+  <node id="272" visible="true" version="1" lat="53.7185360" lon="28.4263615">
+    <tag k="amenity" v="car_sharing"/>
+    <tag k="name" v="amenity_car_sharing"/>
+  </node>
+  <node id="273" visible="true" version="1" lat="53.7185360" lon="28.4283615">
+    <tag k="amenity" v="bicycle_rental"/>
+    <tag k="name" v="amenity_bicycle_rental"/>
+  </node>
+  <node id="274" visible="true" version="1" lat="53.7185360" lon="28.4303615">
+    <tag k="shop" v="travel_agency"/>
+    <tag k="name" v="shop_travel_agency"/>
+  </node>
+  <node id="275" visible="true" version="1" lat="53.7185360" lon="28.4323615">
+    <tag k="shop" v="laundry"/>
+    <tag k="name" v="shop_laundry"/>
+  </node>
+  <node id="276" visible="true" version="1" lat="53.7205360" lon="28.4043615">
+    <tag k="shop" v="dry_cleaning"/>
+    <tag k="name" v="shop_dry_cleaning"/>
+  </node>
+  <node id="277" visible="true" version="1" lat="53.7205360" lon="28.4063615">
+    <tag k="amenity" v="vending_machine"/>
+    <tag k="name" v="amenity_vending_machine"/>
+  </node>
+  <node id="278" visible="true" version="1" lat="53.7205360" lon="28.4083615">
+    <tag k="amenity" v="bank"/>
+    <tag k="name" v="amenity_bank"/>
+  </node>
+  <node id="279" visible="true" version="1" lat="53.7205360" lon="28.4103615">
+    <tag k="amenity" v="atm"/>
+    <tag k="name" v="amenity_atm"/>
+  </node>
+  <node id="280" visible="true" version="1" lat="53.7205360" lon="28.4123615">
+    <tag k="tourism" v="information"/>
+    <tag k="name" v="tourism_information"/>
+  </node>
+  <node id="281" visible="true" version="1" lat="53.7205360" lon="28.4143615">
+    <tag k="tourism" v="attraction"/>
+    <tag k="name" v="tourism_attraction"/>
+  </node>
+  <node id="282" visible="true" version="1" lat="53.7205360" lon="28.4163615">
+    <tag k="tourism" v="museum"/>
+    <tag k="name" v="tourism_museum"/>
+  </node>
+  <node id="283" visible="true" version="1" lat="53.7205360" lon="28.4183615">
+    <tag k="historic" v="monument"/>
+    <tag k="name" v="historic_monument"/>
+  </node>
+  <node id="284" visible="true" version="1" lat="53.7205360" lon="28.4203615">
+    <tag k="historic" v="memorial"/>
+    <tag k="name" v="historic_memorial"/>
+  </node>
+  <node id="285" visible="true" version="1" lat="53.7205360" lon="28.4223615">
+    <tag k="tourism" v="artwork"/>
+    <tag k="name" v="tourism_artwork"/>
+  </node>
+  <node id="286" visible="true" version="1" lat="53.7205360" lon="28.4243615">
+    <tag k="historic" v="castle"/>
+    <tag k="name" v="historic_castle"/>
+  </node>
+  <node id="287" visible="true" version="1" lat="53.7205360" lon="28.4263615">
+    <tag k="historic" v="ruins"/>
+    <tag k="name" v="historic_ruins"/>
+  </node>
+  <node id="288" visible="true" version="1" lat="53.7205360" lon="28.4283615">
+    <tag k="historic" v="archaeological_site"/>
+    <tag k="name" v="historic_archaeological_site"/>
+  </node>
+  <node id="289" visible="true" version="1" lat="53.7205360" lon="28.4303615">
+    <tag k="historic" v="wayside_cross"/>
+    <tag k="name" v="historic_wayside_cross"/>
+  </node>
+  <node id="290" visible="true" version="1" lat="53.7205360" lon="28.4323615">
+    <tag k="historic" v="wayside_shrine"/>
+    <tag k="name" v="historic_wayside_shrine"/>
+  </node>
+  <node id="291" visible="true" version="1" lat="53.7225360" lon="28.4043615">
+    <tag k="historic" v="battlefield"/>
+    <tag k="name" v="historic_battlefield"/>
+  </node>
+  <node id="292" visible="true" version="1" lat="53.7225360" lon="28.4063615">
+    <tag k="historic" v="fort"/>
+    <tag k="name" v="historic_fort"/>
+  </node>
+  <node id="293" visible="true" version="1" lat="53.7225360" lon="28.4083615">
+    <tag k="tourism" v="picnic_site"/>
+    <tag k="name" v="tourism_picnic_site"/>
+  </node>
+  <node id="294" visible="true" version="1" lat="53.7225360" lon="28.4103615">
+    <tag k="tourism" v="viewpoint"/>
+    <tag k="name" v="tourism_viewpoint"/>
+  </node>
+  <node id="295" visible="true" version="1" lat="53.7225360" lon="28.4123615">
+    <tag k="tourism" v="zoo"/>
+    <tag k="name" v="tourism_zoo"/>
+  </node>
+  <node id="296" visible="true" version="1" lat="53.7225360" lon="28.4143615">
+    <tag k="tourism" v="theme_park"/>
+    <tag k="name" v="tourism_theme_park"/>
+  </node>
+  <node id="297" visible="true" version="1" lat="53.7225360" lon="28.4163615">
+    <tag k="amenity" v="toilets"/>
+    <tag k="name" v="amenity_toilets"/>
+  </node>
+  <node id="298" visible="true" version="1" lat="53.7225360" lon="28.4183615">
+    <tag k="amenity" v="bench"/>
+    <tag k="name" v="amenity_bench"/>
+  </node>
+  <node id="299" visible="true" version="1" lat="53.7225360" lon="28.4203615">
+    <tag k="amenity" v="drinking_water"/>
+    <tag k="name" v="amenity_drinking_water"/>
+  </node>
+  <node id="300" visible="true" version="1" lat="53.7225360" lon="28.4223615">
+    <tag k="man_made" v="lighthouse"/>
+    <tag k="name" v="man_made_lighthouse"/>
+  </node>
+  <node id="301" visible="true" version="1" lat="53.7225360" lon="28.4243615">
+    <tag k="man_made" v="water_well"/>
+    <tag k="name" v="man_made_water_well"/>
+  </node>
+  <node id="302" visible="true" version="1" lat="53.7225360" lon="28.4263615">
+    <tag k="man_made" v="watermill"/>
+    <tag k="name" v="man_made_watermill"/>
+  </node>
+  <node id="303" visible="true" version="1" lat="53.7225360" lon="28.4283615">
+    <tag k="amenity" v="place_of_worship"/>
+    <tag k="name" v="amenity_place_of_worship"/>
+  </node>
+  <node id="304" visible="true" version="1" lat="53.7225360" lon="28.4303615">
+    <tag k="natural" v="spring"/>
+    <tag k="name" v="natural_spring"/>
+  </node>
+  <node id="305" visible="true" version="1" lat="53.7225360" lon="28.4323615"/>
+  <node id="306" visible="true" version="1" lat="53.7233360" lon="28.4323615"/>
+  <node id="307" visible="true" version="1" lat="53.7233360" lon="28.4331615"/>
+  <node id="308" visible="true" version="1" lat="53.7225360" lon="28.4331615"/>
+  <way id="1000067" visible="true" version="1">
+    <nd ref="305"/>
+    <nd ref="306"/>
+    <nd ref="307"/>
+    <nd ref="308"/>
+    <nd ref="305"/>
+    <tag k="natural" v="glacier"/>
+    <tag k="name" v="natural_glacier"/>
+  </way>
+  <node id="309" visible="true" version="1" lat="53.7245360" lon="28.4043615">
+    <tag k="natural" v="peak"/>
+    <tag k="name" v="natural_peak"/>
+  </node>
+  <node id="310" visible="true" version="1" lat="53.7245360" lon="28.4063615"/>
+  <node id="311" visible="true" version="1" lat="53.7253360" lon="28.4063615"/>
+  <node id="312" visible="true" version="1" lat="53.7253360" lon="28.4071615"/>
+  <node id="313" visible="true" version="1" lat="53.7245360" lon="28.4071615"/>
+  <way id="1000068" visible="true" version="1">
+    <nd ref="310"/>
+    <nd ref="311"/>
+    <nd ref="312"/>
+    <nd ref="313"/>
+    <nd ref="310"/>
+    <tag k="natural" v="cliff"/>
+    <tag k="name" v="natural_cliff"/>
+  </way>
+  <node id="314" visible="true" version="1" lat="53.7245360" lon="28.4083615">
+    <tag k="natural" v="volcano"/>
+    <tag k="name" v="natural_volcano"/>
+  </node>
+  <node id="315" visible="true" version="1" lat="53.7245360" lon="28.4103615">
+    <tag k="natural" v="cave_entrance"/>
+    <tag k="name" v="natural_cave_entrance"/>
+  </node>
+  <node id="316" visible="true" version="1" lat="53.7245360" lon="28.4123615"/>
+  <node id="317" visible="true" version="1" lat="53.7253360" lon="28.4123615"/>
+  <node id="318" visible="true" version="1" lat="53.7253360" lon="28.4131615"/>
+  <node id="319" visible="true" version="1" lat="53.7245360" lon="28.4131615"/>
+  <way id="1000069" visible="true" version="1">
+    <nd ref="316"/>
+    <nd ref="317"/>
+    <nd ref="318"/>
+    <nd ref="319"/>
+    <nd ref="316"/>
+    <tag k="natural" v="beach"/>
+    <tag k="name" v="natural_beach"/>
+  </way>
+  <node id="320" visible="true" version="1" lat="53.7245360" lon="28.4143615"/>
+  <node id="321" visible="true" version="1" lat="53.7250360" lon="28.4148615"/>
+  <way id="1000070" visible="true" version="1">
+    <nd ref="320"/>
+    <nd ref="321"/>
+    <tag k="highway" v="ford"/>
+    <tag k="name" v="highway_ford"/>
+  </way>
+  <node id="322" visible="true" version="1" lat="53.7245360" lon="28.4163615">
+    <tag k="amenity" v="fuel"/>
+    <tag k="name" v="amenity_fuel"/>
+  </node>
+  <node id="323" visible="true" version="1" lat="53.7245360" lon="28.4183615"/>
+  <node id="324" visible="true" version="1" lat="53.7250360" lon="28.4188615"/>
+  <way id="1000071" visible="true" version="1">
+    <nd ref="323"/>
+    <nd ref="324"/>
+    <tag k="highway" v="services"/>
+    <tag k="name" v="highway_services"/>
+  </way>
+  <node id="325" visible="true" version="1" lat="53.7245360" lon="28.4203615">
+    <tag k="amenity" v="parking"/>
+    <tag k="name" v="amenity_parking"/>
+  </node>
+  <node id="326" visible="true" version="1" lat="53.7245360" lon="28.4223615">
+    <tag k="amenity" v="bicycle_parking"/>
+    <tag k="name" v="amenity_bicycle_parking"/>
+  </node>
+  <node id="327" visible="true" version="1" lat="53.7245360" lon="28.4243615">
+    <tag k="amenity" v="bicycle_repair_station"/>
+    <tag k="name" v="amenity_bicycle_repair_station"/>
+  </node>
+  <node id="328" visible="true" version="1" lat="53.7245360" lon="28.4263615"/>
+  <node id="329" visible="true" version="1" lat="53.7250360" lon="28.4268615"/>
+  <way id="1000072" visible="true" version="1">
+    <nd ref="328"/>
+    <nd ref="329"/>
+    <tag k="waterway" v="waterfall"/>
+    <tag k="name" v="waterway_waterfall"/>
+  </way>
+  <node id="330" visible="true" version="1" lat="53.7245360" lon="28.4283615"/>
+  <node id="331" visible="true" version="1" lat="53.7250360" lon="28.4288615"/>
+  <way id="1000073" visible="true" version="1">
+    <nd ref="330"/>
+    <nd ref="331"/>
+    <tag k="railway" v="station"/>
+    <tag k="name" v="railway_station"/>
+  </way>
+  <node id="332" visible="true" version="1" lat="53.7245360" lon="28.4303615"/>
+  <node id="333" visible="true" version="1" lat="53.7250360" lon="28.4308615"/>
+  <way id="1000074" visible="true" version="1">
+    <nd ref="332"/>
+    <nd ref="333"/>
+    <tag k="railway" v="halt"/>
+    <tag k="name" v="railway_halt"/>
+  </way>
+  <node id="334" visible="true" version="1" lat="53.7245360" lon="28.4323615"/>
+  <node id="335" visible="true" version="1" lat="53.7250360" lon="28.4328615"/>
+  <way id="1000075" visible="true" version="1">
+    <nd ref="334"/>
+    <nd ref="335"/>
+    <tag k="railway" v="tram_stop"/>
+    <tag k="name" v="railway_tram_stop"/>
+  </way>
+  <node id="336" visible="true" version="1" lat="53.7265360" lon="28.4043615"/>
+  <node id="337" visible="true" version="1" lat="53.7270360" lon="28.4048615"/>
+  <way id="1000076" visible="true" version="1">
+    <nd ref="336"/>
+    <nd ref="337"/>
+    <tag k="highway" v="bus_stop"/>
+    <tag k="name" v="highway_bus_stop"/>
+  </way>
+  <node id="338" visible="true" version="1" lat="53.7265360" lon="28.4063615">
+    <tag k="amenity" v="bus_station"/>
+    <tag k="name" v="amenity_bus_station"/>
+  </node>
+  <node id="339" visible="true" version="1" lat="53.7265360" lon="28.4083615">
+    <tag k="amenity" v="taxi"/>
+    <tag k="name" v="amenity_taxi"/>
+  </node>
+  <node id="340" visible="true" version="1" lat="53.7265360" lon="28.4103615">
+    <tag k="amenity" v="airport"/>
+    <tag k="name" v="amenity_airport"/>
+  </node>
+  <node id="341" visible="true" version="1" lat="53.7265360" lon="28.4123615"/>
+  <node id="342" visible="true" version="1" lat="53.7273360" lon="28.4123615"/>
+  <node id="343" visible="true" version="1" lat="53.7273360" lon="28.4131615"/>
+  <node id="344" visible="true" version="1" lat="53.7265360" lon="28.4131615"/>
+  <way id="1000077" visible="true" version="1">
+    <nd ref="341"/>
+    <nd ref="342"/>
+    <nd ref="343"/>
+    <nd ref="344"/>
+    <nd ref="341"/>
+    <tag k="aeroway" v="aerodrome"/>
+    <tag k="name" v="aeroway_aerodrome"/>
+  </way>
+  <node id="345" visible="true" version="1" lat="53.7265360" lon="28.4143615"/>
+  <node id="346" visible="true" version="1" lat="53.7273360" lon="28.4143615"/>
+  <node id="347" visible="true" version="1" lat="53.7273360" lon="28.4151615"/>
+  <node id="348" visible="true" version="1" lat="53.7265360" lon="28.4151615"/>
+  <way id="1000078" visible="true" version="1">
+    <nd ref="345"/>
+    <nd ref="346"/>
+    <nd ref="347"/>
+    <nd ref="348"/>
+    <nd ref="345"/>
+    <tag k="aeroway" v="airfield"/>
+    <tag k="name" v="aeroway_airfield"/>
+  </way>
+  <node id="349" visible="true" version="1" lat="53.7265360" lon="28.4163615">
+    <tag k="aeroway" v="helipad"/>
+    <tag k="name" v="aeroway_helipad"/>
+  </node>
+  <node id="350" visible="true" version="1" lat="53.7265360" lon="28.4183615"/>
+  <node id="351" visible="true" version="1" lat="53.7273360" lon="28.4183615"/>
+  <node id="352" visible="true" version="1" lat="53.7273360" lon="28.4191615"/>
+  <node id="353" visible="true" version="1" lat="53.7265360" lon="28.4191615"/>
+  <way id="1000079" visible="true" version="1">
+    <nd ref="350"/>
+    <nd ref="351"/>
+    <nd ref="352"/>
+    <nd ref="353"/>
+    <nd ref="350"/>
+    <tag k="aeroway" v="apron"/>
+    <tag k="name" v="aeroway_apron"/>
+  </way>
+  <node id="354" visible="true" version="1" lat="53.7265360" lon="28.4203615">
+    <tag k="amenity" v="ferry_terminal"/>
+    <tag k="name" v="amenity_ferry_terminal"/>
+  </node>
+  <node id="355" visible="true" version="1" lat="53.7265360" lon="28.4223615"/>
+  <node id="356" visible="true" version="1" lat="53.7270360" lon="28.4228615"/>
+  <way id="1000080" visible="true" version="1">
+    <nd ref="355"/>
+    <nd ref="356"/>
+    <tag k="aerialway" v="station"/>
+    <tag k="name" v="aerialway_station"/>
+  </way>
+  <node id="357" visible="true" version="1" lat="53.7265360" lon="28.4243615">
+    <tag k="amenity" v="shower"/>
+    <tag k="name" v="amenity_shower"/>
+  </node>
+  <node id="358" visible="true" version="1" lat="53.7265360" lon="28.4263615">
+    <tag k="natural" v="saddle"/>
+    <tag k="name" v="natural_saddle"/>
+  </node>
+  <node id="359" visible="true" version="1" lat="53.7265360" lon="28.4283615"/>
+  <node id="360" visible="true" version="1" lat="53.7273360" lon="28.4283615"/>
+  <node id="361" visible="true" version="1" lat="53.7273360" lon="28.4291615"/>
+  <node id="362" visible="true" version="1" lat="53.7265360" lon="28.4291615"/>
+  <way id="1000081" visible="true" version="1">
+    <nd ref="359"/>
+    <nd ref="360"/>
+    <nd ref="361"/>
+    <nd ref="362"/>
+    <nd ref="359"/>
+    <tag k="natural" v="hot_spring"/>
+    <tag k="name" v="natural_hot_spring"/>
+  </way>
+  <node id="363" visible="true" version="1" lat="53.7265360" lon="28.4303615"/>
+  <node id="364" visible="true" version="1" lat="53.7270360" lon="28.4308615"/>
+  <way id="1000082" visible="true" version="1">
+    <nd ref="363"/>
+    <nd ref="364"/>
+    <tag k="highway" v="rest_area"/>
+    <tag k="name" v="highway_rest_area"/>
+  </way>
+</osm>

@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6" generator="PurrGO_Test_Suite">
+  <!-- Компактный BBox вокруг центра карты -->
+  <bounds minlat="53.7130000" minlon="28.4180000" maxlat="53.7140000" maxlon="28.4210000"/>
+
+  <!-- 20 POI в радиусе ~10 метров друг от друга -->
+  <node id="1" visible="true" version="1" lat="53.7135360" lon="28.4193615">
+    <tag k="amenity" v="restaurant"/>
+    <tag k="name" v="Restaurant «Старый Баку &amp; New Bar»"/>
+  </node>
+  
+  <node id="2" visible="true" version="1" lat="53.7135460" lon="28.4193715">
+    <tag k="shop" v="supermarket"/>
+    <tag k="name" v="Supermarket «Южный Экспресс-Market»"/>
+  </node>
+  
+  <node id="3" visible="true" version="1" lat="53.7135260" lon="28.4193515">
+    <tag k="tourism" v="hotel"/>
+    <tag k="name" v="Hotel «Grand Palace &amp; Отель»"/>
+  </node>
+  
+  <node id="4" visible="true" version="1" lat="53.7135560" lon="28.4193315">
+    <tag k="amenity" v="cafe"/>
+    <tag k="name" v="Café «Шоколад &amp; Coffee House»"/>
+  </node>
+  
+  <node id="5" visible="true" version="1" lat="53.7135160" lon="28.4193915">
+    <tag k="amenity" v="pharmacy"/>
+    <tag k="name" v="Apteka «Здоровье для Всех &amp; Pharma»"/>
+  </node>
+  
+  <node id="6" visible="true" version="1" lat="53.7135660" lon="28.4193115">
+    <tag k="shop" v="bakery"/>
+    <tag k="name" v="Bakery «Французская Булочка &amp; Хлеб»"/>
+  </node>
+  
+  <node id="7" visible="true" version="1" lat="53.7135060" lon="28.4194115">
+    <tag k="amenity" v="bank"/>
+    <tag k="name" v="Bank «Национальный Кредит &amp; Finance»"/>
+  </node>
+  
+  <node id="8" visible="true" version="1" lat="53.7135760" lon="28.4192915">
+    <tag k="shop" v="books"/>
+    <tag k="name" v="Book Store «Читай-Город &amp; BookShop»"/>
+  </node>
+  
+  <node id="9" visible="true" version="1" lat="53.7134960" lon="28.4194315">
+    <tag k="amenity" v="fuel"/>
+    <tag k="name" v="Gas Station «Белнефтехим &amp; Oil»"/>
+  </node>
+  
+  <node id="10" visible="true" version="1" lat="53.7135860" lon="28.4192715">
+    <tag k="shop" v="clothes"/>
+    <tag k="name" v="Boutique «Модный Стиль &amp; Fashion»"/>
+  </node>
+  
+  <node id="11" visible="true" version="1" lat="53.7134860" lon="28.4194515">
+    <tag k="amenity" v="hospital"/>
+    <tag k="name" v="Central Hospital &amp; Городская Больница"/>
+  </node>
+  
+  <node id="12" visible="true" version="1" lat="53.7135960" lon="28.4192515">
+    <tag k="amenity" v="police"/>
+    <tag k="name" v="Police Station &amp; Отдел ОВД"/>
+  </node>
+  
+  <node id="13" visible="true" version="1" lat="53.7134760" lon="28.4194715">
+    <tag k="amenity" v="fire_station"/>
+    <tag k="name" v="Fire Department &amp; Пожарная Часть №1"/>
+  </node>
+  
+  <node id="14" visible="true" version="1" lat="53.7136060" lon="28.4192315">
+    <tag k="tourism" v="museum"/>
+    <tag k="name" v="History Museum &amp; Исторический Музей"/>
+  </node>
+  
+  <node id="15" visible="true" version="1" lat="53.7134660" lon="28.4194915">
+    <tag k="amenity" v="fast_food"/>
+    <tag k="name" v="Fast Food «Burger King &amp; Бюргер»"/>
+  </node>
+  
+  <node id="16" visible="true" version="1" lat="53.7136160" lon="28.4192115">
+    <tag k="shop" v="computer"/>
+    <tag k="name" v="Tech Store «Электроника &amp; Техно»"/>
+  </node>
+  
+  <node id="17" visible="true" version="1" lat="53.7134560" lon="28.4195115">
+    <tag k="amenity" v="toilets"/>
+    <tag k="name" v="Public WC &amp; Общественный Туалет"/>
+  </node>
+  
+  <node id="18" visible="true" version="1" lat="53.7136260" lon="28.4191915">
+    <tag k="amenity" v="bench"/>
+    <tag k="name" v="Park Bench &amp; Скамейка у Фонтана"/>
+  </node>
+  
+  <node id="19" visible="true" version="1" lat="53.7134460" lon="28.4195315">
+    <tag k="tourism" v="viewpoint"/>
+    <tag k="name" v="Scenic Viewpoint &amp; Смотровая Площадка"/>
+  </node>
+  
+  <node id="20" visible="true" version="1" lat="53.7136360" lon="28.4191715">
+    <tag k="amenity" v="atm"/>
+    <tag k="name" v="ATM Terminal «Сбербанк &amp; Банкомат»"/>
+  </node>
+</osm>
