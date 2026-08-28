@@ -29,21 +29,40 @@ def get_base_directory() -> str:
 
 def main() -> None:
     cli_parser = argparse.ArgumentParser(description="PurrGO Map Compiler")
+    # Добавляем опциональный аргумент для файла, по умолчанию map.osm
+    cli_parser.add_argument("input_map", nargs="?", default="map.osm", help="Path to the input .osm file (default: map.osm)")
     args = cli_parser.parse_args()
 
-    # Initialize hardware-independent paths
+    # Инициализация путей
     base_dir = get_base_directory()
-    map_osm_path = os.path.join(base_dir, "map.osm")
-    features_csv_path = os.path.join(base_dir, "features.csv")
-    routes_dir_path = os.path.join(base_dir, "routes")
+    
+    # Берем путь из аргументов
+    map_osm_path = os.path.abspath(args.input_map)
 
     if not os.path.exists(map_osm_path):
         print(f"[-] Error: {map_osm_path} file not found. Terminating.")
         return
 
+    # Извлекаем имя файла и отрезаем расширение (например, "map" из "map.osm")
+    map_filename = os.path.basename(map_osm_path)
+    map_name, _ = os.path.splitext(map_filename)
+
+    # Формируем путь для папки результатов
+    out_dir = os.path.join(base_dir, map_name)
+    
+    # Создаем папку, если ее нет
+    if not os.path.exists(out_dir):
+        os.makedirs(out_dir)
+
+    features_csv_path = os.path.join(base_dir, "features.csv")
+    # routes_dir_path = os.path.join(base_dir, "routes") # Если папка routes нужна в будущем, можно тоже перенаправить
+
     print("=========================================")
     print("PurrGO MAP COMPILER")
     print(f"Base Directory: {base_dir}")
+    print(f"Input Map: {map_osm_path}")
+    print(f"Output Folder: {out_dir}")
+    print(f"Map Name: {map_name}")
     print("=========================================")
 
     # 1. Initialize Look-Up Tables
@@ -54,9 +73,9 @@ def main() -> None:
     roads_data, landuse_data, water_data, pois_data = parser.parse()
 
     # 3. Serialize Layers
-    # Helper to route output binary files to the base directory
+    # Обновляем помощник, чтобы он сохранял файлы в новую директорию out_dir
     def out_path(filename: str) -> str:
-        return os.path.join(base_dir, filename)
+        return os.path.join(out_dir, filename)
 
     meta_all: List[MapFeature] = []
 
@@ -92,8 +111,9 @@ def main() -> None:
         print("[~] Point objects (POI) are missing in the source data.")
 
     # 4. Export JSON Metadata
+    # Записываем извлеченное имя в map.name вместо старого "PurrGO_Map"
     if meta_all:
-        MapCompiler.create_map_name("PurrGO_Map", meta_all, out_path("map.name"))
+        MapCompiler.create_map_name(map_name, meta_all, out_path("map.name"))
 
     print("\n[SUCCESS] Map package compiled successfully!")
 
