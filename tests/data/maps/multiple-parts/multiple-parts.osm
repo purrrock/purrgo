@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6" generator="PurrGO_Test_Suite">
+  <bounds minlat="53.7085360" minlon="28.4143615" maxlat="53.7185360" maxlon="28.4243615"/>
+
+  <!-- Часть 1: Северо-Западный полигон -->
+  <node id="1" visible="true" version="1" lat="53.7165360" lon="28.4143615"/>
+  <node id="2" visible="true" version="1" lat="53.7185360" lon="28.4143615"/>
+  <node id="3" visible="true" version="1" lat="53.7165360" lon="28.4163615"/>
+
+  <!-- Часть 2: Северо-Восточный полигон -->
+  <node id="4" visible="true" version="1" lat="53.7165360" lon="28.4223615"/>
+  <node id="5" visible="true" version="1" lat="53.7185360" lon="28.4243615"/>
+  <node id="6" visible="true" version="1" lat="53.7165360" lon="28.4243615"/>
+
+  <!-- Часть 3: Южный полигон -->
+  <node id="7" visible="true" version="1" lat="53.7085360" lon="28.4173615"/>
+  <node id="8" visible="true" version="1" lat="53.7105360" lon="28.4193615"/>
+  <node id="9" visible="true" version="1" lat="53.7085360" lon="28.4213615"/>
+
+  <!-- Геометрия частей (без тегов, чтобы парсер не посчитал их отдельными объектами) -->
+  <way id="10" visible="true" version="1">
+    <nd ref="1"/>
+    <nd ref="2"/>
+    <nd ref="3"/>
+    <nd ref="1"/>
+  </way>
+  
+  <way id="11" visible="true" version="1">
+    <nd ref="4"/>
+    <nd ref="5"/>
+    <nd ref="6"/>
+    <nd ref="4"/>
+  </way>
+  
+  <way id="12" visible="true" version="1">
+    <nd ref="7"/>
+    <nd ref="8"/>
+    <nd ref="9"/>
+    <nd ref="7"/>
+  </way>
+
+  <!-- Единый объект, содержащий 3 parts -->
+  <relation id="13" visible="true" version="1">
+    <member type="way" ref="10" role="outer"/>
+    <member type="way" ref="11" role="outer"/>
+    <member type="way" ref="12" role="outer"/>
+    <tag k="type" v="multipolygon"/>
+    <tag k="natural" v="wood"/>
+    <tag k="name" v="Трехчастный лес"/>
+  </relation>
+</osm>

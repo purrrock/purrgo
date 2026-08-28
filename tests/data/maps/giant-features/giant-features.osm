@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6" generator="PurrGO_Test_Suite">
+  <bounds minlat="8.713535999999998" minlon="-16.5806385" maxlat="98.713536" maxlon="73.41936150000001"/>
+  <node id="1" visible="true" version="1" lat="53.713536" lon="-31.580638"/>
+  <node id="2" visible="true" version="1" lat="55.423637" lon="-18.247305"/>
+  <node id="3" visible="true" version="1" lat="56.927474" lon="-4.913972"/>
+  <node id="4" visible="true" version="1" lat="58.043663" lon="8.419362"/>
+  <node id="5" visible="true" version="1" lat="58.637575" lon="21.752695"/>
+  <node id="6" visible="true" version="1" lat="58.637575" lon="35.086028"/>
+  <node id="7" visible="true" version="1" lat="58.043663" lon="48.419362"/>
+  <node id="8" visible="true" version="1" lat="56.927474" lon="61.752695"/>
+  <node id="9" visible="true" version="1" lat="55.423637" lon="75.086028"/>
+  <node id="10" visible="true" version="1" lat="53.713536" lon="88.419362"/>
+  <node id="11" visible="true" version="1" lat="56.913536" lon="28.419362"/>
+  <node id="12" visible="true" version="1" lat="55.976278" lon="30.682103"/>
+  <node id="13" visible="true" version="1" lat="53.713536" lon="31.619362"/>
+  <node id="14" visible="true" version="1" lat="51.450794" lon="30.682103"/>
+  <node id="15" visible="true" version="1" lat="50.513536" lon="28.419362"/>
+  <node id="16" visible="true" version="1" lat="51.450794" lon="26.156620"/>
+  <node id="17" visible="true" version="1" lat="53.713536" lon="25.219362"/>
+  <node id="18" visible="true" version="1" lat="55.976278" lon="26.156620"/>
+
+  <way id="19" visible="true" version="1">
+    <nd ref="1"/>
+    <nd ref="2"/>
+    <nd ref="3"/>
+    <nd ref="4"/>
+    <nd ref="5"/>
+    <nd ref="6"/>
+    <nd ref="7"/>
+    <nd ref="8"/>
+    <nd ref="9"/>
+    <nd ref="10"/>
+    <tag k="highway" v="motorway"/>
+    <tag k="name" v="Transcontinental Motorway"/>
+  </way>
+
+  <way id="20" visible="true" version="1">
+    <nd ref="11"/>
+    <nd ref="12"/>
+    <nd ref="13"/>
+    <nd ref="14"/>
+    <nd ref="15"/>
+    <nd ref="16"/>
+    <nd ref="17"/>
+    <nd ref="18"/>
+    <nd ref="11"/>
+    <tag k="natural" v="wood"/>
+    <tag k="name" v="Mega Forest"/>
+  </way>
+</osm>

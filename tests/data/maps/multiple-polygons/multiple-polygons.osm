@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6" generator="PurrGO_Test_Suite">
+  <!-- Границы карты отцентрированы относительно 53.52351455, 28.4119479 -->
+  <bounds minlat="53.5135145" minlon="28.3919479" maxlat="53.5435145" maxlon="28.4319479"/>
+
+  <!-- Объект 1: Западный лес -->
+  <node id="1" visible="true" version="1" lat="53.5255145" lon="28.3999479"/>
+  <node id="2" visible="true" version="1" lat="53.5215145" lon="28.3999479"/>
+  <node id="3" visible="true" version="1" lat="53.5215145" lon="28.4039479"/>
+  <node id="4" visible="true" version="1" lat="53.5255145" lon="28.4039479"/>
+
+  <!-- Объект 2: Восточный лес -->
+  <node id="5" visible="true" version="1" lat="53.5255145" lon="28.4199479"/>
+  <node id="6" visible="true" version="1" lat="53.5215145" lon="28.4199479"/>
+  <node id="7" visible="true" version="1" lat="53.5215145" lon="28.4239479"/>
+  <node id="8" visible="true" version="1" lat="53.5255145" lon="28.4239479"/>
+
+  <!-- Объект 3: Северный лес -->
+  <node id="9" visible="true" version="1" lat="53.5335145" lon="28.4099479"/>
+  <node id="10" visible="true" version="1" lat="53.5295145" lon="28.4099479"/>
+  <node id="11" visible="true" version="1" lat="53.5295145" lon="28.4139479"/>
+  <node id="12" visible="true" version="1" lat="53.5335145" lon="28.4139479"/>
+
+  <!-- Геометрия и метаданные -->
+  <way id="13" visible="true" version="1">
+    <nd ref="1"/>
+    <nd ref="2"/>
+    <nd ref="3"/>
+    <nd ref="4"/>
+    <nd ref="1"/>
+    <tag k="natural" v="wood"/>
+    <tag k="name" v="Западный лес"/>
+  </way>
+
+  <way id="14" visible="true" version="1">
+    <nd ref="5"/>
+    <nd ref="6"/>
+    <nd ref="7"/>
+    <nd ref="8"/>
+    <nd ref="5"/>
+    <tag k="natural" v="wood"/>
+    <tag k="name" v="Восточный лес"/>
+  </way>
+
+  <way id="15" visible="true" version="1">
+    <nd ref="9"/>
+    <nd ref="10"/>
+    <nd ref="11"/>
+    <nd ref="12"/>
+    <nd ref="9"/>
+    <tag k="natural" v="wood"/>
+    <tag k="name" v="Северный лес"/>
+  </way>
+</osm>

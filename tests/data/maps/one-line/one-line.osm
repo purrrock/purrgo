@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6" generator="PurrGO_Test_Suite">
+  <bounds minlat="53.7085360" minlon="28.4143615" maxlat="53.7185360" maxlon="28.4243615"/>
+  
+  <node id="1" visible="true" version="1" lat="53.7085360" lon="28.4143615"/>
+  <node id="2" visible="true" version="1" lat="53.7185360" lon="28.4243615"/>
+  
+  <way id="3" visible="true" version="1">
+    <nd ref="1"/>
+    <nd ref="2"/>
+    <tag k="highway" v="motorway"/>
+    <tag k="name" v="Прямая автомагистраль"/>
+  </way>
+</osm>

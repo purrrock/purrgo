@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6" generator="PurrGO_Test_Suite">
+  <bounds minlat="53.698536" minlon="28.4043615" maxlat="53.728536" maxlon="28.4343615"/>
+  <node id="1" visible="true" version="1" lat="53.7235360" lon="28.4193615"/>
+  <node id="2" visible="true" version="1" lat="53.7140317" lon="28.4194268"/>
+  <node id="3" visible="true" version="1" lat="53.7231953" lon="28.4219497"/>
+  <node id="4" visible="true" version="1" lat="53.7139979" lon="28.4195528"/>
+  <node id="5" visible="true" version="1" lat="53.7221963" lon="28.4243615"/>
+  <node id="6" visible="true" version="1" lat="53.7139327" lon="28.4196659"/>
+  <node id="7" visible="true" version="1" lat="53.7206071" lon="28.4264326"/>
+  <node id="8" visible="true" version="1" lat="53.7138404" lon="28.4197582"/>
+  <node id="9" visible="true" version="1" lat="53.7185360" lon="28.4280218"/>
+  <node id="10" visible="true" version="1" lat="53.7137273" lon="28.4198234"/>
+  <node id="11" visible="true" version="1" lat="53.7161242" lon="28.4290208"/>
+  <node id="12" visible="true" version="1" lat="53.7136013" lon="28.4198572"/>
+  <node id="13" visible="true" version="1" lat="53.7135360" lon="28.4293615"/>
+  <node id="14" visible="true" version="1" lat="53.7134707" lon="28.4198572"/>
+  <node id="15" visible="true" version="1" lat="53.7109478" lon="28.4290208"/>
+  <node id="16" visible="true" version="1" lat="53.7133447" lon="28.4198234"/>
+  <node id="17" visible="true" version="1" lat="53.7085360" lon="28.4280218"/>
+  <node id="18" visible="true" version="1" lat="53.7132316" lon="28.4197582"/>
+  <node id="19" visible="true" version="1" lat="53.7064649" lon="28.4264326"/>
+  <node id="20" visible="true" version="1" lat="53.7131393" lon="28.4196659"/>
+  <node id="21" visible="true" version="1" lat="53.7048757" lon="28.4243615"/>
+  <node id="22" visible="true" version="1" lat="53.7130741" lon="28.4195528"/>
+  <node id="23" visible="true" version="1" lat="53.7038767" lon="28.4219497"/>
+  <node id="24" visible="true" version="1" lat="53.7130403" lon="28.4194268"/>
+  <node id="25" visible="true" version="1" lat="53.7035360" lon="28.4193615"/>
+  <node id="26" visible="true" version="1" lat="53.7130403" lon="28.4192962"/>
+  <node id="27" visible="true" version="1" lat="53.7038767" lon="28.4167733"/>
+  <node id="28" visible="true" version="1" lat="53.7130741" lon="28.4191702"/>
+  <node id="29" visible="true" version="1" lat="53.7048757" lon="28.4143615"/>
+  <node id="30" visible="true" version="1" lat="53.7131393" lon="28.4190571"/>
+  <node id="31" visible="true" version="1" lat="53.7064649" lon="28.4122904"/>
+  <node id="32" visible="true" version="1" lat="53.7132316" lon="28.4189648"/>
+  <node id="33" visible="true" version="1" lat="53.7085360" lon="28.4107012"/>
+  <node id="34" visible="true" version="1" lat="53.7133447" lon="28.4188996"/>
+  <node id="35" visible="true" version="1" lat="53.7109478" lon="28.4097022"/>
+  <node id="36" visible="true" version="1" lat="53.7134707" lon="28.4188658"/>
+  <node id="37" visible="true" version="1" lat="53.7135360" lon="28.4093615"/>
+  <node id="38" visible="true" version="1" lat="53.7136013" lon="28.4188658"/>
+  <node id="39" visible="true" version="1" lat="53.7161242" lon="28.4097022"/>
+  <node id="40" visible="true" version="1" lat="53.7137273" lon="28.4188996"/>
+  <node id="41" visible="true" version="1" lat="53.7185360" lon="28.4107012"/>
+  <node id="42" visible="true" version="1" lat="53.7138404" lon="28.4189648"/>
+  <node id="43" visible="true" version="1" lat="53.7206071" lon="28.4122904"/>
+  <node id="44" visible="true" version="1" lat="53.7139327" lon="28.4190571"/>
+  <node id="45" visible="true" version="1" lat="53.7221963" lon="28.4143615"/>
+  <node id="46" visible="true" version="1" lat="53.7139979" lon="28.4191702"/>
+  <node id="47" visible="true" version="1" lat="53.7231953" lon="28.4167733"/>
+  <node id="48" visible="true" version="1" lat="53.7140317" lon="28.4192962"/>
+
+  <way id="49" visible="true" version="1">
+    <nd ref="1"/>
+    <nd ref="2"/>
+    <nd ref="3"/>
+    <nd ref="4"/>
+    <nd ref="5"/>
+    <nd ref="6"/>
+    <nd ref="7"/>
+    <nd ref="8"/>
+    <nd ref="9"/>
+    <nd ref="10"/>
+    <nd ref="11"/>
+    <nd ref="12"/>
+    <nd ref="13"/>
+    <nd ref="14"/>
+    <nd ref="15"/>
+    <nd ref="16"/>
+    <nd ref="17"/>
+    <nd ref="18"/>
+    <nd ref="19"/>
+    <nd ref="20"/>
+    <nd ref="21"/>
+    <nd ref="22"/>
+    <nd ref="23"/>
+    <nd ref="24"/>
+    <nd ref="25"/>
+    <nd ref="26"/>
+    <nd ref="27"/>
+    <nd ref="28"/>
+    <nd ref="29"/>
+    <nd ref="30"/>
+    <nd ref="31"/>
+    <nd ref="32"/>
+    <nd ref="33"/>
+    <nd ref="34"/>
+    <nd ref="35"/>
+    <nd ref="36"/>
+    <nd ref="37"/>
+    <nd ref="38"/>
+    <nd ref="39"/>
+    <nd ref="40"/>
+    <nd ref="41"/>
+    <nd ref="42"/>
+    <nd ref="43"/>
+    <nd ref="44"/>
+    <nd ref="45"/>
+    <nd ref="46"/>
+    <nd ref="47"/>
+    <nd ref="48"/>
+    <nd ref="1"/>
+    <tag k="natural" v="wood"/>
+    <tag k="name" v="Clipping Test Star"/>
+  </way>
+</osm>
