@@ -89,7 +89,7 @@ Map parser / renderer audit
 
 * [ ] Реализовать RAM buffer для track points.
 * [ ] Накапливать точки блоками.
-* [ ] Согласовать buffer size с размером SD sector.
+* [X] Согласовать buffer size с размером SD sector.
 * [ ] Минимизировать количество операций записи на SD.
 
 ## Track filtering
@@ -122,7 +122,8 @@ Map parser / renderer audit
 
 
 # Text labels
-
+* [ ] Разработать шрифт, позволяющий отображать латиницу, кириллицу, расширенные кирилицу и латиницу.
+* [ ] Разработать собственную 8-битную кодировку и функцию преобразования utf8-purrgo 
 * [ ] Определить набор объектов, для которых нужны labels.
 * [ ] Определить font storage.
 * [ ] Определить формат label в карте.
@@ -163,8 +164,6 @@ Map parser / renderer audit
 # Event-driven display updates
 
 * [ ] Проверить возможность partial refresh после выбора конкретного E-Ink controller.
-
-
 
 # microSD power architecture
 
@@ -288,6 +287,12 @@ Map parser / renderer audit
 * [ ] Проверить C reference renderer.
 * [ ] Проверить загрузку эталонных карт на STM32.
 * [ ] После стабилизации запретить изменения binary structure без увеличения версии формата.
+
+# Встроеный ридер
+
+Рассмотреть возможность создания страницы чтения электронных книг.
+
+* [ ] Создать Reader отдельной странице интерфейса.
 
 ---
 
