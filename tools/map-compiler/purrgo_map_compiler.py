@@ -112,8 +112,7 @@ def main() -> None:
 
     # 4. Export JSON Metadata
     # Записываем извлеченное имя в map.name вместо старого "PurrGO_Map"
-    if meta_all:
-        MapCompiler.create_map_name(map_name, meta_all, out_path("map.name"))
+    MapCompiler.create_map_name(map_name, meta_all, out_path("map.name"))
 
     print("\n[SUCCESS] Map package compiled successfully!")
 
