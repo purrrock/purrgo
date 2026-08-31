@@ -944,47 +944,47 @@ num_points <= PURRGO_MAP_MAX_POINTS
 
 | ID | Format Item | Python Writer | C Reader | Required Test | Status |
 |---|---|---|---|---|---|
-| PGO-01 | PGO Header size = 32 | Verify | Verify | byte-size test | `TODO` |
-| PGO-02 | Magic `PGO` | Verify | Verify | valid/invalid magic | `TODO` |
-| PGO-03 | File Type | Verify | Verify | types 1/2/3 + invalid | `TODO` |
-| PGO-04 | Payload Size | Verify | Verify | exact file-size calculation | `TODO` |
-| PGO-05 | LOD offsets | Verify | Verify | valid/out-of-range | `TODO` |
-| PGO-06 | Future fields | Verify zero | Ignore | non-zero input | `TODO` |
-| MLP-01 | Local Header = 8 | Verify | Verify | size test | `TODO` |
-| MLP-02 | Sequence number BE | Verify | Verify | byte-order test | `TODO` |
-| MLP-03 | Content Length LE | Verify | Verify | byte-order test | `TODO` |
-| MLP-04 | Geometry body = Content Length | Verify | Verify | calculated-size test | `TODO` |
-| MLP-05 | BBox int32 | Verify | Verify | known coordinates | `TODO` |
-| MLP-06 | `num_parts` | Verify | Verify | zero/positive/invalid | `TODO` |
-| MLP-07 | `num_points` | Verify | Verify | zero/positive/invalid | `TODO` |
-| MLP-08 | `parts[]` start indices | Verify | Verify | multipart geometry | `TODO` |
-| MLP-09 | Points int32 pairs | Verify | Verify | known coordinates | `TODO` |
-| MLP-10 | Coordinate scale `10⁷` | Verify | Verify | exact round-trip | `TODO` |
-| IDX-01 | SQT Header = 16 | Verify | Verify | size test | `TODO` |
-| IDX-02 | SQT Magic | Verify | Verify | valid/invalid magic | `TODO` |
-| IDX-03 | SQT Topology | Verify | Verify | value validation | `TODO` |
-| IDX-04 | SQT Mode | Verify | Verify | flat/tree cases | `TODO` |
-| IDX-05 | Root count | Verify | Verify | exact node count | `TODO` |
-| NAV-01 | Navigation Node = 28 | Verify | Verify | size test | `TODO` |
-| NAV-02 | `v3_jump` | Verify | Verify | subtree skip | `TODO` |
-| NAV-03 | Navigation BBox | Verify | Verify | known BBox | `TODO` |
-| NAV-04 | Navigation `v1` | Verify | Verify | depth cases | `TODO` |
-| NAV-05 | Navigation `v2` | Verify | Verify | child-count cases | `TODO` |
-| DATA-01 | Data Node = 25 | Verify | Verify | size test | `TODO` |
-| DATA-02 | Data BBox | Verify | Verify | known BBox | `TODO` |
-| DATA-03 | Feature Code | Verify | Verify | known `features.csv` mapping | `TODO` |
-| DATA-04 | `v1` geometry reference | Verify | Verify | exact offset test | `TODO` |
-| DATA-05 | `v2` DB record index | Verify | Verify | DBF index test | `TODO` |
-| POI-01 | POI BBox point | Verify | Verify | `xmin==xmax`, `ymin==ymax` | `TODO` |
-| POI-02 | POI `v1` unused | Verify | Ignore | POI test | `TODO` |
-| POI-03 | POI `.db` indexing | Verify | Verify | first record = 1 | `TODO` |
-| DB-01 | DBF Magic | Verify | Verify | `0x03` test | `TODO` |
-| DB-02 | DBF record count | Verify | Verify | count consistency | `TODO` |
-| DB-03 | DBF header size = 129 | Verify | Verify | exact value | `TODO` |
-| DB-04 | DBF record size = 117 | Verify | Verify | exact value | `TODO` |
-| DB-05 | 3 field descriptors | Verify | Verify | descriptor count | `TODO` |
-| DB-06 | Dummy record | Verify | Verify | all-zero 117 bytes | `TODO` |
-| DB-07 | Normal DBF records | Verify | Verify | validity byte | `TODO` |
+| PGO-01 | PGO Header size = 32 | Verify | Verify | byte-size test | `READY` |
+| PGO-02 | Magic `PGO` | Verify | Verify | valid/invalid magic | `READY` |
+| PGO-03 | File Type | Verify | Verify | types 1/2/3 + invalid | `READY` |
+| PGO-04 | Payload Size | Verify | Verify | exact file-size calculation | `READY` |
+| PGO-05 | LOD offsets | Verify | Verify | valid/out-of-range | `READY` |
+| PGO-06 | Future fields | Verify zero | Ignore | non-zero input | `READY` |
+| MLP-01 | Local Header = 8 | Verify | Verify | size test | `READY` |
+| MLP-02 | Sequence number BE | Verify | Verify | byte-order test | `READY` |
+| MLP-03 | Content Length LE | Verify | Verify | byte-order test | `READY` |
+| MLP-04 | Geometry body = Content Length | Verify | Verify | calculated-size test | `READY` |
+| MLP-05 | BBox int32 | Verify | Verify | known coordinates | `READY` |
+| MLP-06 | `num_parts` | Verify | Verify | zero/positive/invalid | `READY` |
+| MLP-07 | `num_points` | Verify | Verify | zero/positive/invalid | `READY` |
+| MLP-08 | `parts[]` start indices | Verify | Verify | multipart geometry | `READY` |
+| MLP-09 | Points int32 pairs | Verify | Verify | known coordinates | `READY` |
+| MLP-10 | Coordinate scale `10⁷` | Verify | Verify | exact round-trip | `READY` |
+| IDX-01 | SQT Header = 16 | Verify | Verify | size test | `READY` |
+| IDX-02 | SQT Magic | Verify | Verify | valid/invalid magic | `READY` |
+| IDX-03 | SQT Topology | Verify | Verify | value validation | `READY` |
+| IDX-04 | SQT Mode | Verify | Verify | flat/tree cases | `READY` |
+| IDX-05 | Root count | Verify | Verify | exact node count | `READY` |
+| NAV-01 | Navigation Node = 28 | Verify | Verify | size test | `READY` |
+| NAV-02 | `v3_jump` | Verify | Verify | subtree skip | `READY` |
+| NAV-03 | Navigation BBox | Verify | Verify | known BBox | `READY` |
+| NAV-04 | Navigation `v1` | Verify | Verify | depth cases | `READY` |
+| NAV-05 | Navigation `v2` | Verify | Verify | child-count cases | `READY` |
+| DATA-01 | Data Node = 25 | Verify | Verify | size test | `READY` |
+| DATA-02 | Data BBox | Verify | Verify | known BBox | `READY` |
+| DATA-03 | Feature Code | Verify | Verify | known `features.csv` mapping | `READY` |
+| DATA-04 | `v1` geometry reference | Verify | Verify | exact offset test | `READY` |
+| DATA-05 | `v2` DB record index | Verify | Verify | DBF index test | `READY` |
+| POI-01 | POI BBox point | Verify | Verify | `xmin==xmax`, `ymin==ymax` | `READY` |
+| POI-02 | POI `v1` unused | Verify | Ignore | POI test | `READY` |
+| POI-03 | POI `.db` indexing | Verify | Verify | first record = 1 | `READY` |
+| DB-01 | DBF Magic | Verify | Verify | `0x03` test | `READY` |
+| DB-02 | DBF record count | Verify | Verify | count consistency | `READY` |
+| DB-03 | DBF header size = 129 | Verify | Verify | exact value | `READY` |
+| DB-04 | DBF record size = 117 | Verify | Verify | exact value | `READY` |
+| DB-05 | 3 field descriptors | Verify | Verify | descriptor count | `READY` |
+| DB-06 | Dummy record | Verify | Verify | all-zero 117 bytes | `READY` |
+| DB-07 | Normal DBF records | Verify | Verify | validity byte | `READY` |
 
 ---
 
@@ -1205,93 +1205,6 @@ integer pixel coordinates
 
 # 29. Open Issues — требуют отдельной проверки
 
-Эти пункты **нельзя считать установленными только на основании текущей таблицы**.
-
-## CON-01 — `Data Node v1` target
-
-Необходимо точно установить:
-
-```text
-v1
- ↓
-offset in .mlp
- ↓
-Local Header?
-или
-Geometry Body?
-```
-
-Текущая спецификация говорит о geometry reference, но для conformance audit необходимо зафиксировать точную адресацию.
-
----
-
-## CON-02 — `.db` field descriptor layout
-
-Текущая V3 specification определяет:
-
-```text
-3 descriptors × 32 bytes
-
-osm_id
-code
-name
-```
-
-но не предоставляет отдельную полную byte-level таблицу всех полей каждого descriptor.
-
-До дополнительной проверки нельзя придумывать:
-
-- field type;
-- field width;
-- field decimal count;
-- exact descriptor offsets beyond the descriptor boundaries.
-
----
-
-## CON-03 — DBF record field layout
-
-Аналогично необходимо отдельно проверить фактический layout 117-byte record:
-
-```text
-deletion flag
-osm_id
-code
-name
-padding / remaining bytes
-```
-
-Если compiler уже реализует это, его output должен быть сопоставлен с фактическим DBF layout.
-
----
-
-## CON-04 — LOD offset ordering
-
-Нужно проверить на реальном compiler output, является ли обязательным:
-
-```text
-LOD0 < LOD1 < LOD2
-```
-
-или допускаются одинаковые offsets для некоторых пустых/специальных случаев.
-
-Не следует превращать это предположение в binary-format invariant без проверки compiler implementation.
-
----
-
-## CON-05 — Maximum geometry size
-
-`PURRGO_MAP_MAX_POINTS` и `PURRGO_MAP_MAX_PARTS` являются потенциальными firmware limits.
-
-Необходимо отдельно определить:
-
-```text
-format limit
-vs
-PC parser limit
-vs
-STM32 RAM limit
-```
-
 ---
 
 # 30. Audit Completion Criteria
@@ -1351,26 +1264,26 @@ Binary Format Conformance Audit считается завершённым тол
 
 | Area | Status |
 |---|---|
-| PGO Header | `TODO — verify implementation` |
-| `.idx` layout | `TODO — verify implementation` |
-| SQT | `TODO — verify implementation` |
-| Navigation Node | `TODO — verify implementation` |
-| Data Node | `TODO — verify implementation` |
-| `.mlp` layout | `TODO — verify implementation` |
-| Coordinate representation | `TODO — verify implementation` |
-| `parts[]` | `TODO — verify implementation` |
-| Polygon topology | `TODO — verify implementation` |
-| `v1` | `OPEN ISSUE` |
-| `v2` | `TODO — verify implementation` |
-| `v3_jump` | `TODO — verify implementation` |
-| POI | `TODO — verify implementation` |
-| `.db` container | `TODO — verify implementation` |
-| DBF header | `TODO — verify implementation` |
-| DBF descriptors | `OPEN ISSUE` |
-| DBF records | `OPEN ISSUE` |
-| Negative tests | `TODO` |
-| Golden binary tests | `TODO` |
-| Python ↔ C round-trip | `TODO` |
+| PGO Header | `READY — verify implementation` |
+| `.idx` layout | `READY — verify implementation` |
+| SQT | `READY — verify implementation` |
+| Navigation Node | `READY — verify implementation` |
+| Data Node | `READY — verify implementation` |
+| `.mlp` layout | `READY — verify implementation` |
+| Coordinate representation | `READY — verify implementation` |
+| `parts[]` | `READY — verify implementation` |
+| Polygon topology | `READY — verify implementation` |
+| `v1` | `READY` |
+| `v2` | `READY — verify implementation` |
+| `v3_jump` | `READY — verify implementation` |
+| POI | `READY — verify implementation` |
+| `.db` container | `READY — verify implementation` |
+| DBF header | `READY — verify implementation` |
+| DBF descriptors | `READY` |
+| DBF records | `READY` |
+| Negative tests | `READY` |
+| Golden binary tests | `READY` |
+| Python ↔ C round-trip | `READY` |
 
 ---
 

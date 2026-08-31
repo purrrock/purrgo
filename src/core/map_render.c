@@ -6,6 +6,53 @@
 #include "purrgo/gfx_polygon.h"
 #include <stddef.h>
 
+
+#define PURRGO_MAX_LABELS_PER_FRAME 32
+
+typedef struct {
+    int16_t min_x;
+    int16_t min_y;
+    int16_t max_x;
+    int16_t max_y;
+} label_bbox_t;
+
+static label_bbox_t s_drawn_labels[PURRGO_MAX_LABELS_PER_FRAME];
+static uint16_t s_drawn_labels_count = 0;
+
+// Вызывать один раз перед началом рендера нового кадра (например, в purrgo_map_render_viewport)
+void map_render_clear_labels(void) {
+    s_drawn_labels_count = 0;
+}
+
+// Проверка коллизий и резервирование места
+bool map_render_try_place_label(int16_t x, int16_t y, uint16_t width_px, uint16_t height_px) {
+    label_bbox_t new_box = {
+        .min_x = x,
+        .min_y = y,
+        .max_x = x + (int16_t)width_px,
+        .max_y = y + (int16_t)height_px
+    };
+
+    for (uint16_t i = 0; i < s_drawn_labels_count; i++) {
+        // Логика проверки пересечения BBox
+        if (!(new_box.max_x < s_drawn_labels[i].min_x ||
+              new_box.min_x > s_drawn_labels[i].max_x ||
+              new_box.max_y < s_drawn_labels[i].min_y ||
+              new_box.min_y > s_drawn_labels[i].max_y)) {
+            return false; // Коллизия найдена, метку не рисуем
+        }
+    }
+
+    if (s_drawn_labels_count < PURRGO_MAX_LABELS_PER_FRAME) {
+        s_drawn_labels[s_drawn_labels_count++] = new_box;
+        return true;
+    }
+
+    return false; // Лимит меток исчерпан
+}
+
+
+
 static gfx_point_t s_polygon_buffer[PURRGO_MAP_MAX_POINTS];
 
 void map_render_feature(
