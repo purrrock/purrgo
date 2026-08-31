@@ -5,6 +5,39 @@ import struct
 from dataclasses import dataclass, field
 from typing import List, Tuple, Any, Sequence
 
+# Глобальная инициализация таблицы символов (выполняется один раз)
+_PGO_CHAR_MAP = {
+     
+     # Замена отсутствующих символов на ASCII аналоги
+    '№': 0x4E,  # Заменяем знак номера на латинскую 'N'
+    'Ĺ': 0x4C,  # Заменяем на латинскую 'L'
+    'ĺ': 0x6C,  # Заменяем на латинскую 'l'
+    
+    'А': 0x80, 'Б': 0x81, 'В': 0x82, 'Г': 0x83, 'Д': 0x84, 'Е': 0x85, 'Ж': 0x86, 'З': 0x87,
+    'И': 0x88, 'Й': 0x89, 'К': 0x8A, 'Л': 0x8B, 'М': 0x8C, 'Н': 0x8D, 'О': 0x8E, 'П': 0x8F,
+    'Р': 0x90, 'С': 0x91, 'Т': 0x92, 'У': 0x93, 'Ф': 0x94, 'Х': 0x95, 'Ц': 0x96, 'Ч': 0x97,
+    'Ш': 0x98, 'Щ': 0x99, 'Ъ': 0x9A, 'Ы': 0x9B, 'Ь': 0x9C, 'Э': 0x9D, 'Ю': 0x9E, 'Я': 0x9F,
+    'а': 0xA0, 'б': 0xA1, 'в': 0xA2, 'г': 0xA3, 'д': 0xA4, 'е': 0xA5, 'ж': 0xA6, 'з': 0xA7,
+    'и': 0xA8, 'й': 0xA9, 'к': 0xAA, 'л': 0xAB, 'м': 0xAC, 'н': 0xAD, 'о': 0xAE, 'п': 0xAF,
+    'р': 0xB0, 'с': 0xB1, 'т': 0xB2, 'у': 0xB3, 'ф': 0xB4, 'х': 0xB5, 'ц': 0xB6, 'ч': 0xB7,
+    'ш': 0xB8, 'щ': 0xB9, 'ъ': 0xBA, 'ы': 0xBB, 'ь': 0xBC, 'э': 0xBD, 'ю': 0xBE, 'я': 0xBF,
+    'Ґ': 0xC0, 'Є': 0xC1, 'І': 0xC2, 'Ї': 0xC3, 'Ў': 0xC4, 'Ђ': 0xC5, 'Ј': 0xC6, 'Љ': 0xC7,
+    'Њ': 0xC8, 'Џ': 0xC9, 'Ѓ': 0xCA, 'Ѕ': 0xCB, 'Ғ': 0xCC, 'Қ': 0xCD, 'Ң': 0xCE, 'Ұ': 0xCF,
+    'ґ': 0xD0, 'є': 0xD1, 'і': 0xD2, 'ї': 0xD3, 'ў': 0xD4, 'ђ': 0xD5, 'ј': 0xD6, 'љ': 0xD7,
+    'њ': 0xD8, 'џ': 0xD9, 'ѓ': 0xDA, 'ѕ': 0xDB, 'ғ': 0xDC, 'қ': 0xDD, 'ң': 0xDE, 'ұ': 0xDF,
+    'Ё': 0xF0, 'ё': 0xF1
+}
+
+_LATIN_EXT = {
+    0xE0: 'ÄäÀàÂâÃãÅå', 0xE1: 'ÖöÒòÔôÕõØø', 0xE2: 'ŬŭÜüÙùÛû', 0xE3: 'ß',
+    0xE4: 'ÇçĆćČč', 0xE5: 'ĞğĜĝ', 0xE6: 'İ', 0xE7: 'ı',
+    0xE8: 'ŠšŞşȘșŚś', 0xE9: 'Ąą', 0xEA: 'Ęę', 0xEB: 'Łł',
+    0xEC: 'ŃńŇňÑñ', 0xED: 'Óó', 0xEE: 'ŽžŹźŻż', 0xEF: 'Řř'
+}
+
+for _pgo_code, _unicode_chars in _LATIN_EXT.items():
+    for _char in _unicode_chars:
+        _PGO_CHAR_MAP[_char] = _pgo_code
 
 class HWConfig:
     PGO_HEADER_SIZE = 32
@@ -16,18 +49,23 @@ class HWConfig:
 
     RAM_LOAD_TYPE = 0x04000000
 
-
-def safe_encode(text: Any, max_len: int) -> bytes:
+def pgo_encode(text: Any, max_len: int) -> bytes:
     """
-    Secure truncator: Prevents incomplete UTF-8 encoding caused by forced slicing of
-    multi-byte characters such as Chinese characters, thus avoiding crashes of the watch's font engine.
+    Конвертирует строку в однобайтовую кодировку PurrGO-256.
+    Обрезает до max_len и дополняет нулями.
     """
-    b = str(text or "").encode('utf-8')
-    if len(b) <= max_len:
-        return b.ljust(max_len, b'\x00')
-    # Slice and decode with 'ignore' to drop incomplete sequences, then re-encode
-    return b[:max_len].decode('utf-8', 'ignore').encode('utf-8').ljust(max_len, b'\x00')
-
+    # Сразу обрезаем исходную строку, чтобы не обрабатывать лишние символы
+    source = str(text or "")[:max_len]
+    result = bytearray()
+    
+    for char in source:
+        code = ord(char)
+        if code <= 0x7F:
+            result.append(code)
+        else:
+            result.append(_PGO_CHAR_MAP.get(char, 0x3F))
+            
+    return bytes(result).ljust(max_len, b'\x00')
 
 # [MEMORY OPTIMIZATION 1]: Указание slots=True предотвращает создание __dict__ и __weakref__
 # Это экономит ~56-64 байта чистой памяти на каждом экземпляре класса.
