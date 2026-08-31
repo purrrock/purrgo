@@ -26,14 +26,14 @@ bool map_idx_parse_node(
     purrgo_fs_t *idx_fs,
     uint32_t *current_idx_offset,
     purrgo_fs_t *mlp_fs,
+    purrgo_fs_t *db_fs, // <--- ДОБАВЛЕНО
     bool is_nav_node,
     const purrgo_bbox_t *cam,
     const purrgo_viewport_t *vp,
     gfx_context_t *gfx,
-    purrgo_map_layer_t layer_type,
+    bool is_polygon_layer,
     map_diag_t *diag,
     uint32_t lod_end
 );
-
 
 #endif /* PURRGO_MAP_IDX_H */

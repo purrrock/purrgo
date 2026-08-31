@@ -6,7 +6,33 @@
 #include "purrgo/gfx_circle.h"
 #include "purrgo/config.h"
 #include <stddef.h>
+#include "purrgo/gfx_text.h"
 
+// Вспомогательная функция чтения имени POI из DBF файла напрямую с SD-карты
+static bool map_db_read_poi_name(purrgo_fs_t *db_fs, uint32_t v2, char *out_buffer, size_t max_len) {
+    if (!db_fs || v2 == 0) return false;
+
+    // Смещение по спецификации PurrGO V3 для POI (где нет dummy-записи)
+    uint32_t record_idx = v2 - 1;
+    uint32_t name_offset = 32 + 129 + (record_idx * 117) + 17;
+
+    if (!db_fs->seek(db_fs->handle, name_offset)) {
+        return false;
+    }
+
+    char raw_name[100];
+    uint32_t bytes_read = db_fs->read(db_fs->handle, raw_name, 100);
+    if (bytes_read == 0) return false;
+
+    size_t len = 0;
+    while (len < bytes_read && raw_name[len] != '\0' && len < max_len - 1) {
+        out_buffer[len] = raw_name[len];
+        len++;
+    }
+    out_buffer[len] = '\0';
+
+    return len > 0;
+}
 
 /*
  * Радиусы POI.
@@ -274,19 +300,26 @@ bool map_idx_parse_node(
             }
 
 
-            /*
-             * Подписи здесь намеренно не рисуются.
-             *
-             * app_config.poi_label_mode уже определяет будущий
-             * режим:
-             *
-             *     ALL
-             *     IMPORTANT
-             *     OFF
-             *
-             * Но текстовый renderer POI будет добавлен отдельным
-             * этапом.
-             */
+			// Если у POI есть имя, пытаемся его прочитать и разместить
+                if (v2 > 0 && db_fs != NULL) {
+                    char name[64];
+                    if (map_db_read_poi_name(db_fs, v2, name, sizeof(name))) {
+                        // Вычисляем размеры текста
+                        int len = 0;
+                        while (name[len]) len++;
+                        
+                        int16_t text_w = len * 6; // 5px символ + 1px промежуток
+                        int16_t text_h = 8;
+                        
+                        // Центрируем текст под кружком с отступом 2px
+                        int16_t text_x = sx - (text_w / 2);
+                        int16_t text_y = sy + radius + 2;
+
+                        // Жадное размещение с защитой от нагромождения
+                        if (map_render_try_place_label(text_x, text_y, text_w, text_h)) {
+                            gfx_draw_string_halo(gfx, text_x, text_y, name);
+                        }
+                    }
             return true;
         }
 
