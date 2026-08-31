@@ -6,7 +6,7 @@ import math
 import struct
 from typing import List, Tuple, Any
 
-from purrgo_models import MapFeature, RTreeNode, HWConfig, safe_encode
+from purrgo_models import MapFeature, RTreeNode, HWConfig, pgo_encode
 from purrgo_lookup import LookupTables
 
 
@@ -46,12 +46,10 @@ class MapCompiler:
 
     @staticmethod
     def _pad(text: Any, length: int) -> bytes:
-        """Pad text to fixed length using safe UTF-8 encoding."""
+        """Pad text to fixed length using PGO-256 encoding."""
         if isinstance(text, bytes):
-            text = text[:length]
-        else:
-            text = safe_encode(text, length)
-        return text.ljust(length, b'\x00')
+            return text[:length].ljust(length, b'\x00')
+        return pgo_encode(text, length)
 
     @staticmethod
     def _desc(name: str, length: int) -> bytes:

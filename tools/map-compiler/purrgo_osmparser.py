@@ -14,7 +14,7 @@ from lxml import etree as ET
 from functools import lru_cache
 from typing import List, Tuple, Dict, Optional
 
-from purrgo_models import MapFeature, HWConfig, safe_encode
+from purrgo_models import MapFeature, HWConfig, pgo_encode
 from purrgo_geometry import is_clockwise
 from purrgo_lookup import LookupTables
 
@@ -73,11 +73,9 @@ def _sanitize_name_cached(name: str) -> str:
     if len(name) > 22:
         name = name[:20].rstrip('_') + ".."
 
-    # Limit for DB .db (bytes)
-    encoded_name = name.encode('utf-8')
-    if len(encoded_name) > 100:
-        name_bytes = safe_encode(name, 100)
-        name = name_bytes.decode('utf-8', 'ignore').rstrip('_')
+    # Limit for DB .db (1 символ = 1 байт в PGO-256)
+    if len(name) > 100:
+        name = name[:100].rstrip('_')
 
     return name
 
@@ -546,8 +544,9 @@ class OSMParser:
 
         name = _sanitize_name_cached(raw_name)
 
-        if not name:
-            name = str(rule.pg_class)
+        # отключил замену имени на тег
+        # if not name:
+        #    name = str(rule.pg_class)
 
         try:
             osm_id = elem.get('id')
@@ -686,12 +685,15 @@ class OSMParser:
                     sum(p[1] for p in unique_points)
                     // len(unique_points)
                 )
-
-                poi_name = (
-                    name
-                    if name
-                    else str(rule.pg_class)
-                )
+                
+                
+                poi_name = name
+                # отключил подстановку тега вместо имени
+                # poi_name = (
+                    # name
+                    # if name
+                    # else str(rule.pg_class)
+                # )
 
                 points_bytes = struct.pack(
                     "<ii",
