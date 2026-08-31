@@ -56,7 +56,7 @@ import shutil
 
 from xml.sax.saxutils import escape
 from typing import Any
-
+from lxml import etree as ET
 
 # ---------------------------------------------------------------------------
 # PyOsmium handler
