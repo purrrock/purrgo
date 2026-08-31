@@ -210,7 +210,7 @@ void test_lod_0() {
     purrgo_bbox_t cam = { -200, -200, 200, 200 };
     purrgo_viewport_t vp = { 0, 0, 100, 100 };
 
-    purrgo_map_render_layer(&idx, &mlp, &gfx, &cam, &vp, false);
+purrgo_map_render_layer(&idx, &mlp, NULL, &gfx, &cam, &vp, MAP_LAYER_LINES);
 
     // PGO (32) + LOD0 SQT (16) + LOD0 Data Node (25) = 73 (stops reading after the 1 count)
     // Actually the mock size of LOD0 is 44 now, but it only reads 41
@@ -229,7 +229,7 @@ void test_lod_1_1km() {
     gfx_context_t gfx;
     purrgo_bbox_t cam = { -200, -200, 200, 200 };
     purrgo_viewport_t vp = { 0, 0, 100, 100 };
-    purrgo_map_render_layer(&idx, &mlp, &gfx, &cam, &vp, false);
+purrgo_map_render_layer(&idx, &mlp, NULL, &gfx, &cam, &vp, MAP_LAYER_POLYGONS);
 
     // PGO (32) + LOD1 SQT (16) + LOD1 Nav Node (28) + LOD1 Child Node (25) = 101
     // (since direct B-tree jump starts at offset 76 + 28 bytes Nav Node)
@@ -249,7 +249,7 @@ void test_lod_1_5km() {
     gfx_context_t gfx;
     purrgo_bbox_t cam = { -200, -200, 200, 200 };
     purrgo_viewport_t vp = { 0, 0, 100, 100 };
-    purrgo_map_render_layer(&idx, &mlp, &gfx, &cam, &vp, false);
+purrgo_map_render_layer(&idx, &mlp, NULL, &gfx, &cam, &vp, MAP_LAYER_LINES);
 
     assert(mock_idx_pos == 145);
     assert(mock_mlp_pos == 32);
@@ -265,7 +265,7 @@ void test_lod_2_10km() {
     gfx_context_t gfx;
     purrgo_bbox_t cam = { -200, -200, 200, 200 };
     purrgo_viewport_t vp = { 0, 0, 100, 100 };
-    purrgo_map_render_layer(&idx, &mlp, &gfx, &cam, &vp, false);
+purrgo_map_render_layer(&idx, &mlp, NULL, &gfx, &cam, &vp, MAP_LAYER_LINES);
 
     // LOD2 SQT starts at 145. Read 16 = 161. Read Data(25) = 186.
     assert(mock_idx_pos == 186);
@@ -285,7 +285,7 @@ void test_malformed_v3_jump() {
     purrgo_viewport_t vp = { 0, 0, 100, 100 };
 
     // Should detect out-of-bounds jump and stop without moving offset by 4000
-    purrgo_map_render_layer(&idx, &mlp, &gfx, &cam, &vp, false);
+    purrgo_map_render_layer(&idx, &mlp, NULL, &gfx, &cam, &vp, MAP_LAYER_LINES);
 
     // It should stop at PGO(32) + SQT(16) + NavNode(28) = 76 and NOT seek forward by 4000
     assert(mock_idx_pos == 76);
@@ -311,7 +311,7 @@ void test_regression_v3_jump_is_exact() {
     // Camera way outside the mock node bbox
     purrgo_bbox_t cam = { 500, 500, 1000, 1000 };
     purrgo_viewport_t vp = { 0, 0, 100, 100 };
-    purrgo_map_render_layer(&idx, &mlp, &gfx, &cam, &vp, false);
+ purrgo_map_render_layer(&idx, &mlp, NULL, &gfx, &cam, &vp, MAP_LAYER_LINES);
 
     // Check that it reaches the exact same final offset successfully
     assert(mock_idx_pos == 186);
