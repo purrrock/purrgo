@@ -6,7 +6,7 @@
 
 #include "purrgo/map.h"
 #include "map_internal.h"
-
+#include "map_projection.h"
 
 /*
  * Разбирает один Data Node IDX.
