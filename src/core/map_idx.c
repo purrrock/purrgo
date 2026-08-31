@@ -185,30 +185,51 @@ bool map_idx_parse_node(
             map_render_feature(mlp_fs, v1, cam, vp, gfx, is_polygon, style, diag);
 
             // Подписываем только площади (Landuse/Water). Игнорируем дороги ради производительности и чистоты
-            if (is_polygon && v2 >= 2 && db_fs != NULL) {
-                char name[64];
-                if (map_db_read_name(db_fs, v2, false, name, sizeof(name))) {
-                    // Вычисляем центр BBox, разделяя слагаемые для защиты от int32 overflow
-                    int32_t center_x = (xmin / 2) + (xmax / 2);
-                    int32_t center_y = (ymin / 2) + (ymax / 2);
-                    
-                    int16_t sx, sy;
-                    project_to_screen(center_x, center_y, cam, vp, &sx, &sy);
+if (is_polygon && v2 >= 2 && db_fs != NULL) {
+    char name[64];
 
-                    int len = 0;
-                    while (name[len]) len++;
-                    int16_t text_w = len * 6;
-                    int16_t text_h = 8;
-                    
-                    // Центрируем текст относительно вычисленного центра полигона
-                    int16_t text_x = sx - (text_w / 2);
-                    int16_t text_y = sy - (text_h / 2);
+    if (map_db_read_name(db_fs, v2, false, name, sizeof(name))) {
+        /*
+         * Вычисляем центр BBox, разделяя слагаемые
+         * для защиты от int32 overflow.
+         */
+        int32_t center_x = (xmin / 2) + (xmax / 2);
+        int32_t center_y = (ymin / 2) + (ymax / 2);
 
-                    if (map_render_try_place_label(text_x, text_y, text_w, text_h)) {
-                        gfx_draw_string_halo(gfx, text_x, text_y, name);
-                    }
-                }
-            }
+        int16_t sx, sy;
+        project_to_screen(center_x, center_y, cam, vp, &sx, &sy);
+
+        int len = 0;
+        while (name[len]) {
+            len++;
+        }
+
+        int16_t text_w = len * 6;
+        int16_t text_h = 8;
+
+        /*
+         * Центрируем текст относительно вычисленного
+         * центра полигона.
+         */
+        int16_t text_x = sx - (text_w / 2);
+        int16_t text_y = sy - (text_h / 2);
+
+        /*
+         * Не рисуем подпись сейчас.
+         *
+         * Landuse geometry уже будет нарисована, затем
+         * roads будут нарисованы поверх неё. После этого
+         * map.c вызовет map_render_draw_queued_labels().
+         */
+        map_render_queue_label(
+            text_x,
+            text_y,
+            text_w,
+            text_h,
+            name
+        );
+    }
+}
         }
 
         return true;
