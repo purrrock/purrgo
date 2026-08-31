@@ -19,7 +19,7 @@
  * Поэтому эти значения являются параметрами текущего renderer,
  * а не параметрами формата .idx.
  */
-#define PURRGO_POI_BIG_RADIUS   4
+#define PURRGO_POI_BIG_RADIUS   6
 #define PURRGO_POI_SMALL_RADIUS 3
 
 
