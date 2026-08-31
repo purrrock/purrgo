@@ -5,24 +5,87 @@
 #include <stdbool.h>
 #include "purrgo/track_logger.h"
 
-// Глобальная структура настроек устройства
+
+/*
+ * Режим отображения подписей POI.
+ *
+ * PURRGO_POI_LABELS_ALL:
+ *     показывать подписи всех именованных POI.
+ *
+ * PURRGO_POI_LABELS_IMPORTANT:
+ *     показывать только подписи важных POI.
+ *
+ * PURRGO_POI_LABELS_OFF:
+ *     подписи POI отключены.
+ *
+ * На текущем этапе сам механизм отрисовки текста POI ещё не
+ * реализуется. Значение настройки уже хранится в конфигурации,
+ * чтобы позднее добавить рендеринг подписей без изменения
+ * интерфейса настроек.
+ */
+typedef enum {
+    PURRGO_POI_LABELS_ALL = 0,
+    PURRGO_POI_LABELS_IMPORTANT,
+    PURRGO_POI_LABELS_OFF
+} purrgo_poi_label_mode_t;
+
+
+/*
+ * Глобальная структура настроек устройства.
+ */
 typedef struct {
-    int16_t tz_offset_minutes;    // Смещение часового пояса от UTC в минутах[cite: 3]
-    track_logger_mode_t log_mode; // Режим записи трека[cite: 3]
-    bool backlight_on;            // Состояние подсветки дисплея[cite: 3]
-    
-    // Новые параметры навигатора
-    char map_dir[128];             // Директория выбранной карты
-    int32_t last_lat_1e7;         // Последняя широта для центрирования при холодном старте
-    int32_t last_lon_1e7;         // Последняя долгота для центрирования при холодном старте
+    int16_t tz_offset_minutes;
+    track_logger_mode_t log_mode;
+    bool backlight_on;
+
+    /*
+     * Директория выбранной карты.
+     */
+    char map_dir[128];
+
+    /*
+     * Последняя широта для центрирования при холодном старте.
+     */
+    int32_t last_lat_1e7;
+
+    /*
+     * Последняя долгота для центрирования при холодном старте.
+     */
+    int32_t last_lon_1e7;
+
+    /*
+     * Глобальное включение отображения POI.
+     *
+     * false:
+     *     POI не передаются в renderer.
+     *
+     * true:
+     *     POI отображаются согласно их LOD.
+     */
+    bool poi_enabled;
+
+    /*
+     * Режим отображения подписей POI.
+     *
+     * На текущем этапе используется только настройками.
+     * Сам текстовый renderer POI будет подключён отдельно.
+     */
+    purrgo_poi_label_mode_t poi_label_mode;
+
 } purrgo_config_t;
+
 
 extern purrgo_config_t app_config;
 
+
 void purrgo_config_init(void);
 
-// Функции управления файлом конфигурации
+
+/*
+ * Функции управления файлом конфигурации.
+ */
 bool purrgo_config_load(void);
 bool purrgo_config_save(void);
 
-#endif // PURRGO_CONFIG_H
+
+#endif /* PURRGO_CONFIG_H */
