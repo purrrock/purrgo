@@ -18,10 +18,23 @@ void map_render_feature(
     map_diag_t *diag
 );
 
-// Очистка BBox-кэша меток (вызывать перед отрисовкой кадра)
+// Очистка BBox-кэша меток и очереди отложенных меток.
+// Вызывать один раз перед отрисовкой нового кадра.
 void map_render_clear_labels(void);
 
-// Проверка коллизий и резервирование места для новой метки
+// Проверка коллизий и резервирование места для новой метки.
 bool map_render_try_place_label(int16_t x, int16_t y, uint16_t w, uint16_t h);
+
+// Добавить подпись в очередь отложенной отрисовки.
+bool map_render_queue_label(
+    int16_t x,
+    int16_t y,
+    uint16_t w,
+    uint16_t h,
+    const char *text
+);
+
+// Отрисовать все ранее поставленные в очередь подписи.
+void map_render_draw_queued_labels(gfx_context_t *gfx);
 
 #endif // PURRGO_MAP_RENDER_H
