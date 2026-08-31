@@ -2,60 +2,6 @@
 
 ### Ещё не реализовано
 
-## Эталонные карты
-
-- [ ] Создать минимальный набор `.idx/.mlp`.
-- [ ] Одна линия.
-- [ ] Несколько `parts`.
-- [ ] Большое количество точек.
-- [ ] Polygon.
-- [ ] Polygon с hole.
-- [ ] Несколько polygon.
-- [ ] Antimeridian geometry.
-- [ ] Empty geometry.
-- [ ] Unknown feature code.
-- [ ] Несколько LOD.
-- [ ] Несколько SQT.
-- [ ] Большие `v3_jump`.
-
-
-## Line geometry chunking на стороне PC
-
-- [ ] Реализовать автоматический chunking line geometry в Python converter.
-- [ ] Ограничить количество вершин одного chunk.
-- [ ] Повторять граничную точку в следующем chunk.
-- [ ] Не допускать визуальных разрывов.
-- [ ] Сохранять корректную работу `parts[]`.
-- [ ] Добавить regression tests для chunking.
-
-## Polygon subdivision на стороне PC
-
-- [ ] Реализовать polygon subdivision/clipping на стороне PC.
-- [ ] Не разрезать polygon простым делением массива точек.
-- [ ] Сохранять геометрическую целостность каждого ring.
-- [ ] Сохранять outer rings.
-- [ ] Сохранять holes.
-- [ ] Проверить polygon clipping около viewport boundaries.
-
-##  Geometry limits
-
-- [ ] Определить архитектуру `PURRGO_MAP_MAX_POINTS`.
-- [ ] Определить архитектуру `PURRGO_MAP_MAX_PARTS`.
-- [ ] Сделать значения конфигурационными.
-- [ ] Не считать renderer limits ограничениями бинарного формата.
-- [ ] **Не фиксировать окончательные числовые значения до появления STM32.**
-
-## Polygon buffer
-
-- [ ] Проверить, можно ли после subdivision отказаться от большого статического polygon buffer.
-- [ ] Минимизировать временные RAM buffers.
-
-
-Map parser / renderer audit
-
-- [ ] Сократить диагностическое logging для production build.
-
-
 # POI
 
 Реализовать слой POI.
@@ -122,8 +68,8 @@ Map parser / renderer audit
 
 
 # Text labels
-* [ ] Разработать шрифт, позволяющий отображать латиницу, кириллицу, расширенные кирилицу и латиницу.
-* [ ] Разработать собственную 8-битную кодировку и функцию преобразования utf8-purrgo 
+* [X] Разработать шрифт, позволяющий отображать латиницу, кириллицу, расширенные кирилицу и латиницу.
+* [X] Разработать собственную 8-битную кодировку и функцию преобразования utf8-purrgo 
 * [ ] Определить набор объектов, для которых нужны labels.
 * [ ] Определить font storage.
 * [ ] Определить формат label в карте.
@@ -231,8 +177,6 @@ Map parser / renderer audit
 
 ## Memory limits
 
-* [ ] После измерений зафиксировать `PURRGO_MAP_MAX_POINTS`.
-* [ ] После измерений зафиксировать `PURRGO_MAP_MAX_PARTS`.
 * [ ] Зафиксировать окончательные временные buffers.
 * [ ] Проверить stack margin.
 
@@ -281,8 +225,8 @@ Map parser / renderer audit
 
 Выполняется только после завершения и проверки формата.
 
-* [ ] Создать окончательный regression dataset.
-* [ ] Перегенерировать эталонные карты.
+* [X] Создать окончательный regression dataset.
+* [X] Перегенерировать эталонные карты.
 * [ ] Проверить все regression tests.
 * [ ] Проверить C reference renderer.
 * [ ] Проверить загрузку эталонных карт на STM32.
@@ -330,13 +274,9 @@ Map parser / renderer audit
 
 До появления STM32 выполнить:
 
-10. [ ] Эталонный regression dataset.
-11. [ ] Line chunking.
-12. [ ] Polygon subdivision/clipping.
 13. [ ] PC reference renderer.
 14. [ ] Полный float/malloc audit map subsystem.
 15. [ ] Regression tests для LOD.
-16. [X] Подготовка GNSS marker и auto-follow на platform-independent уровне.
 
 **После этого проект должен иметь стабильный и документированный формат PurrGO и полностью тестируемый на PC map pipeline.**
 
