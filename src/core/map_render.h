@@ -18,4 +18,10 @@ void map_render_feature(
     map_diag_t *diag
 );
 
+// Очистка BBox-кэша меток (вызывать перед отрисовкой кадра)
+void map_render_clear_labels(void);
+
+// Проверка коллизий и резервирование места для новой метки
+bool map_render_try_place_label(int16_t x, int16_t y, uint16_t w, uint16_t h);
+
 #endif // PURRGO_MAP_RENDER_H
