@@ -3,7 +3,7 @@ Code;PG_class;STYLE;LOD;Layer;OSM_Tags;Description;Enabled;Icon
 1;ROAD_MAJOR;DARK_GRAY_THICK_LINE;2;roads;highway=motorway;Автомагистраль;1;
 1;ROAD_MAJOR;DARK_GRAY_THICK_LINE;2;roads;highway=trunk;Магистраль;1;
 2;ROAD_NORMAL;DARK_GRAY_SEMITHICK_LINE;2;roads;highway=primary;Главная дорога;1;
-2;ROAD_NORMAL;DARK_GRAY_SEMITHICK_LINE;1;roads;highway=secondary;Второстепенная дорога;1;
+2;ROAD_NORMAL;DARK_GRAY_SEMITHICK_LINE;2;roads;highway=secondary;Второстепенная дорога;1;
 2;ROAD_NORMAL;DARK_GRAY_SEMITHICK_LINE;1;roads;highway=tertiary;Местная дорога;1;
 3;ROAD_MINOR;DARK_GRAY_LINE;1;roads;highway=unclassified;Дорога неизвестная;1;
 3;ROAD_MINOR;DARK_GRAY_LINE;1;roads;highway=residential;Жилая улица;1;
@@ -13,7 +13,7 @@ Code;PG_class;STYLE;LOD;Layer;OSM_Tags;Description;Enabled;Icon
 4;ROAD_NORMAL;DARK_GRAY_SEMITHICK_LINE;2;roads;highway=motorway_link;Съезд с автомагистрали;1;
 4;ROAD_NORMAL;DARK_GRAY_SEMITHICK_LINE;2;roads;highway=trunk_link;Съезд с магистрали;1;
 4;ROAD_NORMAL;DARK_GRAY_SEMITHICK_LINE;2;roads;highway=primary_link;Съезд с главной дороги;1;
-4;ROAD_NORMAL;DARK_GRAY_SEMITHICK_LINE;1;roads;highway=secondary_link;Съезд со второст. дороги;1;
+4;ROAD_NORMAL;DARK_GRAY_SEMITHICK_LINE;2;roads;highway=secondary_link;Съезд со второст. дороги;1;
 4;ROAD_NORMAL;DARK_GRAY_SEMITHICK_LINE;1;roads;highway=tertiary_link;Съезд с местной дороги;1;
 3;ROAD_MINOR;DARK_GRAY_LINE;1;roads;highway=service;Служебный проезд;1;
 5;ROAD_UNPAVED;DARK_GRAY_DASHED_LINE;1;roads;highway=track;Грунтовая дорога;1;
