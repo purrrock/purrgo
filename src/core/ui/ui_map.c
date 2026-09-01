@@ -4,6 +4,8 @@
 #include "purrgo/gfx_text.h"
 #include "purrgo/geo.h"
 #include "purrgo/map.h"
+#include "purrgo/track_renderer.h"
+#include "purrgo/track_logger.h"
 #include "purrgo/config.h"
 #include "purrgo/logger.h"
 #include "purrgo/hardware_config.h"
@@ -496,6 +498,11 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
         gfx_set_clip(gfx, map_vp.offset_x, map_vp.offset_y, map_vp.width, map_vp.height);
 
         bool map_success = purrgo_map_render_viewport(gfx, &map_vp, &dynamic_cam, app_config.map_dir);
+
+        const char* active_track_filename = purrgo_logger_get_active_filename();
+        if (active_track_filename != NULL) {
+            purrgo_track_render(gfx, &dynamic_cam, &map_vp, active_track_filename);
+        }
 
         marker_state_t new_marker_state;
         ui_calc_marker_state(gnss, &map_vp, &dynamic_cam, &new_marker_state);

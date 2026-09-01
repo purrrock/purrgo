@@ -11,6 +11,7 @@
 
 static purrgo_file_t* active_file = NULL;
 static track_logger_state_t current_state = LOGGER_STATE_IDLE;
+static char s_active_filename[64] = {0};
 
 static uint8_t current_track_day = 0;
 
@@ -100,6 +101,9 @@ bool purrgo_logger_start(const purrgo_gnss_solution_t* first_fix) {
         return false;
     }
 
+    strncpy(s_active_filename, filename, sizeof(s_active_filename) - 1);
+    s_active_filename[sizeof(s_active_filename) - 1] = '\0';
+
     buffer_pos = 0;
     is_first_point = true;
     last_sync_time = 0;
@@ -184,5 +188,13 @@ void purrgo_logger_stop(void) {
             active_file = NULL;
         }
     }
+    s_active_filename[0] = '\0';
     current_state = LOGGER_STATE_IDLE;
+}
+
+const char* purrgo_logger_get_active_filename(void) {
+    if (s_active_filename[0] != '\0') {
+        return s_active_filename;
+    }
+    return NULL;
 }
