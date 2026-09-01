@@ -10,6 +10,13 @@ typedef enum {
     LOGGER_STATE_ERROR
 } track_logger_state_t;
 
+#define TRACK_RAM_MAX_POINTS 8192
+
+typedef struct {
+    int32_t lat_1e7;
+    int32_t lon_1e7;
+} track_point_t;
+
 // Режимы записи трека
 typedef enum {
     LOGGER_MODE_STANDARD,   // 5 метров или 5 минут

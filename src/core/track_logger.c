@@ -26,6 +26,25 @@ static uint32_t last_sync_time = 0;
 
 static char write_buffer[GPX_BUFFER_SIZE];
 static size_t buffer_pos = 0;
+
+/*
+ * RAM Track Buffer
+ *
+ * This buffer exists separately from the GPX file because reading/parsing a GPX
+ * file back from the SD card in real-time during map rendering would be too slow
+ * and cause excessive SD card wear. The RAM buffer provides immediate, fast access
+ * to the recent track geometry for live rendering on the screen.
+ *
+ * It is implemented as a circular buffer to bound memory usage predictably,
+ * discarding the oldest points once full. It does NOT affect the GPX file recording,
+ * which continues writing all points indefinitely.
+ *
+ * The maximum is 8192 points, which uses exactly 64 KiB of RAM (8192 * 8 bytes).
+ * This is an acceptable and deterministic footprint for the target STM32 platform.
+ */
+static track_point_t ram_track_buffer[TRACK_RAM_MAX_POINTS];
+static size_t ram_track_head = 0;
+static size_t ram_track_count = 0;
 // Стандартный заголовок файла GPX 1.1
 static const char* GPX_HEADER = 
     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
@@ -108,6 +127,10 @@ bool purrgo_logger_start(const purrgo_gnss_solution_t* first_fix) {
     is_first_point = true;
     last_sync_time = 0;
     
+    // Clear the RAM buffer for the new session
+    ram_track_head = 0;
+    ram_track_count = 0;
+
     write_to_buffer(GPX_HEADER);
     current_state = LOGGER_STATE_RECORDING;
     return true;
@@ -177,6 +200,14 @@ void purrgo_logger_add_point(const purrgo_gnss_solution_t* fix) {
              fix->hours, fix->minutes, fix->seconds);
 
     write_to_buffer(point_str);
+
+    // Also add to the RAM circular buffer
+    ram_track_buffer[ram_track_head].lat_1e7 = fix->lat_1e7;
+    ram_track_buffer[ram_track_head].lon_1e7 = fix->lon_1e7;
+    ram_track_head = (ram_track_head + 1) % TRACK_RAM_MAX_POINTS;
+    if (ram_track_count < TRACK_RAM_MAX_POINTS) {
+        ram_track_count++;
+    }
 }
 void purrgo_logger_stop(void) {
     if (current_state == LOGGER_STATE_RECORDING) {
@@ -190,6 +221,10 @@ void purrgo_logger_stop(void) {
     }
     s_active_filename[0] = '\0';
     current_state = LOGGER_STATE_IDLE;
+
+    // Clear the RAM buffer
+    ram_track_head = 0;
+    ram_track_count = 0;
 }
 
 const char* purrgo_logger_get_active_filename(void) {
