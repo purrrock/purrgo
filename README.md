@@ -1,227 +1,218 @@
-# PurrGo
+# PurrGO
 
-**PurrGo** is an open-source GNSS navigator and track logger for resource-constrained embedded hardware.
+**PurrGO** — автономный ултра-энергоэффективный GNSS-навигатор и трекер.
 
-The project is inspired by classic handheld GPS navigators, with a different priority:
+Основная идея:
 
-> **Useful offline navigation with minimal power consumption and no route calculation.**
+> **Офлайн-навигация с минимальным энергопотреблением, без расчёта маршрутов.**
 
-PurrGo is being developed as portable C software. The same core algorithms are developed and tested on a PC and are intended to run on STM32 with minimal source changes.
+PurrGO предназначен для:
+
+- GNSS-позиционирования;
+- отображения офлайн-векторных карт;
+- записи треков;
+- работы с Waypoint;
+- базовой навигации на Waypoint;
+- полностью автономной работы без Internet и облачных сервисов.
+
+PurrGO **не выполняет turn-by-turn route calculation**. Это навигатор и трекер, а не routing engine.
 
 ---
 
-## Project status
+## Статус проекта
 
-PurrGo is under active development.
+Проект находится в активной разработке.
 
-Current development flow:
+Текущий переход:
 
 ```text
-GNSS data
-   │
-   ▼
-PC / emulator
-   │
-   ├── GNSS
-   ├── navigation
-   ├── geo
-   ├── track
-   └── maps
-   │
-   ▼
-STM32 firmware
+PC
+ │
+ ├── GNSS
+ ├── navigation
+ ├── track
+ ├── maps
+ └── renderer
+ │
+ ▼
+STM32
+ │
+ ▼
+Release hardware
 ```
 
-The PC implementation is a development environment for the same portable core that will run on the embedded target.
+Portable C core разрабатывается и тестируется на PC перед переносом на STM32.
+
+Следующий основной этап — реализация и интеграция firmware для **STM32U585CIU6**.
+
+Текущий список работ находится в [`TODO.md`](TODO.md).
 
 ---
 
-## Features
+## Архитектура
 
-Planned and currently developed functionality includes:
-
-- GNSS positioning;
-- latitude, longitude and altitude;
-- speed, course and UTC time;
-- fix and satellite information;
-- track recording;
-- GPX support;
-- waypoint management;
-- offline vector maps;
-- map rendering, zoom and pan;
-- current-position marker;
-- track display;
-- basic waypoint navigation;
-- physical controls;
-- completely offline operation.
-
-PurrGo intentionally does **not** implement turn-by-turn route calculation.
-
-It is a **navigator/logger**, not a routing engine.
-
----
-
-## Design goals
-
-### Low power
-
-The final device is intended to operate from a single 18650 Li-ion cell.
-
-Power management is treated as an architectural requirement. GNSS, display, storage and MCU power states are designed to be controlled independently where the hardware allows it.
-
-Actual power consumption will be measured on hardware rather than estimated from theoretical component figures.
-
-### Offline operation
-
-PurrGo does not require:
-
-- Internet;
-- cellular connectivity;
-- Wi-Fi;
-- Bluetooth;
-- cloud services.
-
-Maps, tracks and waypoints are stored locally.
-
-### Portable software
-
-Navigation logic is kept independent from:
-
-- STM32 HAL;
-- CMSIS;
-- Win32;
-- GUI frameworks;
-- operating-system APIs.
-
-Detailed software architecture and portability rules are described in [`docs/architecture.md`](docs/architecture.md).
-
----
-
-## Hardware
-
-PurrGo currently uses three conceptual hardware profiles.
-
-| Profile | Platform | GNSS | Display |
-|---|---|---|---|
-| Development | PC | Mock / USB GNSS | Emulator |
-| Prototype | NUCLEO-F446RE | GY-NEO6MV2 / u-blox NEO-6M | 2.4" 240×320 ST7789 |
-| Release | STM32U5-class | u-blox M10-class | 2.7" 176×264 E-Ink |
-
-The release device is planned around:
-
-- STM32U5-class MCU;
-- modern u-blox M10-class receiver;
-- microSD;
-- low-power display;
-- physical buttons;
-- one 18650 Li-ion cell.
-
-Hardware details and the current hardware roadmap are documented in [`HARDWARE.md`](HARDWARE.md).
-
----
-
-## Map system
-
-Maps are prepared on a PC and stored in a compact binary format for the navigator.
+Программная архитектура разделена на portable core и платформенный код:
 
 ```text
-source map data
-      │
-      ▼
-PC preprocessing
-      │
-      ▼
-PurrGo map format
-      │
-      ▼
++---------------------------+
+|        Application        |
++-------------+-------------+
+              |
+              v
++---------------------------+
+|      Platform layer       |
+|   PC / STM32 / u-blox     |
++-------------+-------------+
+              |
+              v
++---------------------------+
+|       Portable core       |
+| GNSS / map / track / geo  |
+| navigation / graphics     |
++---------------------------+
+```
+
+Подробное описание архитектуры и правил разделения находится в [`docs/architecture.md`](docs/architecture.md).
+
+---
+
+## Release hardware
+
+Финальная конфигурация:
+
+| Компонент | Release |
+|---|---|
+| MCU | STM32U585CIU6 |
+| GNSS | G10A F30 |
+| Display | Waveshare 2.7inch e-Paper HAT |
+| Display resolution | 176 × 264 |
+| Display | 4 gray levels, SPI |
+| Storage | microSD |
+| Battery | 1 × 18650 Li-ion |
+| Controls | физические кнопки |
+
+Для разработки STM32 используются **NUCLEO-F446RE** и **STM32F411CEU6** — та плата, которая будет доступна первой.
+
+Для разработки GNSS используется **GY-NEO6MV2**.
+
+Подробности аппаратной части находятся в [`HARDWARE.md`](HARDWARE.md).
+
+---
+
+## Maps
+
+Карты подготавливаются на PC и затем используются устройством:
+
+```text
+OSM data
+   │
+   ▼
+Map compiler
+   │
+   ▼
+PurrGO map package
+   │
+   ▼
 microSD
-      │
-      ▼
-STM32 renderer
-      │
-      ▼
-display
+   │
+   ▼
+STM32
+   │
+   ▼
+Map renderer
+   │
+   ▼
+E-Ink display
 ```
 
-The embedded device renders precompiled map data; it is not intended to perform general-purpose GIS processing.
+STM32 использует **предкомпилированные векторные карты** и не выполняет общее GIS-процессирование.
 
-The map format, parser and rendering architecture are documented in [`docs/architecture.md`](docs/architecture.md).
+Карта состоит из package-level metadata `map.name` и бинарных файлов слоёв:
+
+```text
+map.name
+*.idx
+*.mlp
+*.db
+```
+
+Подробности:
+
+- [`docs/purrgo_map_specification_v3.md`](docs/purrgo_map_specification_v3.md) — нормативная спецификация Map Format V3;
+- [`docs/PurrGO Map Format V3 — Binary Format Conformance.md`](docs/PurrGO%20Map%20Format%20V3%20%E2%80%94%20Binary%20Format%20Conformance.md) — требования соответствия;
+- [`tools/map-compiler/README.md`](tools/map-compiler/README.md) — как создать карту для PurrGO.
 
 ---
 
-## Repository
+## Repository structure
 
 ```text
 purrgo/
 ├── apps/
-│   ├── pc/
-│   ├── stm32/
-│   └── emulator/
+│   ├── pc/                 # PC applications
+│   ├── stm32/              # STM32 application
+│   └── emulator/           # PC emulator
 │
-├── docs/
+├── docs/                   # Project documentation
 ├── include/
-├── src/
-│   ├── core/
-│   └── platform/
-│       ├── pc/
-│       ├── stm32/
-│       └── ublox/
+│   └── purrgo/             # Public interfaces
 │
-├── tests/
-├── third_party/
-├── tools/
+├── src/
+│   ├── core/               # Portable core
+│   └── platform/           # Platform-specific code
+│
+├── tests/                  # Tests
+├── third_party/            # External dependencies
+├── tools/                  # Development/build tools
 │
 ├── CMakeLists.txt
 ├── HARDWARE.md
+├── TODO.md
 └── README.md
 ```
 
-For the detailed source-level architecture, see [`docs/architecture.md`](docs/architecture.md).
+---
+
+## Building
+
+PC-версия использует:
+
+- C11;
+- CMake;
+- MinGW-w64 GCC или MSVC;
+- Visual Studio Code.
 
 ---
 
-## Building on Windows
+## PC GNSS
 
-The current PC development environment uses:
+В репозитории имеется PC-приложение для работы с GNSS-приёмником через последовательный порт.
 
-- CMake 3.20+;
-- MinGW-w64 GCC or MSVC;
-- Visual Studio Code;
-- C/C++ extension;
-- CMake Tools.
-
-The project uses C11 and CMake.
-
-Detailed build instructions are available in:
-
-[`Руководство по компиляции.md`](Руководство%20по%20компиляции.md)
-
----
-
-## PC real-time GNSS logger
-
-The repository includes a PC application for reading GNSS data from a serial port.
-
-Example:
+Пример запуска:
 
 ```cmd
 .\build\apps\pc_realtime_logger\pc_realtime_logger.exe COM3
 ```
 
-Replace `COM3` with the actual receiver port.
+`COM3` необходимо заменить на порт GNSS-приёмника.
 
-This application is intended for testing the GNSS pipeline with real receiver data before deploying the same core algorithms to STM32.
+Приложение используется для проверки GNSS pipeline на реальном приёмнике до переноса соответствующего кода на STM32.
 
 ---
 
 ## Documentation
 
-- [`docs/architecture.md`](docs/architecture.md) — detailed software architecture, module boundaries, data flow, map subsystem and portability rules.
-- [`HARDWARE.md`](HARDWARE.md) — hardware profiles, peripherals and power architecture.
-- [`Руководство по компиляции.md`](Руководство%20по%20компиляции.md) — Windows / VS Code build instructions.
+| Документ | Содержание |
+|---|---|
+| [`docs/architecture.md`](docs/architecture.md) | Архитектура программного обеспечения |
+| [`HARDWARE.md`](HARDWARE.md) | Аппаратная конфигурация |
+| [`TODO.md`](TODO.md) | Текущие задачи |
+| [`docs/purrgo_map_specification_v3.md`](docs/purrgo_map_specification_v3.md) | Формат карт V3 |
+| [`docs/PurrGO Map Format V3 — Binary Format Conformance.md`](docs/PurrGO%20Map%20Format%20V3%20%E2%80%94%20Binary%20Format%20Conformance.md) | Conformance V3 |
+| [`tools/map-compiler/README.md`](tools/map-compiler/README.md) | Создание карт |
 
 ---
 
 ## License
 
-PurrGo is distributed under the license included in [`LICENSE`](LICENSE).
+PurrGo распространяется на условиях лицензии, указанной в [`LICENSE`](LICENSE).

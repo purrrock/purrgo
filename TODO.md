@@ -1,283 +1,272 @@
-# TODO: Roadmap проекта PurrGO
+# PurrGO — TODO
 
-### Ещё не реализовано
-
-# POI
-
-Реализовать слой POI.
-
-* [X] Определить, нужен ли отдельный geometry type.
-* [X] Добавить обработку POI feature codes.
-* [X] Использовать `gfx_circle`.
-* [X] Реализовать `POI_BIG` — диаметр 6 px.
-* [X] Реализовать `POI_SMALL` — диаметр 4 px.
-* [X] Не включать POI в polygon/line rendering path.
-* [ ] Реализовать POI icons после определения требований к icon storage.
-
-# Waypoint navigation
-
-Маршрутизация исключена. Поддерживается только навигация по прямой к выбранной точке.
-
-* [ ] Реализовать выбор Waypoint.
-* [ ] Отображать прямую от текущей GNSS позиции до Waypoint.
-* [ ] Рассчитывать расстояние до Waypoint.
-* [ ] Рассчитывать азимут на Waypoint.
-* [ ] Выводить distance на data panel.
-* [ ] Выводить bearing на data panel.
-* [ ] Использовать integer/fixed-point arithmetic.
-* [ ] Не использовать floating point.
+Текущий статус проекта: **PC-версия выходит на финальную стадию. Следующий основной этап — перенос на STM32U585CIU6.**
 
 ---
 
-# Track logging
+# 1. Завершение PC-версии
 
-## RAM buffering
+## Map
 
-* [ ] Реализовать RAM buffer для track points.
-* [ ] Накапливать точки блоками.
-* [X] Согласовать buffer size с размером SD sector.
-* [ ] Минимизировать количество операций записи на SD.
+- [ ] Выполнить полный audit map subsystem на `float` и `malloc`.
+- [ ] Завершить regression tests для LOD.
+- [ ] Проверить все regression tests на эталонных картах.
+- [ ] Проверить C reference renderer на эталонных картах.
+- [ ] Зафиксировать regression dataset.
+- [ ] Зафиксировать стабильную версию Map Format V3.
 
-## Track filtering
+## Text labels
 
-* [ ] Реализовать режим Standard:
+- [X] Определить набор объектов с labels.
+- [X] Определить формат label в карте.
+- [X] Разработать шрифт.
+- [X] Определить font storage.
+- [X] Реализовать собственную 8-битную кодировку.
+- [X] Реализовать UTF-8 → PurrGO conversion.
+- [X] Реализовать integer-only размещение.
+- [X] Реализовать clipping.
+- [X] Реализовать систему приоритетов.
+- [X] Не блокировать базовый map parser.
+- [ ] Проверить и ограничить потребление RAM.
 
-  * запись при смещении от `5 m`;
-  * либо не реже одного раза в `5 min`.
-* [ ] Реализовать режим Expedition:
+## POI
 
-  * запись при смещении от `100 m`;
-  * либо не реже одного раза в `15 min`.
-* [ ] Протестировать фильтрацию независимо от STM32.
-
-## Track rendering
-
-* [ ] Реализовать отображение пройденного пути.
-* [ ] Использовать streaming geometry.
-* [ ] Не создавать большой полный buffer трека в RAM.
-
-
-# Planned route
-
-Маршрутизация не входит в PurrGO.
-
-* [ ] Реализовать отображение заранее загруженного/запланированного маршрута.
-* [ ] Использовать отдельный style.
-* [ ] Не добавлять routing engine.
-* [ ] Проверить совместимость с отображением текущего track.
-
-
-# Text labels
-* [X] Разработать шрифт, позволяющий отображать латиницу, кириллицу, расширенные кирилицу и латиницу.
-* [X] Разработать собственную 8-битную кодировку и функцию преобразования utf8-purrgo 
-* [X] Определить набор объектов, для которых нужны labels.
-* [X] Определить font storage.
-* [X] Определить формат label в карте.
-* [X] Реализовать integer-only размещение.
-* [X] Реализовать clipping.
-* [X] Реализовать минимальную систему приоритетов.
-* [ ] Не допускать чрезмерного потребления RAM.
-* [X] Не блокировать map parser базового уровня.
+- [X] Реализовать отдельный POI rendering path.
+- [X] Реализовать `POI_BIG`.
+- [X] Реализовать `POI_SMALL`.
+- [X] Не включать POI в polygon/line rendering path.
+- [X] Обеспечить порядок отрисовки: `landuse → roads → POI → GNSS marker`.
+- [ ] Реализовать POI icons.
 
 ---
 
-# E-Ink abstraction
+# 2. Навигация по Waypoint
 
-Эти задачи можно проектировать до появления конкретного дисплея, но окончательные параметры зависят от controller.
+Маршрутизация в PurrGO не реализуется.
 
-## Rendering model
-
-* [ ] Реализовать событийно-ориентированный redraw.
-* [ ] Не выполнять бессмысленный циклический polling дисплея.
-* [ ] Определить dirty-region abstraction.
-* [ ] Разделить logical renderer и physical display driver.
-* [ ] Поддержать full refresh и partial refresh через abstraction layer.
-
-## Ghosting
-
-* [ ] Добавить счётчик partial updates.
-* [ ] Добавить механизм запроса full refresh.
-* [ ] Определить критерии полной перерисовки после появления конкретного E-Ink controller.
-* [ ] Не фиксировать количество partial updates до аппаратного тестирования.
-
-## 2-bit palette
-
-* [ ] Проверить mapping PurrGO styles → 4 grayscale levels.
-* [ ] Проверить читаемость линий.
-* [ ] Проверить читаемость polygon fills.
-* [ ] Проверить контраст POI/marker/labels.
-
-# Event-driven display updates
-
-* [ ] Проверить возможность partial refresh после выбора конкретного E-Ink controller.
-
-# microSD power architecture
-
-До STM32 реализовать только platform-independent architecture.
-
-* [ ] Определить API управления питанием SD.
-* [ ] Разделить logical storage state и physical power state.
-* [ ] Подготовить поддержку load switch.
-* [ ] Определить состояния:
-
-  * OFF;
-  * POWERING;
-  * READY;
-  * ACTIVE;
-  * SHUTDOWN.
-
-После появления hardware:
-
-* [ ] Подключить реальный load switch.
-* [ ] Проверить ток утечки.
-* [ ] Измерить время power-up.
-* [ ] Измерить стоимость включения/выключения относительно режима постоянного питания.
+- [ ] Реализовать выбор Waypoint.
+- [ ] Отображать направление на Waypoint.
+- [ ] Рассчитывать расстояние до Waypoint.
+- [ ] Рассчитывать bearing/азимут на Waypoint.
+- [ ] Выводить distance на data panel.
+- [ ] Выводить bearing на data panel.
+- [ ] Использовать integer/fixed-point arithmetic.
+- [ ] Не использовать floating point.
 
 ---
 
-# GNSS power architecture
+# 3. Track logging
 
-До STM32:
+## Запись
 
-* [ ] Определить GNSS power state machine.
-* [ ] Определить API start/stop/sleep.
-* [ ] Определить условия временного отключения GNSS.
-* [ ] Разделить GNSS logic и hardware power control.
+- [ ] Реализовать RAM buffer для track points.
+- [ ] Накапливать точки блоками.
+- [ ] Минимизировать количество операций записи на SD.
+- [ ] Реализовать запись GPX.
 
-После STM32:
+## Фильтрация
 
-* [ ] Реализовать реальное управление питанием GNSS.
-* [ ] Проверить hardware wake-up.
-* [ ] Проверить GNSS startup time.
-* [ ] Измерить выигрыш по энергопотреблению.
+### Standard
+
+- [ ] Записывать точку при смещении ≥ 5 m.
+- [ ] Записывать точку не реже одного раза в 5 min.
+
+### Expedition
+
+- [ ] Записывать точку при смещении ≥ 100 m.
+- [ ] Записывать точку не реже одного раза в 15 min.
+- [ ] Протестировать фильтрацию независимо от STM32.
+
+## Отображение
+
+- [ ] Реализовать отображение пройденного track.
+- [ ] Использовать streaming geometry.
+- [ ] Не хранить полный track в RAM.
 
 ---
 
-# STM32 validation
+# 4. Planned route
 
-**Не выполнять до появления целевого STM32 hardware.**
+Расчёт маршрута не входит в PurrGO.
+
+- [ ] Реализовать отображение заранее подготовленного маршрута.
+- [ ] Использовать отдельный style.
+- [ ] Проверить совместимость с отображением текущего track.
+
+---
+
+# 5. Release display
+
+Release-дисплей выбран:
+
+**Waveshare 2.7inch e-Paper HAT, 176 × 264, 4 gray levels.**
+
+- [ ] Завершить STM32 display driver.
+- [ ] Реализовать abstraction между renderer и physical display.
+- [ ] Реализовать full refresh.
+- [ ] Реализовать partial refresh.
+- [ ] Реализовать dirty-region updates.
+- [ ] Определить стратегию обновления GNSS marker.
+- [ ] Измерить ghosting.
+- [ ] Определить необходимость периодического full refresh.
+- [ ] Проверить читаемость карты, POI и labels на 4 уровнях серого.
+
+---
+
+# 6. microSD
+
+- [ ] Выбрать low-voltage microSD-модуль для Release.
+- [ ] Реализовать STM32 SPI driver.
+- [ ] Реализовать файловую систему.
+- [ ] Реализовать структуру `/PURRGO/`.
+- [ ] Реализовать управление питанием SD.
+- [ ] Проверить power-up/power-down.
+- [ ] Измерить ток потребления.
+- [ ] Проверить надёжность записи track при выключении питания.
+
+---
+
+# 7. GNSS
+
+## STM32
+
+- [ ] Перенести GNSS transport на STM32.
+- [ ] Реализовать UART + DMA.
+- [ ] Интегрировать GNSS parser.
+- [ ] Интегрировать G10A F30.
+- [ ] Проверить 1PPS.
+- [ ] Реализовать управление питанием GNSS.
+- [ ] Измерить startup time.
+- [ ] Измерить потребление.
+
+---
+
+# 8. STM32 migration
+
+Целевой MCU Release:
+
+**STM32U585CIU6**
+
+Для разработки используются:
+
+- NUCLEO-F446RE;
+- STM32F411CEU6.
+
+Используется та плата, которая доступна первой.
+
+## Перенос core
+
+- [ ] Собрать portable core без PC-specific dependencies.
+- [ ] Проверить map parser на STM32.
+- [ ] Проверить map renderer на STM32.
+- [ ] Проверить GNSS processing.
+- [ ] Проверить track processing.
+- [ ] Проверить Waypoint navigation.
 
 ## RAM
 
-* [ ] Измерить фактический RAM usage map subsystem.
-* [ ] Измерить максимальный размер статических buffers.
-* [ ] Измерить stack usage `parse_node()`.
-* [ ] Измерить stack usage geometry parser.
-* [ ] Проверить worst-case geometry.
+- [ ] Измерить фактическое RAM usage.
+- [ ] Определить максимальные buffers.
+- [ ] Измерить stack usage `parse_node()`.
+- [ ] Измерить stack usage geometry parser.
+- [ ] Проверить worst-case geometry.
+- [ ] Проверить stack margin.
 
 ## Performance
 
-* [ ] Измерить SD read throughput.
-* [ ] Измерить время чтения geometry.
-* [ ] Измерить integer projection performance.
-* [ ] Измерить line rendering performance.
-* [ ] Измерить polygon rendering performance.
-* [ ] Измерить полный frame rendering time.
-* [ ] Проверить worst-case frame.
-
-## Memory limits
-
-* [ ] Зафиксировать окончательные временные buffers.
-* [ ] Проверить stack margin.
+- [ ] Измерить SD read throughput.
+- [ ] Измерить время чтения geometry.
+- [ ] Измерить integer projection performance.
+- [ ] Измерить line rendering performance.
+- [ ] Измерить polygon rendering performance.
+- [ ] Измерить полный frame rendering time.
+- [ ] Проверить worst-case frame.
 
 ## Floating point
 
-* [ ] Проверить production map path на отсутствие floating-point operations.
-* [ ] Проверить map subsystem через compiler/linker diagnostics.
-* [ ] Проверить отсутствие software floating-point helper functions в итоговом firmware, если они не нужны другим подсистемам.
+- [ ] Проверить production map/navigation path на отсутствие floating-point operations.
+- [ ] Проверить итоговый firmware на наличие software floating-point helpers.
 
 ---
 
-# STM32 power management
+# 9. Power management
 
-Цель — обеспечить длительную автономную работу.
+Цель автономной работы:
 
-* [ ] Реализовать Stop mode.
-* [ ] Реализовать Standby mode при необходимости.
-* [ ] Определить источники wake-up.
-* [ ] Настроить GNSS UART DMA.
-* [ ] Принимать GNSS поток без постоянного активного polling CPU.
-* [ ] Определить условия wake-up по GNSS data.
-* [ ] Интегрировать button interrupts.
-* [ ] Измерить ток MCU в active state.
-* [ ] Измерить ток MCU в Stop.
-* [ ] Измерить ток MCU в Standby.
-* [ ] Измерить среднее потребление в типичном navigation workload.
+| Режим | Цель |
+|---|---:|
+| Непрерывная навигация | ≥ 24 ч |
+| Типичный режим | ≥ 36 ч |
+| Экспедиционный режим | ≥ 48 ч |
 
----
-
-# Display power measurements
-
-После появления конкретного E-Ink hardware:
-
-* [ ] Измерить ток полного refresh.
-* [ ] Измерить ток partial refresh.
-* [ ] Измерить время полного refresh.
-* [ ] Измерить время partial refresh.
-* [ ] Измерить ghosting.
-* [ ] Определить оптимальную частоту full refresh.
-* [ ] Определить оптимальную стратегию обновления marker.
-* [ ] Определить реальную стоимость перерисовки карты.
+- [ ] Реализовать Stop mode.
+- [ ] Реализовать Standby mode при необходимости.
+- [ ] Определить источники wake-up.
+- [ ] Интегрировать button interrupts.
+- [ ] Определить GNSS power states.
+- [ ] Определить SD power states.
+- [ ] Определить display power states.
+- [ ] Измерить ток MCU active.
+- [ ] Измерить ток MCU Stop.
+- [ ] Измерить ток MCU Standby.
+- [ ] Измерить потребление GNSS.
+- [ ] Измерить потребление SD.
+- [ ] Измерить потребление дисплея.
+- [ ] Измерить среднее потребление PurrGO в типичном navigation workload.
 
 ---
 
-# Финализация формата
+# 10. User interface
 
-Выполняется только после завершения и проверки формата.
-
-* [X] Создать окончательный regression dataset.
-* [X] Перегенерировать эталонные карты.
-* [ ] Проверить все regression tests.
-* [ ] Проверить C reference renderer.
-* [ ] Проверить загрузку эталонных карт на STM32.
-* [ ] После стабилизации запретить изменения binary structure без увеличения версии формата.
-
-# Встроеный ридер
-
-Рассмотреть возможность создания страницы чтения электронных книг.
-
-* [ ] Создать Reader отдельной странице интерфейса.
+- [ ] Определить окончательное количество и расположение кнопок.
+- [ ] Проверить, достаточно ли четырёх встроенных кнопок Waveshare для основного интерфейса.
+- [ ] Реализовать основные экраны PurrGO.
+- [ ] Реализовать переключение режимов.
+- [ ] Реализовать data panel.
+- [ ] Реализовать отображение состояния GNSS.
+- [ ] Реализовать отображение состояния батареи.
 
 ---
 
-# Правила разработки
+# 11. Встроенный TXT reader
 
-## Binary format
+Дополнительная функция после основной навигационной части:
 
-* Не добавлять поля «на будущее», если они не имеют определённого назначения.
-* Размеры и offsets всех полей должны быть явно зафиксированы.
-* Python converter и C parser должны изменяться синхронно.
-* Любое изменение binary format должно сопровождаться regression tests.
-* Renderer limits не должны автоматически становиться ограничениями binary format.
-
-## Embedded C
-
-* Не использовать `float` в map/navigation path.
-* Предпочитать integer/fixed-point arithmetic.
-* Избегать dynamic allocation.
-* Не создавать большие локальные buffers на stack.
-* Не полагаться на x86-specific integer sizes.
-* Проверять переполнение и границы offsets.
-* Не оптимизировать RAM «на глаз» — окончательные ограничения должны подтверждаться измерениями на STM32.
-
-## Power
-
-* Не делать непрерывный polling дисплея.
-* Не держать SD/GNSS включёнными без необходимости.
-* Использовать event-driven processing.
-* Буферизовать операции записи на SD.
-* Не принимать окончательные power-management решения без измерений реального hardware.
+- [ ] Создать отдельный Reader mode.
+- [ ] Реализовать чтение TXT.
+- [ ] Реализовать разбиение текста на страницы.
+- [ ] Использовать существующий PurrGO raster font.
+- [ ] Реализовать навигацию по страницам кнопками.
 
 ---
 
-# Текущий ближайший milestone
+# 12. Release validation
 
-До появления STM32 выполнить:
+Перед Release:
 
-13. [X] PC reference renderer.
-14. [ ] Полный float/malloc audit map subsystem.
-15. [ ] Regression tests для LOD.
+- [ ] Полностью проверить карты на STM32.
+- [ ] Проверить GNSS на реальном G10A F30.
+- [ ] Проверить запись и чтение microSD.
+- [ ] Проверить track logging.
+- [ ] Проверить Waypoint navigation.
+- [ ] Проверить display refresh.
+- [ ] Проверить ghosting.
+- [ ] Проверить кнопки.
+- [ ] Проверить cold start.
+- [ ] Проверить восстановление после выключения питания.
+- [ ] Измерить фактическое время автономной работы.
+- [ ] Выполнить длительный тест непрерывной навигации.
+- [ ] Выполнить длительный тест записи track.
+- [ ] Выполнить тест заполненной microSD.
+- [ ] Проверить поведение при повреждённых/неполных файлах карт.
 
-**После этого проект должен иметь стабильный и документированный формат PurrGO и полностью тестируемый на PC map pipeline.**
+---
 
-Только после этого имеет смысл переходить к STM32-specific RAM, performance и power optimization.
+# 13. После стабилизации Release
+
+- [ ] Запретить изменения Map Format V3 без увеличения версии формата.
+- [ ] Зафиксировать Release hardware configuration.
+- [ ] Зафиксировать pinout.
+- [ ] Зафиксировать power architecture.
+- [ ] Обновить документацию после финальных аппаратных измерений.
+- [ ] Подготовить Release build.

@@ -1,788 +1,358 @@
-# PurrGo Software Architecture
+# PurrGO Software Architecture
 
 ## 1. Purpose
 
-**PurrGo** is an autonomous GNSS navigator and track logger for resource-constrained embedded hardware.
+PurrGO is an autonomous offline GNSS navigator and track logger for resource-constrained embedded hardware.
 
-The primary architectural goals are:
+The device provides:
 
-- offline navigation;
-- low power consumption;
-- operation without Internet, cellular connectivity, Wi-Fi or cloud services;
-- GNSS positioning and track recording;
-- rendering of precompiled vector maps;
-- waypoint navigation;
-- physical-button control;
-- deployment on STM32 with minimal changes to portable application logic;
-- deterministic development and testing on a PC.
+* GNSS positioning;
+* track recording;
+* offline vector-map display;
+* waypoint navigation;
+* physical-button control;
+* low-power operation.
 
-PurrGo deliberately does **not** implement turn-by-turn route calculation.
+PurrGO does **not** perform turn-by-turn route calculation. It is a navigator/logger, not a routing engine.
 
-The device is a **navigator/logger**, not a routing engine.
+The software is developed and validated on a PC before deployment to STM32.
 
 ---
 
-## 2. Architectural principles
+# 2. Architectural Principles
 
-PurrGo is organized around a strict separation between:
-
-1. portable application logic;
-2. platform adapters;
-3. target-specific application composition;
-4. external data and hardware interfaces.
-
-The same portable `src/core/` code is intended to execute both in the PC development environment and on the final STM32 target.
-
-The PC implementation is therefore **not a separate navigation engine**. It is a development and validation environment for the embedded application logic.
-
-The architecture follows these principles:
-
-- hardware-independent core;
-- deterministic data processing;
-- explicit integer units and scaling;
-- minimal dynamic allocation;
-- dependency injection for external resources;
-- independent update rates for GNSS, navigation, storage and display;
-- preprocessed map data rather than on-device GIS processing;
-- explicit power-management boundaries;
-- hardware-specific code isolated from navigation algorithms.
-
----
-
-## 3. System architecture
-
-The high-level software architecture is:
+The software is divided into three main layers:
 
 ```text
-+------------------------------------------------------------------+
-|                         APPLICATIONS                             |
-|                                                                  |
-|  apps/pc/                 apps/stm32/           apps/emulator/   |
-|  PC tools                 firmware              PC emulator      |
-|  experiments               composition           UI/hardware sim  |
-+-----------------------------+----------------------+-------------+
-                              |
-                              v
-+------------------------------------------------------------------+
-|                       PLATFORM ADAPTERS                          |
-|                                                                  |
-|  src/platform/pc/       src/platform/stm32/   src/platform/ublox |
-|  serial/file I/O        UART/SPI/SD/display   u-blox-specific    |
-|  PC filesystem          MCU services          GNSS protocol      |
-+-----------------------------+----------------------+-------------+
-                              |
-                              v
-+------------------------------------------------------------------+
-|                         PORTABLE CORE                            |
-|                                                                  |
-|  GNSS | navigation | geo | track | map | graphics | math        |
-|                                                                  |
-|              Hardware-independent C application logic            |
-+------------------------------------------------------------------+
-                              |
-                              v
-+------------------------------------------------------------------+
-|                         EXTERNAL DATA                            |
-|                                                                  |
-| GNSS | map files | tracks | waypoints | configuration | input    |
-+------------------------------------------------------------------+
++-----------------------------+
+|         Application         |
+|   PC / STM32 / Emulator     |
++--------------+--------------+
+               |
+               v
++-----------------------------+
+|       Platform adapters     |
+| PC / STM32 / u-blox         |
++--------------+--------------+
+               |
+               v
++-----------------------------+
+|        Portable core        |
+| GNSS / navigation / map /   |
+| track / graphics / geo      |
++-----------------------------+
 ```
 
-The core must not know whether it is running on Windows, an STM32 development board, or the final navigator.
+The main rules are:
+
+1. Application logic belongs in the portable core whenever possible.
+2. Hardware and operating-system dependencies belong in platform adapters.
+3. Application entry points compose the core with a platform.
+4. The same core code is used on PC and STM32.
+5. The core must not depend on STM32 HAL, CMSIS, Win32 or a concrete filesystem, UART, SPI or display driver.
+6. External resources are accessed through interfaces supplied by the application/platform layer.
+7. Memory usage should be bounded and predictable.
+8. Map data is precompiled on the PC; the STM32 does not perform general-purpose GIS processing.
+9. Production map/navigation code does not require floating-point arithmetic.
+10. GNSS, storage, display and navigation processing have independent update rates.
 
 ---
 
-## 4. Repository architecture
+# 3. Repository Structure
 
-The repository is organized approximately as follows:
+The main architectural boundaries are:
 
 ```text
 purrgo/
 ├── apps/
 │   ├── pc/                 # PC applications
-│   ├── stm32/              # STM32 application layer
-│   └── emulator/           # PC hardware/emulator application
-│
-├── cmake/                  # CMake support files
-│
-├── docs/
-│   └── architecture.md     # This document
+│   ├── stm32/              # STM32 application
+│   └── emulator/           # PC emulator
 │
 ├── include/
-│   └── purrgo/             # Public C interfaces
+│   └── purrgo/             # Public interfaces
 │
 ├── src/
-│   ├── core/               # Hardware-independent application logic
+│   ├── core/               # Portable application logic
 │   └── platform/
-│       ├── pc/              # PC adapters
-│       ├── stm32/           # STM32 adapters
-│       └── ublox/           # u-blox-specific functionality
+│       ├── pc/             # PC adapters
+│       ├── stm32/          # STM32 adapters
+│       └── ublox/          # u-blox-specific functionality
 │
 ├── tests/
-│   └── core/               # Deterministic core tests
+│   └── core/               # Core tests
 │
-├── third_party/             # External dependencies
-│
-├── tools/                   # Development and preprocessing tools
-│
-├── CMakeLists.txt
-├── HARDWARE.md
-└── README.md
+├── tools/                  # Build-time and development tools
+├── third_party/            # External dependencies
+└── docs/                   # Project documentation
 ```
 
-The architecture intentionally keeps the public interfaces in `include/purrgo/` separate from their implementations in `src/`.
+`include/purrgo/` contains public interfaces. Their implementations are located in `src/`.
 
 ---
 
-# 5. Portable core
+# 4. Portable Core
 
-## 5.1. Role
+`src/core/` contains hardware-independent application logic.
 
-`src/core/` contains the algorithms and data structures that should remain independent of the target hardware.
+Its responsibilities include:
 
-Current and planned responsibilities include:
+* GNSS data processing;
+* navigation state;
+* geographic calculations;
+* coordinate transformations;
+* track processing;
+* waypoint calculations;
+* map access and rendering logic;
+* graphics primitives;
+* supporting mathematics.
 
-- GNSS parsing and normalization;
-- navigation state;
-- geographic calculations;
-- coordinate transformations;
-- track processing;
-- waypoint calculations;
-- map parsing and rendering algorithms;
-- graphics primitives required by the map renderer;
-- mathematical utilities.
+The core is the primary target for deterministic PC testing.
 
-The core is the primary unit of deterministic testing.
+## Core restrictions
 
----
+Core code must not directly access:
 
-## 5.2. Core restrictions
+* STM32 HAL or CMSIS;
+* Win32 or other OS-specific APIs;
+* GPIO;
+* UART;
+* SPI;
+* DMA;
+* timers;
+* display controllers;
+* SD-card drivers;
+* concrete filesystem implementations.
 
-Code in `src/core/` must:
+The core should use fixed-width integer types where representation matters and make units, scaling and byte order explicit.
 
-1. Use standard C.
-2. Avoid STM32 HAL headers.
-3. Avoid CMSIS dependencies.
-4. Avoid Win32 APIs.
-5. Avoid GUI frameworks.
-6. Avoid operating-system-specific APIs.
-7. Avoid direct GPIO access.
-8. Avoid direct UART, SPI, DMA or timer access.
-9. Avoid direct display-controller access.
-10. Avoid direct SD-card or filesystem implementation details.
-11. Avoid uncontrolled dynamic allocation.
-12. Use fixed-width integer types where the width is part of the interface contract.
-13. Make byte order explicit when parsing binary formats.
-14. Make physical units and scaling explicit.
-15. Keep external resources behind interfaces supplied by platform/application code.
-16. Be testable using deterministic PC input.
-
-The core may depend on abstractions representing external resources, but it must not depend on their concrete hardware implementation.
+Dynamic allocation should be avoided or strictly controlled.
 
 ---
 
-# 6. Platform layer
+# 5. Platform Layer
 
-The platform layer adapts hardware or operating-system services to the interfaces expected by the portable core.
+`src/platform/` adapts external hardware and operating-system services to interfaces used by the core.
 
-Current platform separation is:
+## PC
 
-```text
-src/platform/pc/
-src/platform/stm32/
-src/platform/ublox/
-```
+`src/platform/pc/` provides services required by desktop applications and tests, such as:
 
-## 6.1. PC platform
+* serial I/O;
+* filesystem access;
+* GNSS input/replay;
+* development utilities.
 
-`src/platform/pc/` provides desktop implementations used for:
+The PC environment is a development and validation platform, not a separate navigation implementation.
 
-- serial communication;
-- file access;
-- development utilities;
-- GNSS replay;
-- PC applications;
-- deterministic testing.
+## STM32
 
-The PC platform allows real GNSS receivers and recorded data to be processed before STM32 deployment.
+`src/platform/stm32/` contains hardware-facing functionality, including:
 
----
+* UART;
+* SPI;
+* DMA;
+* timers;
+* RTC/time sources;
+* microSD;
+* display interface;
+* buttons;
+* power control;
+* MCU low-power operation.
 
-## 6.2. STM32 platform
+Board-specific peripheral configuration and pin assignments belong outside the portable core.
 
-`src/platform/stm32/` is the hardware-facing layer.
-
-It is responsible for services such as:
-
-- UART;
-- SPI;
-- DMA;
-- timers;
-- RTC/time sources;
-- microSD access;
-- display interface;
-- physical buttons;
-- power-control signals;
-- MCU low-power modes.
-
-Board-specific pin mappings and peripheral initialization belong here or in the STM32 application composition layer.
-
-They must not leak into `src/core/`.
-
----
-
-## 6.3. u-blox platform
+## u-blox
 
 `src/platform/ublox/` contains receiver-specific functionality.
 
-PurrGo deliberately separates generic GNSS processing from receiver-specific configuration.
-
-This permits development with older receivers while allowing the final hardware to use a modern u-blox M10-class receiver.
-
-The intended hardware evolution is:
-
-```text
-Development:
-
-USB GNSS / mock data
-        |
-        v
-NMEA
-        |
-        v
-minmea / GNSS interface
-        |
-        v
-portable core
-
-
-Prototype:
-
-GY-NEO6MV2
-u-blox NEO-6M
-        |
-       UART
-        |
-       NMEA
-        |
-       minmea
-        |
-        v
-portable core
-
-
-Release:
-
-u-blox M10-class
-        |
-   NMEA / UBX
-        |
-        v
-u-blox platform
-        |
-        v
-GNSS interface
-        |
-        v
-portable core
-```
-
-Receiver-specific power and configuration operations should remain outside the navigation algorithms.
+Generic GNSS processing remains in the portable application layer, while u-blox-specific configuration and control remain isolated in this platform layer.
 
 ---
 
-# 7. Application layer
+# 6. Application Layer
 
-## 7.1. PC applications
+## PC
 
-`apps/pc/` contains desktop entry points used for development and experimentation.
+`apps/pc/` contains desktop applications used for development, testing and real-time GNSS work.
 
-Current applications include:
+A typical data flow is:
 
-- `purrgo_pc`;
-- `pc_realtime_logger`.
+```text
+GNSS
+  |
+  v
+PC transport
+  |
+  v
+GNSS parser
+  |
+  v
+portable core
+  |
+  +--> navigation
+  +--> track
+  +--> map
+  +--> UI/output
+```
 
-The PC applications compose the portable core with the PC platform.
+## STM32
 
-A typical real-time GNSS flow is:
+`apps/stm32/` is the composition point for the final firmware.
+
+It connects:
+
+```text
+STM32 platform
+      |
+      +--> GNSS
+      +--> storage
+      +--> display
+      +--> buttons
+      +--> power
+      |
+      v
+portable application core
+```
+
+Navigation algorithms should not be duplicated in the STM32 application.
+
+## Emulator
+
+`apps/emulator/` provides a PC environment for testing target-oriented behaviour without the physical device.
+
+It should use the same portable core as the real application whenever practical.
+
+---
+
+# 7. GNSS and Navigation
+
+GNSS processing is separated into three stages:
 
 ```text
 GNSS receiver
-     |
-     v
-PC serial port
-     |
-     v
-PC platform adapter
-     |
-     v
-GNSS parser
-     |
-     v
+      |
+      v
+transport
+      |
+      v
+NMEA / UBX parsing
+      |
+      v
+normalized GNSS data
+      |
+      v
 navigation state
-     |
-     +----> track processing
-     |
-     +----> map processing
-     |
-     +----> UI/output
 ```
 
-The PC real-time logger is primarily a development and validation tool.
+Receiver-specific communication belongs to the platform layer.
 
----
-
-## 7.2. STM32 application
-
-`apps/stm32/` is the composition point for the embedded firmware.
-
-It is responsible for connecting:
-
-- STM32 platform services;
-- GNSS input;
-- navigation state;
-- map rendering;
-- display;
-- storage;
-- buttons;
-- power-management policy.
-
-The STM32 application should not duplicate navigation algorithms already implemented in `src/core/`.
-
----
-
-## 7.3. Emulator
-
-`apps/emulator/` provides a PC representation of the target device and its hardware-facing behavior.
-
-The emulator is useful for testing:
-
-- map rendering;
-- display geometry;
-- input handling;
-- navigation state;
-- UI behaviour;
-- target-specific workflows.
-
-The emulator should consume the same core algorithms as the embedded application whenever practical.
-
----
-
-# 8. GNSS subsystem
-
-GNSS processing is separated into transport, parsing and navigation layers.
+The navigation subsystem consumes normalized GNSS data and provides state used by:
 
 ```text
-             GNSS receiver
-                   |
-                   v
-        UART / USB / recorded file
-                   |
-                   v
-             transport layer
-                   |
-                   v
-           NMEA / UBX parsing
-                   |
-                   v
-          normalized GNSS data
-                   |
-                   v
-           navigation state
-             /           \
-            v             v
-        track             map
-        logging         navigation
+             navigation state
+              /      |       \
+             v       v        v
+          track    waypoint   map
+                    navigation
 ```
 
-## 8.1. NMEA
+Waypoint navigation provides position-to-waypoint information such as distance and bearing.
 
-The initial GNSS processing path uses standard NMEA data and the `minmea` library.
-
-NMEA parsing converts receiver sentences into normalized data consumed by the portable application logic.
-
-The core should not depend on a particular serial-port implementation.
+PurrGO does not calculate routes.
 
 ---
 
-## 8.2. UBX
+# 8. Track Recording
 
-The u-blox platform layer may additionally provide UBX-specific configuration and control.
-
-This is important for the final low-power device because the receiver may need to be configured dynamically for:
-
-- update rate;
-- enabled satellite constellations;
-- power-saving modes;
-- receiver state;
-- other receiver-specific operating parameters.
-
-These operations are platform functionality rather than navigation algorithms.
-
----
-
-# 9. Navigation subsystem
-
-The navigation subsystem maintains the normalized state required by the application.
-
-Typical information includes:
-
-- latitude;
-- longitude;
-- altitude;
-- speed;
-- course;
-- UTC time;
-- fix status;
-- satellite information.
-
-The GNSS receiver is therefore treated as an input source rather than as the navigation application itself.
-
-The navigation state is consumed by:
+Track recording consumes normalized navigation data:
 
 ```text
 GNSS
  |
- +--> track recorder
- |
- +--> waypoint navigation
- |
- +--> map viewport
- |
- +--> position marker
- |
- +--> UI
-```
-
-PurrGo provides basic navigation to a waypoint, such as:
-
-- distance;
-- bearing/azimuth;
-- current position relationship.
-
-It does not calculate turn-by-turn routes.
-
----
-
-# 10. Geographic calculations
-
-Geographic calculations belong to the portable core.
-
-The implementation should prefer deterministic integer or fixed-point arithmetic where practical.
-
-The project uses explicit scaled coordinate representations rather than relying on implicit floating-point units.
-
-For map data, the current internal coordinate representation is based on:
-
-```text
-degrees × 10^7
-```
-
-Map source geometry may use a different scale and is converted at the map-format boundary.
-
-Intermediate calculations should use sufficiently wide integer types to prevent overflow.
-
-For example, coordinate differences and projection products should be promoted before subtraction or multiplication.
-
-The objective is:
-
-- deterministic behaviour;
-- portability;
-- predictable MCU performance;
-- reduced dependence on hardware floating-point support.
-
-Floating-point arithmetic is not forbidden where it provides a concrete benefit, but it should not become an unnecessary dependency of the portable core.
-
----
-
-# 11. Track subsystem
-
-The track subsystem consumes normalized navigation positions and produces recorded track data.
-
-The intended storage format is GPX.
-
-The logical pipeline is:
-
-```text
-GNSS fix
-   |
-   v
+ v
 navigation state
-   |
-   v
-track filter / sampling
-   |
-   v
-RAM buffer
-   |
-   v
-GPX writer
-   |
-   v
+ |
+ v
+track processing
+ |
+ v
+buffer
+ |
+ v
+GPX
+ |
+ v
+storage
+```
+
+Storage access is performed through a platform abstraction.
+
+Buffering and batched writes are used to reduce unnecessary storage activity and support low-power operation.
+
+---
+
+# 9. Map Subsystem
+
+PurrGO uses **precompiled vector maps**.
+
+The map workflow is:
+
+```text
+OSM/source data
+      |
+      v
+PC map compiler
+      |
+      v
+PurrGO map package
+      |
+      v
 microSD
+      |
+      v
+STM32 map subsystem
+      |
+      v
+graphics
+      |
+      v
+display
 ```
 
-The storage implementation should buffer track data to reduce unnecessary microSD activity.
+The STM32 does not compile OSM data or perform general-purpose GIS processing.
 
-This is particularly important for the release device because SD-card writes are relatively expensive in both energy and latency.
-
----
-
-# 12. Waypoint navigation
-
-Waypoint management is part of the application domain rather than the map renderer.
-
-Waypoints may be stored locally and represented using standard geographic coordinates.
-
-The navigation subsystem can calculate:
-
-```text
-current position
-       |
-       +----> waypoint
-                 |
-                 +----> distance
-                 |
-                 +----> bearing
-```
-
-Waypoint storage is intended to be local and offline.
-
----
-
-# 13. Map subsystem
-
-PurrGo uses **precompiled vector maps**.
-
-The embedded device does not perform general-purpose GIS processing or generate maps from OpenStreetMap data.
-
-The intended pipeline is:
-
-```text
-OpenStreetMap / source data
-          |
-          v
-    PC preprocessing
-          |
-          v
-  PurrGo binary map format
-          |
-          v
-        microSD
-          |
-          v
-    STM32 map subsystem
-          |
-          v
-       renderer
-          |
-          v
-        display
-```
-
-This architecture reduces:
-
-- RAM requirements;
-- CPU requirements;
-- storage overhead;
-- software complexity;
-- energy consumption.
-
----
-
-## 13.1. Map data model
-
-The current map renderer operates on precompiled binary data using separate index/geometry resources.
-
-The current implementation works with:
-
-```text
-IDX
- |
- +--> spatial/index information
- |
- +--> SQT / NAV / DATA traversal
- |
- +--> AABB visibility tests
- |
- v
-MLP
- |
- +--> geometry
- |
- +--> points
- |
- +--> parts/rings
- |
- v
-projection
- |
- v
-graphics renderer
-```
-
-The map subsystem is therefore divided conceptually into:
+The map subsystem performs:
 
 1. spatial selection;
-2. binary geometry access;
-3. geographic clipping/culling;
+2. binary map access;
+3. visibility/culling;
 4. coordinate projection;
-5. graphics rendering.
+5. rendering.
+
+The binary map format is defined exclusively in:
+
+```text
+docs/purrgo_map_specification_v3.md
+```
+
+Map compiler usage is documented in:
+
+```text
+tools/map-compiler/README.md
+```
+
+Binary-format conformance requirements are documented in:
+
+```text
+docs/PurrGO Map Format V3 — Binary Format Conformance.md
+```
 
 ---
 
-## 13.2. Spatial filtering
+# 10. Graphics and Display
 
-The map renderer does not blindly render every geometry in the map.
-
-The current processing pipeline uses spatial hierarchy information to locate relevant data:
-
-```text
-IDX
- |
- v
-SQT
- |
- v
-NAV nodes
- |
- v
-DATA nodes
- |
- v
-AABB intersection
- |
- +---- outside viewport --> discard
- |
- +---- intersects -------> geometry
-```
-
-This is essential for running large maps on a microcontroller with limited RAM.
-
----
-
-## 13.3. Bounding boxes
-
-Map geometry is filtered using axis-aligned bounding boxes.
-
-The implementation also handles longitude ranges crossing the antimeridian.
-
-Conceptually:
-
-```text
-normal longitude range:
-
-min_x ---------------- max_x
-
-
-antimeridian-crossing range:
-
-       max_x       min_x
----------|----------|---------
-         <          >
-```
-
-Camera intersection and projection therefore cannot assume that longitude always increases monotonically from `min_x` to `max_x`.
-
----
-
-## 13.4. MLP geometry
-
-The current MLP renderer supports multi-part geometry.
-
-For line layers:
-
-```text
-geometry
-   |
-   +-- part 0 -> polyline
-   +-- part 1 -> polyline
-   +-- part 2 -> polyline
-```
-
-For polygon layers:
-
-```text
-geometry
-   |
-   +-- ring 0
-   +-- ring 1
-   +-- ring 2
-```
-
-Polygon rendering can represent holes using compound polygon rendering and an even-odd fill rule.
-
-The parser validates structural information such as:
-
-- number of parts;
-- number of points;
-- part start indices;
-- geometry bounds.
-
-The current implementation deliberately places a protective limit on the number of points held by one polygon rendering operation.
-
-This is an implementation constraint, not a limitation of the underlying map format.
-
----
-
-## 13.5. Memory strategy
-
-The map renderer avoids dynamic allocation for temporary polygon geometry.
-
-The current implementation uses a static point buffer.
-
-This has several advantages:
-
-- deterministic memory usage;
-- no heap fragmentation;
-- predictable behaviour on STM32;
-- simpler failure handling;
-- easier resource budgeting.
-
-Large map geometries must therefore be processed within explicit implementation limits.
-
----
-
-# 14. Map projection
-
-The current map renderer converts geographic coordinates into framebuffer coordinates using integer arithmetic.
-
-The basic transformation is:
-
-```text
-map coordinate
-      |
-      v
-camera-relative coordinate
-      |
-      v
-scale to viewport
-      |
-      v
-screen coordinate
-```
-
-The current internal coordinate representation is:
-
-```text
-latitude / longitude = degrees × 10^7
-```
-
-MLP geometry coordinates are converted to this representation at the parser boundary.
-
-Intermediate projection calculations use `int64_t`.
-
-This is required because expressions involving coordinate differences and viewport scaling can exceed the range of `int32_t` even when the final screen coordinate fits comfortably into `int16_t`.
-
-The final conversion to graphics coordinates occurs only after the full calculation and range protection.
-
----
-
-# 15. Graphics architecture
-
-The map subsystem is separated from the physical display controller.
-
-Conceptually:
+The map renderer is independent of the physical display controller.
 
 ```text
 map renderer
@@ -800,636 +370,218 @@ display adapter
 physical display
 ```
 
-The map renderer should not know whether the target display is:
+This allows the same rendering logic to be used by the PC environment and STM32 firmware.
 
-- an emulator window;
-- TFT;
-- E-Ink;
-- another framebuffer-backed display.
+Display updates are independent of GNSS updates. A new GNSS fix does not necessarily require a complete display refresh.
 
-This permits the same map algorithms to be tested on a PC and later connected to an STM32 display driver.
-
----
-
-# 16. Display subsystem
-
-Display updates are deliberately independent from GNSS and navigation update rates.
-
-A typical architecture is:
+The release display is:
 
 ```text
-GNSS                 1 Hz
-Track recording      1 Hz
-Navigation state     1 Hz
-Display              event / variable rate
+Waveshare 2.7inch e-Paper HAT
+176 × 264 pixels
+4 grayscale levels
+SPI
+portrait orientation
 ```
 
-A GNSS update does not automatically imply a complete display redraw.
-
-The display may instead be refreshed when:
-
-- the position changes sufficiently;
-- the map viewport changes;
-- the user pans the map;
-- the zoom level changes;
-- the selected map changes;
-- the track display changes;
-- a waypoint/navigation state changes.
-
-This is particularly important for E-Ink displays.
+Hardware details are documented in `HARDWARE.md`.
 
 ---
 
-## 16.1. Display geometry
+# 11. Storage
 
-Display geometry is treated as a build-time hardware configuration rather than being scattered through application code.
+Persistent storage is provided by microSD on the target device.
 
-The target display configuration should define, in one place:
-
-- width;
-- height;
-- diagonal;
-- color depth / bits per pixel;
-- orientation.
-
-The diagonal is retained because physical display size can be used to derive pixel density and to scale UI elements such as the position marker appropriately.
-
-The map and graphics layers should consume the resulting viewport dimensions rather than hard-coded display constants.
-
----
-
-## 16.2. Current display targets
-
-The current hardware profiles are:
+The logical application data consists of:
 
 ```text
-Development:
-    176 × 264
-    E-Ink emulator geometry
-
-Prototype:
-    240 × 320
-    2.4" ST7789 TFT
-
-Release:
-    176 × 264
-    2.7" E-Ink
+maps
+tracks
+waypoints
+configuration
 ```
 
-The release display is intended to provide a low-static-power reflective interface suitable for long battery operation.
+Application logic accesses storage through an abstraction rather than directly through the SD-card or filesystem implementation.
 
-The exact final display remains subject to hardware validation.
+This allows the same core logic to operate with a PC filesystem during development.
 
 ---
 
-# 17. Storage architecture
+# 12. Power Management
 
-The intended persistent storage is microSD.
+Low power consumption is an architectural requirement.
 
-The logical storage layout is:
-
-```text
-/maps/
-    precompiled vector maps
-
-/tracks/
-    recorded GPX tracks
-
-/waypoints/
-    user waypoints
-
-/config/
-    device configuration
-```
-
-The application should access storage through an abstraction rather than depending directly on a particular filesystem or SD-card driver.
-
-This permits the same application logic to operate with:
+The application must be able to manage major power consumers independently where supported by the hardware:
 
 ```text
-PC filesystem
-      |
-      v
-platform storage adapter
-
-
-or
-
-microSD
-      |
-      v
-STM32 storage adapter
+                 +--> GNSS
+                 |
+                 +--> display activity
+                 |
+power policy ----+--> storage activity
+                 |
+                 +--> MCU operating mode
+                 |
+                 +--> peripherals
 ```
+
+The system should spend as much time as practical in low-power states between meaningful events.
+
+Display refreshes, storage operations and GNSS activity should therefore be controlled independently rather than tied to a single continuous processing loop.
+
+Hardware-specific power control belongs to the STM32 platform layer.
 
 ---
 
-# 18. Power-management architecture
+# 13. Data and Dependency Flow
 
-Low power consumption is an architectural requirement, not a final optimization.
-
-The release device is intended to operate from a single 18650 Li-ion cell.
-
-Power control should be possible independently for major consumers where supported by the hardware:
+The preferred dependency direction is:
 
 ```text
-                  +--> GNSS power
-                  |
-MCU power policy -+--> display activity
-                  |
-                  +--> microSD activity
-                  |
-                  +--> MCU operating mode
-                  |
-                  +--> peripheral power
+        applications
+             |
+             v
+        platform
+             |
+             v
+           core
 ```
 
-Potential MCU states include:
-
-```text
-ACTIVE
-  |
-  v
-NAVIGATION
-  |
-  v
-IDLE
-  |
-  v
-LOW POWER / STOP
-```
-
-The MCU should spend as much time as practical in low-power states between meaningful events.
-
-Important wake-up sources include:
-
-- GNSS data;
-- timers;
-- buttons;
-- storage events;
-- display operations.
-
----
-
-## 18.1. GNSS power
-
-The GNSS receiver is a separately managed power consumer.
-
-The final u-blox M10-class implementation should support receiver-specific low-power configuration where appropriate.
-
-The application architecture must therefore permit the receiver to be:
-
-- active;
-- configured;
-- placed into a power-saving state;
-- disabled when navigation is not required.
-
----
-
-## 18.2. Display power
-
-Display activity is independent of navigation-state processing.
-
-For E-Ink, the goal is to avoid unnecessary refreshes because static display content does not require continuous power.
-
-The application should therefore operate on an event-driven display-update model.
-
----
-
-## 18.3. microSD power
-
-microSD access should be minimized through:
-
-- buffered writes;
-- batched operations;
-- reduced filesystem activity;
-- optional hardware power control on the release platform.
-
-This is particularly important because the SD card can have a substantial active and idle power impact compared with the MCU itself.
-
----
-
-# 19. Hardware profiles
-
-The software architecture supports three conceptual hardware profiles.
-
-## 19.1. Development
-
-```text
-Platform:
-    PC
-
-GNSS:
-    mock data / USB GNSS
-
-Display:
-    emulator
-
-Storage:
-    PC filesystem
-```
-
-Primary purpose:
-
-- core algorithm development;
-- deterministic tests;
-- parser development;
-- map rendering;
-- UI experimentation.
-
----
-
-## 19.2. Prototype
-
-```text
-MCU:
-    STM32F446RE
-    NUCLEO-F446RE
-
-GNSS:
-    GY-NEO6MV2
-    u-blox NEO-6M
-
-Display:
-    2.4" 240 × 320 ST7789 TFT
-
-Storage:
-    microSD
-
-Input:
-    physical buttons / development controls
-```
-
-The prototype is intended primarily for validating:
-
-- STM32 integration;
-- peripheral drivers;
-- GNSS communication;
-- display rendering;
-- map rendering;
-- storage;
-- application timing.
-
-The NUCLEO board is a development platform and does not define the final PCB architecture.
-
----
-
-## 19.3. Release
-
-The current release direction is:
-
-```text
-MCU:
-    STM32U5 class
-    currently targeting STM32U585CIU6-class hardware
-
-GNSS:
-    modern u-blox M10-class receiver
-
-Display:
-    2.7" E-Ink
-    176 × 264
-    2 bpp / 4 logical grayscale levels
-
-Storage:
-    microSD
-
-Input:
-    physical buttons
-
-Power:
-    1 × 18650 Li-ion
-```
-
-The exact MCU, GNSS module, display and power-management components remain subject to hardware validation.
-
----
-
-# 20. Build architecture
-
-The project uses CMake and C11.
-
-The build system should maintain the same conceptual separation as the source tree:
-
-```text
-portable core
-     |
-     +---- PC platform ----> PC applications
-     |
-     +---- STM32 platform -> STM32 application
-     |
-     +---- emulator ------- > PC emulator
-```
-
-Platform-specific code should be selected by build configuration rather than by contaminating portable source files with large numbers of target-specific conditionals.
-
-The Windows development environment currently supports:
-
-- CMake;
-- MinGW-w64 GCC or MSVC;
-- Visual Studio Code;
-- C/C++ tooling;
-- CMake Tools.
-
-The PC build is the primary environment for fast development and deterministic testing.
-
----
-
-# 21. Testing architecture
-
-Tests belong primarily under:
-
-```text
-tests/core/
-```
-
-The preferred testing model is deterministic input/output testing.
-
-For example:
-
-```text
-recorded GNSS data
-        |
-        v
-portable parser
-        |
-        v
-navigation state
-        |
-        v
-expected result
-```
-
-Map processing can similarly be tested using known binary map fragments and expected rendering behaviour.
-
-The objective is to detect algorithmic errors before introducing STM32-specific variables.
-
-Hardware tests remain necessary for:
-
-- actual GNSS behaviour;
-- SPI timing;
-- SD-card behaviour;
-- display refresh;
-- power consumption;
-- low-power wake-up;
-- DMA;
-- physical buttons.
-
----
-
-# 22. Dependency direction
-
-Dependencies should point toward portable application logic.
-
-Preferred:
-
-```text
-apps
-  |
-  v
-platform
-  |
-  v
-core
-```
-
-or, for externally supplied resources:
+The core may receive abstract interfaces for external resources:
 
 ```text
 application
-    |
-    +---- creates adapter
-    |
-    +---- passes interface
-              |
-              v
-             core
+     |
+     +---- creates/configures adapter
+     |
+     v
+  interface
+     |
+     v
+    core
 ```
 
-Forbidden architecture:
+The reverse dependency is prohibited:
 
 ```text
 core
  |
- +--> STM32 HAL
- |
- +--> Win32
- |
- +--> display driver
- |
- +--> SD driver
- |
- +--> concrete UART
+ +--> STM32 HAL       forbidden
+ +--> Win32           forbidden
+ +--> concrete SD     forbidden
+ +--> display driver  forbidden
+ +--> concrete UART   forbidden
 ```
 
-The core must remain reusable.
+This separation is what allows the portable core to move from PC to STM32 without rewriting the application algorithms.
 
 ---
 
-# 23. Resource-management strategy
+# 14. Resource Management
 
-PurrGo targets resource-constrained microcontrollers.
+PurrGO targets resource-constrained STM32 hardware.
 
-Memory usage therefore needs to be explicit.
+Preferred techniques are:
 
-Preferred techniques include:
+* fixed-width integer types;
+* caller-owned buffers;
+* bounded arrays;
+* static buffers where practical;
+* streaming parsing;
+* spatial culling before geometry processing;
+* batched storage operations;
+* avoidance of unnecessary data copies;
+* controlled dynamic allocation.
 
-- caller-owned buffers;
-- static buffers where practical;
-- bounded arrays;
-- fixed-width integer types;
-- streaming binary parsing;
-- spatial culling before geometry decoding;
-- batched storage operations;
-- avoidance of unnecessary copies.
+The production map/navigation path uses integer/fixed-point representations and does not depend on floating-point arithmetic.
 
-The map subsystem is a representative example:
-
-```text
-map index
-   |
-   v
-spatial culling
-   |
-   v
-selected geometry only
-   |
-   v
-bounded temporary buffer
-   |
-   v
-projection
-   |
-   v
-graphics
-```
-
-This avoids loading an entire map or unnecessary geometry into RAM.
+PC-side tools are not subject to this runtime restriction.
 
 ---
 
-# 24. Error handling
+# 15. Error Handling
 
-External data must be treated as untrusted input.
+External data must be treated as potentially malformed.
 
 This includes:
 
-- GNSS data;
-- binary map files;
-- GPX files;
-- waypoint data;
-- configuration files;
-- filesystem results.
+* GNSS input;
+* map files;
+* GPX files;
+* waypoint data;
+* configuration;
+* filesystem results.
 
-Binary parsers should:
+Parsers must validate:
 
-- validate sizes;
-- validate offsets;
-- validate counts;
-- check read results;
-- avoid signed/unsigned overflow;
-- make endianness explicit;
-- reject malformed structures rather than attempting unsafe interpretation.
+* sizes;
+* offsets;
+* counts;
+* read results;
+* numeric ranges;
+* binary structure;
+* byte order.
 
-The map parser in particular must not assume that binary offsets or geometry counts are valid merely because they originated from a generated map.
+Malformed input must not cause out-of-bounds memory or file access.
 
 ---
 
-# 25. Data-flow summary
+# 16. Testing Strategy
 
-The complete intended runtime architecture is:
+Portable core functionality should be tested on the PC using deterministic input.
+
+Examples:
 
 ```text
-                         +----------------+
-                         | GNSS receiver  |
-                         +-------+--------+
-                                 |
-                                 v
-                         +----------------+
-                         | GNSS transport |
-                         +-------+--------+
-                                 |
-                                 v
-                         +----------------+
-                         | NMEA / UBX     |
-                         | parser         |
-                         +-------+--------+
-                                 |
-                                 v
-                         +----------------+
-                         | Navigation     |
-                         | state          |
-                         +---+--------+---+
-                             |        |
-                    +--------+        +--------+
-                    v                          v
-             +-------------+            +-------------+
-             | Track       |            | Waypoint    |
-             | subsystem   |            | navigation  |
-             +------+------+            +-------------+
-                    |
-                    v
-               GPX / microSD
-
-
-Position + viewport
-        |
-        v
-+-------------------+
-| Map subsystem     |
-|                   |
-| IDX -> SQT/NAV    |
-|      -> DATA      |
-|      -> AABB      |
-|      -> MLP       |
-|      -> projection|
-+---------+---------+
-          |
-          v
-+-------------------+
-| Graphics renderer |
-+---------+---------+
-          |
-          v
-+-------------------+
-| Display adapter   |
-+---------+---------+
-          |
-          v
-       Display
+recorded GNSS data
+       |
+       v
+portable GNSS processing
+       |
+       v
+expected navigation state
 ```
 
-The entire pipeline can be executed with PC adapters during development and with STM32 adapters on the embedded target.
-
----
-
-# 26. Development strategy
-
-The project follows a staged hardware-independent development model:
+and:
 
 ```text
-Stage 1
-PC core development
-       |
-       v
-Stage 2
-PC GNSS / map / emulator validation
-       |
-       v
-Stage 3
-STM32 prototype integration
-       |
-       v
-Stage 4
-power and peripheral validation
-       |
-       v
-Stage 5
-release hardware
+test map
+    |
+    v
+portable map parser/renderer
+    |
+    v
+expected result
 ```
 
-The same core algorithms should survive these stages.
+Hardware testing remains necessary for:
 
-Hardware changes should primarily require new or modified platform adapters and application composition, not rewrites of navigation logic.
+* GNSS receiver behaviour;
+* UART/SPI/DMA;
+* microSD;
+* display refresh;
+* buttons;
+* power consumption;
+* low-power modes;
+* wake-up behaviour.
 
----
-
-# 27. Architectural invariants
-
-The following properties are considered architectural invariants of PurrGo:
-
-1. PurrGo is an offline navigator/logger.
-2. PurrGo does not perform turn-by-turn route calculation.
-3. Navigation algorithms are portable C.
-4. `src/core/` is independent of STM32 HAL, CMSIS and Windows APIs.
-5. PC applications use the same core algorithms intended for STM32.
-6. GNSS transport is separated from GNSS parsing and navigation state.
-7. Receiver-specific u-blox functionality remains isolated from generic navigation logic.
-8. Maps are precompiled on a PC.
-9. The embedded device renders map data rather than acting as a general GIS processor.
-10. Map visibility is spatially filtered before geometry rendering.
-11. Map geometry is processed using bounded memory.
-12. Display updates are independent from GNSS update frequency.
-13. Storage access is abstracted from application logic.
-14. Low-power operation is considered at architectural boundaries.
-15. Physical controls are preferred over a touchscreen for the release device.
-16. The final device is designed around local storage and autonomous operation.
+The purpose of the PC environment is to detect algorithmic and data-processing errors before introducing hardware-specific variables.
 
 ---
 
-# 28. Current implementation direction
+# 17. Architectural Invariants
 
-The architecture is intentionally designed to accommodate the current development state without freezing unfinished hardware decisions.
+The following are architectural invariants of PurrGO:
 
-The immediate software priorities are:
-
-- stabilize the portable core;
-- keep geographic arithmetic deterministic and overflow-safe;
-- complete GNSS abstraction;
-- continue map parser/renderer development;
-- centralize display geometry configuration;
-- validate map rendering on PC;
-- move the same map/navigation code to STM32;
-- keep storage and display behind platform interfaces;
-- measure actual power consumption on prototype hardware.
-
-The architecture should evolve with implementation, but the dependency direction and hardware-independent core should remain stable.
+1. PurrGO is an offline GNSS navigator/logger.
+2. PurrGO does not implement turn-by-turn routing.
+3. Portable application logic is kept independent of hardware.
+4. PC and STM32 use the same portable core.
+5. Hardware dependencies are isolated in platform adapters.
+6. Maps are compiled on the PC and rendered on the device.
+7. The STM32 map path does not perform general-purpose GIS processing.
+8. Map data is spatially filtered before geometry is rendered.
+9. Resource usage is bounded where practical.
+10. Production map/navigation code does not depend on floating-point arithmetic.
+11. Display and storage activity are independently controllable.
+12. Binary map-format details are defined only by the V3 map specification.
