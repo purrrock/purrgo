@@ -233,3 +233,46 @@ const char* purrgo_logger_get_active_filename(void) {
     }
     return NULL;
 }
+
+size_t purrgo_logger_get_track_points(
+    track_point_t* out_points,
+    size_t max_points
+) {
+    if (out_points == NULL || max_points == 0) {
+        return 0;
+    }
+
+    size_t points_to_copy = ram_track_count;
+    if (points_to_copy > max_points) {
+        points_to_copy = max_points;
+    }
+
+    if (points_to_copy == 0) {
+        return 0;
+    }
+
+    // To copy the most recent points in chronological order:
+    // The newest point is at (ram_track_head - 1) % TRACK_RAM_MAX_POINTS
+    // The oldest point to copy is at (ram_track_head - points_to_copy) % TRACK_RAM_MAX_POINTS
+    size_t start_index;
+    if (ram_track_head >= points_to_copy) {
+        start_index = ram_track_head - points_to_copy;
+    } else {
+        start_index = TRACK_RAM_MAX_POINTS - (points_to_copy - ram_track_head);
+    }
+
+    // Now copy from start_index to out_points
+    // We may need to wrap around the end of the circular buffer
+    size_t points_copied = 0;
+    size_t current_index = start_index;
+    while (points_copied < points_to_copy) {
+        out_points[points_copied] = ram_track_buffer[current_index];
+        points_copied++;
+        current_index++;
+        if (current_index >= TRACK_RAM_MAX_POINTS) {
+            current_index = 0;
+        }
+    }
+
+    return points_copied;
+}
