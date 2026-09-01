@@ -5,6 +5,7 @@
 
 #include "display.h"
 #include <purrgo/gnss_types.h>
+#include "purrgo/track_logger.h"
 
 #ifdef USE_MOCK_GNSS
 #include <purrgo/gnss_mock.h>
@@ -261,7 +262,9 @@ int main(int argc, char* argv[]) {
          */
         SDL_Delay(10);
     }
-
+    // Корректно закрываем GPX-файл, сбрасываем буфер и пишем закрывающие теги
+    purrgo_logger_stop();
+    // ============================
     SDL_DestroyTexture(fb_texture);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
