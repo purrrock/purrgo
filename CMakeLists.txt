@@ -59,6 +59,7 @@ set(CORE_SOURCES
     src/core/sun.c
     src/core/sun_tables.c
     src/core/track_logger.c
+    src/core/track_renderer.c
     src/core/ubx.c
 )
 
