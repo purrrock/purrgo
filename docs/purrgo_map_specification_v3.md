@@ -1,29 +1,54 @@
-# PurrGO MAP FORMAT TECHNICAL SPECIFICATION — V3
+# PurrGO Map Format — Technical Specification V3
+
+**Status:** normative specification
+
+This document defines the binary PurrGO map format V3 and the rules required for a compatible map compiler and firmware parser.
+
+The format consists of three PGO-wrapped files:
+
+* `.idx` — spatial index;
+* `.mlp` — vector geometry;
+* `.db` — object attributes.
+
+Feature classification is defined by `features.csv`.
+
+All multi-byte integer fields use **Little-Endian** byte order unless explicitly stated otherwise.
 
 ---
-# 1. GLOBAL LAYER HEADER (PGO HEADER)
 
-Each binary map layer file (`.idx`, `.mlp`, `.db`) must begin with a global PurrGO header with a fixed length of **32 bytes**.
-The header is identical for all three file types.
-All multi-byte integer fields use **Little-Endian** byte order.
+# 1. PGO CONTAINER
 
-### 1.1. PGO Header Byte Structure
+Every `.idx`, `.mlp` and `.db` file begins with a fixed-size **32-byte PGO header**.
 
-| Offset | Size | Data Type | Field Description            | Value / Format                                                                                                  |
-| :----- | :--- | :-------- | :--------------------------- | :-------------------------------------------------------------------------------------------------------------- |
-| `0x00` | 3    | `char[3]` | **Magic Signature**          | Strictly `b'PGO'` (`50 47 4F`)                                                                                  |
-| `0x03` | 1    | `uint8`   | **File Type**                | `.idx` = `1`, `.mlp` = `2`, `.db` = `3`                                                                         |
-| `0x04` | 4    | `uint32`  | **Payload Size**             | Payload size in bytes, Little-Endian. Formula: `File Size - 32`                                                 |
-| `0x08` | 4    | `uint32`  | **LOD 0 Offset**             | Absolute byte offset of the LOD 0 SQT block in the `.idx` file. For `.mlp` and `.db`: **for future extensions** |
-| `0x0C` | 4    | `uint32`  | **LOD 1 Offset**             | Absolute byte offset of the LOD 1 SQT block in the `.idx` file. For `.mlp` and `.db`: **for future extensions** |
-| `0x10` | 4    | `uint32`  | **LOD 2 Offset**             | Absolute byte offset of the LOD 2 SQT block in the `.idx` file. For `.mlp` and `.db`: **for future extensions** |
-| `0x14` | 4    | `uint32`  | **Future Extension Field 1** | For future extensions                                                                                           |
-| `0x18` | 4    | `uint32`  | **Future Extension Field 2** | For future extensions                                                                                           |
-| `0x1C` | 4    | `uint32`  | **Future Extension Field 3** | For future extensions                                                                                           |
+## 1.1. Header layout
 
-### File Type
+| Offset | Size | Type      | Field              | Description                                 |
+| -----: | ---: | --------- | ------------------ | ------------------------------------------- |
+| `0x00` |    3 | `char[3]` | Magic              | Strictly `PGO` (`50 47 4F`)                 |
+| `0x03` |    1 | `uint8`   | File Type          | `1` = `.idx`, `2` = `.mlp`, `3` = `.db`     |
+| `0x04` |    4 | `uint32`  | Payload Size       | File size minus 32                          |
+| `0x08` |    4 | `uint32`  | LOD 0 Offset       | Absolute file offset of LOD 0 SQT in `.idx` |
+| `0x0C` |    4 | `uint32`  | LOD 1 Offset       | Absolute file offset of LOD 1 SQT in `.idx` |
+| `0x10` |    4 | `uint32`  | LOD 2 Offset       | Absolute file offset of LOD 2 SQT in `.idx` |
+| `0x14` |    4 | `uint32`  | Future Extension 1 | Reserved; must be zero                      |
+| `0x18` |    4 | `uint32`  | Future Extension 2 | Reserved; must be zero                      |
+| `0x1C` |    4 | `uint32`  | Future Extension 3 | Reserved; must be zero                      |
 
-The `File Type` field identifies the binary layer represented by the file:
+The payload begins at:
+
+```text
+0x20
+```
+
+The payload size is:
+
+```text
+Payload Size = File Size - 32
+```
+
+`uint32` therefore permits files of up to approximately 4 GiB; the current implementation limits payload size to `0xFFFFFFFF`.
+
+## 1.2. File type
 
 ```text
 1 = .idx
@@ -31,27 +56,11 @@ The `File Type` field identifies the binary layer represented by the file:
 3 = .db
 ```
 
-Other values are currently undefined and are reserved for future extensions.
+Other values are reserved for future extensions.
 
-### Payload Size
+## 1.3. LOD offsets
 
-`Payload Size` specifies the number of bytes following the 32-byte PGO header.
-
-```text
-Payload Size = File Size - 32
-```
-
-The payload therefore begins at offset:
-
-```text
-0x20
-```
-
-For files up to approximately **3.5 GiB**, `uint32` is sufficient for the current PurrGO map format.
-
-### LOD Offsets
-
-For `.idx` files, the three LOD offset fields contain absolute byte offsets from the beginning of the file:
+For `.idx`, the three LOD fields contain **absolute byte offsets from the beginning of the file**:
 
 ```text
 LOD 0 Offset → beginning of LOD 0 SQT block
@@ -59,118 +68,168 @@ LOD 1 Offset → beginning of LOD 1 SQT block
 LOD 2 Offset → beginning of LOD 2 SQT block
 ```
 
-This allows the firmware to seek directly to the SQT corresponding to the selected LOD without sequentially traversing preceding LOD sections.
+They allow the firmware to seek directly to a selected LOD.
 
-For `.mlp` and `.db` files these fields are currently unused and are reserved **for future extensions**.
+For `.mlp` and `.db`, these fields are currently unused and must be zero.
 
-### Future Extension Fields
+## 1.4. Reserved fields
 
-Offsets `0x14`–`0x1F` are currently undefined.
-They are explicitly reserved **for future extensions** and must be written as zero by the current compiler.
-The current firmware must not assign any additional semantics to these fields.
+Offsets `0x14`–`0x1F` are reserved for future extensions.
 
-### 1.2. Header Validation
+The current compiler writes zero to these fields.
 
-The C parser must:
+Current firmware must treat them as opaque and assign them no additional meaning.
 
-1. Verify the `PGO` magic signature.
-2. Verify that `File Type` is one of the currently supported values (`1`, `2`, `3`).
-3. Read `Payload Size` as Little-Endian `uint32`.
-4. Calculate the payload boundary from the 32-byte header.
-5. For `.idx`, validate that each LOD offset is within the file payload boundary.
-6. Reject malformed or unsupported headers before parsing the payload.
-7. Treat the future-extension fields as opaque and ignore their contents.
+## 1.5. Header validation
+
+A parser must:
+
+1. verify the `PGO` magic;
+2. verify that `File Type` is `1`, `2` or `3`;
+3. read `Payload Size`;
+4. verify that the declared payload fits inside the file;
+5. for `.idx`, verify that every LOD offset is inside the file;
+6. reject malformed or unsupported headers before parsing the payload.
 
 ---
 
-# 2. GEOMETRY FILE STRUCTURE (`.MLP`)
+# 2. COORDINATE REPRESENTATION
 
-The `.mlp` file contains raw ordered coordinates of vertices for linear and polygonal objects.
+All map coordinates use signed 32-bit fixed-point integers with a precision of:
 
-Coordinates are represented using **signed 32-bit integers with a fixed precision of `10⁻⁷` degrees**.
+```text
+10⁻⁷ degrees
+```
 
-No floating-point coordinates are stored in `.mlp`.
-
-### 2.1. Coordinate Representation
-
-A geographic coordinate is converted as:
+Conversion from geographic coordinates:
 
 ```text
 integer_coordinate = geographic_coordinate × 10⁷
 ```
 
-For example:
+Example:
 
 ```text
 55.7558000° → 557558000
 37.6173000° → 376173000
 ```
 
-To convert an integer back to degrees:
-
-```text
-geographic_coordinate = integer_coordinate / 10000000.0
-```
-
-The coordinate order is:
+Coordinate order:
 
 ```text
 X = longitude
 Y = latitude
 ```
 
-### 2.2. Local Geometry Header
+No floating-point coordinates are stored in `.idx` or `.mlp`.
 
-Immediately following the 32-byte global PGO header is an array of geometry records.
-
-Each record is prefaced by its own 8-byte mini-header.
-
-| Offset | Size | Data Type | Endianness               | Field Description                                |
-| :----- | :--- | :-------- | :----------------------- | :----------------------------------------------- |
-| `0x00` | 4    | `uint32`  | **Big-Endian** (`>I`)    | Geometry record sequence number, starting from 1 |
-| `0x04` | 4    | `uint32`  | **Little-Endian** (`<I`) | Geometry record body length in bytes             |
-
-### 2.3. Geometry Record Body
-
-The record body size is strictly equal to the `Content Length` field.
-
-| Offset                 | Size             | Data Type    | Field Description                                   |
-| :--------------------- | :--------------- | :----------- | :-------------------------------------------------- |
-| `0x00`                 | 16               | `int32[4]`   | `bbox_int = [minx, miny, maxx, maxy]`               |
-| `0x10`                 | 4                | `int32`      | `num_parts` — number of segments/rings              |
-| `0x14`                 | 4                | `int32`      | `num_points` — total number of points               |
-| `0x18`                 | `num_parts * 4`  | `uint32[]`   | `parts` array; point indices where each part begins |
-| `0x18 + num_parts * 4` | `num_points * 8` | `int32[2][]` | Points as `[X, Y]` pairs                            |
-
-All coordinate values in `bbox_int` and `points` use the `10⁻⁷` degree representation.
-
-`parts` contains **indices, not contour lengths**.
+The STM32 map/navigation path operates on these integer coordinates. Floating-point arithmetic is not required for binary map parsing or spatial traversal.
 
 ---
 
-## 2.4. Polygon Topology (Multipolygons)
+# 3. GEOMETRY FILE (`.MLP`)
 
-Complex polygon structures are stored in the same unified geometry representation.
+The `.mlp` file stores ordered coordinates for linear and polygonal map features.
 
-* All points of all rings are flattened into a single `points` array.
-* `num_parts` specifies the number of rings.
-* `parts` contains the start index of each ring.
-* Rings must be closed: the first and last coordinate must be identical.
-* A single closed polygon consists of one part.
-* Outer and inner rings use different winding directions.
+The file consists of a PGO header followed by geometry records.
 
-### Winding Rules
+```text
++-------------------------+
+| PGO Header (32 bytes)   |
++-------------------------+
+| Geometry Record         |
++-------------------------+
+| Geometry Record         |
++-------------------------+
+| ...                     |
++-------------------------+
+```
 
-* **Outer contours:** strictly **Clockwise (CW)**.
-* **Inner contours / holes:** strictly **Counter-Clockwise (CCW)**.
+## 3.1. Geometry Record Local Header
+
+Each geometry record begins with an 8-byte local header.
+
+| Offset | Size | Type     | Endianness    | Description                                    |
+| -----: | ---: | -------- | ------------- | ---------------------------------------------- |
+| `0x00` |    4 | `uint32` | Big-Endian    | Geometry record sequence number, starting at 1 |
+| `0x04` |    4 | `uint32` | Little-Endian | Geometry record body length in bytes           |
+
+The record body immediately follows this local header.
+
+## 3.2. Geometry Record Body
+
+The body length is exactly the value stored in the local header.
+
+|   Offset |             Size | Type         | Description                     |
+| -------: | ---------------: | ------------ | ------------------------------- |
+|   `0x00` |               16 | `int32[4]`   | BBox `[minx, miny, maxx, maxy]` |
+|   `0x10` |                4 | `int32`      | `num_parts`                     |
+|   `0x14` |                4 | `int32`      | `num_points`                    |
+|   `0x18` |  `num_parts × 4` | `uint32[]`   | `parts` array                   |
+| variable | `num_points × 8` | `int32[2][]` | Points `[X,Y]`                  |
+
+All coordinates use the `10⁻⁷` degree representation.
+
+`parts` contains **point indices**, not contour lengths.
+
+For a geometry with `num_parts` parts, each `parts[i]` identifies the first point of part `i`.
+
+## 3.3. Geometry pointer (`v1`)
+
+For a normal Data Node, `v1` identifies the corresponding geometry inside `.mlp`.
+
+`v1` is an offset **relative to the beginning of the `.mlp` payload**, i.e. relative to file offset `0x20`.
+
+It points to the beginning of the **Geometry Record Body**, not to the 8-byte Local Header.
+
+Therefore:
+
+```text
+absolute .mlp file offset = 0x20 + v1
+```
+
+For example, if:
+
+```text
+v1 = 8
+```
+
+the pointer refers to the first byte of the first Geometry Record Body.
+
+The 8-byte Local Header is therefore not included in `v1`.
+
+The current compiler implements this as:
+
+```text
+v1 = geometry_record_offset_in_payload + 8
+```
+
+## 3.4. Polygon topology
+
+Multipolygon geometry uses the same representation as all other geometry.
+
+* all rings are flattened into one `points` array;
+* `num_parts` specifies the number of rings;
+* `parts` contains the starting point index of each ring;
+* rings must be closed;
+* the first and last point of a ring must be identical.
+
+Winding rules:
+
+```text
+Outer rings → Clockwise (CW)
+Inner rings → Counter-Clockwise (CCW)
+```
+
+A simple polygon consists of one closed part.
 
 ---
 
-# 3. SPATIAL INDEX STRUCTURE (`.IDX`)
+# 4. SPATIAL INDEX (`.IDX`)
 
-The `.idx` file organizes map objects by Levels of Detail (LOD) and clusters them for fast BBox culling.
+The `.idx` file provides spatial lookup and BBox culling.
 
-PurrGO currently defines three LOD levels:
+PurrGO currently defines:
 
 ```text
 LOD 0
@@ -178,91 +237,242 @@ LOD 1
 LOD 2
 ```
 
-The spatial index uses a hierarchical R-tree structure based on Sort-Tile-Recursive (STR) bulk loading.
+Each LOD is stored as an independent SQT section.
 
-### 3.1. Nodes
+The spatial index uses a hierarchical tree generated using the **Sort-Tile-Recursive (STR)** bulk-loading algorithm.
 
-Navigation Node занимает 28 байт, а Data Node занимает 25 байт.
-
-The last 8 bytes have a fixed interpretation depending on node type and allow the parser to traverse the tree.
-
-Coordinates in all nodes are stored as signed 32-bit integers using the `10⁻⁷` degree coordinate representation.
+The index contains only information required for spatial traversal and feature retrieval. OSM tags and textual descriptions are not stored in `.idx`.
 
 ---
 
-## 3.2. Data Node
+# 5. SQT LOD SECTIONS
+
+Each LOD section begins with a fixed 16-byte SQT header.
+
+## 5.1. SQT header
+
+| Offset | Size | Type      | Description          |
+| -----: | ---: | --------- | -------------------- |
+| `0x00` |    4 | `char[4]` | Magic: `SQT\x01`     |
+| `0x04` |    4 | `uint32`  | Topology: `1`        |
+| `0x08` |    4 | `uint32`  | Tree depth           |
+| `0x0C` |    4 | `uint32`  | Number of root nodes |
+
+Conceptually:
+
+```text
++-----------------------+
+| SQT Header (16 bytes) |
++-----------------------+
+| Root Node             |
+| Root Node             |
+| ...                   |
++-----------------------+
+```
+
+An empty LOD still contains its complete 16-byte SQT header.
+
+For an empty LOD:
+
+```text
+depth = 0
+root_count = 0
+```
+
+---
+
+# 6. NAVIGATION NODE
+
+A Navigation Node represents a spatial cluster containing child nodes.
+
+Its binary size is **28 bytes**.
+
+Binary layout:
+
+```text
+<IiiiiII
+```
+
+| Offset | Size | Type       | Description                          |
+| -----: | ---: | ---------- | ------------------------------------ |
+| `0x00` |    4 | `uint32`   | `v3_jump`                            |
+| `0x04` |   16 | `int32[4]` | Cluster BBox `[xmin,ymin,xmax,ymax]` |
+| `0x14` |    4 | `uint32`   | `v1` — tree level                    |
+| `0x18` |    4 | `uint32`   | `v2` — number of children            |
+
+All BBox coordinates use the `10⁻⁷` degree representation.
+
+## 6.1. Tree level
+
+For:
+
+```text
+v1 = 0
+```
+
+all children are Data Nodes.
+
+For:
+
+```text
+v1 > 0
+```
+
+all children are Navigation Nodes with:
+
+```text
+child level = v1 - 1
+```
+
+Thus the tree is homogeneous at every Navigation Node level.
+
+---
+
+# 7. `v3_jump`
+
+`v3_jump` is the exact physical size, in bytes, of the complete child subtree belonging to the Navigation Node.
+
+It does **not** include the 28-byte Navigation Node itself.
+
+Examples:
+
+For a level-0 Navigation Node with 14 Data Nodes:
+
+```text
+v3_jump = 14 × 25
+        = 350 bytes
+```
+
+For a higher-level Navigation Node:
+
+```text
+v3_jump = sum(child.bin_size)
+```
+
+where each child is another Navigation Node.
+
+## 7.1. Subtree skipping
+
+After the Navigation Node header has been read, the parser position is immediately at the first child.
+
+If the Navigation Node BBox does not intersect the current viewport, the entire child subtree can be skipped:
+
+```text
+file_position += v3_jump
+```
+
+No compensation is applied.
+
+There is no prefetch compensation or additional adjustment associated with `v3_jump`.
+
+The compiler and firmware must use the same definition.
+
+---
+
+# 8. DATA NODE
 
 A Data Node represents one cartographic feature.
-Размер 25 байт. Распаковка `<iiiiBII`.
-| Offset        | Size | Type       | Description                                   |
-| :------------ | :--- | :--------- | :-------------------------------------------- |
-| `0x00 - 0x0F` | 16   | `int32[4]` | BBox `[xmin, ymin, xmax, ymax]` |
-| `0x10`        | 1    | `uint8`    | **Type** — PurrGO feature code |
-| `0x11 - 0x14` | 4    | `uint32`   | **v1** — pointer to geometry record in `.mlp` |
-| `0x15 - 0x18` | 4    | `uint32`   | **v2** — record index in `.db` |
 
-### 3.2.1. Feature Code
+Its binary size is **25 bytes**.
 
-The `Type` field is the numeric `Code` from `features.csv`.
+Binary format:
 
-The compiler converts OSM objects into PurrGO feature definitions before writing the binary map.
+```text
+<iiiiBII
+```
 
-The firmware does **not** need to know the original OSM tag.
+| Offset | Size | Type       | Description                  |
+| -----: | ---: | ---------- | ---------------------------- |
+| `0x00` |   16 | `int32[4]` | BBox `[xmin,ymin,xmax,ymax]` |
+| `0x10` |    1 | `uint8`    | `Type` — PurrGO feature code |
+| `0x11` |    4 | `uint32`   | `v1` — geometry pointer      |
+| `0x15` |    4 | `uint32`   | `v2` — DB record index       |
+
+## 8.1. Feature code
+
+`Type` is the numeric `Code` from `features.csv`.
+
+The firmware uses this numeric code to identify the PurrGO feature class and rendering style.
+
+The original OSM tags are not required by the firmware.
 
 For example:
 
 ```text
-features.csv:
+features.csv
 
 2;ROAD_NORMAL;DARK_GRAY_SEMITHICK_LINE;1;roads;highway=primary;Главная дорога;1;
 ```
 
-A resulting Data Node contains:
+produces:
 
 ```text
 Type = 2
 ```
 
-The semantic interpretation is therefore:
+The meaning of the code is defined by the corresponding `features.csv` entry.
+
+The textual fields `PG_class`, `STYLE`, `LOD`, `Layer` and `OSM_Tags` are not stored in the Data Node.
+
+## 8.2. `v1`
+
+For linear and polygonal features:
 
 ```text
-Code 2 → ROAD_NORMAL
-        → DARK_GRAY_SEMITHICK_LINE
-        → LOD 1
-        → roads
+v1 = offset of Geometry Body in .mlp payload
 ```
 
-The mapping between `Code`, `PG_class`, `STYLE`, `LOD` and other feature metadata is defined by the compiler's `features.csv`.
+For native POIs:
+
+```text
+v1 = 0
+```
+
+See [Section 3.3](#33-geometry-pointer-v1).
+
+## 8.3. `v2`
+
+For features with an associated attribute record:
+
+```text
+v2 = DB record index
+```
+
+For layers without a `.db` file:
+
+```text
+v2 = 0
+```
+
+The exact `.db` indexing rules are defined in Section 10.
 
 ---
 
-# 4. FEATURE CLASSIFICATION (`features.csv`)
+# 9. FEATURE CLASSIFICATION (`features.csv`)
 
-`features.csv` is the source definition used by the PurrGO map compiler.
+`features.csv` is the source classification table used by the map compiler.
 
-It replaces the previous `features_dtg1.csv` classification/remapping system.
-
-The new format is:
+The format is:
 
 ```text
 Code;PG_class;STYLE;LOD;Layer;OSM_Tags;Description;Enabled;Icon
 ```
 
-## 4.1. CSV Fields
+## 9.1. Fields
 
-| Field         | Type       | Description                                                  |
-| :------------ | :--------- | :----------------------------------------------------------- |
-| `Code`        | integer    | Numeric PurrGO feature code stored in `.idx` Data Nodes      |
-| `PG_class`    | identifier | Semantic PurrGO feature class                                |
-| `STYLE`       | identifier | Rendering style assigned to the feature                      |
-| `LOD`         | integer    | LOD level at which the feature is stored                     |
-| `Layer`       | identifier | Target map layer (`roads`, `landuse`, `water`, `pois`, etc.) |
-| `OSM_Tags`    | expression | OSM tag expression used to identify the feature              |
-| `Description` | text       | Human-readable description                                   |
-| `Enabled`     | `0/1`      | Whether the rule is enabled for compilation                  |
-| `Icon`        | identifier | POI icon identifier; currently informational                 |
+| Field         | Type       | Description                                      |
+| ------------- | ---------- | ------------------------------------------------ |
+| `Code`        | integer    | Numeric PurrGO feature code stored in Data Nodes |
+| `PG_class`    | identifier | Semantic PurrGO feature class                    |
+| `STYLE`       | identifier | Rendering style                                  |
+| `LOD`         | integer    | LOD at which the feature is stored               |
+| `Layer`       | identifier | Target layer                                     |
+| `OSM_Tags`    | expression | OSM tag expression used for matching             |
+| `Description` | text       | Human-readable description                       |
+| `Enabled`     | `0/1`      | Whether the rule is active                       |
+| `Icon`        | identifier | POI icon identifier                              |
 
-### Example
+Example:
 
 ```text
 Code;PG_class;STYLE;LOD;Layer;OSM_Tags;Description;Enabled;Icon
@@ -274,32 +484,36 @@ Code;PG_class;STYLE;LOD;Layer;OSM_Tags;Description;Enabled;Icon
 12;POI_SMALL;DARK_GRAY_CIRCLE;0;pois;amenity=pharmacy;Аптека;1;cross
 ```
 
----
+The exact set of feature classes and styles is defined by the current `features.csv`.
 
-## 4.2. OSM Rule Matching
+## 9.2. Rule matching
 
-Feature rules are processed **strictly from top to bottom**.
+Rules are evaluated strictly from top to bottom.
 
-The first matching enabled rule determines the resulting PurrGO feature.
+The **first matching enabled rule wins**.
 
-For example, a specific rule must precede a more general rule:
+Therefore more specific rules must precede more general rules.
+
+Example:
 
 ```text
 11;POI_BIG;...;place=city, capital=yes;Столица;1;circle
 11;POI_BIG;...;place=city;Город;1;circle
 ```
 
-An object matching both expressions is classified by the first rule.
+An object matching both rules is classified by the first rule.
 
-The same rule applies when an OSM object can belong to different logical map categories.
+This rule also resolves conflicts between logical categories such as `landuse` and `POI`.
 
-For example, if an object can be interpreted both as `landuse` and as a POI, its classification is determined by whichever matching rule occurs first in `features.csv`.
+There is no separate remapping stage such as:
 
-There is no separate `Remap_Code`, `Remap_Color` or `Remap_LOD` stage.
+```text
+Remap_Code
+Remap_Color
+Remap_LOD
+```
 
----
-
-## 4.3. Disabled Features
+## 9.3. Disabled rules
 
 If:
 
@@ -307,17 +521,15 @@ If:
 Enabled = 0
 ```
 
-the corresponding rule is ignored by the compiler.
+the rule is ignored by the compiler.
 
-The feature is not written to the binary map as a result of that rule.
+No feature is generated from that rule.
 
----
+## 9.4. Feature classes
 
-## 4.4. PurrGO Feature Classes
+`PG_class` provides the semantic PurrGO classification.
 
-`PG_class` provides the semantic classification used by PurrGO.
-
-Examples include:
+Examples:
 
 ```text
 NO_CLASS
@@ -334,15 +546,11 @@ POI_BIG
 POI_SMALL
 ```
 
-The exact set of classes is defined by the current `features.csv`.
+The binary map stores only the numeric `Code`.
 
-The binary `.idx` format stores the numeric `Code`, not the textual `PG_class`.
+## 9.5. Rendering styles
 
----
-
-## 4.5. Rendering Styles
-
-`STYLE` identifies the rendering style associated with a feature.
+`STYLE` identifies the rendering style assigned to the feature.
 
 Examples:
 
@@ -359,13 +567,11 @@ DARK_GRAY_CIRCLE
 DARK_GRAY_BIG_CIRCLE
 ```
 
-The style identifier is a compiler/rendering definition and is not stored as a string in `.idx`.
+Style names are not stored as strings in `.idx`.
 
----
+## 9.6. POI icons
 
-## 4.6. POI Icons
-
-The `Icon` field is used only for POI feature definitions.
+`Icon` is currently metadata associated with POI feature definitions.
 
 Examples:
 
@@ -381,176 +587,82 @@ airplane
 attraction
 ```
 
-At the current stage of PurrGO development, no bitmap/icon assets are embedded into the map.
+Bitmap/icon assets are not embedded in the map format.
 
-Therefore all POIs are currently rendered using the native POI representation, typically a circle.
+Current PurrGO POIs use a native renderer representation, typically a circle.
 
-The `Icon` field is retained in `features.csv` for future native icon support.
-
----
-
-# 5. NAVIGATION NODE
-
-A Navigation Node represents a spatial cluster containing child nodes.
-
-Binary unpacking format:
-
-```text
-<IiiiiII
-```
-
-| Offset        | Size | Type       | Description                                    |
-| :------------ | :--- | :--------- | :--------------------------------------------- |
-| `0x00 - 0x03` | 4    | `uint32`   | `v3_jump` — jump over the entire child subtree |
-| `0x04 - 0x13` | 16   | `int32[4]` | Cluster BBox `[xmin, ymin, xmax, ymax]`        |
-| `0x14 - 0x17` | 4    | `uint32`   | `v1` — tree depth                              |
-| `0x18 - 0x1B` | 4    | `uint32`   | `v2` — number of child nodes                   |
-
-### Tree Depth
-
-```text
-v1 = 0
-```
-
-Children are Data Nodes.
-
-```text
-v1 > 0
-```
-
-Children are Navigation Nodes at depth:
-
-```text
-v1 - 1
-```
-
-The Navigation Node itself does not contain a cartographic feature code.
+The `Icon` field is retained for future native icon support.
 
 ---
 
-## 5.1. `v3_jump`
-
-`v3_jump` is used for fast subtree skipping during BBox culling.
-
-`v3_jump` is the exact physical size of the skipped child subtree in bytes. Therefore, when the current Navigation Node is culled, the parser advances by exactly: `v3_jump` bytes.
-
-When a Navigation Node is invisible, the parser performs the corresponding jump over the entire child subtree.
-
-The exact compensation must remain consistent between the map compiler and firmware parser.
-
-
----
-
-# 6. LOD SECTION STRUCTURE
-
-Each `.idx` file contains sections for:
-
-```text
-LOD 0
-LOD 1
-LOD 2
-```
-
-Each section begins with a 16-byte SQT header.
-
-The section header contains:
-
-| Offset | Size | Поле         | Значение                                       |
-| ------ | ---: | ------------ | ---------------------------------------------- |
-| `0x00` |    4 | Magic        | `SQT\x01`                                      |
-| `0x04` |    4 | Topology     | `1` — PurrGO SQT topology                      |
-| `0x08` |    4 | Mode / Depth | `0` = flat, `1` = one-level, `>1` = tree depth |
-| `0x0C` |    4 | Root count   | Количество root nodes                          |
-
-Conceptually:
-
-```text
-+-----------------------+
-| SQT Header (16 bytes) |
-+-----------------------+
-| Root Node             |
-| Root Node             |
-| ...                   |
-+-----------------------+
-```
-
-An empty LOD still contains its complete 16-byte SQT header.
-
----
-
-# 7. SPATIAL INDEX COMPILATION
-
-The compiler builds the `.idx` spatial index using the Sort-Tile-Recursive (STR) bulk-loading algorithm.
-
-### Input
-
-For every compiled feature:
-
-```text
-Code
-LOD
-BBox
-v1
-v2
-```
-
-### Processing
-
-1. Group features by LOD.
-2. Sort features by X coordinate.
-3. Divide them into spatial slices.
-4. Sort each slice by Y coordinate.
-5. Pack objects into clusters.
-6. Generate Navigation Nodes.
-7. Calculate enclosing BBoxes.
-8. Generate `v3_jump` values.
-9. Write the LOD sections sequentially.
-
-The binary index contains only information necessary for spatial traversal and object retrieval.
-
-OSM tags and textual feature descriptions are **not stored in `.idx`**.
-
----
-
-# 8. ATTRIBUTE DATABASE STRUCTURE (`.DB`)
+# 10. ATTRIBUTE DATABASE (`.DB`)
 
 The `.db` file stores textual attributes such as object names.
 
-The format is a standard **dBase III (DBF)** database encapsulated inside a PGO container.
+It contains a **dBase III (DBF)** database encapsulated in a PGO container.
 
-## 8.1. DBF Header
-
-Starts at offset `0x20`, immediately after the PGO header.
-
-* dBase III Magic Byte: `0x03`
-* Number of Records: 4-byte little-endian value at offset `0x24`
-* Database Header Size: `129` (`0x81 0x00`) at offset `0x28`
-* Record Size: `117` (`0x75 0x00`) at offset `0x2A`
-
----
-
-## 8.2. Record Fields
-
-The DBF header contains exactly three 32-byte field descriptors:
-
-1. `osm_id`
-2. `code`
-3. `name`
-
-The header terminator `0x0D` follows the third field descriptor.
----
-
-## 8.3. Dummy Record
-
-The dummy record is a special exception and is filled entirely with zero bytes.
-
-Unnamed objects reference this record using:
+The DBF payload begins at file offset:
 
 ```text
-v2 = 1
+0x20
 ```
 
-Named records follow:
+## 10.1. DBF header
+
+The current format uses:
+
+```text
+Magic byte       = 0x03
+Header size      = 129 bytes (0x0081)
+Record size      = 117 bytes (0x0075)
+```
+
+The number of records is stored as a 4-byte little-endian value.
+
+The DBF header contains exactly three field descriptors:
+
+```text
+osm_id
+code
+name
+```
+
+The field descriptor for each field is 32 bytes.
+
+The header terminator is:
+
+```text
+0x0D
+```
+
+## 10.2. Record layout
+
+Each normal record is 117 bytes:
+
+```text
++----------+------------+----------+----------------------+
+| Validity | osm_id     | code     | name                 |
+| 1 byte   | 12 bytes   | 4 bytes  | 100 bytes            |
++----------+------------+----------+----------------------+
+```
+
+The normal record validity indicator is:
+
+```text
+0x20
+```
+
+## 10.3. Standard layer dummy record
+
+Standard map layers use a special zero-filled dummy record at DB record index 1.
+
+The dummy record is:
+
+```text
+117 bytes of 0x00
+```
+
+Named objects use:
 
 ```text
 v2 = 2
@@ -558,71 +670,237 @@ v2 = 3
 ...
 ```
 
-All subsequent normal DBF records begin with the standard dBase validity indicator byte (`0x20`).
+Thus:
 
----
+```text
+v2 = 1
+```
 
-## 8.4. Layers Without Names
+identifies the dummy record.
 
-If a standard layer contains no named objects, `.db` creation may be skipped.
+## 10.4. Layers without names
 
-In that case:
+If a standard layer contains no named objects, creation of its `.db` file may be skipped.
+
+All features in that layer then use:
 
 ```text
 v2 = 0
 ```
 
-for all features in that layer.
+## 10.5. POI database
+
+A POI `.db` uses the same three-field DBF structure but does not contain the standard dummy record.
+
+Therefore:
+
+```text
+v2 = 1
+```
+
+is the first physical POI record.
+
+Unnamed POIs use:
+
+```text
+v2 = 0
+```
 
 ---
 
-# 9. POI LAYER
+# 11. MAP METADATA (`map.name`)
 
-The POI layer therefore does not require a `pois.mlp` geometry file.
+Every PurrGO map package must contain a `map.name` file.
 
-A POI Data Node contains its geographic point directly in its BBox:
+Unlike `.idx`, `.mlp` and `.db`, `map.name` is a text file and is **not wrapped in a PGO binary header**.
+
+The file uses **strict JSON** and contains the map name and the geographic center of the map.
+
+## 11.1. JSON structure
+
+The required structure is:
+
+```json
+{"centerLat":55.7558,"centerLon":37.6173,"mapName":"Moscow"}
+```
+
+The three required fields are:
+
+| Field       | JSON type | Description                             |
+| ----------- | --------- | --------------------------------------- |
+| `centerLat` | number    | Map center latitude in decimal degrees  |
+| `centerLon` | number    | Map center longitude in decimal degrees |
+| `mapName`   | string    | Human-readable map name                 |
+
+The coordinate order is:
+
+```text
+centerLat = latitude
+centerLon = longitude
+```
+
+Unlike coordinates stored in `.idx` and `.mlp`, the coordinates in `map.name` are stored directly as decimal-degree JSON numbers.
+
+## 11.2. Map center
+
+`centerLat` and `centerLon` represent the center calculated from the **global BBox of all map layers** included in the map package.
+
+They are used by the PC map viewer and by the firmware as the initial map/camera center.
+
+The center is metadata only. It does not replace the spatial BBoxes stored in `.idx`.
+
+## 11.3. JSON representation
+
+The current PurrGO map package uses compact JSON without unnecessary whitespace.
+
+The compiler should serialize the object using JSON separators equivalent to:
+
+```python
+json.dumps(data, separators=(',', ':'))
+```
+
+Therefore the preferred representation is:
+
+```json
+{"centerLat":55.7558,"centerLon":37.6173,"mapName":"Moscow"}
+```
+
+rather than:
+
+```json
+{
+    "centerLat": 55.7558,
+    "centerLon": 37.6173,
+    "mapName": "Moscow"
+}
+```
+
+The compact representation keeps the file small and is compatible with the current firmware JSON parsing requirements.
+
+## 11.4. Map package structure
+
+A complete map package therefore has the following structure:
+
+```text
+<map>/
+├── map.name
+├── landuse.idx
+├── landuse.mlp
+├── landuse.db
+├── water.idx
+├── water.mlp
+├── water.db
+├── roads.idx
+├── roads.mlp
+├── roads.db
+├── pois.idx
+└── pois.db
+```
+
+Layer files that contain no data may be omitted according to the layer rules defined elsewhere in this specification. The `map.name` file itself is mandatory.
+
+## 11.5. Relationship to binary map files
+
+`map.name` is package-level metadata:
+
+```text
+                    Map Package
+                         │
+             ┌───────────┴───────────┐
+             │                       │
+         map.name               Binary layers
+             │                       │
+       ┌─────┴─────┐          ┌──────┼──────┐
+       │           │          │      │      │
+    mapName    center       .idx   .mlp    .db
+```
+
+`map.name` does not contain feature data, geometry, spatial index data or attribute records.
+
+---
+
+
+# 12. POI LAYER
+
+POIs are point features and do not require an `.mlp` geometry record.
+
+A POI Data Node stores its point directly in its BBox:
 
 ```text
 xmin == xmax
 ymin == ymax
 ```
 
-The coordinates use the same fixed-point `10⁻⁷` degree representation as all other map coordinates.
-
-### Example
+The coordinates use the same fixed-point representation:
 
 ```text
-xmin = xmax = longitude × 10⁷
-ymin = ymax = latitude × 10⁷
+coordinate = degrees × 10⁷
 ```
 
-The `v1` geometry pointer is unused for native POIs.
+For a POI:
 
-The feature `Code` identifies the PurrGO POI class.
+```text
+v1 = 0
+```
 
-The `Icon` information originates from `features.csv`, but at the current implementation stage POIs are rendered using a native circle representation.
+The feature `Type` identifies the PurrGO POI class.
 
-### 9.1. POI Attribute Database
-
-If named POIs are stored in `pois.db`, the POI database uses the same three-field DBF structure as standard layers.
-
-Unlike standard map layers, the POI database does not contain the zero dummy record.
-
-The first physical POI record has index:
-
-`v2 = 1`
-
-Unnamed POIs use:
-
-`v2 = 0`
+The `Icon` metadata originates from `features.csv`, but the current renderer uses the native POI representation.
 
 ---
 
-# 10. OPERATION ALGORITHMS
+# 13. LAYER GEOMETRY INVARIANTS
 
-## 10.1. Map Compilation Pipeline
+The compiler guarantees that geometry type is consistent with the target layer.
 
-The PurrGO map compiler performs the following conceptual pipeline:
+The current layer contract is:
+
+| Layer     | Geometry              |
+| --------- | --------------------- |
+| `roads`   | line geometry only    |
+| `landuse` | polygon geometry only |
+| `water`   | polygon geometry only |
+| `pois`    | point geometry only   |
+
+The firmware may rely on this invariant and does not need to determine geometry type dynamically.
+
+A violation indicates an invalid map produced by the compiler.
+
+---
+
+# 14. STR INDEX CONSTRUCTION
+
+The `.idx` spatial index is generated using the Sort-Tile-Recursive (STR) bulk-loading algorithm.
+
+Conceptually:
+
+1. group features by LOD;
+2. sort features by X centroid;
+3. divide them into spatial slices;
+4. sort each slice by Y centroid;
+5. divide objects into clusters;
+6. generate Navigation Nodes;
+7. calculate enclosing BBoxes;
+8. calculate `v3_jump`;
+9. serialize the resulting tree into the LOD section.
+
+The current implementation uses a maximum cluster size of:
+
+```text
+14 children
+```
+
+for Navigation Nodes.
+
+A level-0 Navigation Node contains Data Nodes.
+
+Higher-level Navigation Nodes contain lower-level Navigation Nodes.
+
+---
+
+# 15. MAP COMPILATION MODEL
+
+The complete compilation flow is:
 
 ```text
 OpenStreetMap data
@@ -631,11 +909,11 @@ OpenStreetMap data
    OSM objects
         │
         ▼
-  features.csv
+   features.csv
         │
-        │  top-to-bottom matching
+        │ first matching enabled rule
         ▼
-PurrGO feature definition
+ PurrGO feature definition
         │
         ├── Code
         ├── PG_class
@@ -643,211 +921,170 @@ PurrGO feature definition
         ├── LOD
         └── Layer
         │
-        ▼
-   Geometry / POI
-        │
-        ├───────────────┐
-        ▼               ▼
-      .mlp             .db
-        │
-        └───────┐
-                ▼
-              .idx
-                │
-                ▼
-          PGO containers
+        ├─────────────────┐
+        ▼                 ▼
+  Geometry              POI
+        │                 │
+        ▼                 ▼
+      .mlp              .idx
+        │                 │
+        └──────┐    ┌─────┘
+               ▼    ▼
+                 .db
 ```
 
+For normal linear and polygonal features:
+
+1. determine `Code`;
+2. determine `LOD`;
+3. determine `Layer`;
+4. calculate integer BBox;
+5. write geometry to `.mlp`;
+6. assign `v1` to the Geometry Body;
+7. create the corresponding Data Node;
+8. assign `v2` if an attribute record exists;
+9. insert the Data Node into the LOD spatial index.
+
+For native POIs:
+
+1. determine `Code`;
+2. determine `LOD`;
+3. determine `Layer = pois`;
+4. calculate the point coordinates;
+5. create a zero-area Data Node BBox;
+6. set `v1 = 0`;
+7. assign `v2` if a POI attribute record exists;
+8. insert the Data Node into the LOD spatial index.
+
 ---
 
-## 10.2. Data Node Generation
+# 16. FIRMWARE PARSING MODEL
 
-For each enabled OSM feature selected by `features.csv`:
+The firmware does not parse OSM tags.
 
-1. Determine its PurrGO `Code`.
-2. Determine its target `LOD`.
-3. Determine its target `Layer`.
-4. Calculate its integer BBox using `10⁻⁷` coordinate precision.
-5. If it is a linear/polygonal feature, write its geometry to `.mlp`.
-6. If it is a native POI, store its point directly in `.idx`.
-7. If it has a name, allocate a record in `.db`.
-8. Create a Data Node referencing the resulting payload.
+It operates on:
 
----
-
-## 10.3. Hardware Parsing Algorithm
-
-Conceptually:
-
-```python
-def parse_node(file, is_nav_node, current_level):
-    if not is_nav_node:
-        # Узел данных теперь занимает 25 байт (код уменьшен до 1 байта)
-        data_bytes = file.read(25)
-        
-        xmin, ymin, xmax, ymax, code, v1, v2 = \
-            struct.unpack("<iiiiBII", data_bytes)
-        
-        render_object(xmin, ymin, xmax, ymax, code, v1, v2)
-        return
-
-    nav_bytes = file.read(28)
-    v3_jump, xmin, ymin, xmax, ymax, level, count = \
-        struct.unpack("<IiiiiII", nav_bytes)
-
-    if not is_in_screen(xmin, ymin, xmax, ymax):
-        # Точный прыжок без компенсации
-        file.seek(v3_jump, 1)
-        return
-
-    child_is_nav = level > 0
-
-    for _ in range(count):
-        parse_node(
-            file,
-            child_is_nav,
-            level - 1 if child_is_nav else 0
-        )
+```text
+.idx
+.mlp
+.db
 ```
 
-The parser converts fixed-point coordinates to display coordinates only when required by the renderer.
-
----
-
-# 11. INTERNAL RENDERING MODEL
-
-## Geometry type by layer
-
-The map compiler guarantees that geometry types are consistent with the target layer. This is a format-level invariant and may therefore be relied upon by the PurrGO navigator renderer:
-
-* `roads` — **line geometry only**;
-* `landuse` — **polygon geometry only**;
-* `water` — **polygon geometry only**;
-* `pois` — **point geometry only**.
-
-The navigator does not need to detect or validate geometry type at runtime. A violation of this invariant indicates an invalid map produced by the map compiler and is outside the normal runtime data contract.
-
-## Rendering model
-
-The binary map does not contain textual OSM feature definitions.
-
-The firmware works with compact numeric PurrGO feature codes.
+and the corresponding numeric PurrGO feature definitions.
 
 Conceptually:
 
 ```text
 .idx
  │
- └── Code
+ └── Data Node
       │
-      ▼
- PurrGO feature table
-      │
-      ├── PG_class
-      ├── STYLE
-      └── rendering parameters
+      ├── BBox
+      ├── Type ───────────────┐
+      ├── v1 ──→ .mlp         │
+      └── v2 ──→ .db          │
+                              ▼
+                       Feature definition
+                              │
+                              ├── PG_class
+                              ├── STYLE
+                              └── rendering parameters
 ```
 
-The map compiler is responsible for converting the much larger OSM tag space into this compact PurrGO-specific classification.
+Spatial traversal is performed using integer BBoxes.
 
-This prevents the firmware from having to process arbitrary OSM tags.
+A Navigation Node whose BBox does not intersect the current viewport can be skipped using its exact `v3_jump`.
+
+A Data Node that passes the spatial test is passed to the renderer.
 
 ---
 
-# 12. KNOWN HARDWARE QUIRKS & EDGE CASES
+# 17. BINARY FORMAT INVARIANTS
 
-## 12.1. `v3_jump` Prefetch Compensation not need now
+The following properties are normative for V3:
 
----
-
-## 12.2. Empty LOD Sections
-
-Every LOD section must contain its 16-byte SQT header, including empty sections.
-
----
-
-## 12.3. Fixed-Point Coordinates
-
-All map coordinates use:
-
-```text
-int32 = degrees × 10⁷
-```
-
-No floating-point coordinates are stored in `.mlp` or `.idx`.
-
-This applies to:
-
-* geometry coordinates;
-* geometry BBoxes;
-* Data Node BBoxes;
-* Navigation Node BBoxes;
-* POI coordinates.
+1. All PGO containers have a 32-byte header.
+2. The PGO magic is exactly `PGO`.
+3. `.idx`, `.mlp` and `.db` use file types `1`, `2` and `3`.
+4. All multi-byte integers are Little-Endian unless explicitly specified otherwise.
+5. `.mlp` geometry record sequence numbers are Big-Endian.
+6. Coordinates use signed `int32` with `10⁻⁷` degree precision.
+7. `.idx` Data Nodes are exactly 25 bytes.
+8. `.idx` Navigation Nodes are exactly 28 bytes.
+9. `v1` in a normal Data Node points to the Geometry Body in `.mlp`, relative to the beginning of the `.mlp` payload.
+10. The `.mlp` Local Header is not included in the `v1` target.
+11. `v3_jump` is exactly the byte size of the complete child subtree.
+12. No `v3_jump` compensation is applied.
+13. Empty LODs still contain their 16-byte SQT headers.
+14. POIs do not use `.mlp` geometry records.
+15. POI coordinates are represented by a zero-area Data Node BBox.
+16. OSM rule matching uses first-match-wins semantics.
+17. Disabled `features.csv` rules are ignored.
+18. OSM tags and textual feature definitions are not stored in `.idx`.
+19. Geometry type is determined by the target layer.
+20. Reserved PGO header fields have no current runtime semantics.
 
 ---
 
-## 12.4. POI Representation
+# 18. FILE RELATIONSHIPS
 
-POIs do not use geometry records in `.mlp`.
-
-Their point coordinates are stored directly in the `.idx` Data Node BBox:
+The relationship between the three binary files is:
 
 ```text
-xmin == xmax
-ymin == ymax
+.idx
+ │
+ ├── Data Node.Type ──────→ features.csv / PurrGO feature definition
+ │
+ ├── Data Node.v1 ────────→ .mlp Geometry Body
+ │
+ └── Data Node.v2 ────────→ .db record
 ```
+
+For native POIs:
+
+```text
+.idx
+ │
+ ├── Data Node.Type ──────→ POI feature definition
+ ├── Data Node.BBox ──────→ point coordinates
+ ├── v1 = 0
+ └── v2 ──────────────────→ optional POI .db record
+```
+
+This separation keeps the runtime binary representation compact while leaving OSM-specific classification to the PC-side map compiler.
 
 ---
 
-## 12.5. OSM Rule Conflicts
+# 19. IMPLEMENTATION CONSTRAINTS
 
-An OSM object may match more than one rule in `features.csv`.
+The binary map format is designed for resource-constrained firmware.
 
-The compiler resolves this deterministically:
+The STM32 implementation should:
 
-> **Rules are processed from top to bottom. The first matching enabled rule wins.**
+* use fixed-width integer types;
+* operate directly on fixed-point coordinates;
+* avoid floating-point arithmetic in the production map/navigation path;
+* avoid dynamic allocation where practical;
+* rely on the compiler's geometry/layer invariants;
+* reject malformed binary structures rather than attempting to recover from them.
 
-This includes conflicts between different logical layers, such as:
-
-```text
-landuse
-POI
-```
-
-No secondary remapping stage is used.
+The PC-side compiler is not subject to the STM32 runtime arithmetic restriction and may use floating-point arithmetic where required by compilation algorithms.
 
 ---
 
-# 13. SUMMARY
+# 20. VERSIONING
 
-The PurrGO map format consists of three primary binary components:
+This document defines **PurrGO Map Format V3**.
 
-1. **`.idx`** — spatial index containing LOD sections, Data Nodes and Navigation Nodes.
-2. **`.mlp`** — vector geometry storage for linear and polygonal features.
-3. **`.db`** — dBase III-compatible attribute database containing textual object names.
+Changes to any of the following constitute a binary-format change and require corresponding updates to both compiler and firmware:
 
-Feature classification is defined by:
-
-```text
-features.csv
-```
-
-with the structure:
-
-```text
-Code;PG_class;STYLE;LOD;Layer;OSM_Tags;Description;Enabled;Icon
-```
-
-The compiler processes `features.csv` from top to bottom and uses the first matching enabled rule.
-
-The resulting binary map stores compact PurrGO feature codes rather than OSM classification strings.
-
-Geographic coordinates are represented as signed 32-bit integers with a precision of:
-
-```text
-10⁻⁷ degrees
-```
-
-POIs are represented natively in the spatial index rather than being converted into geometry stored in `.mlp`.
-
-The format is designed for sequential parsing, spatial BBox culling and efficient rendering on resource-constrained PurrGO navigation hardware.
+* PGO header;
+* SQT header;
+* Navigation Node layout;
+* Data Node layout;
+* Geometry Record layout;
+* `.db` layout;
+* meaning of `v1`, `v2` or `v3_jump`;
+* coordinate representation;
+* LOD representation;
+* feature-code semantics.
