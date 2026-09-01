@@ -4,6 +4,8 @@
 #include "purrgo/map_controller.h"
 #include "purrgo/trip_computer.h"
 #include "purrgo/config_controller.h"
+#include "purrgo/track_logger.h"
+#include "purrgo/logger.h"
 
 // Текущее состояние конечного автомата
 static purrgo_state_t current_state;
@@ -107,6 +109,26 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
         display_fix = *current_fix; // fallback to UTC if conversion fails (e.g. out of bounds)
         display_fix.valid = false;
     }
+
+
+// === БЛОК ТРЕК-ЛОГГЕРА ===
+    static bool is_track_logging_active = false;
+
+    if (current_fix->valid) {
+        if (!is_track_logging_active) {
+            // Стартуем логгер при получении первого валидного фикса
+            if (purrgo_logger_start(current_fix)) {
+                is_track_logging_active = true;
+                PURRGO_LOG("Auto-started track logging\n");
+            }
+        }
+        
+        if (is_track_logging_active) {
+            // Передаем координаты в фильтр (он сам решит, записывать ли точку)
+            purrgo_logger_add_point(current_fix);
+        }
+    }
+// ============================================
 
     // Диспетчеризация фоновой логики приложения в зависимости от активного экрана
     switch (current_state) {
