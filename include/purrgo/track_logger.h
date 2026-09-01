@@ -31,4 +31,9 @@ void purrgo_logger_add_point(const purrgo_gnss_solution_t* fix);
 void purrgo_logger_stop(void);
 const char* purrgo_logger_get_active_filename(void);
 
+size_t purrgo_logger_get_track_points(
+    track_point_t* out_points,
+    size_t max_points
+);
+
 #endif // PURRGO_TRACK_LOGGER_H
