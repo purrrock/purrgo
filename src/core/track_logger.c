@@ -136,25 +136,25 @@ bool purrgo_logger_start(const purrgo_gnss_solution_t* first_fix) {
     return true;
 }
 
-void purrgo_logger_add_point(const purrgo_gnss_solution_t* fix) {
-    if (current_state != LOGGER_STATE_RECORDING || !fix || !fix->valid) return;
+bool purrgo_logger_add_point(const purrgo_gnss_solution_t* fix) {
+    if (current_state != LOGGER_STATE_RECORDING || !fix || !fix->valid) return false;
 
     uint32_t utc_epoch = 0;
     if (!purrgo_time_datetime_to_epoch(fix->year, fix->month, fix->day,
                                        fix->hours, fix->minutes, fix->seconds, &utc_epoch)) {
-        return;
+        return false;
     }
     
     purrgo_gnss_solution_t local_fix;
     if (!purrgo_time_apply_timezone(fix, &local_fix, app_config.tz_offset_minutes)) {
-        return;
+        return false;
     }
 
     // Проверка смены суток происходит по ЛОКАЛЬНОМУ времени
     if (local_fix.day != current_track_day) {
         purrgo_logger_stop();
         if (!purrgo_logger_start(fix)) {
-            return; 
+            return false;
         }
     }
 
@@ -175,7 +175,7 @@ void purrgo_logger_add_point(const purrgo_gnss_solution_t* fix) {
         }
     }
 
-    if (!should_record) return;
+    if (!should_record) return false;
 
     last_recorded_lat = fix->lat_1e7;
     last_recorded_lon = fix->lon_1e7;
@@ -208,6 +208,8 @@ void purrgo_logger_add_point(const purrgo_gnss_solution_t* fix) {
     if (ram_track_count < TRACK_RAM_MAX_POINTS) {
         ram_track_count++;
     }
+
+    return true;
 }
 void purrgo_logger_stop(void) {
     if (current_state == LOGGER_STATE_RECORDING) {
