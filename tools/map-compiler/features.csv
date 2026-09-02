@@ -89,10 +89,10 @@ Code;PG_class;STYLE;LOD;Layer;OSM_Tags;Description;Enabled;Icon
 16;POI_SMALL;DARK_GRAY_CIRCLE;0;pois;amenity=restaurant;Ресторан;1;вилка и нож
 16;POI_SMALL;DARK_GRAY_CIRCLE;0;pois;amenity=fast_food;Фастфуд;1;вилка и нож
 16;POI_SMALL;DARK_GRAY_CIRCLE;0;pois;amenity=cafe;Кафе;1;вилка и нож
-16;POI_SMALL;DARK_GRAY_CIRCLE;0;pois;amenity=pub;Паб;1;кружка
-16;POI_SMALL;DARK_GRAY_CIRCLE;0;pois;amenity=bar;Бар;1;кружка
+32;POI_SMALL;DARK_GRAY_CIRCLE;0;pois;amenity=pub;Паб;1;кружка
+32;POI_SMALL;DARK_GRAY_CIRCLE;0;pois;amenity=bar;Бар;1;кружка
 16;POI_SMALL;DARK_GRAY_CIRCLE;0;pois;amenity=food_court;Фуд-корт;1;вилка и нож
-16;POI_SMALL;DARK_GRAY_CIRCLE;0;pois;amenity=biergarten;Пивной сад;0;кружка
+32;POI_SMALL;DARK_GRAY_CIRCLE;0;pois;amenity=biergarten;Пивной сад;0;кружка
 17;POI_SMALL;DARK_GRAY_CIRCLE;1;pois;tourism=hotel;Отель;1;домик
 17;POI_SMALL;DARK_GRAY_CIRCLE;1;pois;tourism=motel;Мотель;1;домик
 17;POI_SMALL;DARK_GRAY_CIRCLE;1;pois;tourism=bed_and_breakfast;Мини-гостиница (B&B);1;домик
