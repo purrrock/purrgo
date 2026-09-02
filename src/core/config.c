@@ -325,8 +325,9 @@ bool purrgo_config_load(void)
                 int32_t mode = parse_int32(val);
 
                 if (
-                    mode >= LOGGER_MODE_OFF &&
-                    mode <= LOGGER_MODE_EXPEDITION
+                    mode == LOGGER_MODE_OFF ||
+                    mode == LOGGER_MODE_STANDARD ||
+                    mode == LOGGER_MODE_EXPEDITION
                 ) {
                     app_config.log_mode = (track_logger_mode_t)mode;
                 }
