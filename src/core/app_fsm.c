@@ -125,7 +125,9 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
         
         if (is_track_logging_active) {
             // Передаем координаты в фильтр (он сам решит, записывать ли точку)
-            purrgo_logger_add_point(current_fix);
+            if (purrgo_logger_add_point(current_fix)) {
+                purrgo_app_map_mark_dirty();
+            }
         }
     }
 // ============================================

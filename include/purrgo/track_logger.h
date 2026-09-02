@@ -27,7 +27,7 @@ typedef enum {
 void purrgo_logger_set_mode(track_logger_mode_t mode);
 
 bool purrgo_logger_start(const purrgo_gnss_solution_t* first_fix);
-void purrgo_logger_add_point(const purrgo_gnss_solution_t* fix);
+bool purrgo_logger_add_point(const purrgo_gnss_solution_t* fix);
 void purrgo_logger_stop(void);
 const char* purrgo_logger_get_active_filename(void);
 
