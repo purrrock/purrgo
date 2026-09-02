@@ -59,6 +59,9 @@ static const char* GPX_FOOTER =
 // Установка режима логгера
 void purrgo_logger_set_mode(track_logger_mode_t mode) {
     current_mode = mode;
+    if (current_mode == LOGGER_MODE_OFF && current_state == LOGGER_STATE_RECORDING) {
+        purrgo_logger_stop();
+    }
 }
 
 #include "purrgo/purrgo_time.h"
