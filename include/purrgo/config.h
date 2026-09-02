@@ -72,6 +72,11 @@ typedef struct {
      */
     purrgo_poi_label_mode_t poi_label_mode;
 
+    /*
+     * Включение отображения текущего трека на карте.
+     */
+    bool track_display_enabled;
+
 } purrgo_config_t;
 
 
