@@ -1,636 +1,575 @@
 #!/usr/bin/env python3
 """
-PurrGO 6x6 POI Icon Editor
+PurrGO 7x7 POI Icon Editor
 
-Simple Tkinter editor for a set of up to 256 icons.
+Simple Tkinter editor for 7x7 POI icons.
 
-Each pixel has 5 possible states:
-    TRANSPARENT
-    WHITE
-    LIGHT_GRAY
-    DARK_GRAY
-    BLACK
+Pixel format:
+    2 bits grayscale + 1 bit transparency
+    gray: 0..3
+    alpha: 0 transparent, 1 opaque
 
-Internal pixel encoding uses 3 bits:
-    bit 0..1 = grayscale value
-        0 = white
-        1 = light gray
-        2 = dark gray
-        3 = black
+Each pixel is stored as one byte:
     bit 2 = alpha
-        0 = transparent
-        1 = opaque
+    bits 1..0 = grayscale
 
-Thus 6x6 = 36 pixels = 108 bits = 14 bytes per icon.
+Thus the editor's native icon data is:
+    49 bytes per icon.
 
-Pixels are packed in row-major order, 3 bits per pixel, least-significant
-bit first. The generated C header contains:
-    PURRGO_ICON_WIDTH       6
-    PURRGO_ICON_HEIGHT      6
-    PURRGO_ICON_COUNT       actual number of icons
-    PURRGO_ICON_BYTES       14
-    purrgo_icons[count][14]
+The generated C array uses one byte per pixel. This is deliberately simple
+and avoids packing/unpacking 2-bit grayscale and transparency in firmware.
 
-Icon selection is one byte (0..255).
+Icon selection is one byte:
+    icon index 0..255
+
+Generated data:
+    purrgo_poi_icons[256][7][7]
+
+Unused icon slots are transparent.
 """
 
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog
 from pathlib import Path
 
-WIDTH = 6
-HEIGHT = 6
+GRID = 7
 MAX_ICONS = 256
-PIXELS = WIDTH * HEIGHT
-BYTES_PER_ICON = (PIXELS * 3 + 7) // 8
 
-# Pixel values:
-# -1 = transparent
-#  0 = white
-#  1 = light gray
-#  2 = dark gray
-#  3 = black
-TRANSPARENT = -1
+# Pixel encoding:
+#   0x00..0x03 = transparent, grayscale 0..3
+#   0x04..0x07 = opaque,      grayscale 0..3
+ALPHA_BIT = 0x04
 
-PALETTE = [
-    ("Transparent", TRANSPARENT),
-    ("White", 0),
-    ("Light gray", 1),
-    ("Dark gray", 2),
-    ("Black", 3),
-]
+GRAY_NAMES = {
+    0: "black",
+    1: "dark gray",
+    2: "light gray",
+    3: "white",
+}
 
-CELL = 55
-GRID_X = 20
-GRID_Y = 20
 
-BG = "#d0d0d0"
+def blank_icon():
+    """Create a completely transparent 7x7 icon."""
+    return [[0 for _ in range(GRID)] for _ in range(GRID)]
 
 
 class IconEditor:
     def __init__(self, root):
         self.root = root
-        self.root.title("PurrGO 6x6 POI Icon Editor")
+        self.root.title("PurrGO 7x7 POI Icon Editor")
 
-        # Start with one icon.
-        self.icons = [[TRANSPARENT] * PIXELS]
-        self.names = ["icon_00"]
+        self.icons = [blank_icon() for _ in range(MAX_ICONS)]
         self.current = 0
-        self.selected_value = TRANSPARENT
-        self.drawing = False
-        self.drag_value = TRANSPARENT
 
-        self.build_ui()
-        self.refresh_icon_list()
-        self.draw_grid()
-        self.update_status()
+        # Current drawing state.
+        self.gray = 0
+        self.alpha = 1
 
-    def build_ui(self):
-        # Left: icon list
-        left = tk.Frame(self.root)
-        left.pack(side=tk.LEFT, fill=tk.Y, padx=8, pady=8)
+        self.cell_size = 55
+        self.margin = 10
 
-        tk.Label(left, text="Icons (0..255)").pack()
+        self._build_ui()
+        self._draw_grid()
+        self._update_info()
 
-        list_frame = tk.Frame(left)
-        list_frame.pack(fill=tk.Y, expand=True)
+    # ------------------------------------------------------------------
+    # UI
+    # ------------------------------------------------------------------
 
-        scrollbar = tk.Scrollbar(list_frame, orient=tk.VERTICAL)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+    def _build_ui(self):
+        main = tk.Frame(self.root)
+        main.pack(padx=10, pady=10)
 
-        self.icon_list = tk.Listbox(
-            list_frame,
-            width=22,
-            height=22,
-            exportselection=False,
-            yscrollcommand=scrollbar.set,
-        )
-        self.icon_list.pack(side=tk.LEFT, fill=tk.Y)
-        scrollbar.config(command=self.icon_list.yview)
-        self.icon_list.bind("<<ListboxSelect>>", self.on_icon_select)
+        left = tk.Frame(main)
+        left.pack(side=tk.LEFT)
 
-        buttons = tk.Frame(left)
-        buttons.pack(fill=tk.X, pady=8)
+        right = tk.Frame(main)
+        right.pack(side=tk.LEFT, padx=(15, 0), fill=tk.Y)
 
-        tk.Button(buttons, text="New", command=self.new_icon).pack(fill=tk.X)
-        tk.Button(buttons, text="Delete", command=self.delete_icon).pack(fill=tk.X, pady=2)
-        tk.Button(buttons, text="Rename", command=self.rename_icon).pack(fill=tk.X)
-
-        # Center: editor
-        center = tk.Frame(self.root)
-        center.pack(side=tk.LEFT, padx=8, pady=8)
-
+        canvas_size = self.margin * 2 + GRID * self.cell_size
         self.canvas = tk.Canvas(
-            center,
-            width=GRID_X * 2 + WIDTH * CELL,
-            height=GRID_Y * 2 + HEIGHT * CELL,
-            bg="white",
+            left,
+            width=canvas_size,
+            height=canvas_size,
             highlightthickness=1,
-            highlightbackground="black",
         )
         self.canvas.pack()
 
-        self.canvas.bind("<Button-1>", self.paint_start)
-        self.canvas.bind("<B1-Motion>", self.paint_motion)
-        self.canvas.bind("<ButtonRelease-1>", self.paint_end)
-        self.canvas.bind("<Button-3>", self.erase_at)
-        self.canvas.bind("<B3-Motion>", self.erase_motion)
+        self.canvas.bind("<Button-1>", self._paint_at_event)
+        self.canvas.bind("<B1-Motion>", self._paint_at_event)
 
-        # Palette
-        palette = tk.Frame(center)
-        palette.pack(fill=tk.X, pady=8)
+        # Icon number.
+        tk.Label(right, text="Icon:").pack(anchor="w")
 
-        self.palette_var = tk.StringVar(value="Transparent")
+        nav = tk.Frame(right)
+        nav.pack(fill=tk.X)
 
-        for text, value in PALETTE:
+        tk.Button(nav, text="◀", width=3, command=self._previous).pack(side=tk.LEFT)
+        self.icon_var = tk.IntVar(value=0)
+        self.icon_spin = tk.Spinbox(
+            nav,
+            from_=0,
+            to=MAX_ICONS - 1,
+            width=5,
+            textvariable=self.icon_var,
+            command=self._spin_changed,
+        )
+        self.icon_spin.pack(side=tk.LEFT, padx=4)
+        self.icon_spin.bind("<Return>", self._spin_changed_event)
+
+        tk.Button(nav, text="▶", width=3, command=self._next).pack(side=tk.LEFT)
+
+        tk.Button(
+            right,
+            text="Clear icon",
+            command=self._clear_current,
+        ).pack(fill=tk.X, pady=(10, 3))
+
+        tk.Button(
+            right,
+            text="Copy current → next",
+            command=self._copy_next,
+        ).pack(fill=tk.X, pady=3)
+
+        # Grayscale selector.
+        tk.Label(right, text="Grayscale:").pack(anchor="w", pady=(15, 3))
+
+        self.gray_var = tk.IntVar(value=0)
+        for value in range(4):
             tk.Radiobutton(
-                palette,
-                text=text,
-                variable=self.palette_var,
-                value=text,
-                command=self.select_palette,
-            ).pack(side=tk.LEFT, padx=3)
+                right,
+                text=f"{value} — {GRAY_NAMES[value]}",
+                variable=self.gray_var,
+                value=value,
+                command=self._tool_changed,
+            ).pack(anchor="w")
 
-        # Commands
-        commands = tk.Frame(center)
-        commands.pack(fill=tk.X)
+        # Alpha selector.
+        tk.Label(right, text="Pixel:").pack(anchor="w", pady=(15, 3))
 
-        tk.Button(commands, text="Clear", command=self.clear_icon).pack(side=tk.LEFT)
-        tk.Button(commands, text="Fill white", command=lambda: self.fill_icon(0)).pack(side=tk.LEFT, padx=3)
-        tk.Button(commands, text="Fill transparent", command=lambda: self.fill_icon(TRANSPARENT)).pack(side=tk.LEFT)
+        self.alpha_var = tk.IntVar(value=1)
 
-        # Right: file operations / status
-        right = tk.Frame(self.root)
-        right.pack(side=tk.LEFT, fill=tk.Y, padx=8, pady=8)
+        tk.Radiobutton(
+            right,
+            text="Opaque",
+            variable=self.alpha_var,
+            value=1,
+            command=self._tool_changed,
+        ).pack(anchor="w")
 
-        tk.Button(right, text="Open C array...", command=self.open_c_array).pack(fill=tk.X)
-        tk.Button(right, text="Save C array...", command=self.save_c_array).pack(fill=tk.X, pady=4)
+        tk.Radiobutton(
+            right,
+            text="Transparent",
+            variable=self.alpha_var,
+            value=0,
+            command=self._tool_changed,
+        ).pack(anchor="w")
+
+        # File operations.
+        tk.Label(right, text="File:").pack(anchor="w", pady=(15, 3))
+
+        tk.Button(
+            right,
+            text="Save C array…",
+            command=self._save_c,
+        ).pack(fill=tk.X, pady=2)
+
+        tk.Button(
+            right,
+            text="Save project…",
+            command=self._save_project,
+        ).pack(fill=tk.X, pady=2)
+
+        tk.Button(
+            right,
+            text="Load project…",
+            command=self._load_project,
+        ).pack(fill=tk.X, pady=2)
+
+        self.info_var = tk.StringVar()
+        tk.Label(
+            right,
+            textvariable=self.info_var,
+            justify=tk.LEFT,
+            anchor="w",
+        ).pack(anchor="w", pady=(15, 0))
 
         tk.Label(
             right,
             text=(
-                "Pixel format:\n"
-                "3 bits / pixel\n"
-                "2 bits grayscale\n"
-                "1 bit alpha\n\n"
-                "36 pixels / icon\n"
-                "14 bytes / icon"
+                "Mouse: draw pixels\n"
+                "Right mouse: erase pixel\n"
+                "Each icon: 7×7 = 49 bytes"
             ),
             justify=tk.LEFT,
-            anchor="w",
-        ).pack(fill=tk.X, pady=15)
+        ).pack(anchor="w", pady=(15, 0))
 
-        self.status = tk.Label(right, text="", justify=tk.LEFT, anchor="w")
-        self.status.pack(fill=tk.X)
+        # Keyboard navigation.
+        self.root.bind("<Left>", lambda e: self._previous())
+        self.root.bind("<Right>", lambda e: self._next())
 
-        tk.Label(
-            right,
-            text="Left mouse: draw\nRight mouse: transparent",
-            justify=tk.LEFT,
-            anchor="w",
-        ).pack(fill=tk.X, pady=15)
-
-    def select_palette(self):
-        name = self.palette_var.get()
-        for text, value in PALETTE:
-            if text == name:
-                self.selected_value = value
-                return
-
-    def refresh_icon_list(self):
-        self.icon_list.delete(0, tk.END)
-        for i, name in enumerate(self.names):
-            self.icon_list.insert(tk.END, f"{i:02X}  {name}")
-
-        if self.names:
-            self.icon_list.selection_clear(0, tk.END)
-            self.icon_list.selection_set(self.current)
-            self.icon_list.see(self.current)
-
-    def on_icon_select(self, _event=None):
-        selection = self.icon_list.curselection()
-        if not selection:
-            return
-        self.current = selection[0]
-        self.draw_grid()
-        self.update_status()
-
-    def new_icon(self):
-        if len(self.icons) >= MAX_ICONS:
-            messagebox.showwarning("Icon limit", "Maximum is 256 icons.")
-            return
-
-        index = len(self.icons)
-        self.icons.append([TRANSPARENT] * PIXELS)
-        self.names.append(f"icon_{index:02X}")
-        self.current = index
-
-        self.refresh_icon_list()
-        self.draw_grid()
-        self.update_status()
-
-    def delete_icon(self):
-        if len(self.icons) <= 1:
-            messagebox.showwarning("Delete", "At least one icon must remain.")
-            return
-
-        if not messagebox.askyesno(
-            "Delete icon",
-            f"Delete icon {self.current:02X} ({self.names[self.current]})?",
-        ):
-            return
-
-        del self.icons[self.current]
-        del self.names[self.current]
-
-        self.current = min(self.current, len(self.icons) - 1)
-        self.refresh_icon_list()
-        self.draw_grid()
-        self.update_status()
-
-    def rename_icon(self):
-        old = self.names[self.current]
-        name = simpledialog.askstring("Rename icon", "C identifier:", initialvalue=old)
-        if name is None:
-            return
-
-        name = self.sanitize_identifier(name)
-        if not name:
-            messagebox.showerror("Invalid name", "Name must contain letters, digits or underscore.")
-            return
-
-        self.names[self.current] = name
-        self.refresh_icon_list()
+    # ------------------------------------------------------------------
+    # Pixel encoding
+    # ------------------------------------------------------------------
 
     @staticmethod
-    def sanitize_identifier(name):
-        result = []
-        for ch in name.strip():
-            if ch.isalnum() or ch == "_":
-                result.append(ch)
-        name = "".join(result)
+    def encode_pixel(gray, alpha):
+        """
+        Encode one pixel.
 
-        if name and name[0].isdigit():
-            name = "_" + name
-        return name
+        The lower two bits contain grayscale 0..3.
+        Bit 2 contains opacity.
+        """
+        return (gray & 0x03) | (ALPHA_BIT if alpha else 0)
 
-    def pixel_rect(self, x, y):
-        x0 = GRID_X + x * CELL
-        y0 = GRID_Y + y * CELL
-        return x0, y0, x0 + CELL, y0 + CELL
+    @staticmethod
+    def decode_pixel(value):
+        """Decode one stored pixel into (gray, alpha)."""
+        return value & 0x03, 1 if (value & ALPHA_BIT) else 0
 
-    def pixel_color(self, value):
-        if value == TRANSPARENT:
-            return BG
-        if value == 0:
-            return "#ffffff"
-        if value == 1:
-            return "#aaaaaa"
-        if value == 2:
-            return "#555555"
-        return "#000000"
+    # ------------------------------------------------------------------
+    # Drawing
+    # ------------------------------------------------------------------
 
-    def draw_grid(self):
+    def _tool_changed(self):
+        self.gray = self.gray_var.get()
+        self.alpha = self.alpha_var.get()
+        self._draw_grid()
+
+    def _paint_at_event(self, event):
+        x = (event.x - self.margin) // self.cell_size
+        y = (event.y - self.margin) // self.cell_size
+
+        if not (0 <= x < GRID and 0 <= y < GRID):
+            return
+
+        # Right mouse button is not delivered here on most Tk builds.
+        # Normal drawing is therefore handled separately by <Button-3>.
+        value = self.encode_pixel(self.gray, self.alpha)
+        self.icons[self.current][y][x] = value
+        self._draw_grid()
+        self._update_info()
+
+    def _erase_at_event(self, event):
+        x = (event.x - self.margin) // self.cell_size
+        y = (event.y - self.margin) // self.cell_size
+
+        if not (0 <= x < GRID and 0 <= y < GRID):
+            return
+
+        self.icons[self.current][y][x] = 0
+        self._draw_grid()
+        self._update_info()
+
+    def _draw_grid(self):
         self.canvas.delete("all")
-        pixels = self.icons[self.current]
 
-        for y in range(HEIGHT):
-            for x in range(WIDTH):
-                value = pixels[y * WIDTH + x]
-                x0, y0, x1, y1 = self.pixel_rect(x, y)
-                fill = self.pixel_color(value)
+        for y in range(GRID):
+            for x in range(GRID):
+                value = self.icons[self.current][y][x]
+                gray, alpha = self.decode_pixel(value)
 
-                # Checkerboard for transparent pixels.
-                if value == TRANSPARENT:
-                    self.canvas.create_rectangle(
-                        x0, y0, x1, y1,
-                        fill="#eeeeee",
-                        outline="#777777",
-                    )
-                    s = CELL // 2
-                    self.canvas.create_rectangle(
-                        x0, y0, x0 + s, y0 + s,
-                        fill="#cccccc", outline=""
-                    )
-                    self.canvas.create_rectangle(
-                        x0 + s, y0 + s, x1, y1,
-                        fill="#cccccc", outline=""
-                    )
-                    self.canvas.create_rectangle(
-                        x0, y0, x1, y1,
-                        outline="#777777",
-                    )
+                # Draw a checkerboard under transparent pixels.
+                if alpha:
+                    # Four grayscale levels:
+                    # 0 = black, 3 = white.
+                    shade = int(gray * 255 / 3)
+                    fill = f"#{shade:02x}{shade:02x}{shade:02x}"
                 else:
-                    self.canvas.create_rectangle(
-                        x0, y0, x1, y1,
-                        fill=fill,
-                        outline="#777777",
+                    # Checkerboard makes transparency visible.
+                    fill = "#d0d0d0" if (x + y) % 2 == 0 else "#f0f0f0"
+
+                x0 = self.margin + x * self.cell_size
+                y0 = self.margin + y * self.cell_size
+                x1 = x0 + self.cell_size
+                y1 = y0 + self.cell_size
+
+                self.canvas.create_rectangle(
+                    x0,
+                    y0,
+                    x1,
+                    y1,
+                    fill=fill,
+                    outline="#808080",
+                )
+
+                # Show grayscale number in opaque cells.
+                if alpha:
+                    self.canvas.create_text(
+                        (x0 + x1) // 2,
+                        (y0 + y1) // 2,
+                        text=str(gray),
+                        fill="#ffffff" if gray <= 1 else "#000000",
                     )
 
-    def canvas_pixel(self, event):
-        x = (event.x - GRID_X) // CELL
-        y = (event.y - GRID_Y) // CELL
-
-        if 0 <= x < WIDTH and 0 <= y < HEIGHT:
-            return x, y
-        return None
-
-    def set_pixel(self, x, y, value):
-        self.icons[self.current][y * WIDTH + x] = value
-        self.draw_grid()
-
-    def paint_start(self, event):
-        p = self.canvas_pixel(event)
-        if p is None:
-            return
-
-        self.drawing = True
-        self.drag_value = self.selected_value
-        self.set_pixel(*p, self.drag_value)
-
-    def paint_motion(self, event):
-        if not self.drawing:
-            return
-
-        p = self.canvas_pixel(event)
-        if p is not None:
-            self.set_pixel(*p, self.drag_value)
-
-    def paint_end(self, _event):
-        self.drawing = False
-
-    def erase_at(self, event):
-        p = self.canvas_pixel(event)
-        if p is not None:
-            self.set_pixel(*p, TRANSPARENT)
-
-    def erase_motion(self, event):
-        p = self.canvas_pixel(event)
-        if p is not None:
-            self.set_pixel(*p, TRANSPARENT)
-
-    def clear_icon(self):
-        self.fill_icon(TRANSPARENT)
-
-    def fill_icon(self, value):
-        self.icons[self.current] = [value] * PIXELS
-        self.draw_grid()
-
-    def update_status(self):
-        self.status.config(
-            text=(
-                f"Current: {self.current:02X}\n"
-                f"Name: {self.names[self.current]}\n"
-                f"Icons: {len(self.icons)}/{MAX_ICONS}"
-            )
+        # Outer border.
+        size = GRID * self.cell_size
+        self.canvas.create_rectangle(
+            self.margin,
+            self.margin,
+            self.margin + size,
+            self.margin + size,
+            outline="#000000",
+            width=2,
         )
 
     # ------------------------------------------------------------------
-    # C array encoding
+    # Icon navigation
     # ------------------------------------------------------------------
 
-    @staticmethod
-    def encode_icon(pixels):
-        """
-        Pack 36 pixels, 3 bits each, into 14 bytes.
+    def _set_current(self, index):
+        index = max(0, min(MAX_ICONS - 1, index))
+        self.current = index
+        self.icon_var.set(index)
+        self._draw_grid()
+        self._update_info()
 
-        Pixel bit layout:
-            transparent -> 0b000
-            white       -> 0b001
-            light gray  -> 0b011
-            dark gray   -> 0b101
-            black       -> 0b111
+    def _previous(self):
+        self._set_current((self.current - 1) % MAX_ICONS)
 
-        The encoding deliberately keeps alpha as the MSB:
-            bit 2 = alpha
-            bits 1..0 = gray
+    def _next(self):
+        self._set_current((self.current + 1) % MAX_ICONS)
 
-        All pixels are packed consecutively, starting with pixel 0
-        at the least significant bit of byte 0.
-        """
-        value = 0
+    def _spin_changed(self):
+        try:
+            self._set_current(int(self.icon_var.get()))
+        except ValueError:
+            self.icon_var.set(self.current)
 
-        for i, pixel in enumerate(pixels):
-            if pixel == TRANSPARENT:
-                encoded = 0
-            else:
-                encoded = 0x4 | (pixel & 0x03)
-            value |= encoded << (i * 3)
+    def _spin_changed_event(self, _event):
+        self._spin_changed()
 
-        return value.to_bytes(BYTES_PER_ICON, "little")
+    # ------------------------------------------------------------------
+    # Icon operations
+    # ------------------------------------------------------------------
 
-    @staticmethod
-    def decode_icon(data):
-        pixels = []
-        value = int.from_bytes(data[:BYTES_PER_ICON], "little")
+    def _clear_current(self):
+        self.icons[self.current] = blank_icon()
+        self._draw_grid()
+        self._update_info()
 
-        for i in range(PIXELS):
-            encoded = (value >> (i * 3)) & 0x07
+    def _copy_next(self):
+        if self.current >= MAX_ICONS - 1:
+            messagebox.showinfo("Copy", "Icon 255 has no next icon.")
+            return
 
-            alpha = encoded & 0x04
-            gray = encoded & 0x03
+        source = self.icons[self.current]
+        self.icons[self.current + 1] = [row[:] for row in source]
+        self._set_current(self.current + 1)
 
-            if not alpha:
-                pixels.append(TRANSPARENT)
-            else:
-                pixels.append(gray)
+    def _update_info(self):
+        used = sum(
+            1
+            for icon in self.icons
+            if any(pixel != 0 for row in icon for pixel in row)
+        )
 
-        return pixels
+        opaque = sum(
+            1
+            for row in self.icons[self.current]
+            for pixel in row
+            if pixel & ALPHA_BIT
+        )
 
-    def save_c_array(self):
-        filename = filedialog.asksaveasfilename(
-            title="Save PurrGO icon C array",
+        self.info_var.set(
+            f"Icon {self.current}\n"
+            f"Opaque pixels: {opaque}/49\n"
+            f"Used icons: {used}/{MAX_ICONS}"
+        )
+
+    # ------------------------------------------------------------------
+    # C output
+    # ------------------------------------------------------------------
+
+    def _save_c(self):
+        path = filedialog.asksaveasfilename(
+            title="Save C array",
             defaultextension=".h",
             filetypes=[
                 ("C header", "*.h"),
                 ("C source", "*.c"),
                 ("All files", "*.*"),
             ],
+            initialfile="purrgo_poi_icons.h",
         )
 
-        if not filename:
+        if not path:
             return
 
         try:
-            text = self.generate_c_header()
-            Path(filename).write_text(text, encoding="utf-8")
+            text = self._generate_c()
+            Path(path).write_text(text, encoding="utf-8")
+            messagebox.showinfo("Saved", f"Saved:\n{path}")
         except OSError as exc:
             messagebox.showerror("Save error", str(exc))
-            return
 
-        messagebox.showinfo(
-            "Saved",
-            f"Saved {len(self.icons)} icons to:\n{filename}",
-        )
+    def _generate_c(self):
+        """
+        Generate a simple C header.
 
-    def generate_c_header(self):
-        guard = "PURRGO_POI_ICONS_H"
-        lines = []
+        Layout:
+            purrgo_poi_icons[icon][y][x]
 
-        lines.append("/*")
-        lines.append(" * PurrGO POI icons")
-        lines.append(" * Generated by PurrGO 6x6 POI Icon Editor.")
-        lines.append(" *")
-        lines.append(" * Pixel format: 3 bits/pixel")
-        lines.append(" *   bit 2   = alpha (0 transparent, 1 opaque)")
-        lines.append(" *   bits 1:0 = grayscale")
-        lines.append(" *              0 white")
-        lines.append(" *              1 light gray")
-        lines.append(" *              2 dark gray")
-        lines.append(" *              3 black")
-        lines.append(" *")
-        lines.append(" * Packing: row-major, 3 bits/pixel, LSB first.")
-        lines.append(" * 6x6 pixels = 36 pixels = 108 bits = 14 bytes/icon.")
-        lines.append(" */")
-        lines.append("")
-        lines.append(f"#ifndef {guard}")
-        lines.append(f"#define {guard}")
-        lines.append("")
-        lines.append("#include <stdint.h>")
-        lines.append("")
-        lines.append(f"#define PURRGO_ICON_WIDTH       {WIDTH}u")
-        lines.append(f"#define PURRGO_ICON_HEIGHT      {HEIGHT}u")
-        lines.append(f"#define PURRGO_ICON_COUNT       {len(self.icons)}u")
-        lines.append(f"#define PURRGO_ICON_BYTES       {BYTES_PER_ICON}u")
-        lines.append("")
-        lines.append(
-            "/* One byte selects an icon: 0x00..0xFF. "
-            "PURRGO_ICON_COUNT contains the number actually defined. */"
-        )
-        lines.append("")
+        One byte per pixel:
+            bit 2     alpha
+            bits 1:0  grayscale
 
-        lines.append(
-            f"static const uint8_t purrgo_icons[{len(self.icons)}][{BYTES_PER_ICON}] = {{"
-        )
+        Therefore:
+            0x00 = transparent black
+            0x01 = transparent dark gray
+            0x02 = transparent light gray
+            0x03 = transparent white
+            0x04 = opaque black
+            0x05 = opaque dark gray
+            0x06 = opaque light gray
+            0x07 = opaque white
+        """
 
-        for index, (name, pixels) in enumerate(zip(self.names, self.icons)):
-            data = self.encode_icon(pixels)
-            lines.append(f"    /* 0x{index:02X}: {name} */")
+        lines = [
+            "/*",
+            " * PurrGO 7x7 POI icons.",
+            " * Generated by purrgo_icon_editor.py",
+            " *",
+            " * Pixel format:",
+            " *   bit 2    = alpha (0 transparent, 1 opaque)",
+            " *   bits 1:0 = grayscale (0..3)",
+            " *",
+            " * Layout:",
+            " *   purrgo_poi_icons[icon][y][x]",
+            " *",
+            " * Icon selector is one byte: 0..255.",
+            " */",
+            "",
+            "#ifndef PURRGO_POI_ICONS_H",
+            "#define PURRGO_POI_ICONS_H",
+            "",
+            "#include <stdint.h>",
+            "",
+            "#define PURRGO_POI_ICON_COUNT 256u",
+            "#define PURRGO_POI_ICON_WIDTH  7u",
+            "#define PURRGO_POI_ICON_HEIGHT 7u",
+            "",
+            "#define PURRGO_POI_ALPHA 0x04u",
+            "",
+            "static const uint8_t purrgo_poi_icons[256][7][7] = {",
+        ]
 
-            # 14 bytes split over two lines for readability.
-            first = ", ".join(f"0x{b:02X}" for b in data[:7])
-            second = ", ".join(f"0x{b:02X}" for b in data[7:])
+        for icon_index, icon in enumerate(self.icons):
+            lines.append(f"    /* Icon {icon_index} */")
+            lines.append("    {")
 
-            lines.append(f"    {{ {first},")
-            lines.append(f"      {second} }},")
+            for row in icon:
+                values = ", ".join(f"0x{pixel:02X}" for pixel in row)
+                lines.append(f"        {{ {values} }},")
 
-        lines.append("};")
-        lines.append("")
-        lines.append(f"#endif /* {guard} */")
-        lines.append("")
+            lines.append("    },")
+
+        lines.extend([
+            "};",
+            "",
+            "#endif /* PURRGO_POI_ICONS_H */",
+            "",
+        ])
 
         return "\n".join(lines)
 
     # ------------------------------------------------------------------
-    # Loading generated C array
+    # Project format
     # ------------------------------------------------------------------
 
-    def open_c_array(self):
-        filename = filedialog.askopenfilename(
-            title="Open PurrGO icon C array",
+    def _save_project(self):
+        path = filedialog.asksaveasfilename(
+            title="Save icon project",
+            defaultextension=".p7i",
             filetypes=[
-                ("C files", "*.h *.c"),
+                ("PurrGO icon project", "*.p7i"),
+                ("All files", "*.*"),
+            ],
+            initialfile="purrgo_poi_icons.p7i",
+        )
+
+        if not path:
+            return
+
+        try:
+            # Simple textual format:
+            # PurrGO-POI-7x7-v1
+            # icon number followed by 49 hexadecimal bytes.
+            lines = ["PurrGO-POI-7x7-v1"]
+
+            for index, icon in enumerate(self.icons):
+                data = [pixel for row in icon for pixel in row]
+                lines.append(
+                    f"{index:02X}: " +
+                    " ".join(f"{value:02X}" for value in data)
+                )
+
+            Path(path).write_text("\n".join(lines) + "\n", encoding="utf-8")
+            messagebox.showinfo("Saved", f"Saved:\n{path}")
+        except OSError as exc:
+            messagebox.showerror("Save error", str(exc))
+
+    def _load_project(self):
+        path = filedialog.askopenfilename(
+            title="Load icon project",
+            filetypes=[
+                ("PurrGO icon project", "*.p7i"),
                 ("All files", "*.*"),
             ],
         )
 
-        if not filename:
+        if not path:
             return
 
         try:
-            text = Path(filename).read_text(encoding="utf-8")
-            data = self.parse_c_array(text)
+            lines = Path(path).read_text(encoding="utf-8").splitlines()
+
+            if not lines or lines[0].strip() != "PurrGO-POI-7x7-v1":
+                raise ValueError("Unsupported or invalid project file.")
+
+            icons = [blank_icon() for _ in range(MAX_ICONS)]
+
+            for line in lines[1:]:
+                if not line.strip():
+                    continue
+
+                left, right = line.split(":", 1)
+                index = int(left.strip(), 16)
+                values = [int(value, 16) for value in right.split()]
+
+                if not 0 <= index < MAX_ICONS:
+                    raise ValueError(f"Invalid icon index: {index}")
+
+                if len(values) != GRID * GRID:
+                    raise ValueError(
+                        f"Icon {index}: expected 49 pixels, got {len(values)}"
+                    )
+
+                if any(value < 0 or value > 0x07 for value in values):
+                    raise ValueError(f"Icon {index}: invalid pixel value")
+
+                icons[index] = [
+                    values[y * GRID:(y + 1) * GRID]
+                    for y in range(GRID)
+                ]
+
+            self.icons = icons
+            self._set_current(0)
+
+            messagebox.showinfo("Loaded", f"Loaded:\n{path}")
+
         except (OSError, ValueError) as exc:
-            messagebox.showerror("Open error", str(exc))
-            return
-
-        self.icons = []
-        self.names = []
-
-        for index, (name, icon_data) in enumerate(data):
-            self.icons.append(self.decode_icon(icon_data))
-            self.names.append(name or f"icon_{index:02X}")
-
-        if not self.icons:
-            self.icons = [[TRANSPARENT] * PIXELS]
-            self.names = ["icon_00"]
-
-        self.current = 0
-        self.refresh_icon_list()
-        self.draw_grid()
-        self.update_status()
-
-    @staticmethod
-    def parse_c_array(text):
-        """
-        Parse the generated format without requiring a C parser.
-
-        The parser intentionally accepts only byte literals inside the
-        purrgo_icons initializer. This is sufficient for files generated
-        by this editor.
-        """
-        marker = "purrgo_icons"
-        pos = text.find(marker)
-        if pos < 0:
-            raise ValueError("purrgo_icons array was not found.")
-
-        start = text.find("{", pos)
-        if start < 0:
-            raise ValueError("purrgo_icons initializer was not found.")
-
-        end = text.find("};", start)
-        if end < 0:
-            raise ValueError("End of purrgo_icons array was not found.")
-
-        body = text[start + 1:end]
-
-        import re
-
-        # Each icon has a comment immediately before its initializer.
-        pattern = re.compile(
-            r"/\*\s*0x([0-9A-Fa-f]{2}):\s*([^*]*?)\s*\*/\s*"
-            r"\{\s*([^{}]*?)\}",
-            re.DOTALL,
-        )
-
-        result = []
-
-        for match in pattern.finditer(body):
-            name = match.group(2).strip()
-            byte_text = match.group(3)
-
-            byte_tokens = re.findall(
-                r"0[xX][0-9A-Fa-f]+|\b\d+\b",
-                byte_text,
-            )
-
-            values = []
-            for token in byte_tokens:
-                value = int(token, 0)
-                if not 0 <= value <= 255:
-                    raise ValueError("Invalid byte value in C array.")
-                values.append(value)
-
-            if len(values) != BYTES_PER_ICON:
-                raise ValueError(
-                    f"Icon {match.group(1)} has {len(values)} bytes; "
-                    f"expected {BYTES_PER_ICON}."
-                )
-
-            result.append((name, bytes(values)))
-
-            if len(result) > MAX_ICONS:
-                raise ValueError("More than 256 icons are not supported.")
-
-        if not result:
-            raise ValueError("No icon records found.")
-
-        return result
+            messagebox.showerror("Load error", str(exc))
 
 
 def main():
     root = tk.Tk()
-    IconEditor(root)
+    app = IconEditor(root)
+
+    # Right mouse button erases pixels.
+    app.canvas.bind("<Button-3>", app._erase_at_event)
+    app.canvas.bind("<B3-Motion>", app._erase_at_event)
+
     root.mainloop()
 
 
