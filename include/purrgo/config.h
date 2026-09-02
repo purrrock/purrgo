@@ -7,6 +7,16 @@
 
 
 /*
+ * Режим отображения POI.
+ */
+typedef enum {
+    PURRGO_POI_MODE_NO = 0,
+    PURRGO_POI_MODE_CIRCLES,
+    PURRGO_POI_MODE_ICONS
+} purrgo_poi_mode_t;
+
+
+/*
  * Режим отображения подписей POI.
  *
  * PURRGO_POI_LABELS_ALL:
@@ -54,15 +64,9 @@ typedef struct {
     int32_t last_lon_1e7;
 
     /*
-     * Глобальное включение отображения POI.
-     *
-     * false:
-     *     POI не передаются в renderer.
-     *
-     * true:
-     *     POI отображаются согласно их LOD.
+     * Режим отображения POI.
      */
-    bool poi_enabled;
+    purrgo_poi_mode_t poi_mode;
 
     /*
      * Режим отображения подписей POI.

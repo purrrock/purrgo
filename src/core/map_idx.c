@@ -134,7 +134,7 @@ bool map_idx_parse_node(
          * ============================================================
          */
         if (layer_type == MAP_LAYER_POIS) {
-            if (!app_config.poi_enabled) return true;
+            if (app_config.poi_mode == PURRGO_POI_MODE_NO) return true;
 
             int32_t poi_x = xmin;
             int32_t poi_y = ymin;
