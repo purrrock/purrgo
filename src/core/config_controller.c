@@ -517,13 +517,14 @@ bool purrgo_config_controller_handle_button(
                 else if (
                     config_cursor_idx == (draft_poi_enabled ? 4 : 3)
                 ) {
-                    if (
-                        draft_log_mode == LOGGER_MODE_EXPEDITION
-                    ) {
-                        draft_log_mode = LOGGER_MODE_OFF;
+                    if (draft_log_mode == LOGGER_MODE_OFF) {
+                        draft_log_mode = LOGGER_MODE_STANDARD;
+                    }
+                    else if (draft_log_mode == LOGGER_MODE_STANDARD) {
+                        draft_log_mode = LOGGER_MODE_EXPEDITION;
                     }
                     else {
-                        draft_log_mode++;
+                        draft_log_mode = LOGGER_MODE_OFF;
                     }
                 }
 
@@ -609,13 +610,14 @@ bool purrgo_config_controller_handle_button(
                 else if (
                     config_cursor_idx == (draft_poi_enabled ? 4 : 3)
                 ) {
-                    if (
-                        draft_log_mode == LOGGER_MODE_OFF
-                    ) {
+                    if (draft_log_mode == LOGGER_MODE_OFF) {
                         draft_log_mode = LOGGER_MODE_EXPEDITION;
                     }
+                    else if (draft_log_mode == LOGGER_MODE_EXPEDITION) {
+                        draft_log_mode = LOGGER_MODE_STANDARD;
+                    }
                     else {
-                        draft_log_mode--;
+                        draft_log_mode = LOGGER_MODE_OFF;
                     }
                 }
 
