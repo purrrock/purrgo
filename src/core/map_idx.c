@@ -148,18 +148,22 @@ bool map_idx_parse_node(
                 radius = PURRGO_POI_ICON_WIDTH / 2;
                 int16_t start_x = sx - radius;
                 int16_t start_y = sy - (PURRGO_POI_ICON_HEIGHT / 2);
+
+                gfx_color_t old_fg = gfx->color_fg;
+                gfx_color_t old_bg = gfx->color_bg;
+
                 for (int y = 0; y < PURRGO_POI_ICON_HEIGHT; y++) {
                     for (int x = 0; x < PURRGO_POI_ICON_WIDTH; x++) {
                         uint8_t pixel = purrgo_poi_icons[obj_type][y][x];
                         if (pixel & PURRGO_POI_ALPHA) {
                             gfx_color_t color = pixel & 0x03;
-                            gfx_color_t old_fg = gfx->color_fg;
-                            gfx->color_fg = color;
+                            gfx_set_color(gfx, color, old_bg);
                             gfx_draw_pixel(gfx, start_x + x, start_y + y);
-                            gfx->color_fg = old_fg;
                         }
                     }
                 }
+
+                gfx_set_color(gfx, old_fg, old_bg);
             } else if (app_config.poi_mode == PURRGO_POI_MODE_CIRCLES) {
                 if (obj_type == 11) {
                     radius = PURRGO_POI_BIG_RADIUS;
