@@ -151,8 +151,13 @@ bool map_idx_parse_node(
                 gfx_draw_poi_circle(gfx, sx, sy, radius);
             }
 
-            // Читаем и жадно размещаем подпись POI, если есть место
-            if (v2 > 0 && db_fs != NULL) {
+            /*
+             * Подписи POI отключены в режиме PURRGO_POI_LABELS_OFF.
+             * Сам маркер POI при этом продолжает отображаться.
+             */
+            if (app_config.poi_label_mode != PURRGO_POI_LABELS_OFF &&
+                v2 > 0 &&
+                db_fs != NULL) {
                 char name[64];
                 if (map_db_read_name(db_fs, v2, true, name, sizeof(name))) {
                     int len = 0;
@@ -200,8 +205,18 @@ bool map_idx_parse_node(
             
             map_render_feature(mlp_fs, v1, cam, vp, gfx, is_polygon, style, diag);
 
-            // Подписываем только площади (Landuse/Water). Игнорируем дороги ради производительности и чистоты
-            if (is_polygon && v2 >= 2 && db_fs != NULL) {
+            /*
+             * Подписываем только площади (Landuse/Water).
+             * Игнорируем дороги ради производительности и чистоты.
+             *
+             * При PURRGO_POI_LABELS_OFF подписи полигонов также
+             * полностью отключены. Геометрия полигона при этом
+             * продолжает отрисовываться.
+             */
+            if (is_polygon &&
+                app_config.poi_label_mode != PURRGO_POI_LABELS_OFF &&
+                v2 >= 2 &&
+                db_fs != NULL) {
                 char name[64];
 
                 if (map_db_read_name(db_fs, v2, false, name, sizeof(name))) {
