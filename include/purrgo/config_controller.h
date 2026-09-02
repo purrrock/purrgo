@@ -40,7 +40,7 @@ int config_app_get_dir_cursor(void);
 /*
  * Состояние редактирования POI в меню.
  */
-bool config_app_get_draft_poi_enabled(void);
+purrgo_poi_mode_t config_app_get_draft_poi_mode(void);
 
 purrgo_poi_label_mode_t
 config_app_get_draft_poi_label_mode(void);

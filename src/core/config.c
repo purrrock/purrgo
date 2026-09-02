@@ -88,10 +88,10 @@ void purrgo_config_init(void)
     /*
      * До появления настройки POI они не отображались.
      *
-     * Поэтому false сохраняет прежнее поведение после обновления
+     * Поэтому PURRGO_POI_MODE_NO сохраняет прежнее поведение после обновления
      * прошивки.
      */
-    app_config.poi_enabled = false;
+    app_config.poi_mode = PURRGO_POI_MODE_NO;
 
     /*
      * Подписи по умолчанию выключены.
@@ -281,19 +281,31 @@ bool purrgo_config_load(void)
             /*
              * Глобальное включение POI.
              *
-             * Допустимые значения:
-             *
-             *     0 = выключено
-             *     1 = включено
+             * Поддержка старого формата.
              */
             else if (strcmp(key, "POI_ENABLED") == 0) {
                 int32_t enabled = parse_int32(val);
 
                 if (enabled == 0) {
-                    app_config.poi_enabled = false;
+                    app_config.poi_mode = PURRGO_POI_MODE_NO;
                 }
                 else if (enabled == 1) {
-                    app_config.poi_enabled = true;
+                    app_config.poi_mode = PURRGO_POI_MODE_CIRCLES;
+                }
+            }
+
+            /*
+             * Режим отображения POI.
+             */
+            else if (strcmp(key, "POI_MODE") == 0) {
+                int32_t mode = parse_int32(val);
+
+                if (
+                    mode == PURRGO_POI_MODE_NO ||
+                    mode == PURRGO_POI_MODE_CIRCLES ||
+                    mode == PURRGO_POI_MODE_ICONS
+                ) {
+                    app_config.poi_mode = (purrgo_poi_mode_t)mode;
                 }
             }
 
@@ -407,7 +419,7 @@ bool purrgo_config_save(void)
         "MAP_DIR=%s\n"
         "LAST_LAT_1E7=%d\n"
         "LAST_LON_1E7=%d\n"
-        "POI_ENABLED=%d\n"
+        "POI_MODE=%d\n"
         "POI_LABELS=%d\n"
         "LOG_MODE=%d\n"
         "TRACK_DISPLAY_ENABLED=%d\n",
@@ -420,7 +432,7 @@ bool purrgo_config_save(void)
 
         (int)app_config.last_lon_1e7,
 
-        app_config.poi_enabled ? 1 : 0,
+        (int)app_config.poi_mode,
 
         (int)app_config.poi_label_mode,
 
