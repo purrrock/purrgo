@@ -22,8 +22,9 @@ void ui_render_menu_config(gfx_context_t* gfx)
     int cursor =
         purrgo_app_get_config_cursor();
 
-    bool poi_enabled =
-        config_app_get_draft_poi_enabled();
+    purrgo_poi_mode_t poi_mode =
+        config_app_get_draft_poi_mode();
+    bool poi_enabled = (poi_mode != PURRGO_POI_MODE_NO);
 
     purrgo_poi_label_mode_t poi_label_mode =
         config_app_get_draft_poi_label_mode();
@@ -120,11 +121,20 @@ void ui_render_menu_config(gfx_context_t* gfx)
         gfx_set_color(gfx, 0, 3);
     }
 
+    const char* poi_mode_str;
+    if (poi_mode == PURRGO_POI_MODE_CIRCLES) {
+        poi_mode_str = "CIRCLES";
+    } else if (poi_mode == PURRGO_POI_MODE_ICONS) {
+        poi_mode_str = "ICONS";
+    } else {
+        poi_mode_str = "NO";
+    }
+
     snprintf(
         buf,
         sizeof(buf),
         "POI: %s",
-        poi_enabled ? "YES" : "NO"
+        poi_mode_str
     );
 
     gfx_draw_string(
