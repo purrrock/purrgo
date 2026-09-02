@@ -28,6 +28,12 @@ void ui_render_menu_config(gfx_context_t* gfx)
     purrgo_poi_label_mode_t poi_label_mode =
         config_app_get_draft_poi_label_mode();
 
+    track_logger_mode_t log_mode =
+        config_app_get_draft_log_mode();
+
+    bool track_display_enabled =
+        config_app_get_draft_track_display_enabled();
+
 
     gfx_draw_string(
         gfx,
@@ -181,6 +187,76 @@ void ui_render_menu_config(gfx_context_t* gfx)
 
     /*
      * ---------------------------------------------------------------
+     * LOG MODE
+     * ---------------------------------------------------------------
+     */
+    int log_mode_idx = poi_enabled ? 4 : 3;
+
+    if (cursor == log_mode_idx) {
+        gfx_set_color(gfx, 3, 0);
+    }
+    else {
+        gfx_set_color(gfx, 0, 3);
+    }
+
+    const char* log_mode_text;
+    switch (log_mode) {
+        case LOGGER_MODE_EXPEDITION:
+            log_mode_text = "EXPEDITION";
+            break;
+        case LOGGER_MODE_STANDARD:
+            log_mode_text = "STANDARD";
+            break;
+        case LOGGER_MODE_OFF:
+        default:
+            log_mode_text = "OFF";
+            break;
+    }
+
+    snprintf(
+        buf,
+        sizeof(buf),
+        "LOG: %s",
+        log_mode_text
+    );
+
+    gfx_draw_string(
+        gfx,
+        10,
+        poi_enabled ? 85 : 70,
+        buf
+    );
+
+    /*
+     * ---------------------------------------------------------------
+     * TRACK DISPLAY
+     * ---------------------------------------------------------------
+     */
+    int track_display_idx = poi_enabled ? 5 : 4;
+
+    if (cursor == track_display_idx) {
+        gfx_set_color(gfx, 3, 0);
+    }
+    else {
+        gfx_set_color(gfx, 0, 3);
+    }
+
+    snprintf(
+        buf,
+        sizeof(buf),
+        "SHOW TRACK: %s",
+        track_display_enabled ? "ON" : "OFF"
+    );
+
+    gfx_draw_string(
+        gfx,
+        10,
+        poi_enabled ? 100 : 85,
+        buf
+    );
+
+    /*
+     * ---------------------------------------------------------------
      * HELP
      * ---------------------------------------------------------------
      */
@@ -189,28 +265,28 @@ void ui_render_menu_config(gfx_context_t* gfx)
     gfx_draw_string(
         gfx,
         10,
-        90,
+        poi_enabled ? 120 : 105,
         "UP/DN : Select"
     );
 
     gfx_draw_string(
         gfx,
         10,
-        105,
+        poi_enabled ? 135 : 120,
         "+/- : Change"
     );
 
     gfx_draw_string(
         gfx,
         10,
-        120,
+        poi_enabled ? 150 : 135,
         "OK  : Apply/Open"
     );
 
     gfx_draw_string(
         gfx,
         10,
-        135,
+        poi_enabled ? 165 : 150,
         "MENU: Cancel"
     );
 }

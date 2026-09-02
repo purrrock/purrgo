@@ -46,4 +46,12 @@ purrgo_poi_label_mode_t
 config_app_get_draft_poi_label_mode(void);
 
 
+/*
+ * Состояние редактирования настроек трека в меню.
+ */
+track_logger_mode_t config_app_get_draft_log_mode(void);
+
+bool config_app_get_draft_track_display_enabled(void);
+
+
 #endif /* PURRGO_CONFIG_CONTROLLER_H */

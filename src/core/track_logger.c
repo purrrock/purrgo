@@ -59,6 +59,9 @@ static const char* GPX_FOOTER =
 // Установка режима логгера
 void purrgo_logger_set_mode(track_logger_mode_t mode) {
     current_mode = mode;
+    if (current_mode == LOGGER_MODE_OFF && current_state == LOGGER_STATE_RECORDING) {
+        purrgo_logger_stop();
+    }
 }
 
 #include "purrgo/purrgo_time.h"
@@ -97,6 +100,7 @@ static void write_to_buffer(const char* str) {
 }
 
 bool purrgo_logger_start(const purrgo_gnss_solution_t* first_fix) {
+    if (current_mode == LOGGER_MODE_OFF) return false;
     if (current_state == LOGGER_STATE_RECORDING) return false;
     if (!first_fix || !first_fix->valid) return false;
 
@@ -137,6 +141,7 @@ bool purrgo_logger_start(const purrgo_gnss_solution_t* first_fix) {
 }
 
 bool purrgo_logger_add_point(const purrgo_gnss_solution_t* fix) {
+    if (current_mode == LOGGER_MODE_OFF) return false;
     if (current_state != LOGGER_STATE_RECORDING || !fix || !fix->valid) return false;
 
     uint32_t utc_epoch = 0;

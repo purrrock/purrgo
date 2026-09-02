@@ -101,6 +101,11 @@ void purrgo_config_init(void)
     app_config.poi_label_mode = PURRGO_POI_LABELS_OFF;
 
     /*
+     * Отображение текущего трека по умолчанию включено.
+     */
+    app_config.track_display_enabled = true;
+
+    /*
      * Базовый путь к картам для PC-эмулятора.
      */
     strncpy(
@@ -138,6 +143,7 @@ bool purrgo_config_load(void)
         /*
          * Если файла нет, создаём его с дефолтными значениями.
          */
+        purrgo_logger_set_mode(app_config.log_mode);
         purrgo_config_save();
         return false;
     }
@@ -159,6 +165,7 @@ bool purrgo_config_load(void)
 
     if (bytes_read == 0) {
         purrgo_config_init();
+        purrgo_logger_set_mode(app_config.log_mode);
         return false;
     }
 
@@ -310,6 +317,35 @@ bool purrgo_config_load(void)
                         (purrgo_poi_label_mode_t)mode;
                 }
             }
+
+            /*
+             * Режим записи трека.
+             */
+            else if (strcmp(key, "LOG_MODE") == 0) {
+                int32_t mode = parse_int32(val);
+
+                if (
+                    mode == LOGGER_MODE_OFF ||
+                    mode == LOGGER_MODE_STANDARD ||
+                    mode == LOGGER_MODE_EXPEDITION
+                ) {
+                    app_config.log_mode = (track_logger_mode_t)mode;
+                }
+            }
+
+            /*
+             * Включение отображения трека.
+             */
+            else if (strcmp(key, "TRACK_DISPLAY_ENABLED") == 0) {
+                int32_t enabled = parse_int32(val);
+
+                if (enabled == 0) {
+                    app_config.track_display_enabled = false;
+                }
+                else if (enabled == 1) {
+                    app_config.track_display_enabled = true;
+                }
+            }
         }
 
         if (is_eof) {
@@ -328,6 +364,11 @@ bool purrgo_config_load(void)
             line++;
         }
     }
+
+    /*
+     * Применяем загруженный режим записи трека.
+     */
+    purrgo_logger_set_mode(app_config.log_mode);
 
     return true;
 }
@@ -367,7 +408,9 @@ bool purrgo_config_save(void)
         "LAST_LAT_1E7=%d\n"
         "LAST_LON_1E7=%d\n"
         "POI_ENABLED=%d\n"
-        "POI_LABELS=%d\n",
+        "POI_LABELS=%d\n"
+        "LOG_MODE=%d\n"
+        "TRACK_DISPLAY_ENABLED=%d\n",
 
         (int)app_config.tz_offset_minutes,
 
@@ -379,7 +422,11 @@ bool purrgo_config_save(void)
 
         app_config.poi_enabled ? 1 : 0,
 
-        (int)app_config.poi_label_mode
+        (int)app_config.poi_label_mode,
+
+        (int)app_config.log_mode,
+
+        app_config.track_display_enabled ? 1 : 0
     );
 
     /*

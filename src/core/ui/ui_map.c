@@ -500,7 +500,7 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
         bool map_success = purrgo_map_render_viewport(gfx, &map_vp, &dynamic_cam, app_config.map_dir);
 
         const char* active_track_filename = purrgo_logger_get_active_filename();
-        if (active_track_filename != NULL) {
+        if (active_track_filename != NULL && app_config.track_display_enabled) {
             purrgo_track_render(gfx, &dynamic_cam, &map_vp, active_track_filename);
         }
 
