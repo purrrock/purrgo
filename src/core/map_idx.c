@@ -143,13 +143,13 @@ bool map_idx_parse_node(
             project_to_screen(poi_x, poi_y, cam, vp, &sx, &sy);
 
             int16_t radius = 0;
-            if (style == PURRGO_STYLE_DARK_GRAY_BIG_CIRCLE) {
-                radius = PURRGO_POI_BIG_RADIUS;
-                gfx_draw_poi_circle(gfx, sx, sy, radius);
-            } else if (style == PURRGO_STYLE_DARK_GRAY_CIRCLE) {
-                radius = PURRGO_POI_SMALL_RADIUS;
-                gfx_draw_poi_circle(gfx, sx, sy, radius);
-            }
+ if (obj_type == 11) {
+    radius = PURRGO_POI_BIG_RADIUS;
+    gfx_draw_poi_circle(gfx, sx, sy, radius);
+} else if (obj_type > 11) {
+    radius = PURRGO_POI_SMALL_RADIUS;
+    gfx_draw_poi_circle(gfx, sx, sy, radius);
+}
 
             /*
              * Подписи POI отключены в режиме PURRGO_POI_LABELS_OFF.
@@ -166,7 +166,7 @@ bool map_idx_parse_node(
                     int16_t text_w = len * 6; // Ширина: 5px символ + 1px промежуток
                     int16_t text_h = 8;       // Высота: 8px
                     
-                    if (style == PURRGO_STYLE_DARK_GRAY_BIG_CIRCLE) {
+                    if (obj_type == 11)  {
                         // Для POI_BIG: центрируем текст строго под маркером
                         int16_t text_x = sx - (text_w / 2);
                         int16_t text_y = sy + radius + 2;
