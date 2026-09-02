@@ -1,9 +1,7 @@
 #include "purrgo/track_renderer.h"
-#include "purrgo/fs_hal.h"
 #include "purrgo/track_logger.h"
 #include "map_projection.h"
 #include "purrgo/gfx_line.h"
-#include <string.h>
 
 void purrgo_track_render(
     gfx_context_t *gfx,
