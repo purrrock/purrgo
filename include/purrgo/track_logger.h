@@ -19,8 +19,9 @@ typedef struct {
 
 // Режимы записи трека
 typedef enum {
-    LOGGER_MODE_STANDARD,   // 5 метров или 5 минут
-    LOGGER_MODE_EXPEDITION  // 100 метров или 15 минут
+    LOGGER_MODE_STANDARD = 0,   // 5 метров или 5 минут
+    LOGGER_MODE_EXPEDITION = 1, // 100 метров или 15 минут
+    LOGGER_MODE_OFF = 2
 } track_logger_mode_t;
 
 // Установка режима (можно вызывать на лету из меню настроек)
