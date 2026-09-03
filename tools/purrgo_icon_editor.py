@@ -28,6 +28,7 @@ Generated data:
 Unused icon slots are transparent.
 """
 
+import re
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog
 from pathlib import Path
@@ -170,20 +171,14 @@ class IconEditor:
 
         tk.Button(
             right,
-            text="Save C array…",
+            text="Load C array (.h)…",
+            command=self._load_c,
+        ).pack(fill=tk.X, pady=2)
+
+        tk.Button(
+            right,
+            text="Save C array (.h)…",
             command=self._save_c,
-        ).pack(fill=tk.X, pady=2)
-
-        tk.Button(
-            right,
-            text="Save project…",
-            command=self._save_project,
-        ).pack(fill=tk.X, pady=2)
-
-        tk.Button(
-            right,
-            text="Load project…",
-            command=self._load_project,
         ).pack(fill=tk.X, pady=2)
 
         self.info_var = tk.StringVar()
@@ -378,7 +373,7 @@ class IconEditor:
         )
 
     # ------------------------------------------------------------------
-    # C output
+    # C output and input (.h parsing)
     # ------------------------------------------------------------------
 
     def _save_c(self):
@@ -402,6 +397,55 @@ class IconEditor:
             messagebox.showinfo("Saved", f"Saved:\n{path}")
         except OSError as exc:
             messagebox.showerror("Save error", str(exc))
+
+    def _load_c(self):
+        path = filedialog.askopenfilename(
+            title="Load C array",
+            filetypes=[
+                ("C header", "*.h"),
+                ("C source", "*.c"),
+                ("All files", "*.*"),
+            ],
+        )
+
+        if not path:
+            return
+
+        try:
+            text = Path(path).read_text(encoding="utf-8")
+
+            # Extract the array block using regex
+            array_match = re.search(r'purrgo_poi_icons.*?=\s*\{(.*?)\};', text, re.DOTALL)
+            if not array_match:
+                raise ValueError("Could not find purrgo_poi_icons array in file.")
+
+            # Extract all hex values
+            hex_values = re.findall(r'0x[0-9A-Fa-f]{2}', array_match.group(1))
+            if not hex_values:
+                raise ValueError("No pixel data found.")
+
+            int_values = [int(v, 16) for v in hex_values]
+
+            icons = [blank_icon() for _ in range(MAX_ICONS)]
+            idx = 0
+            
+            # Map back to 3D array [256][7][7]
+            for i in range(MAX_ICONS):
+                for y in range(GRID):
+                    for x in range(GRID):
+                        if idx < len(int_values):
+                            val = int_values[idx]
+                            if val < 0 or val > 0x07:
+                                raise ValueError(f"Invalid pixel value {val} at index {idx}")
+                            icons[i][y][x] = val
+                            idx += 1
+
+            self.icons = icons
+            self._set_current(0)
+            messagebox.showinfo("Loaded", f"Loaded:\n{path}")
+
+        except Exception as exc:
+            messagebox.showerror("Load error", str(exc))
 
     def _generate_c(self):
         """
@@ -472,94 +516,6 @@ class IconEditor:
         ])
 
         return "\n".join(lines)
-
-    # ------------------------------------------------------------------
-    # Project format
-    # ------------------------------------------------------------------
-
-    def _save_project(self):
-        path = filedialog.asksaveasfilename(
-            title="Save icon project",
-            defaultextension=".p7i",
-            filetypes=[
-                ("PurrGO icon project", "*.p7i"),
-                ("All files", "*.*"),
-            ],
-            initialfile="purrgo_poi_icons.p7i",
-        )
-
-        if not path:
-            return
-
-        try:
-            # Simple textual format:
-            # PurrGO-POI-7x7-v1
-            # icon number followed by 49 hexadecimal bytes.
-            lines = ["PurrGO-POI-7x7-v1"]
-
-            for index, icon in enumerate(self.icons):
-                data = [pixel for row in icon for pixel in row]
-                lines.append(
-                    f"{index:02X}: " +
-                    " ".join(f"{value:02X}" for value in data)
-                )
-
-            Path(path).write_text("\n".join(lines) + "\n", encoding="utf-8")
-            messagebox.showinfo("Saved", f"Saved:\n{path}")
-        except OSError as exc:
-            messagebox.showerror("Save error", str(exc))
-
-    def _load_project(self):
-        path = filedialog.askopenfilename(
-            title="Load icon project",
-            filetypes=[
-                ("PurrGO icon project", "*.p7i"),
-                ("All files", "*.*"),
-            ],
-        )
-
-        if not path:
-            return
-
-        try:
-            lines = Path(path).read_text(encoding="utf-8").splitlines()
-
-            if not lines or lines[0].strip() != "PurrGO-POI-7x7-v1":
-                raise ValueError("Unsupported or invalid project file.")
-
-            icons = [blank_icon() for _ in range(MAX_ICONS)]
-
-            for line in lines[1:]:
-                if not line.strip():
-                    continue
-
-                left, right = line.split(":", 1)
-                index = int(left.strip(), 16)
-                values = [int(value, 16) for value in right.split()]
-
-                if not 0 <= index < MAX_ICONS:
-                    raise ValueError(f"Invalid icon index: {index}")
-
-                if len(values) != GRID * GRID:
-                    raise ValueError(
-                        f"Icon {index}: expected 49 pixels, got {len(values)}"
-                    )
-
-                if any(value < 0 or value > 0x07 for value in values):
-                    raise ValueError(f"Icon {index}: invalid pixel value")
-
-                icons[index] = [
-                    values[y * GRID:(y + 1) * GRID]
-                    for y in range(GRID)
-                ]
-
-            self.icons = icons
-            self._set_current(0)
-
-            messagebox.showinfo("Loaded", f"Loaded:\n{path}")
-
-        except (OSError, ValueError) as exc:
-            messagebox.showerror("Load error", str(exc))
 
 
 def main():
