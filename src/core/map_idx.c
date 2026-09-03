@@ -149,8 +149,9 @@ bool map_idx_parse_node(
                 int16_t start_x = sx - radius;
                 int16_t start_y = sy - (PURRGO_POI_ICON_HEIGHT / 2);
 
-                gfx_color_t old_fg = gfx->color_fg;
-                gfx_color_t old_bg = gfx->color_bg;
+                gfx_color_t old_fg;
+                gfx_color_t old_bg;
+                gfx_get_color(gfx, &old_fg, &old_bg);
 
                 for (int y = 0; y < PURRGO_POI_ICON_HEIGHT; y++) {
                     for (int x = 0; x < PURRGO_POI_ICON_WIDTH; x++) {
