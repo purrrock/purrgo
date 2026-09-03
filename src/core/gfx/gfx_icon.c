@@ -7,9 +7,10 @@ void gfx_draw_icon_7x7(gfx_context_t *ctx, int16_t x, int16_t y, const uint8_t i
         return;
     }
 
-    // Сохраняем исходный цвет переднего плана
+    // Сохраняем исходные цвета
     gfx_color_t old_fg;
-    gfx_get_color(ctx, &old_fg, NULL);
+    gfx_color_t old_bg;
+    gfx_get_color(ctx, &old_fg, &old_bg);
 
     int16_t start_x = x - 3;
     int16_t start_y = y - 3;
@@ -23,8 +24,8 @@ void gfx_draw_icon_7x7(gfx_context_t *ctx, int16_t x, int16_t y, const uint8_t i
                 // Извлекаем цвет (биты 1:0)
                 gfx_color_t color = (gfx_color_t)(pixel & 0x03);
 
-                // Устанавливаем новый цвет переднего плана
-                gfx_set_color(ctx, color, ctx->color_bg);
+                // Устанавливаем новый цвет переднего плана, сохраняя фон
+                gfx_set_color(ctx, color, old_bg);
 
                 // Отрисовываем пиксель с использованием существующего clipping
                 gfx_draw_pixel(ctx, start_x + col, start_y + row);
@@ -32,6 +33,6 @@ void gfx_draw_icon_7x7(gfx_context_t *ctx, int16_t x, int16_t y, const uint8_t i
         }
     }
 
-    // Восстанавливаем исходный цвет переднего плана
-    gfx_set_color(ctx, old_fg, ctx->color_bg);
+    // Восстанавливаем исходные цвета
+    gfx_set_color(ctx, old_fg, old_bg);
 }
