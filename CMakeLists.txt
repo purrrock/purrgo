@@ -43,6 +43,7 @@ set(CORE_SOURCES
     src/core/gfx/gfx_rect.c
     src/core/gfx/gfx_renderer.c
     src/core/gfx/gfx_text.c
+    src/core/gfx/gfx_icon.c
     src/core/gnss.c
     src/core/gnss_adapter.c
     src/core/gnss_mock.c
