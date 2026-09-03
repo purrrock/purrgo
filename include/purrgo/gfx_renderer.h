@@ -100,6 +100,11 @@ void gfx_reset_clip(gfx_context_t *ctx);
 void gfx_set_color(gfx_context_t *ctx, gfx_color_t fg, gfx_color_t bg);
 
 /*
+ * Получение текущих цветов контекста.
+ */
+void gfx_get_color(const gfx_context_t *ctx, gfx_color_t *fg, gfx_color_t *bg);
+
+/*
  * Базовый примитив: отрисовка точки с проверкой границ (clipping).
  * Inline-функция может быть перенесена в .c, если требуется строгая инкапсуляция,
  * но здесь оставлена как прототип для вызова внутри gfx_line.c / gfx_polygon.c
