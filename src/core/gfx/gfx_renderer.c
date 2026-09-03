@@ -86,6 +86,13 @@ void gfx_set_color(gfx_context_t *ctx, gfx_color_t fg, gfx_color_t bg)
     ctx->color_bg = bg;
 }
 
+void gfx_get_color(const gfx_context_t *ctx, gfx_color_t *fg, gfx_color_t *bg)
+{
+    if (ctx == NULL) return;
+    if (fg != NULL) *fg = ctx->color_fg;
+    if (bg != NULL) *bg = ctx->color_bg;
+}
+
 void gfx_draw_pixel(gfx_context_t *ctx, int16_t x, int16_t y)
 {
     if (ctx == NULL || ctx->draw_pixel == NULL) return;
