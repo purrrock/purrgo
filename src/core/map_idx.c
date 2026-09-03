@@ -120,15 +120,6 @@ bool map_idx_parse_node(
         uint32_t v1 = unpack_u32_le(&node_buf[17]);
         uint32_t v2 = unpack_u32_le(&node_buf[21]); // Индекс в .db файле
 
-        purrgo_map_style_t style = purrgo_map_style_from_feature((uint32_t)obj_type);
-
-        if (style == PURRGO_STYLE_NONE) {
-            if (diag != NULL) {
-                if (obj_type == 0) diag->style_none++;
-                else diag->styles_unknown++;
-            }
-            return true;
-        }
 
         /*
          * ============================================================
@@ -201,12 +192,25 @@ bool map_idx_parse_node(
 
             return true;
         }
+		
 
         /*
          * ============================================================
          * LINE / POLYGON
          * ============================================================
          */
+		 
+		 purrgo_map_style_t style =
+    purrgo_map_style_from_feature((uint32_t)obj_type);
+
+if (style == PURRGO_STYLE_NONE) {
+    if (diag != NULL) {
+        if (obj_type == 0) diag->style_none++;
+        else diag->styles_unknown++;
+    }
+    return true;
+}
+		 
         if (v1 > 0) {
             bool is_polygon = (layer_type == MAP_LAYER_POLYGONS);
             
