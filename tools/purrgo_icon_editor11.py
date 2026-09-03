@@ -361,7 +361,7 @@ class IconEditor:
     # ------------------------------------------------------------------
 
     def _load_svg(self):
-        """Load an SVG file and render it directly to the 11x11 grid."""
+        """Load an SVG file and render it directly to the grid."""
         path = filedialog.askopenfilename(
             title="Load SVG to current icon",
             filetypes=[
@@ -374,24 +374,28 @@ class IconEditor:
             return
 
         try:
-            import cairosvg
+            import fitz  # PyMuPDF
             from PIL import Image
-            import io
         except ImportError:
             messagebox.showerror(
                 "Missing dependencies",
-                "Для загрузки SVG требуются библиотеки cairosvg и Pillow.\n\n"
-                "Выполните в консоли:\npip install cairosvg Pillow\n\n"
-                "(На Windows для работы cairosvg может потребоваться установленный GTK3)"
+                "Для загрузки SVG требуется библиотека PyMuPDF.\n\n"
+                "Выполните в консоли:\npip install pymupdf Pillow"
             )
             return
 
         try:
-            # 1. Рендерим вектор в байты PNG с жестко заданным размером GRID x GRID
-            png_bytes = cairosvg.svg2png(url=path, output_width=GRID, output_height=GRID)
-            img = Image.open(io.BytesIO(png_bytes)).convert("RGBA")
+            # 1. Читаем SVG встроенным движком PyMuPDF (не требует Cairo/GTK)
+            doc = fitz.open(path)
+            page = doc[0]
+            
+            # 2. Рендерим в растровый Pixmap с поддержкой прозрачности
+            pix = page.get_pixmap(alpha=True)
+            
+            # 3. Переводим в объект Pillow
+            img = Image.frombytes("RGBA", [pix.width, pix.height], pix.samples)
 
-            # 2. Если SVG имел странный viewBox, принудительно подгоняем под сетку
+            # 4. Принудительно подгоняем под сетку
             if img.size != (GRID, GRID):
                 try:
                     resample_mode = Image.Resampling.LANCZOS
@@ -399,13 +403,12 @@ class IconEditor:
                     resample_mode = Image.LANCZOS
                 img = img.resize((GRID, GRID), resample_mode)
 
-            # 3. Трансформируем цвета и прозрачность
+            # 5. Трансформируем цвета и прозрачность под E-Ink
             for y in range(GRID):
                 for x in range(GRID):
                     r, g, b, a = img.getpixel((x, y))
 
                     # Убираем полупрозрачное "мыло" на краях (anti-aliasing)
-                    # Если пиксель слишком прозрачный, делаем его полностью прозрачным фоном E-Ink
                     if a < 64:
                         alpha = 0
                         gray = 0
@@ -415,10 +418,6 @@ class IconEditor:
                         lum = 0.299 * r + 0.587 * g + 0.114 * b
                         
                         # Переводим в 4 уровня серого (0..3)
-                        # 0..63 -> 0 (Black)
-                        # 64..127 -> 1 (Dark gray)
-                        # 128..191 -> 2 (Light gray)
-                        # 192..255 -> 3 (White)
                         gray = min(3, int(lum // 64))
 
                     self.icons[self.current][y][x] = self.encode_pixel(gray, alpha)
@@ -429,7 +428,6 @@ class IconEditor:
 
         except Exception as exc:
             messagebox.showerror("Load SVG error", f"Ошибка при загрузке SVG:\n{exc}")
-
     def _save_c(self):
         path = filedialog.asksaveasfilename(
             title="Save C array",
