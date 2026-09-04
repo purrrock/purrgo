@@ -10,6 +10,7 @@
 #include "purrgo/logger.h"
 #include "purrgo/hardware_config.h"
 #include "purrgo/display_hal.h"
+#include "purrgo/purrgo_time.h"
 
 typedef struct {
     bool rendered;
@@ -471,9 +472,14 @@ static int16_t get_string_width(const char* str) {
 }
 
 static void ui_update_status_bar(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss) {
+    purrgo_gnss_solution_t display_fix;
+    if (!purrgo_time_apply_timezone(gnss, &display_fix, app_config.tz_offset_minutes)) {
+        display_fix = *gnss;
+    }
+
     status_bar_state_t new_state;
-    new_state.minutes = gnss->minutes;
-    new_state.hours = gnss->hours;
+    new_state.minutes = display_fix.minutes;
+    new_state.hours = display_fix.hours;
     new_state.gnss_valid = gnss->valid;
     new_state.rec_state = purrgo_logger_get_state();
     new_state.valid = true;
