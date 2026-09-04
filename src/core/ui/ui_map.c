@@ -520,57 +520,49 @@ static void ui_update_status_bar(gfx_context_t* gfx, const purrgo_gnss_solution_
     prev_status_state = new_state;
 }
 
-void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const purrgo_sun_info_t* sun) {
-    (void)sun;  // Currently unused in map view
 
-    purrgo_viewport_t map_vp = {
-        .width = PURRGO_HW_DISPLAY_WIDTH_PX,
-        .height = PURRGO_HW_DISPLAY_HEIGHT_PX - 18,
-        .offset_x = 0,
-        .offset_y = 9
-    };
-
-    static bool map_screen_logged = false;
-
-    // Clear bottom status area
-    gfx_set_color(gfx, 0, 3);
-    gfx_fill_rect(gfx, 0, map_vp.offset_y + map_vp.height, PURRGO_HW_DISPLAY_WIDTH_PX, PURRGO_HW_DISPLAY_HEIGHT_PX - (map_vp.offset_y + map_vp.height));
-
-    if (!map_screen_logged) {
-        PURRGO_LOG("EMU: APP_STATE_MAP rendering started\n");
-        map_screen_logged = true;
-    }
+static void ui_map_setup_viewport(purrgo_viewport_t* map_vp, purrgo_bbox_t* dynamic_cam) {
+    map_vp->width = PURRGO_HW_DISPLAY_WIDTH_PX;
+    map_vp->height = PURRGO_HW_DISPLAY_HEIGHT_PX - 18;
+    map_vp->offset_x = 0;
+    map_vp->offset_y = 9;
 
     int32_t center_lat = purrgo_app_get_map_center_lat();
     int32_t center_lon = purrgo_app_get_map_center_lon();
     uint32_t width_m = purrgo_app_get_map_scale_width_m();
 
-    purrgo_bbox_t dynamic_cam;
-    purrgo_geo_bbox_from_center(center_lat, center_lon, width_m, &map_vp, &dynamic_cam);
+    purrgo_geo_bbox_from_center(center_lat, center_lon, width_m, map_vp, dynamic_cam);
+}
 
-    if (purrgo_app_status_bar_is_dirty() || purrgo_app_map_is_dirty() || !prev_status_state.valid) {
-        ui_update_status_bar(gfx, gnss, map_vp.offset_y);
-        purrgo_app_status_bar_clear_dirty();
+static bool ui_map_render_base_layers(gfx_context_t* gfx, const purrgo_viewport_t* map_vp, const purrgo_bbox_t* dynamic_cam) {
+    // Clear map viewport
+    gfx_set_color(gfx, 0, 3);
+    gfx_fill_rect(gfx, map_vp->offset_x, map_vp->offset_y, map_vp->width, map_vp->height);
+
+    // Limit rendering strictly to the map viewport to protect the status bars
+    gfx_set_clip(gfx, map_vp->offset_x, map_vp->offset_y, map_vp->width, map_vp->height);
+
+    return purrgo_map_render_viewport(gfx, map_vp, dynamic_cam, app_config.map_dir);
+}
+
+static void ui_map_render_dynamic_data(gfx_context_t* gfx, const purrgo_viewport_t* map_vp, const purrgo_bbox_t* dynamic_cam) {
+    const char* active_track_filename = purrgo_logger_get_active_filename();
+    if (active_track_filename != NULL && app_config.track_display_enabled) {
+        purrgo_track_render(gfx, dynamic_cam, map_vp, active_track_filename);
     }
+}
 
-    if (purrgo_app_map_is_dirty()) {
-        // Clear map viewport
-        gfx_set_color(gfx, 0, 3);
-        gfx_fill_rect(gfx, map_vp.offset_x, map_vp.offset_y, map_vp.width, map_vp.height);
+static void ui_map_render_gnss_marker(
+    gfx_context_t* gfx,
+    const purrgo_gnss_solution_t* gnss,
+    const purrgo_viewport_t* map_vp,
+    const purrgo_bbox_t* dynamic_cam,
+    bool full_redraw)
+{
+    marker_state_t new_marker_state;
+    ui_calc_marker_state(gnss, map_vp, dynamic_cam, &new_marker_state);
 
-        // Limit rendering strictly to the map viewport to protect the status bars
-        gfx_set_clip(gfx, map_vp.offset_x, map_vp.offset_y, map_vp.width, map_vp.height);
-
-        bool map_success = purrgo_map_render_viewport(gfx, &map_vp, &dynamic_cam, app_config.map_dir);
-
-        const char* active_track_filename = purrgo_logger_get_active_filename();
-        if (active_track_filename != NULL && app_config.track_display_enabled) {
-            purrgo_track_render(gfx, &dynamic_cam, &map_vp, active_track_filename);
-        }
-
-        marker_state_t new_marker_state;
-        ui_calc_marker_state(gnss, &map_vp, &dynamic_cam, &new_marker_state);
-
+    if (full_redraw) {
         if (!prev_marker_state_valid) {
             log_marker_diagnostic("MARKER: initial", &new_marker_state);
             prev_marker_state_valid = true;
@@ -604,20 +596,7 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
         if (new_marker_state.rendered) {
             purrgo_app_notify_marker_rendered(gnss);
         }
-
-        // Restore clipping so status UI can be drawn
-        gfx_reset_clip(gfx);
-
-        if (map_success) {
-            purrgo_app_map_clear_dirty();
-        }
-        display_refresh();
-        dbg_map_render_calls++;
     } else {
-
-        marker_state_t new_marker_state;
-        ui_calc_marker_state(gnss, &map_vp, &dynamic_cam, &new_marker_state);
-
         bool changed = (new_marker_state.rendered != prev_marker_state.rendered) ||
                        (new_marker_state.gnss_valid != prev_marker_state.gnss_valid) ||
                        (new_marker_state.course_valid != prev_marker_state.course_valid) ||
@@ -665,10 +644,10 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
 
             if (min_x <= max_x && min_y <= max_y) {
                 // Clamp to viewport
-                if (min_x < map_vp.offset_x) min_x = map_vp.offset_x;
-                if (max_x >= map_vp.offset_x + map_vp.width) max_x = map_vp.offset_x + map_vp.width - 1;
-                if (min_y < map_vp.offset_y) min_y = map_vp.offset_y;
-                if (max_y >= map_vp.offset_y + map_vp.height) max_y = map_vp.offset_y + map_vp.height - 1;
+                if (min_x < map_vp->offset_x) min_x = map_vp->offset_x;
+                if (max_x >= map_vp->offset_x + map_vp->width) max_x = map_vp->offset_x + map_vp->width - 1;
+                if (min_y < map_vp->offset_y) min_y = map_vp->offset_y;
+                if (max_y >= map_vp->offset_y + map_vp->height) max_y = map_vp->offset_y + map_vp->height - 1;
 
                 int16_t clip_w = max_x - min_x + 1;
                 int16_t clip_h = max_y - min_y + 1;
@@ -684,18 +663,62 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
             }
         }
     }
+}
+
+static void ui_map_render_overlays(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const purrgo_viewport_t* map_vp) {
+    if (purrgo_app_status_bar_is_dirty() || purrgo_app_map_is_dirty() || !prev_status_state.valid) {
+        ui_update_status_bar(gfx, gnss, map_vp->offset_y);
+        purrgo_app_status_bar_clear_dirty();
+    }
+
+    // Clear bottom status area
+    gfx_set_color(gfx, 0, 3);
+    gfx_fill_rect(gfx, 0, map_vp->offset_y + map_vp->height, PURRGO_HW_DISPLAY_WIDTH_PX, PURRGO_HW_DISPLAY_HEIGHT_PX - (map_vp->offset_y + map_vp->height));
 
     gfx_set_color(gfx, 0, 3);
 
-    // Отрисовка масштаба в правом нижнем углу
     const char* scale_label = purrgo_app_get_map_scale_label();
-
     int label_len = 0;
     while(scale_label[label_len] != '\0') label_len++;
     int text_width = label_len * 6;
 
-    int16_t scale_x = map_vp.offset_x + map_vp.width - text_width - 5;
-    int16_t scale_y = map_vp.offset_y + map_vp.height + 1;
+    int16_t scale_x = map_vp->offset_x + map_vp->width - text_width - 5;
+    int16_t scale_y = map_vp->offset_y + map_vp->height + 1;
 
     gfx_draw_string(gfx, scale_x, scale_y, scale_label);
+}
+
+void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const purrgo_sun_info_t* sun) {
+    (void)sun;  // Currently unused in map view
+
+    static bool map_screen_logged = false;
+    if (!map_screen_logged) {
+        PURRGO_LOG("EMU: APP_STATE_MAP rendering started\n");
+        map_screen_logged = true;
+    }
+
+    purrgo_viewport_t map_vp;
+    purrgo_bbox_t dynamic_cam;
+    ui_map_setup_viewport(&map_vp, &dynamic_cam);
+
+    ui_map_render_overlays(gfx, gnss, &map_vp);
+
+    if (purrgo_app_map_is_dirty()) {
+        bool map_success = ui_map_render_base_layers(gfx, &map_vp, &dynamic_cam);
+
+        ui_map_render_dynamic_data(gfx, &map_vp, &dynamic_cam);
+
+        ui_map_render_gnss_marker(gfx, gnss, &map_vp, &dynamic_cam, true);
+
+        // Restore clipping so status UI can be drawn
+        gfx_reset_clip(gfx);
+
+        if (map_success) {
+            purrgo_app_map_clear_dirty();
+        }
+        display_refresh();
+        dbg_map_render_calls++;
+    } else {
+        ui_map_render_gnss_marker(gfx, gnss, &map_vp, &dynamic_cam, false);
+    }
 }
