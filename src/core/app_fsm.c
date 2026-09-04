@@ -109,6 +109,12 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
         status_bar_dirty = true;
     }
 
+    static track_logger_state_t prev_rec_state = LOGGER_STATE_IDLE;
+    if (purrgo_logger_get_state() != prev_rec_state) {
+        prev_rec_state = purrgo_logger_get_state();
+        ui_dirty = true;
+        status_bar_dirty = true;
+    }
 
     prev_fix = *current_fix;
     purrgo_gnss_solution_t display_fix;
@@ -128,8 +134,6 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
             // Стартуем логгер при получении первого валидного фикса
             if (purrgo_logger_start(current_fix)) {
                 is_track_logging_active = true;
-                status_bar_dirty = true;
-                ui_dirty = true;
                 PURRGO_LOG("Auto-started track logging\n");
             }
         }
