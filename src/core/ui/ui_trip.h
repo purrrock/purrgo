@@ -4,6 +4,7 @@
 #include "purrgo/app_ui.h"
 #include "purrgo/gfx_renderer.h"
 
-void ui_render_trip_computer(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const purrgo_sun_info_t* sun);
+void ui_trip_render_grid(gfx_context_t* gfx);
+void ui_trip_render_values(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const purrgo_sun_info_t* sun);
 
 #endif // PURRGO_UI_TRIP_H

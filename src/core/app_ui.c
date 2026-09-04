@@ -12,12 +12,18 @@ void purrgo_app_ui_render(
     const purrgo_gnss_solution_t* gnss,
     const purrgo_sun_info_t* sun
 ) {
-    switch (purrgo_app_get_state()) {
+    static purrgo_state_t prev_state = APP_STATE_MAP;
+    purrgo_state_t current_state = purrgo_app_get_state();
+
+    switch (current_state) {
         case APP_STATE_MENU_CONFIG:
             ui_render_menu_config(gfx);
             break;
         case APP_STATE_TRIP_COMPUTER:
-            ui_render_trip_computer(gfx, gnss, sun);
+            if (prev_state != APP_STATE_TRIP_COMPUTER) {
+                ui_trip_render_grid(gfx);
+            }
+            ui_trip_render_values(gfx, gnss, sun);
             break;
         case APP_STATE_MAP:
             ui_render_map(gfx, gnss, sun);
@@ -28,4 +34,6 @@ void purrgo_app_ui_render(
         default:
             break;
     }
+
+    prev_state = current_state;
 }
