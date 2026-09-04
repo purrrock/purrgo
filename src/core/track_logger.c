@@ -241,6 +241,10 @@ const char* purrgo_logger_get_active_filename(void) {
     return NULL;
 }
 
+track_logger_state_t purrgo_logger_get_state(void) {
+    return current_state;
+}
+
 size_t purrgo_logger_get_track_points(
     track_point_t* out_points,
     size_t max_points
