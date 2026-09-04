@@ -738,8 +738,6 @@ bool purrgo_config_controller_handle_button(
              */
             case PURRGO_BTN_MENU:
 
-                leave_directory_browser();
-
                 /*
                  * Черновые изменения не применяем.
                  */
