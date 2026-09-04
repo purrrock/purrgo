@@ -6,11 +6,17 @@
 #include "purrgo/config_controller.h"
 #include "purrgo/track_logger.h"
 #include "purrgo/logger.h"
+#include "purrgo/geo.h"
+
+#define PURRGO_GNSS_MARKER_UPDATE_DISTANCE_M 5
 
 // Текущее состояние конечного автомата
 static purrgo_state_t current_state;
 static bool ui_dirty = true;
 static purrgo_gnss_solution_t prev_fix = {0};
+
+static bool last_rendered_pos_valid = false;
+static purrgo_gnss_solution_t last_rendered_fix = {0};
 
 void purrgo_app_init(void) {
     /*
@@ -87,13 +93,42 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
     }
 }
 
+void purrgo_app_notify_marker_rendered(const purrgo_gnss_solution_t* rendered_fix) {
+    if (rendered_fix && rendered_fix->valid) {
+        last_rendered_fix = *rendered_fix;
+        last_rendered_pos_valid = true;
+    } else {
+        last_rendered_pos_valid = false;
+    }
+}
+
 void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
+    bool pos_changed_significantly = false;
+
+    if (current_fix->valid) {
+        if (!last_rendered_pos_valid) {
+            pos_changed_significantly = true;
+        } else {
+            uint32_t dist = purrgo_geo_distance_m(
+                last_rendered_fix.lat_1e7, last_rendered_fix.lon_1e7,
+                current_fix->lat_1e7, current_fix->lon_1e7
+            );
+            if (dist >= PURRGO_GNSS_MARKER_UPDATE_DISTANCE_M) {
+                pos_changed_significantly = true;
+            }
+        }
+    } else {
+        // If GNSS becomes invalid, consider it a significant change to clear marker/update status
+        if (last_rendered_pos_valid) {
+            pos_changed_significantly = true;
+        }
+    }
+
     // Check if relevant navigation data has changed to trigger a UI redraw
     if (current_fix->valid != prev_fix.valid ||
         current_fix->minutes != prev_fix.minutes ||
         current_fix->hours != prev_fix.hours ||
-        current_fix->lat_1e7 != prev_fix.lat_1e7 ||
-        current_fix->lon_1e7 != prev_fix.lon_1e7 ||
+        pos_changed_significantly ||
         current_fix->alt_m != prev_fix.alt_m ||
         current_fix->speed_knots != prev_fix.speed_knots ||
         current_fix->satellites_tracked != prev_fix.satellites_tracked) {
