@@ -66,31 +66,33 @@ static gfx_color_t emulator_read_pixel_cb(
     return display_get_pixel(x, y);
 }
 
-int main(int argc, char* argv[]) {
+static SDL_Window* window = NULL;
+static SDL_Renderer* renderer = NULL;
+static SDL_Texture* fb_texture = NULL;
+static purrgo_gnss_solution_t gnss_solution;
+static purrgo_sun_info_t sun_info;
+static bool first_fix_obtained = false;
+static uint32_t last_sun_update = 0;
+
+static bool emulator_sys_init(int argc, char* argv[]) {
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) < 0) {
         fprintf(
             stderr,
             "SDL could not initialize! SDL_Error: %s\n",
             SDL_GetError()
         );
-        return 1;
+        return false;
     }
-
-    SDL_Window* window = NULL;
-    SDL_Renderer* renderer = NULL;
-    SDL_Texture* fb_texture = NULL;
 
     if (!emu_window_init(&window, &renderer, &fb_texture)) {
         if (fb_texture) SDL_DestroyTexture(fb_texture);
         if (renderer) SDL_DestroyRenderer(renderer);
         if (window) SDL_DestroyWindow(window);
         SDL_Quit();
-        return 1;
+        return false;
     }
 
     display_init();
-
-    purrgo_gnss_solution_t gnss_solution;
 
 #ifdef USE_MOCK_GNSS
     purrgo_gnss_mock_init(&gnss_solution);
@@ -108,7 +110,7 @@ int main(int argc, char* argv[]) {
                 "Failed to open serial port: %s\n",
                 argv[1]
             );
-            return 1;
+            return false;
         }
     } else {
         fprintf(
@@ -116,7 +118,7 @@ int main(int argc, char* argv[]) {
             "Usage: %s <COM_PORT>\n",
             argv[0]
         );
-        return 1;
+        return false;
     }
 #endif
 
@@ -131,12 +133,15 @@ int main(int argc, char* argv[]) {
         emulator_read_pixel_cb
     );
 
-    purrgo_sun_info_t sun_info;
     memset(&sun_info, 0, sizeof(sun_info));
 
-    uint32_t last_sun_update = 0;
-    bool first_fix_obtained = false;
+    first_fix_obtained = false;
+    last_sun_update = 0;
 
+    return true;
+}
+
+static void emulator_run_loop(void) {
     uint32_t last_gnss_time = SDL_GetTicks();
     uint32_t last_eink_refresh = 0;
 
@@ -262,13 +267,25 @@ int main(int argc, char* argv[]) {
          */
         SDL_Delay(10);
     }
+}
+
+static void emulator_cleanup(void) {
     // Корректно закрываем GPX-файл, сбрасываем буфер и пишем закрывающие теги
     purrgo_logger_stop();
     // ============================
-    SDL_DestroyTexture(fb_texture);
-    SDL_DestroyRenderer(renderer);
-    SDL_DestroyWindow(window);
+    if (fb_texture) SDL_DestroyTexture(fb_texture);
+    if (renderer) SDL_DestroyRenderer(renderer);
+    if (window) SDL_DestroyWindow(window);
     SDL_Quit();
+}
+
+int main(int argc, char* argv[]) {
+    if (!emulator_sys_init(argc, argv)) {
+        return 1;
+    }
+
+    emulator_run_loop();
+    emulator_cleanup();
 
     return 0;
 }
