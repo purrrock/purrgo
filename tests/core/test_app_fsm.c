@@ -366,10 +366,14 @@ uint32_t purrgo_system_time_ms(void) {
 int mock_fs_open_calls = 0;
 
 void test_logger_cooldown() {
+    setup_test_state(10000000, 20000000, 1000);
     purrgo_app_init();
 
     purrgo_gnss_solution_t fix = {0};
     fix.valid = true;
+    fix.year = 24;
+    fix.month = 1;
+    fix.day = 1;
 
     mock_system_time_ms = 1000; // Start at 1000ms
 
@@ -435,6 +439,8 @@ void test_logger_cooldown() {
     mock_system_time_ms = 0xFFFFFF00 + 5000;
     purrgo_app_update(&fix);
     assert(mock_fs_open_calls == 2); // Retried correctly
+}
+
 void test_status_bar_updates() {
     purrgo_gnss_solution_t gnss = {0};
     gnss.valid = true;
@@ -489,6 +495,8 @@ void test_status_bar_updates() {
 
     // 7. Track logger state change -> marks status bar dirty
     gnss.valid = true;
+    purrgo_logger_stop(); // Make sure state is idle
+    mock_system_time_ms += 300000; // Reset cooldown
     purrgo_logger_set_mode(LOGGER_MODE_STANDARD);
     bool started = purrgo_logger_start(&gnss);
     assert(started);
@@ -528,8 +536,12 @@ bool purrgo_fs_readdir(purrgo_dir_t* dir, purrgo_fs_dirent_t* entry) { return fa
 void purrgo_fs_closedir(purrgo_dir_t* dir) {}
 
 purrgo_file_t* purrgo_fs_open(const char* path, fs_mode_t mode) {
+    mock_fs_open_calls++;
     if (strcmp(path, "PURRGO.CFG") == 0 && mock_config_exists) {
         return (purrgo_file_t*)1; // valid handle
+    }
+    if (strstr(path, ".gpx") != NULL) {
+        return (purrgo_file_t*)2; // valid gpx handle
     }
     return NULL;
 }
