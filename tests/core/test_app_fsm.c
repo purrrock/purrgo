@@ -353,10 +353,30 @@ void test_auto_follow_opposite_side() {
     assert(new_sy == map_vp.offset_y + map_vp.height / 2);
 }
 
+void test_status_bar_updates() {
+    // Status bar relies on ui_dirty being set by purrgo_app_update
+    purrgo_gnss_solution_t gnss = {0};
+    gnss.valid = true;
+    gnss.hours = 10;
+    gnss.minutes = 30;
+
+    // Setup
+    purrgo_app_update(&gnss);
+    assert(purrgo_app_ui_is_dirty());
+    purrgo_app_ui_clear_dirty();
+
+    // Minute change should set UI dirty
+    gnss.minutes = 31;
+    purrgo_app_update(&gnss);
+    assert(purrgo_app_ui_is_dirty());
+    purrgo_app_ui_clear_dirty();
+}
+
 int main() {
     // Setup basic mock or rely on defaults since config_init logic is needed.
     // config load creates PURRGO.CFG
 
+    test_status_bar_updates();
     test_pan_small_scale();
     test_pan_large_scale_high_latitude();
     test_pan_coordinate_bounds_clamping();

@@ -464,7 +464,13 @@ static void ui_draw_marker(gfx_context_t* gfx, const marker_state_t* state) {
 
     gfx_set_color(gfx, old_fg, gfx->color_bg);
 }
-static void ui_update_status_bar(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, bool force_redraw) {
+static int16_t get_string_width(const char* str) {
+    int len = 0;
+    while (str[len] != '\0') len++;
+    return len * 6; // 5x7 font + 1px spacing
+}
+
+static void ui_update_status_bar(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss) {
     status_bar_state_t new_state;
     new_state.minutes = gnss->minutes;
     new_state.hours = gnss->hours;
@@ -472,42 +478,42 @@ static void ui_update_status_bar(gfx_context_t* gfx, const purrgo_gnss_solution_
     new_state.rec_state = purrgo_logger_get_state();
     new_state.valid = true;
 
-    bool changed = force_redraw || !prev_status_state.valid ||
-                   (new_state.minutes != prev_status_state.minutes) ||
-                   (new_state.hours != prev_status_state.hours) ||
-                   (new_state.gnss_valid != prev_status_state.gnss_valid) ||
-                   (new_state.rec_state != prev_status_state.rec_state);
+    int16_t status_h = 9;
 
-    if (changed) {
-        // Clear top status area
-        gfx_set_color(gfx, 0, 3);
-        gfx_fill_rect(gfx, 0, 0, PURRGO_HW_DISPLAY_WIDTH_PX, 9);
+    // Clear top status area
+    gfx_set_color(gfx, 0, 3);
+    gfx_fill_rect(gfx, 0, 0, PURRGO_HW_DISPLAY_WIDTH_PX, status_h);
 
-        gfx_set_color(gfx, 0, 3);
-        char time_str[8];
-        snprintf(time_str, sizeof(time_str), "%02d:%02d", new_state.hours, new_state.minutes);
-        gfx_draw_string(gfx, 2, 1, time_str);
+    gfx_set_color(gfx, 0, 3);
 
-        const char* fix_str = new_state.gnss_valid ? "FIX" : "NO-FIX";
-        // Width roughly 3-6 chars * 6 pixels = 18-36. Put around x=40
-        gfx_draw_string(gfx, 40, 1, fix_str);
+    int16_t next_x = 2;
 
-        const char* rec_str = "NO-REC";
-        if (new_state.rec_state == LOGGER_STATE_RECORDING) rec_str = "REC";
-        else if (new_state.rec_state == LOGGER_STATE_ERROR) rec_str = "ERR-REC";
-        gfx_draw_string(gfx, 90, 1, rec_str);
+    char time_str[8];
+    snprintf(time_str, sizeof(time_str), "%02d:%02d", new_state.hours, new_state.minutes);
+    gfx_draw_string(gfx, next_x, 1, time_str);
+    next_x += get_string_width(time_str) + 6;
 
-        const char* bat_str = "75%";
-        // Right align: width=176, bat_str is 3 chars = 18 pixels. 176 - 18 - 2 = 156
-        int16_t bat_x = PURRGO_HW_DISPLAY_WIDTH_PX - (3 * 6) - 2;
+    const char* fix_str = new_state.gnss_valid ? "FIX" : "NO-FIX";
+    gfx_draw_string(gfx, next_x, 1, fix_str);
+    next_x += get_string_width(fix_str) + 6;
+
+    const char* rec_str = "NO-REC";
+    if (new_state.rec_state == LOGGER_STATE_RECORDING) rec_str = "REC";
+    else if (new_state.rec_state == LOGGER_STATE_ERROR) rec_str = "ERR-REC";
+    gfx_draw_string(gfx, next_x, 1, rec_str);
+
+#if PURRGO_HW_MCU == PURRGO_PLATFORM_PC
+    const char* bat_str = "75%";
+    int16_t bat_x = PURRGO_HW_DISPLAY_WIDTH_PX - get_string_width(bat_str) - 2;
+    if (bat_x > next_x + get_string_width(rec_str)) {
         gfx_draw_string(gfx, bat_x, 1, bat_str);
-
-        prev_status_state = new_state;
-
-        if (!force_redraw) {
-            display_refresh_region(0, 0, PURRGO_HW_DISPLAY_WIDTH_PX, 9);
-        }
     }
+#endif
+
+    if (prev_status_state.valid && !purrgo_app_map_is_dirty()) {
+        display_refresh_region(0, 0, PURRGO_HW_DISPLAY_WIDTH_PX, status_h);
+    }
+    prev_status_state = new_state;
 }
 
 void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const purrgo_sun_info_t* sun) {
@@ -538,8 +544,12 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
     purrgo_bbox_t dynamic_cam;
     purrgo_geo_bbox_from_center(center_lat, center_lon, width_m, &map_vp, &dynamic_cam);
 
+    if (purrgo_app_status_bar_is_dirty() || purrgo_app_map_is_dirty() || !prev_status_state.valid) {
+        ui_update_status_bar(gfx, gnss);
+        purrgo_app_status_bar_clear_dirty();
+    }
+
     if (purrgo_app_map_is_dirty()) {
-        ui_update_status_bar(gfx, gnss, true);
         // Clear map viewport
         gfx_set_color(gfx, 0, 3);
         gfx_fill_rect(gfx, map_vp.offset_x, map_vp.offset_y, map_vp.width, map_vp.height);
@@ -596,7 +606,6 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
         display_refresh();
         dbg_map_render_calls++;
     } else {
-        ui_update_status_bar(gfx, gnss, false);
 
         marker_state_t new_marker_state;
         ui_calc_marker_state(gnss, &map_vp, &dynamic_cam, &new_marker_state);
