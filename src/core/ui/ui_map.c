@@ -10,6 +10,7 @@
 #include "purrgo/logger.h"
 #include "purrgo/hardware_config.h"
 #include "purrgo/display_hal.h"
+#include "purrgo/purrgo_time.h"
 
 typedef struct {
     bool rendered;
