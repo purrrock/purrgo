@@ -137,10 +137,6 @@ bool purrgo_logger_start(const purrgo_gnss_solution_t* first_fix) {
 
     write_to_buffer(GPX_HEADER);
     current_state = LOGGER_STATE_RECORDING;
-    extern void purrgo_app_status_bar_mark_dirty(void);
-    purrgo_app_status_bar_mark_dirty();
-    extern void purrgo_app_ui_mark_dirty(void);
-    purrgo_app_ui_mark_dirty();
     return true;
 }
 
@@ -236,11 +232,6 @@ void purrgo_logger_stop(void) {
     // Clear the RAM buffer
     ram_track_head = 0;
     ram_track_count = 0;
-
-    extern void purrgo_app_status_bar_mark_dirty(void);
-    purrgo_app_status_bar_mark_dirty();
-    extern void purrgo_app_ui_mark_dirty(void);
-    purrgo_app_ui_mark_dirty();
 }
 
 const char* purrgo_logger_get_active_filename(void) {

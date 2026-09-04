@@ -81,9 +81,6 @@ void test_timezone_negative_underflow() {
     EXPECT_FALSE(purrgo_logger_start(&fix));
 }
 
-void purrgo_app_status_bar_mark_dirty(void) {}
-void purrgo_app_ui_mark_dirty(void) {}
-
 int main(void) {
     test_timezone_positive();
     test_timezone_negative();

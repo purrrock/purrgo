@@ -409,11 +409,10 @@ void test_status_bar_updates() {
     gnss.valid = true;
     purrgo_logger_set_mode(LOGGER_MODE_STANDARD);
     bool started = purrgo_logger_start(&gnss);
-    if (started) {
-        purrgo_app_update(&gnss);
-        assert(purrgo_app_status_bar_is_dirty());
-        purrgo_app_status_bar_clear_dirty();
-    }
+    assert(started);
+    purrgo_app_update(&gnss);
+    assert(purrgo_app_status_bar_is_dirty());
+    purrgo_app_status_bar_clear_dirty();
 
     purrgo_logger_stop();
     purrgo_app_update(&gnss);
