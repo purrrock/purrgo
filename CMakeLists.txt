@@ -154,6 +154,9 @@ target_include_directories(purrgo_platform_pc
     add_executable(test_map_mlp tests/core/test_map_mlp.c)
     target_link_libraries(test_map_mlp PRIVATE purrgo_core purrgo_platform_pc)
     add_test(NAME test_map_mlp COMMAND test_map_mlp)
+    add_executable(test_track_renderer tests/core/test_track_renderer.c)
+    target_link_libraries(test_track_renderer PRIVATE purrgo_core purrgo_platform_pc)
+    add_test(NAME test_track_renderer COMMAND test_track_renderer)
 endif()
 
 # Подключение директории эмулятора перенесено в конец дерева сборки, 

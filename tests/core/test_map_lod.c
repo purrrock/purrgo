@@ -317,6 +317,97 @@ void test_regression_v3_jump_is_exact() {
     assert(mock_idx_pos == 186);
 }
 
+void test_pgo_header_idx_read_fail() {
+    setup_test_map();
+    mock_idx_size = 15; // less than 32 bytes header
+    mock_idx_pos = 0;
+    mock_mlp_pos = 0;
+
+    purrgo_fs_t idx = { .handle = NULL, .read = mock_read, .seek = mock_seek };
+    purrgo_fs_t mlp = { .handle = NULL, .read = mock_mlp_read, .seek = mock_mlp_seek };
+    gfx_context_t gfx;
+    purrgo_bbox_t cam = { -200, -200, 200, 200 };
+    purrgo_viewport_t vp = { 0, 0, 100, 100 };
+    purrgo_map_render_layer(&idx, &mlp, NULL, &gfx, &cam, &vp, MAP_LAYER_LINES);
+
+    // It should stop reading idx when trying to read 32 bytes but getting 15.
+    assert(mock_idx_pos == 15);
+    // MLP shouldn't be read since idx fails first
+    assert(mock_mlp_pos == 0);
+}
+
+void test_pgo_header_mlp_read_fail() {
+    setup_test_map();
+    mock_idx_pos = 0;
+    mock_mlp_size = 15; // less than 32 bytes header for mlp
+    mock_mlp_pos = 0;
+
+    purrgo_fs_t idx = { .handle = NULL, .read = mock_read, .seek = mock_seek };
+    purrgo_fs_t mlp = { .handle = NULL, .read = mock_mlp_read, .seek = mock_mlp_seek };
+    gfx_context_t gfx;
+    purrgo_bbox_t cam = { -200, -200, 200, 200 };
+    purrgo_viewport_t vp = { 0, 0, 100, 100 };
+    purrgo_map_render_layer(&idx, &mlp, NULL, &gfx, &cam, &vp, MAP_LAYER_LINES);
+
+    // It should stop reading mlp when trying to read 32 bytes but getting 15.
+    assert(mock_idx_pos == 32); // Successfully read idx header, wait, it parses header then checks file type.
+    assert(mock_mlp_pos == 15);
+}
+
+void test_pgo_header_idx_invalid_magic() {
+    setup_test_map();
+    mock_idx_data[0] = 'X'; // Modify 'P' to 'X'
+    mock_idx_pos = 0;
+    mock_mlp_pos = 0;
+
+    purrgo_fs_t idx = { .handle = NULL, .read = mock_read, .seek = mock_seek };
+    purrgo_fs_t mlp = { .handle = NULL, .read = mock_mlp_read, .seek = mock_mlp_seek };
+    gfx_context_t gfx;
+    purrgo_bbox_t cam = { -200, -200, 200, 200 };
+    purrgo_viewport_t vp = { 0, 0, 100, 100 };
+    purrgo_map_render_layer(&idx, &mlp, NULL, &gfx, &cam, &vp, MAP_LAYER_LINES);
+
+    // Should read idx header (32 bytes), see invalid magic, and return early.
+    assert(mock_idx_pos == 32);
+    assert(mock_mlp_pos == 0);
+}
+
+void test_pgo_header_idx_invalid_file_type() {
+    setup_test_map();
+    mock_idx_data[3] = 99; // Invalid file type for idx
+    mock_idx_pos = 0;
+    mock_mlp_pos = 0;
+
+    purrgo_fs_t idx = { .handle = NULL, .read = mock_read, .seek = mock_seek };
+    purrgo_fs_t mlp = { .handle = NULL, .read = mock_mlp_read, .seek = mock_mlp_seek };
+    gfx_context_t gfx;
+    purrgo_bbox_t cam = { -200, -200, 200, 200 };
+    purrgo_viewport_t vp = { 0, 0, 100, 100 };
+    purrgo_map_render_layer(&idx, &mlp, NULL, &gfx, &cam, &vp, MAP_LAYER_LINES);
+
+    // Should read idx header (32 bytes) successfully but return early because file_type is 99 (not 1).
+    assert(mock_idx_pos == 32);
+    assert(mock_mlp_pos == 0);
+}
+
+void test_pgo_header_mlp_invalid_file_type() {
+    setup_test_map();
+    mock_mlp_data[3] = 99; // Invalid file type for mlp
+    mock_idx_pos = 0;
+    mock_mlp_pos = 0;
+
+    purrgo_fs_t idx = { .handle = NULL, .read = mock_read, .seek = mock_seek };
+    purrgo_fs_t mlp = { .handle = NULL, .read = mock_mlp_read, .seek = mock_mlp_seek };
+    gfx_context_t gfx;
+    purrgo_bbox_t cam = { -200, -200, 200, 200 };
+    purrgo_viewport_t vp = { 0, 0, 100, 100 };
+    purrgo_map_render_layer(&idx, &mlp, NULL, &gfx, &cam, &vp, MAP_LAYER_LINES);
+
+    // Should read idx header, then read mlp header, then fail because mlp file_type is 99 (not 2).
+    assert(mock_idx_pos == 32);
+    assert(mock_mlp_pos == 32);
+}
+
 int main() {
     test_lod_0();
     test_lod_1_1km();
@@ -324,6 +415,12 @@ int main() {
     test_lod_2_10km();
     test_malformed_v3_jump();
     test_regression_v3_jump_is_exact();
+
+    test_pgo_header_idx_read_fail();
+    test_pgo_header_mlp_read_fail();
+    test_pgo_header_idx_invalid_magic();
+    test_pgo_header_idx_invalid_file_type();
+    test_pgo_header_mlp_invalid_file_type();
 
     printf("LOD tests passed!\n");
     return 0;
