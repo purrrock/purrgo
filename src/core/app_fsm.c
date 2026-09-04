@@ -6,15 +6,21 @@
 #include "purrgo/config_controller.h"
 #include "purrgo/track_logger.h"
 #include "purrgo/logger.h"
+#include "purrgo/geo.h"
+
+#define PURRGO_GNSS_MARKER_UPDATE_DISTANCE_M 5
 
 // Текущее состояние конечного автомата
 static purrgo_state_t current_state;
 static bool ui_dirty = true;
+static bool status_bar_dirty = true;
 static purrgo_gnss_solution_t prev_fix = {0};
 
 // Состояние логгера для механизма отката попыток
 static uint32_t next_logger_retry_ms = 0;
 static uint8_t logger_start_failures = 0;
+static bool last_rendered_pos_valid = false;
+static purrgo_gnss_solution_t last_rendered_fix = {0};
 
 void purrgo_app_init(void) {
     next_logger_retry_ms = 0;
@@ -93,18 +99,61 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
     }
 }
 
+void purrgo_app_notify_marker_rendered(const purrgo_gnss_solution_t* rendered_fix) {
+    if (rendered_fix && rendered_fix->valid) {
+        last_rendered_fix = *rendered_fix;
+        last_rendered_pos_valid = true;
+    } else {
+        last_rendered_pos_valid = false;
+    }
+}
+
 void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
+    bool pos_changed_significantly = false;
+
+    if (current_fix->valid) {
+        if (!last_rendered_pos_valid) {
+            pos_changed_significantly = true;
+        } else {
+            uint32_t dist = purrgo_geo_distance_m(
+                last_rendered_fix.lat_1e7, last_rendered_fix.lon_1e7,
+                current_fix->lat_1e7, current_fix->lon_1e7
+            );
+            if (dist >= PURRGO_GNSS_MARKER_UPDATE_DISTANCE_M) {
+                pos_changed_significantly = true;
+            }
+        }
+    } else {
+        // If GNSS becomes invalid, consider it a significant change to clear marker/update status
+        if (last_rendered_pos_valid) {
+            pos_changed_significantly = true;
+        }
+    }
+
     // Check if relevant navigation data has changed to trigger a UI redraw
     if (current_fix->valid != prev_fix.valid ||
         current_fix->minutes != prev_fix.minutes ||
         current_fix->hours != prev_fix.hours ||
-        current_fix->lat_1e7 != prev_fix.lat_1e7 ||
-        current_fix->lon_1e7 != prev_fix.lon_1e7 ||
+        pos_changed_significantly ||
         current_fix->alt_m != prev_fix.alt_m ||
         current_fix->speed_knots != prev_fix.speed_knots ||
         current_fix->satellites_tracked != prev_fix.satellites_tracked) {
 
         ui_dirty = true;
+    }
+
+    if (current_fix->valid != prev_fix.valid ||
+        current_fix->minutes != prev_fix.minutes ||
+        current_fix->hours != prev_fix.hours) {
+
+        status_bar_dirty = true;
+    }
+
+    static track_logger_state_t prev_rec_state = LOGGER_STATE_IDLE;
+    if (purrgo_logger_get_state() != prev_rec_state) {
+        prev_rec_state = purrgo_logger_get_state();
+        ui_dirty = true;
+        status_bar_dirty = true;
     }
 
     prev_fix = *current_fix;
@@ -219,6 +268,16 @@ bool purrgo_app_map_is_dirty(void) {
 }
 void purrgo_app_map_clear_dirty(void) {
     map_app_map_clear_dirty();
+}
+
+void purrgo_app_status_bar_mark_dirty(void) {
+    status_bar_dirty = true;
+}
+bool purrgo_app_status_bar_is_dirty(void) {
+    return status_bar_dirty;
+}
+void purrgo_app_status_bar_clear_dirty(void) {
+    status_bar_dirty = false;
 }
 int32_t purrgo_app_get_map_center_lat(void) {
     return map_app_get_map_center_lat();

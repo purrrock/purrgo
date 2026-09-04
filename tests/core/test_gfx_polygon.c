@@ -245,15 +245,15 @@ static bool test_polygon_too_many_nodes() {
     // To hit >64 intersections on a single horizontal scanline,
     // we generate a single "comb" or "zigzag" polygon.
     // Each tooth of the comb goes up and down, generating 2 intersections per tooth.
-    // 33 teeth = 66 intersections.
-    gfx_point_t points[150]; // 33 * 4 + some buffer
+    // 70 teeth = 140 intersections.
+    gfx_point_t points[300]; // 70 * 4 + some buffer
     uint32_t parts[] = {0};
     uint16_t num_points = 0;
 
     int16_t start_x = 0;
 
     // Create the top zigzags
-    for (int i = 0; i < 35; i++) {
+    for (int i = 0; i < 70; i++) {
         points[num_points++] = (gfx_point_t){start_x, 10};
         start_x++;
         points[num_points++] = (gfx_point_t){start_x, 30};
