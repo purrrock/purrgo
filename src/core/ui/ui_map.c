@@ -31,6 +31,16 @@ typedef struct {
 static marker_state_t prev_marker_state;
 static bool prev_marker_state_valid = false;
 
+typedef struct {
+    uint8_t minutes;
+    uint8_t hours;
+    bool gnss_valid;
+    track_logger_state_t rec_state;
+    bool valid;
+} status_bar_state_t;
+
+static status_bar_state_t prev_status_state = {0};
+
 /*
  * Background cache to avoid re-rendering the whole map when marker changes.
  * Size 24x24 is enough for the marker size + safety margin.
@@ -454,6 +464,52 @@ static void ui_draw_marker(gfx_context_t* gfx, const marker_state_t* state) {
 
     gfx_set_color(gfx, old_fg, gfx->color_bg);
 }
+static void ui_update_status_bar(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, bool force_redraw) {
+    status_bar_state_t new_state;
+    new_state.minutes = gnss->minutes;
+    new_state.hours = gnss->hours;
+    new_state.gnss_valid = gnss->valid;
+    new_state.rec_state = purrgo_logger_get_state();
+    new_state.valid = true;
+
+    bool changed = force_redraw || !prev_status_state.valid ||
+                   (new_state.minutes != prev_status_state.minutes) ||
+                   (new_state.hours != prev_status_state.hours) ||
+                   (new_state.gnss_valid != prev_status_state.gnss_valid) ||
+                   (new_state.rec_state != prev_status_state.rec_state);
+
+    if (changed) {
+        // Clear top status area
+        gfx_set_color(gfx, 0, 3);
+        gfx_fill_rect(gfx, 0, 0, PURRGO_HW_DISPLAY_WIDTH_PX, 9);
+
+        gfx_set_color(gfx, 0, 3);
+        char time_str[8];
+        snprintf(time_str, sizeof(time_str), "%02d:%02d", new_state.hours, new_state.minutes);
+        gfx_draw_string(gfx, 2, 1, time_str);
+
+        const char* fix_str = new_state.gnss_valid ? "FIX" : "NO-FIX";
+        // Width roughly 3-6 chars * 6 pixels = 18-36. Put around x=40
+        gfx_draw_string(gfx, 40, 1, fix_str);
+
+        const char* rec_str = "NO-REC";
+        if (new_state.rec_state == LOGGER_STATE_RECORDING) rec_str = "REC";
+        else if (new_state.rec_state == LOGGER_STATE_ERROR) rec_str = "ERR-REC";
+        gfx_draw_string(gfx, 90, 1, rec_str);
+
+        const char* bat_str = "75%";
+        // Right align: width=176, bat_str is 3 chars = 18 pixels. 176 - 18 - 2 = 156
+        int16_t bat_x = PURRGO_HW_DISPLAY_WIDTH_PX - (3 * 6) - 2;
+        gfx_draw_string(gfx, bat_x, 1, bat_str);
+
+        prev_status_state = new_state;
+
+        if (!force_redraw) {
+            display_refresh_region(0, 0, PURRGO_HW_DISPLAY_WIDTH_PX, 9);
+        }
+    }
+}
+
 void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const purrgo_sun_info_t* sun) {
     (void)sun;  // Currently unused in map view
 
@@ -466,11 +522,8 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
 
     static bool map_screen_logged = false;
 
-    // Clear top status area (0 to offset_y)
-    gfx_set_color(gfx, 0, 3);
-    gfx_fill_rect(gfx, 0, 0, PURRGO_HW_DISPLAY_WIDTH_PX, map_vp.offset_y);
-
     // Clear bottom status area
+    gfx_set_color(gfx, 0, 3);
     gfx_fill_rect(gfx, 0, map_vp.offset_y + map_vp.height, PURRGO_HW_DISPLAY_WIDTH_PX, PURRGO_HW_DISPLAY_HEIGHT_PX - (map_vp.offset_y + map_vp.height));
 
     if (!map_screen_logged) {
@@ -485,11 +538,8 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
     purrgo_bbox_t dynamic_cam;
     purrgo_geo_bbox_from_center(center_lat, center_lon, width_m, &map_vp, &dynamic_cam);
 
-    /* Верхняя служебная строка. */
-    gfx_set_color(gfx, 0, 3);
-    gfx_draw_string(gfx, 5, 1, "TOP STATUS AREA");
-
     if (purrgo_app_map_is_dirty()) {
+        ui_update_status_bar(gfx, gnss, true);
         // Clear map viewport
         gfx_set_color(gfx, 0, 3);
         gfx_fill_rect(gfx, map_vp.offset_x, map_vp.offset_y, map_vp.width, map_vp.height);
@@ -546,6 +596,8 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
         display_refresh();
         dbg_map_render_calls++;
     } else {
+        ui_update_status_bar(gfx, gnss, false);
+
         marker_state_t new_marker_state;
         ui_calc_marker_state(gnss, &map_vp, &dynamic_cam, &new_marker_state);
 
