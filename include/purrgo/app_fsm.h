@@ -40,6 +40,9 @@ void purrgo_app_handle_button(purrgo_btn_t button);
 // Основной цикл обновления логики
 void purrgo_app_update(const purrgo_gnss_solution_t* current_fix);
 
+// Уведомление конечного автомата о том, что маркер был успешно отрисован
+void purrgo_app_notify_marker_rendered(const purrgo_gnss_solution_t* rendered_fix);
+
 // Получение текущего состояния для слоя диспетчеризации отрисовки (gfx_renderer)
 purrgo_state_t purrgo_app_get_state(void);
 
@@ -86,6 +89,10 @@ void purrgo_app_ui_clear_dirty(void);
 void purrgo_app_map_mark_dirty(void);
 bool purrgo_app_map_is_dirty(void);
 void purrgo_app_map_clear_dirty(void);
+
+void purrgo_app_status_bar_mark_dirty(void);
+bool purrgo_app_status_bar_is_dirty(void);
+void purrgo_app_status_bar_clear_dirty(void);
 
 int32_t purrgo_app_get_map_center_lat(void);
 int32_t purrgo_app_get_map_center_lon(void);
