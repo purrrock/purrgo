@@ -537,7 +537,9 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
         ui_draw_marker(gfx, &new_marker_state);
         prev_marker_state = new_marker_state;
 
-        purrgo_app_notify_marker_rendered(gnss);
+        if (new_marker_state.rendered) {
+            purrgo_app_notify_marker_rendered(gnss);
+        }
 
         // Restore clipping so status UI can be drawn
         gfx_reset_clip(gfx);
@@ -612,7 +614,9 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
             }
             prev_marker_state = new_marker_state;
 
-            purrgo_app_notify_marker_rendered(gnss);
+            if (new_marker_state.rendered) {
+                purrgo_app_notify_marker_rendered(gnss);
+            }
         }
     }
 
