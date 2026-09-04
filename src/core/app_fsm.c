@@ -10,6 +10,7 @@
 // Текущее состояние конечного автомата
 static purrgo_state_t current_state;
 static bool ui_dirty = true;
+static bool status_bar_dirty = true;
 static purrgo_gnss_solution_t prev_fix = {0};
 
 void purrgo_app_init(void) {
@@ -99,6 +100,14 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
         current_fix->satellites_tracked != prev_fix.satellites_tracked) {
 
         ui_dirty = true;
+        status_bar_dirty = true;
+    }
+
+    static track_logger_state_t prev_rec_state = LOGGER_STATE_IDLE;
+    if (purrgo_logger_get_state() != prev_rec_state) {
+        prev_rec_state = purrgo_logger_get_state();
+        ui_dirty = true;
+        status_bar_dirty = true;
     }
 
     prev_fix = *current_fix;
@@ -191,6 +200,16 @@ bool purrgo_app_map_is_dirty(void) {
 }
 void purrgo_app_map_clear_dirty(void) {
     map_app_map_clear_dirty();
+}
+
+void purrgo_app_status_bar_mark_dirty(void) {
+    status_bar_dirty = true;
+}
+bool purrgo_app_status_bar_is_dirty(void) {
+    return status_bar_dirty;
+}
+void purrgo_app_status_bar_clear_dirty(void) {
+    status_bar_dirty = false;
 }
 int32_t purrgo_app_get_map_center_lat(void) {
     return map_app_get_map_center_lat();
