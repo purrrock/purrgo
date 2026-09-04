@@ -10,7 +10,11 @@ bool purrgo_stm32_gnss_read_byte(uint8_t *byte)
     return false;
 }
 
+// Forward declaration of the standard STM32 HAL function to avoid introducing
+// board-specific headers before the hardware architecture is finalized.
+uint32_t HAL_GetTick(void);
+
 uint32_t purrgo_stm32_time_ms(void)
 {
-    return 0U;
+    return HAL_GetTick();
 }
