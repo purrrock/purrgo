@@ -470,7 +470,7 @@ static int16_t get_string_width(const char* str) {
     return len * 6; // 5x7 font + 1px spacing
 }
 
-static void ui_update_status_bar(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, int16_t status_h) {
+static void ui_update_status_bar(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss) {
     purrgo_gnss_solution_t display_fix;
     if (!purrgo_time_apply_timezone(gnss, &display_fix, app_config.tz_offset_minutes)) {
         display_fix = *gnss;
@@ -482,6 +482,8 @@ static void ui_update_status_bar(gfx_context_t* gfx, const purrgo_gnss_solution_
     new_state.gnss_valid = gnss->valid;
     new_state.rec_state = purrgo_logger_get_state();
     new_state.valid = true;
+
+    int16_t status_h = map_vp.offset_y;
 
     // Clear top status area
     gfx_set_color(gfx, 0, 3);
@@ -548,7 +550,7 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
     purrgo_geo_bbox_from_center(center_lat, center_lon, width_m, &map_vp, &dynamic_cam);
 
     if (purrgo_app_status_bar_is_dirty() || purrgo_app_map_is_dirty() || !prev_status_state.valid) {
-        ui_update_status_bar(gfx, gnss, map_vp.offset_y);
+        ui_update_status_bar(gfx, gnss);
         purrgo_app_status_bar_clear_dirty();
     }
 
@@ -599,10 +601,6 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
         ui_save_marker_bg(gfx, &new_marker_state);
         ui_draw_marker(gfx, &new_marker_state);
         prev_marker_state = new_marker_state;
-
-        if (new_marker_state.rendered) {
-            purrgo_app_notify_marker_rendered(gnss);
-        }
 
         // Restore clipping so status UI can be drawn
         gfx_reset_clip(gfx);
@@ -677,10 +675,6 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
                 }
             }
             prev_marker_state = new_marker_state;
-
-            if (new_marker_state.rendered) {
-                purrgo_app_notify_marker_rendered(gnss);
-            }
         }
     }
 

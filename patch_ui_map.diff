@@ -1,0 +1,20 @@
+--- src/core/ui/ui_map.c
++++ src/core/ui/ui_map.c
+@@ -473,12 +473,17 @@
+ static void ui_update_status_bar(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss) {
++    purrgo_gnss_solution_t display_fix;
++    if (!purrgo_time_apply_timezone(gnss, &display_fix, app_config.tz_offset_minutes)) {
++        display_fix = *gnss;
++    }
++
+     status_bar_state_t new_state;
+-    new_state.minutes = gnss->minutes;
+-    new_state.hours = gnss->hours;
++    new_state.minutes = display_fix.minutes;
++    new_state.hours = display_fix.hours;
+     new_state.gnss_valid = gnss->valid;
+     new_state.rec_state = purrgo_logger_get_state();
+     new_state.valid = true;
+
+-    int16_t status_h = 9;
++    int16_t status_h = map_vp.offset_y;
