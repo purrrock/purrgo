@@ -544,10 +544,6 @@ class OSMParser:
 
         name = _sanitize_name_cached(raw_name)
 
-        # отключил замену имени на тег
-        # if not name:
-        #    name = str(rule.pg_class)
-
         try:
             osm_id = elem.get('id')
             node_coord = self._get_node_coord(int(osm_id))
@@ -688,12 +684,6 @@ class OSMParser:
                 
                 
                 poi_name = name
-                # отключил подстановку тега вместо имени
-                # poi_name = (
-                    # name
-                    # if name
-                    # else str(rule.pg_class)
-                # )
 
                 points_bytes = struct.pack(
                     "<ii",
