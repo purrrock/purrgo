@@ -59,10 +59,14 @@ void purrgo_sun_calc(int32_t lat_1e7, int32_t lon_1e7,
     // Проверка полярного дня и ночи
     if (cos_H_10k > 10000) {
         info->status = SUN_STATUS_POLAR_NIGHT;
+        info->is_daytime = false;
+        info->time_to_event_min = -1; // Сигнал UI скрыть обратный отсчет
         return;
     }
     if (cos_H_10k < -10000) {
         info->status = SUN_STATUS_POLAR_DAY;
+        info->is_daytime = true;
+        info->time_to_event_min = -1; // Сигнал UI скрыть обратный отсчет
         return;
     }
 
