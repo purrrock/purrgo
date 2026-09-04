@@ -544,9 +544,6 @@ class OSMParser:
 
         name = _sanitize_name_cached(raw_name)
 
-        # отключил замену имени на тег
-        # if not name:
-        #    name = str(rule.pg_class)
 
         try:
             osm_id = elem.get('id')
@@ -685,15 +682,6 @@ class OSMParser:
                     sum(p[1] for p in unique_points)
                     // len(unique_points)
                 )
-                
-                
-                poi_name = name
-                # отключил подстановку тега вместо имени
-                # poi_name = (
-                    # name
-                    # if name
-                    # else str(rule.pg_class)
-                # )
 
                 points_bytes = struct.pack(
                     "<ii",
@@ -704,7 +692,7 @@ class OSMParser:
                 poi_feature = MapFeature(
                     osm_id=f"v{osm_id}",
                     code=rule.code,
-                    name=poi_name,
+                    name=name,
                     points=points_bytes,
                     lod=rule.lod
                 )
