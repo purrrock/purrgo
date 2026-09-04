@@ -354,22 +354,71 @@ void test_auto_follow_opposite_side() {
 }
 
 void test_status_bar_updates() {
-    // Status bar relies on ui_dirty being set by purrgo_app_update
     purrgo_gnss_solution_t gnss = {0};
     gnss.valid = true;
+    gnss.year = 24;
+    gnss.month = 1;
+    gnss.day = 1;
     gnss.hours = 10;
     gnss.minutes = 30;
+    gnss.lat_1e7 = 10000000;
+    gnss.lon_1e7 = 20000000;
+    gnss.speed_knots = 100;
+    gnss.alt_m = 50;
+    gnss.satellites_tracked = 5;
 
     // Setup
     purrgo_app_update(&gnss);
-    assert(purrgo_app_ui_is_dirty());
-    purrgo_app_ui_clear_dirty();
+    assert(purrgo_app_status_bar_is_dirty());
+    purrgo_app_status_bar_clear_dirty();
 
-    // Minute change should set UI dirty
+    // 1. Minute change -> marks status bar dirty
     gnss.minutes = 31;
     purrgo_app_update(&gnss);
-    assert(purrgo_app_ui_is_dirty());
-    purrgo_app_ui_clear_dirty();
+    assert(purrgo_app_status_bar_is_dirty());
+    purrgo_app_status_bar_clear_dirty();
+
+    // 2. Position change alone -> DOES NOT mark status bar dirty
+    gnss.lat_1e7 = 10000001;
+    gnss.lon_1e7 = 20000001;
+    purrgo_app_update(&gnss);
+    assert(!purrgo_app_status_bar_is_dirty());
+
+    // 3. Speed change alone -> DOES NOT mark status bar dirty
+    gnss.speed_knots = 120;
+    purrgo_app_update(&gnss);
+    assert(!purrgo_app_status_bar_is_dirty());
+
+    // 4. Altitude change alone -> DOES NOT mark status bar dirty
+    gnss.alt_m = 60;
+    purrgo_app_update(&gnss);
+    assert(!purrgo_app_status_bar_is_dirty());
+
+    // 5. Satellite count change alone -> DOES NOT mark status bar dirty
+    gnss.satellites_tracked = 6;
+    purrgo_app_update(&gnss);
+    assert(!purrgo_app_status_bar_is_dirty());
+
+    // 6. GNSS FIX -> NO-FIX -> marks status bar dirty
+    gnss.valid = false;
+    purrgo_app_update(&gnss);
+    assert(purrgo_app_status_bar_is_dirty());
+    purrgo_app_status_bar_clear_dirty();
+
+    // 7. Track logger state change -> marks status bar dirty
+    gnss.valid = true;
+    purrgo_logger_set_mode(LOGGER_MODE_STANDARD);
+    bool started = purrgo_logger_start(&gnss);
+    if (started) {
+        purrgo_app_update(&gnss);
+        assert(purrgo_app_status_bar_is_dirty());
+        purrgo_app_status_bar_clear_dirty();
+    }
+
+    purrgo_logger_stop();
+    purrgo_app_update(&gnss);
+    assert(purrgo_app_status_bar_is_dirty());
+    purrgo_app_status_bar_clear_dirty();
 }
 
 int main() {

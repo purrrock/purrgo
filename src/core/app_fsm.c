@@ -100,6 +100,12 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
         current_fix->satellites_tracked != prev_fix.satellites_tracked) {
 
         ui_dirty = true;
+    }
+
+    if (current_fix->valid != prev_fix.valid ||
+        current_fix->minutes != prev_fix.minutes ||
+        current_fix->hours != prev_fix.hours) {
+
         status_bar_dirty = true;
     }
 
