@@ -12,7 +12,13 @@ static purrgo_state_t current_state;
 static bool ui_dirty = true;
 static purrgo_gnss_solution_t prev_fix = {0};
 
+// Состояние логгера для механизма отката попыток
+static uint32_t next_logger_retry_epoch = 0;
+static uint8_t logger_start_failures = 0;
+
 void purrgo_app_init(void) {
+    next_logger_retry_epoch = 0;
+    logger_start_failures = 0;
     /*
      * First try to load the persistent configuration.
      *
@@ -112,13 +118,11 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
 
 
 // === БЛОК ТРЕК-ЛОГГЕРА ===
-    static uint32_t next_logger_retry_epoch = 0;
-    static uint8_t logger_start_failures = 0;
-
     if (current_fix->valid) {
         track_logger_state_t logger_state = purrgo_logger_get_state();
+        track_logger_mode_t logger_mode = purrgo_logger_get_mode();
 
-        if (logger_state == LOGGER_STATE_IDLE || logger_state == LOGGER_STATE_ERROR) {
+        if (logger_mode != LOGGER_MODE_OFF && (logger_state == LOGGER_STATE_IDLE || logger_state == LOGGER_STATE_ERROR)) {
             uint32_t current_epoch = 0;
             if (purrgo_time_datetime_to_epoch(current_fix->year, current_fix->month, current_fix->day,
                                               current_fix->hours, current_fix->minutes, current_fix->seconds,

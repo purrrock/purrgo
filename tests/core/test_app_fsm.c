@@ -362,20 +362,29 @@ void test_logger_cooldown() {
     fix.year = 23; fix.month = 10; fix.day = 10;
     fix.hours = 12; fix.minutes = 0; fix.seconds = 0; // 12:00:00
 
+    extern int mock_fs_open_calls;
+
+    // Test LOGGER_MODE_OFF behaves correctly (no starts)
+    purrgo_logger_set_mode(LOGGER_MODE_OFF);
+    mock_fs_open_calls = 0;
+    purrgo_app_update(&fix);
+    assert(mock_fs_open_calls == 0);
+    assert(purrgo_logger_get_state() == LOGGER_STATE_IDLE);
+
+    purrgo_logger_set_mode(LOGGER_MODE_STANDARD);
+
     // Ensure logger fails to start (fs_open returns NULL)
     // First update should try to start, fail, and set 5s cooldown
+    mock_fs_open_calls = 0;
     purrgo_app_update(&fix);
+    assert(mock_fs_open_calls == 1);
 
     // Check state (should be ERROR)
     assert(purrgo_logger_get_state() == LOGGER_STATE_ERROR);
 
     // Update again at 12:00:01 (1 second later)
     fix.seconds = 1;
-    // We can't directly check if start was called, but if it was called it would try to open fs.
-    // Let's use a global counter in purrgo_fs_open.
-    extern int mock_fs_open_calls;
     mock_fs_open_calls = 0;
-
     purrgo_app_update(&fix);
     assert(mock_fs_open_calls == 0); // Cooldown active, shouldn't call start
 
