@@ -138,7 +138,7 @@ bool map_idx_parse_node(
             int16_t radius = 0;
             if (app_config.poi_mode == PURRGO_POI_MODE_ICONS) {
                 radius = PURRGO_POI_ICON_WIDTH / 2;
-                gfx_draw_icon_7x7(gfx, sx, sy, purrgo_poi_icons[obj_type]);
+                gfx_draw_icon_11x11(gfx, sx, sy, purrgo_poi_icons[obj_type]);
             } else if (app_config.poi_mode == PURRGO_POI_MODE_CIRCLES) {
                 if (obj_type == 11) {
                     radius = PURRGO_POI_BIG_RADIUS;
