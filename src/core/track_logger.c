@@ -64,6 +64,10 @@ void purrgo_logger_set_mode(track_logger_mode_t mode) {
     }
 }
 
+track_logger_mode_t purrgo_logger_get_mode(void) {
+    return current_mode;
+}
+
 #include "purrgo/purrgo_time.h"
 
 // Вспомогательная функция для сброса данных на файловую систему

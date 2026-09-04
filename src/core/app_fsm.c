@@ -16,10 +16,15 @@ static bool ui_dirty = true;
 static bool status_bar_dirty = true;
 static purrgo_gnss_solution_t prev_fix = {0};
 
+// Состояние логгера для механизма отката попыток
+static uint32_t next_logger_retry_ms = 0;
+static uint8_t logger_start_failures = 0;
 static bool last_rendered_pos_valid = false;
 static purrgo_gnss_solution_t last_rendered_fix = {0};
 
 void purrgo_app_init(void) {
+    next_logger_retry_ms = 0;
+    logger_start_failures = 0;
     /*
      * First try to load the persistent configuration.
      *
@@ -161,19 +166,41 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
     }
 
 
+#include "purrgo/system_time.h"
 // === БЛОК ТРЕК-ЛОГГЕРА ===
-    static bool is_track_logging_active = false;
-
     if (current_fix->valid) {
-        if (!is_track_logging_active) {
-            // Стартуем логгер при получении первого валидного фикса
-            if (purrgo_logger_start(current_fix)) {
-                is_track_logging_active = true;
-                PURRGO_LOG("Auto-started track logging\n");
+        track_logger_state_t logger_state = purrgo_logger_get_state();
+        track_logger_mode_t logger_mode = purrgo_logger_get_mode();
+
+        if (logger_mode != LOGGER_MODE_OFF && (logger_state == LOGGER_STATE_IDLE || logger_state == LOGGER_STATE_ERROR)) {
+            uint32_t now = purrgo_system_time_ms();
+            if (logger_start_failures == 0 || (uint32_t)(now - next_logger_retry_ms) < 0x80000000) {
+                if (purrgo_logger_start(current_fix)) {
+                    PURRGO_LOG("Auto-started track logging\n");
+                    logger_start_failures = 0;
+                    next_logger_retry_ms = 0;
+                    logger_state = purrgo_logger_get_state();
+                } else {
+                    logger_start_failures++;
+                    // 5 seconds delay for first failure, 30 seconds for second, 5 minutes for subsequent
+                    uint32_t delay_ms;
+                    if (logger_start_failures == 1) {
+                        delay_ms = 5000;
+                    } else if (logger_start_failures == 2) {
+                        delay_ms = 30000;
+                    } else {
+                        delay_ms = 300000; // 5 minutes
+                        // Prevent overflow
+                        if (logger_start_failures == 255) {
+                            logger_start_failures = 3;
+                        }
+                    }
+                    next_logger_retry_ms = now + delay_ms;
+                }
             }
         }
         
-        if (is_track_logging_active) {
+        if (logger_state == LOGGER_STATE_RECORDING) {
             // Передаем координаты в фильтр (он сам решит, записывать ли точку)
             if (purrgo_logger_add_point(current_fix)) {
                 purrgo_app_map_mark_dirty();
