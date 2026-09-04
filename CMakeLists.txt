@@ -58,6 +58,7 @@ set(CORE_SOURCES
     src/core/navigation.c
     src/core/purrgo_time.c
     src/core/sun.c
+	src/core/system_time.c
     src/core/sun_tables.c
     src/core/track_logger.c
     src/core/track_renderer.c
