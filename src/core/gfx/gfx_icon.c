@@ -1,7 +1,7 @@
 #include "purrgo/gfx_icon.h"
 #include <stddef.h>
 
-void gfx_draw_icon_7x7(gfx_context_t *ctx, int16_t x, int16_t y, const uint8_t icon[7][7])
+void gfx_draw_icon_11x11(gfx_context_t *ctx, int16_t x, int16_t y, const uint8_t icon[11][11])
 {
     if (ctx == NULL || icon == NULL) {
         return;
@@ -12,11 +12,11 @@ void gfx_draw_icon_7x7(gfx_context_t *ctx, int16_t x, int16_t y, const uint8_t i
     gfx_color_t old_bg;
     gfx_get_color(ctx, &old_fg, &old_bg);
 
-    int16_t start_x = x - 3;
-    int16_t start_y = y - 3;
+    int16_t start_x = x - 5;
+    int16_t start_y = y - 5;
 
-    for (int row = 0; row < 7; row++) {
-        for (int col = 0; col < 7; col++) {
+    for (int row = 0; row < 11; row++) {
+        for (int col = 0; col < 11; col++) {
             uint8_t pixel = icon[row][col];
 
             // Проверяем бит прозрачности (бит 2)
