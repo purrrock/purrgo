@@ -37,4 +37,6 @@ size_t purrgo_logger_get_track_points(
     size_t max_points
 );
 
+track_logger_state_t purrgo_logger_get_state(void);
+
 #endif // PURRGO_TRACK_LOGGER_H
