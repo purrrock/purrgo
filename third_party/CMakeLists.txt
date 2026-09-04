@@ -18,3 +18,7 @@ target_compile_options(minmea PRIVATE -w)
 if(WIN32)
     target_compile_definitions(minmea PRIVATE timegm=_mkgmtime)
 endif()
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Generic")
+    target_compile_definitions(minmea PRIVATE timegm=mktime)
+endif()

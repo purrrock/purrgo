@@ -51,8 +51,6 @@ build CMakeFiles/purrgo_core.dir/src/core/app_fsm.c.obj: C_COMPILER__purrgo_core
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
-  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
-  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/map_controller.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/map_controller.c || cmake_object_order_depends_target_purrgo_core
@@ -62,8 +60,6 @@ build CMakeFiles/purrgo_core.dir/src/core/map_controller.c.obj: C_COMPILER__purr
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
-  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
-  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/config_controller.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/config_controller.c || cmake_object_order_depends_target_purrgo_core
@@ -73,8 +69,6 @@ build CMakeFiles/purrgo_core.dir/src/core/config_controller.c.obj: C_COMPILER__p
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
-  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
-  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/trip_computer.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/trip_computer.c || cmake_object_order_depends_target_purrgo_core
@@ -84,8 +78,6 @@ build CMakeFiles/purrgo_core.dir/src/core/trip_computer.c.obj: C_COMPILER__purrg
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
-  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
-  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/app_ui.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/app_ui.c || cmake_object_order_depends_target_purrgo_core
@@ -95,8 +87,6 @@ build CMakeFiles/purrgo_core.dir/src/core/app_ui.c.obj: C_COMPILER__purrgo_core_
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
-  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
-  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/ui/ui_map.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/ui/ui_map.c || cmake_object_order_depends_target_purrgo_core
@@ -106,8 +96,6 @@ build CMakeFiles/purrgo_core.dir/src/core/ui/ui_map.c.obj: C_COMPILER__purrgo_co
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core\ui
-  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
-  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/ui/ui_trip.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/ui/ui_trip.c || cmake_object_order_depends_target_purrgo_core
@@ -117,8 +105,6 @@ build CMakeFiles/purrgo_core.dir/src/core/ui/ui_trip.c.obj: C_COMPILER__purrgo_c
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core\ui
-  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
-  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/ui/ui_config.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/ui/ui_config.c || cmake_object_order_depends_target_purrgo_core
@@ -128,8 +114,6 @@ build CMakeFiles/purrgo_core.dir/src/core/ui/ui_config.c.obj: C_COMPILER__purrgo
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core\ui
-  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
-  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/ui/ui_dir_select.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/ui/ui_dir_select.c || cmake_object_order_depends_target_purrgo_core
@@ -139,8 +123,6 @@ build CMakeFiles/purrgo_core.dir/src/core/ui/ui_dir_select.c.obj: C_COMPILER__pu
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core\ui
-  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
-  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/config.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/config.c || cmake_object_order_depends_target_purrgo_core
@@ -150,8 +132,6 @@ build CMakeFiles/purrgo_core.dir/src/core/config.c.obj: C_COMPILER__purrgo_core_
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
-  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
-  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/geo.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/geo.c || cmake_object_order_depends_target_purrgo_core
@@ -161,8 +141,6 @@ build CMakeFiles/purrgo_core.dir/src/core/geo.c.obj: C_COMPILER__purrgo_core_uns
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
-  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
-  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/gfx/font5x7.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/gfx/font5x7.c || cmake_object_order_depends_target_purrgo_core
@@ -172,8 +150,6 @@ build CMakeFiles/purrgo_core.dir/src/core/gfx/font5x7.c.obj: C_COMPILER__purrgo_
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core\gfx
-  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
-  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/gfx/gfx_circle.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/gfx/gfx_circle.c || cmake_object_order_depends_target_purrgo_core
@@ -183,8 +159,6 @@ build CMakeFiles/purrgo_core.dir/src/core/gfx/gfx_circle.c.obj: C_COMPILER__purr
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core\gfx
-  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
-  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/gfx/gfx_line.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/gfx/gfx_line.c || cmake_object_order_depends_target_purrgo_core
@@ -194,8 +168,6 @@ build CMakeFiles/purrgo_core.dir/src/core/gfx/gfx_line.c.obj: C_COMPILER__purrgo
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core\gfx
-  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
-  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/gfx/gfx_polygon.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/gfx/gfx_polygon.c || cmake_object_order_depends_target_purrgo_core
@@ -205,8 +177,6 @@ build CMakeFiles/purrgo_core.dir/src/core/gfx/gfx_polygon.c.obj: C_COMPILER__pur
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core\gfx
-  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
-  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/gfx/gfx_rect.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/gfx/gfx_rect.c || cmake_object_order_depends_target_purrgo_core
@@ -216,8 +186,6 @@ build CMakeFiles/purrgo_core.dir/src/core/gfx/gfx_rect.c.obj: C_COMPILER__purrgo
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core\gfx
-  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
-  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/gfx/gfx_renderer.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/gfx/gfx_renderer.c || cmake_object_order_depends_target_purrgo_core
@@ -227,8 +195,6 @@ build CMakeFiles/purrgo_core.dir/src/core/gfx/gfx_renderer.c.obj: C_COMPILER__pu
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core\gfx
-  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
-  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/gfx/gfx_text.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/gfx/gfx_text.c || cmake_object_order_depends_target_purrgo_core
@@ -238,8 +204,6 @@ build CMakeFiles/purrgo_core.dir/src/core/gfx/gfx_text.c.obj: C_COMPILER__purrgo
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core\gfx
-  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
-  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/gfx/gfx_icon.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/gfx/gfx_icon.c || cmake_object_order_depends_target_purrgo_core
@@ -249,8 +213,6 @@ build CMakeFiles/purrgo_core.dir/src/core/gfx/gfx_icon.c.obj: C_COMPILER__purrgo
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core\gfx
-  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
-  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/gnss.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/gnss.c || cmake_object_order_depends_target_purrgo_core
@@ -260,8 +222,6 @@ build CMakeFiles/purrgo_core.dir/src/core/gnss.c.obj: C_COMPILER__purrgo_core_un
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
-  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
-  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/gnss_adapter.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/gnss_adapter.c || cmake_object_order_depends_target_purrgo_core
@@ -271,8 +231,6 @@ build CMakeFiles/purrgo_core.dir/src/core/gnss_adapter.c.obj: C_COMPILER__purrgo
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
-  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
-  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/gnss_mock.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/gnss_mock.c || cmake_object_order_depends_target_purrgo_core
@@ -282,8 +240,6 @@ build CMakeFiles/purrgo_core.dir/src/core/gnss_mock.c.obj: C_COMPILER__purrgo_co
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
-  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
-  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/gpx_parser.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/gpx_parser.c || cmake_object_order_depends_target_purrgo_core
@@ -293,8 +249,6 @@ build CMakeFiles/purrgo_core.dir/src/core/gpx_parser.c.obj: C_COMPILER__purrgo_c
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
-  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
-  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/map.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/map.c || cmake_object_order_depends_target_purrgo_core
@@ -304,8 +258,6 @@ build CMakeFiles/purrgo_core.dir/src/core/map.c.obj: C_COMPILER__purrgo_core_uns
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
-  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
-  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/map_culling.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/map_culling.c || cmake_object_order_depends_target_purrgo_core
@@ -315,8 +267,6 @@ build CMakeFiles/purrgo_core.dir/src/core/map_culling.c.obj: C_COMPILER__purrgo_
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
-  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
-  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/map_idx.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/map_idx.c || cmake_object_order_depends_target_purrgo_core
@@ -326,8 +276,6 @@ build CMakeFiles/purrgo_core.dir/src/core/map_idx.c.obj: C_COMPILER__purrgo_core
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
-  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
-  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/map_mlp.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/map_mlp.c || cmake_object_order_depends_target_purrgo_core
@@ -337,8 +285,6 @@ build CMakeFiles/purrgo_core.dir/src/core/map_mlp.c.obj: C_COMPILER__purrgo_core
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
-  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
-  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/map_projection.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/map_projection.c || cmake_object_order_depends_target_purrgo_core
@@ -348,8 +294,6 @@ build CMakeFiles/purrgo_core.dir/src/core/map_projection.c.obj: C_COMPILER__purr
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
-  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
-  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/map_render.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/map_render.c || cmake_object_order_depends_target_purrgo_core
@@ -359,8 +303,6 @@ build CMakeFiles/purrgo_core.dir/src/core/map_render.c.obj: C_COMPILER__purrgo_c
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
-  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
-  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/map_style.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/map_style.c || cmake_object_order_depends_target_purrgo_core
@@ -370,8 +312,6 @@ build CMakeFiles/purrgo_core.dir/src/core/map_style.c.obj: C_COMPILER__purrgo_co
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
-  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
-  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/navigation.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/navigation.c || cmake_object_order_depends_target_purrgo_core
@@ -381,8 +321,6 @@ build CMakeFiles/purrgo_core.dir/src/core/navigation.c.obj: C_COMPILER__purrgo_c
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
-  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
-  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/purrgo_time.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/purrgo_time.c || cmake_object_order_depends_target_purrgo_core
@@ -392,8 +330,6 @@ build CMakeFiles/purrgo_core.dir/src/core/purrgo_time.c.obj: C_COMPILER__purrgo_
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
-  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
-  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/sun.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/sun.c || cmake_object_order_depends_target_purrgo_core
@@ -403,8 +339,15 @@ build CMakeFiles/purrgo_core.dir/src/core/sun.c.obj: C_COMPILER__purrgo_core_uns
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
-  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
-  TARGET_PDB = libpurrgo_core.pdb
+  TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
+
+build CMakeFiles/purrgo_core.dir/src/core/system_time.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/system_time.c || cmake_object_order_depends_target_purrgo_core
+  DEFINES = -DUSE_MOCK_GNSS
+  DEP_FILE = CMakeFiles\purrgo_core.dir\src\core\system_time.c.obj.d
+  FLAGS = -std=c11
+  INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
+  OBJECT_DIR = CMakeFiles\purrgo_core.dir
+  OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/sun_tables.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/sun_tables.c || cmake_object_order_depends_target_purrgo_core
@@ -414,8 +357,6 @@ build CMakeFiles/purrgo_core.dir/src/core/sun_tables.c.obj: C_COMPILER__purrgo_c
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
-  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
-  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/track_logger.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/track_logger.c || cmake_object_order_depends_target_purrgo_core
@@ -425,8 +366,6 @@ build CMakeFiles/purrgo_core.dir/src/core/track_logger.c.obj: C_COMPILER__purrgo
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
-  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
-  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/track_renderer.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/track_renderer.c || cmake_object_order_depends_target_purrgo_core
@@ -436,8 +375,6 @@ build CMakeFiles/purrgo_core.dir/src/core/track_renderer.c.obj: C_COMPILER__purr
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
-  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
-  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/ubx.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/ubx.c || cmake_object_order_depends_target_purrgo_core
@@ -447,8 +384,6 @@ build CMakeFiles/purrgo_core.dir/src/core/ubx.c.obj: C_COMPILER__purrgo_core_uns
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
-  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
-  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 
@@ -459,13 +394,12 @@ build CMakeFiles/purrgo_core.dir/src/core/ubx.c.obj: C_COMPILER__purrgo_core_uns
 #############################################
 # Link the static library libpurrgo_core.a
 
-build libpurrgo_core.a: C_STATIC_LIBRARY_LINKER__purrgo_core_ CMakeFiles/purrgo_core.dir/src/core/app_fsm.c.obj CMakeFiles/purrgo_core.dir/src/core/map_controller.c.obj CMakeFiles/purrgo_core.dir/src/core/config_controller.c.obj CMakeFiles/purrgo_core.dir/src/core/trip_computer.c.obj CMakeFiles/purrgo_core.dir/src/core/app_ui.c.obj CMakeFiles/purrgo_core.dir/src/core/ui/ui_map.c.obj CMakeFiles/purrgo_core.dir/src/core/ui/ui_trip.c.obj CMakeFiles/purrgo_core.dir/src/core/ui/ui_config.c.obj CMakeFiles/purrgo_core.dir/src/core/ui/ui_dir_select.c.obj CMakeFiles/purrgo_core.dir/src/core/config.c.obj CMakeFiles/purrgo_core.dir/src/core/geo.c.obj CMakeFiles/purrgo_core.dir/src/core/gfx/font5x7.c.obj CMakeFiles/purrgo_core.dir/src/core/gfx/gfx_circle.c.obj CMakeFiles/purrgo_core.dir/src/core/gfx/gfx_line.c.obj CMakeFiles/purrgo_core.dir/src/core/gfx/gfx_polygon.c.obj CMakeFiles/purrgo_core.dir/src/core/gfx/gfx_rect.c.obj CMakeFiles/purrgo_core.dir/src/core/gfx/gfx_renderer.c.obj CMakeFiles/purrgo_core.dir/src/core/gfx/gfx_text.c.obj CMakeFiles/purrgo_core.dir/src/core/gfx/gfx_icon.c.obj CMakeFiles/purrgo_core.dir/src/core/gnss.c.obj CMakeFiles/purrgo_core.dir/src/core/gnss_adapter.c.obj CMakeFiles/purrgo_core.dir/src/core/gnss_mock.c.obj CMakeFiles/purrgo_core.dir/src/core/gpx_parser.c.obj CMakeFiles/purrgo_core.dir/src/core/map.c.obj CMakeFiles/purrgo_core.dir/src/core/map_culling.c.obj CMakeFiles/purrgo_core.dir/src/core/map_idx.c.obj CMakeFiles/purrgo_core.dir/src/core/map_mlp.c.obj CMakeFiles/purrgo_core.dir/src/core/map_projection.c.obj CMakeFiles/purrgo_core.dir/src/core/map_render.c.obj CMakeFiles/purrgo_core.dir/src/core/map_style.c.obj CMakeFiles/purrgo_core.dir/src/core/navigation.c.obj CMakeFiles/purrgo_core.dir/src/core/purrgo_time.c.obj CMakeFiles/purrgo_core.dir/src/core/sun.c.obj CMakeFiles/purrgo_core.dir/src/core/sun_tables.c.obj CMakeFiles/purrgo_core.dir/src/core/track_logger.c.obj CMakeFiles/purrgo_core.dir/src/core/track_renderer.c.obj CMakeFiles/purrgo_core.dir/src/core/ubx.c.obj || third_party/libminmea.a
+build libpurrgo_core.a: C_STATIC_LIBRARY_LINKER__purrgo_core_ CMakeFiles/purrgo_core.dir/src/core/app_fsm.c.obj CMakeFiles/purrgo_core.dir/src/core/map_controller.c.obj CMakeFiles/purrgo_core.dir/src/core/config_controller.c.obj CMakeFiles/purrgo_core.dir/src/core/trip_computer.c.obj CMakeFiles/purrgo_core.dir/src/core/app_ui.c.obj CMakeFiles/purrgo_core.dir/src/core/ui/ui_map.c.obj CMakeFiles/purrgo_core.dir/src/core/ui/ui_trip.c.obj CMakeFiles/purrgo_core.dir/src/core/ui/ui_config.c.obj CMakeFiles/purrgo_core.dir/src/core/ui/ui_dir_select.c.obj CMakeFiles/purrgo_core.dir/src/core/config.c.obj CMakeFiles/purrgo_core.dir/src/core/geo.c.obj CMakeFiles/purrgo_core.dir/src/core/gfx/font5x7.c.obj CMakeFiles/purrgo_core.dir/src/core/gfx/gfx_circle.c.obj CMakeFiles/purrgo_core.dir/src/core/gfx/gfx_line.c.obj CMakeFiles/purrgo_core.dir/src/core/gfx/gfx_polygon.c.obj CMakeFiles/purrgo_core.dir/src/core/gfx/gfx_rect.c.obj CMakeFiles/purrgo_core.dir/src/core/gfx/gfx_renderer.c.obj CMakeFiles/purrgo_core.dir/src/core/gfx/gfx_text.c.obj CMakeFiles/purrgo_core.dir/src/core/gfx/gfx_icon.c.obj CMakeFiles/purrgo_core.dir/src/core/gnss.c.obj CMakeFiles/purrgo_core.dir/src/core/gnss_adapter.c.obj CMakeFiles/purrgo_core.dir/src/core/gnss_mock.c.obj CMakeFiles/purrgo_core.dir/src/core/gpx_parser.c.obj CMakeFiles/purrgo_core.dir/src/core/map.c.obj CMakeFiles/purrgo_core.dir/src/core/map_culling.c.obj CMakeFiles/purrgo_core.dir/src/core/map_idx.c.obj CMakeFiles/purrgo_core.dir/src/core/map_mlp.c.obj CMakeFiles/purrgo_core.dir/src/core/map_projection.c.obj CMakeFiles/purrgo_core.dir/src/core/map_render.c.obj CMakeFiles/purrgo_core.dir/src/core/map_style.c.obj CMakeFiles/purrgo_core.dir/src/core/navigation.c.obj CMakeFiles/purrgo_core.dir/src/core/purrgo_time.c.obj CMakeFiles/purrgo_core.dir/src/core/sun.c.obj CMakeFiles/purrgo_core.dir/src/core/system_time.c.obj CMakeFiles/purrgo_core.dir/src/core/sun_tables.c.obj CMakeFiles/purrgo_core.dir/src/core/track_logger.c.obj CMakeFiles/purrgo_core.dir/src/core/track_renderer.c.obj CMakeFiles/purrgo_core.dir/src/core/ubx.c.obj || third_party/libminmea.a
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   POST_BUILD = cd .
   PRE_LINK = cd .
-  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
   TARGET_FILE = libpurrgo_core.a
-  TARGET_PDB = libpurrgo_core.pdb
+  TARGET_PDB = purrgo_core.a.dbg
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 # =============================================================================
@@ -484,8 +418,6 @@ build CMakeFiles/purrgo_ublox7.dir/src/platform/ublox/ublox7_config.c.obj: C_COM
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/src/platform/ublox
   OBJECT_DIR = CMakeFiles\purrgo_ublox7.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_ublox7.dir\src\platform\ublox
-  TARGET_COMPILE_PDB = CMakeFiles\purrgo_ublox7.dir\purrgo_ublox7.pdb
-  TARGET_PDB = libpurrgo_ublox7.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_ublox7.dir
 
 
@@ -500,9 +432,8 @@ build libpurrgo_ublox7.a: C_STATIC_LIBRARY_LINKER__purrgo_ublox7_ CMakeFiles/pur
   OBJECT_DIR = CMakeFiles\purrgo_ublox7.dir
   POST_BUILD = cd .
   PRE_LINK = cd .
-  TARGET_COMPILE_PDB = CMakeFiles\purrgo_ublox7.dir\purrgo_ublox7.pdb
   TARGET_FILE = libpurrgo_ublox7.a
-  TARGET_PDB = libpurrgo_ublox7.pdb
+  TARGET_PDB = purrgo_ublox7.a.dbg
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_ublox7.dir
 
 
@@ -543,14 +474,12 @@ build rebuild_cache: phony CMakeFiles/rebuild_cache.util
 build cmake_object_order_depends_target_minmea: phony || .
 
 build third_party/CMakeFiles/minmea.dir/minmea/minmea.c.obj: C_COMPILER__minmea_unscanned_ D$:/purrgo/third_party/minmea/minmea.c || cmake_object_order_depends_target_minmea
-  DEFINES = -DUSE_MOCK_GNSS
+  DEFINES = -DUSE_MOCK_GNSS -Dtimegm=mktime
   DEP_FILE = third_party\CMakeFiles\minmea.dir\minmea\minmea.c.obj.d
   FLAGS = -std=c11 -w
   INCLUDES = -ID:/purrgo/third_party/minmea
   OBJECT_DIR = third_party\CMakeFiles\minmea.dir
   OBJECT_FILE_DIR = third_party\CMakeFiles\minmea.dir\minmea
-  TARGET_COMPILE_PDB = third_party\CMakeFiles\minmea.dir\minmea.pdb
-  TARGET_PDB = third_party\libminmea.pdb
   TARGET_SUPPORT_DIR = third_party\CMakeFiles\minmea.dir
 
 
@@ -565,9 +494,8 @@ build third_party/libminmea.a: C_STATIC_LIBRARY_LINKER__minmea_ third_party/CMak
   OBJECT_DIR = third_party\CMakeFiles\minmea.dir
   POST_BUILD = cd .
   PRE_LINK = cd .
-  TARGET_COMPILE_PDB = third_party\CMakeFiles\minmea.dir\minmea.pdb
   TARGET_FILE = third_party\libminmea.a
-  TARGET_PDB = third_party\libminmea.pdb
+  TARGET_PDB = minmea.a.dbg
   TARGET_SUPPORT_DIR = third_party\CMakeFiles\minmea.dir
 
 
@@ -642,14 +570,14 @@ build D$:/purrgo/build-stm32/CMakeFiles/cmake.verify_globs: VERIFY_GLOBS | D$:/p
 #############################################
 # Re-run CMake if any of its inputs changed.
 
-build build.ninja D$:/purrgo/build-stm32/cmake_install.cmake D$:/purrgo/build-stm32/third_party/cmake_install.cmake: RERUN_CMAKE D$:/purrgo/build-stm32/CMakeFiles/cmake.verify_globs | C$:/msys64/ucrt64/share/cmake/Modules/CMakeCCompiler.cmake.in C$:/msys64/ucrt64/share/cmake/Modules/CMakeCCompilerABI.c C$:/msys64/ucrt64/share/cmake/Modules/CMakeCInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeCommonLanguageInclude.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeCompilerIdDetection.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeDetermineCCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeDetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeDetermineCompilerABI.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeDetermineCompilerId.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeDetermineCompilerSupport.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeFindBinUtils.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeGenericSystem.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeInitializeConfigs.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeLanguageInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeParseImplicitIncludeInfo.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeParseImplicitLinkInfo.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeParseLibraryArchitecture.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeSystemSpecificInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeSystemSpecificInitialize.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeTestCCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeTestCompilerCommon.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/ADSP-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/ARMCC-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/ARMClang-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/AppleClang-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Borland-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Bruce-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/CMakeCommonCompilerMacros.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Clang-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Clang-DetermineCompilerInternal.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Compaq-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Cray-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/CrayClang-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Diab-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Embarcadero-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Fujitsu-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/FujitsuClang-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/GHS-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/GNU-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/GNU-C.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/GNU-FindBinUtils.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/GNU.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/HP-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/IAR-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/IBMCPP-C-DetermineVersionInternal.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/IBMClang-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Intel-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/IntelLLVM-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/LCC-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/MSVC-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/NVHPC-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/NVIDIA-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/OpenWatcom-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/OrangeC-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/PGI-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/PathScale-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/PellesC-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Renesas-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/SCO-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/SDCC-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/SunPro-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/TI-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/TIClang-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Tasking-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/TinyCC-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/VisualAge-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Watcom-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/XL-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/XLClang-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/zOS-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Internal/CMakeCLinkerInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/Internal/CMakeCommonLinkerInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/Internal/CMakeDetermineLinkerId.cmake C$:/msys64/ucrt64/share/cmake/Modules/Internal/CMakeInspectCLinker.cmake C$:/msys64/ucrt64/share/cmake/Modules/Internal/FeatureTesting.cmake C$:/msys64/ucrt64/share/cmake/Modules/Platform/Generic.cmake CMakeCache.txt CMakeFiles/4.4.2/CMakeCCompiler.cmake CMakeFiles/4.4.2/CMakeSystem.cmake D$:/purrgo/build-stm32/CMakeFiles/VerifyGlobs.cmake D$:/purrgo/CMakeLists.txt D$:/purrgo/stm32-toolchain.cmake D$:/purrgo/third_party/CMakeLists.txt
+build build.ninja D$:/purrgo/build-stm32/cmake_install.cmake D$:/purrgo/build-stm32/third_party/cmake_install.cmake: RERUN_CMAKE D$:/purrgo/build-stm32/CMakeFiles/cmake.verify_globs | C$:/msys64/ucrt64/share/cmake/Modules/CMakeCInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeCommonLanguageInclude.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeGenericSystem.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeInitializeConfigs.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeLanguageInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeSystemSpecificInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeSystemSpecificInitialize.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/CMakeCommonCompilerMacros.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/GNU-C.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/GNU.cmake C$:/msys64/ucrt64/share/cmake/Modules/Internal/CMakeCLinkerInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/Internal/CMakeCommonLinkerInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/Platform/Generic.cmake CMakeCache.txt CMakeFiles/4.4.2/CMakeCCompiler.cmake CMakeFiles/4.4.2/CMakeSystem.cmake D$:/purrgo/build-stm32/CMakeFiles/VerifyGlobs.cmake D$:/purrgo/CMakeLists.txt D$:/purrgo/stm32-toolchain.cmake D$:/purrgo/third_party/CMakeLists.txt
   pool = console
 
 
 #############################################
 # A missing CMake input file is not an error.
 
-build C$:/msys64/ucrt64/share/cmake/Modules/CMakeCCompiler.cmake.in C$:/msys64/ucrt64/share/cmake/Modules/CMakeCCompilerABI.c C$:/msys64/ucrt64/share/cmake/Modules/CMakeCInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeCommonLanguageInclude.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeCompilerIdDetection.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeDetermineCCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeDetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeDetermineCompilerABI.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeDetermineCompilerId.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeDetermineCompilerSupport.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeFindBinUtils.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeGenericSystem.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeInitializeConfigs.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeLanguageInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeParseImplicitIncludeInfo.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeParseImplicitLinkInfo.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeParseLibraryArchitecture.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeSystemSpecificInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeSystemSpecificInitialize.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeTestCCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeTestCompilerCommon.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/ADSP-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/ARMCC-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/ARMClang-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/AppleClang-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Borland-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Bruce-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/CMakeCommonCompilerMacros.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Clang-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Clang-DetermineCompilerInternal.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Compaq-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Cray-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/CrayClang-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Diab-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Embarcadero-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Fujitsu-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/FujitsuClang-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/GHS-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/GNU-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/GNU-C.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/GNU-FindBinUtils.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/GNU.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/HP-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/IAR-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/IBMCPP-C-DetermineVersionInternal.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/IBMClang-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Intel-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/IntelLLVM-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/LCC-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/MSVC-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/NVHPC-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/NVIDIA-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/OpenWatcom-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/OrangeC-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/PGI-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/PathScale-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/PellesC-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Renesas-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/SCO-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/SDCC-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/SunPro-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/TI-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/TIClang-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Tasking-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/TinyCC-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/VisualAge-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Watcom-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/XL-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/XLClang-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/zOS-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Internal/CMakeCLinkerInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/Internal/CMakeCommonLinkerInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/Internal/CMakeDetermineLinkerId.cmake C$:/msys64/ucrt64/share/cmake/Modules/Internal/CMakeInspectCLinker.cmake C$:/msys64/ucrt64/share/cmake/Modules/Internal/FeatureTesting.cmake C$:/msys64/ucrt64/share/cmake/Modules/Platform/Generic.cmake CMakeCache.txt CMakeFiles/4.4.2/CMakeCCompiler.cmake CMakeFiles/4.4.2/CMakeSystem.cmake D$:/purrgo/build-stm32/CMakeFiles/VerifyGlobs.cmake D$:/purrgo/CMakeLists.txt D$:/purrgo/stm32-toolchain.cmake D$:/purrgo/third_party/CMakeLists.txt: phony
+build C$:/msys64/ucrt64/share/cmake/Modules/CMakeCInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeCommonLanguageInclude.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeGenericSystem.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeInitializeConfigs.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeLanguageInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeSystemSpecificInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeSystemSpecificInitialize.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/CMakeCommonCompilerMacros.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/GNU-C.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/GNU.cmake C$:/msys64/ucrt64/share/cmake/Modules/Internal/CMakeCLinkerInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/Internal/CMakeCommonLinkerInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/Platform/Generic.cmake CMakeCache.txt CMakeFiles/4.4.2/CMakeCCompiler.cmake CMakeFiles/4.4.2/CMakeSystem.cmake D$:/purrgo/build-stm32/CMakeFiles/VerifyGlobs.cmake D$:/purrgo/CMakeLists.txt D$:/purrgo/stm32-toolchain.cmake D$:/purrgo/third_party/CMakeLists.txt: phony
 
 
 #############################################
