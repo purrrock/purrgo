@@ -17,7 +17,7 @@ void ui_trip_render_grid(gfx_context_t* gfx) {
     gfx_draw_string(gfx, 10, y_pos, "LOC:");
     y_pos += 12;
     gfx_draw_string(gfx, 10, y_pos, "FIX:");
-    gfx_draw_string(gfx, 50, y_pos, "SAT:");
+    gfx_draw_string(gfx, 70, y_pos, "SAT:");
     y_pos += 12;
     gfx_draw_string(gfx, 10, y_pos, "LAT:");
     y_pos += 12;
@@ -59,7 +59,7 @@ void ui_trip_render_values(gfx_context_t* gfx, const purrgo_gnss_solution_t* gns
     gfx_draw_string(gfx, val_x, y_pos, buf);
 
     snprintf(buf, sizeof(buf), "%-2d", gnss->satellites_tracked);
-    gfx_draw_string(gfx, 80, y_pos, buf); // "SAT: " is at 50, len 4 is 24px -> 74 + 6px space = 80
+    gfx_draw_string(gfx, 100, y_pos, buf); // "SAT: " is at 70, len 4 is 24px -> 94 + 6px space = 100
     y_pos += 12;
 
     // LAT
