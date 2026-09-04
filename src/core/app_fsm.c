@@ -112,18 +112,45 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
 
 
 // === БЛОК ТРЕК-ЛОГГЕРА ===
-    static bool is_track_logging_active = false;
+    static uint32_t next_logger_retry_epoch = 0;
+    static uint8_t logger_start_failures = 0;
 
     if (current_fix->valid) {
-        if (!is_track_logging_active) {
-            // Стартуем логгер при получении первого валидного фикса
-            if (purrgo_logger_start(current_fix)) {
-                is_track_logging_active = true;
-                PURRGO_LOG("Auto-started track logging\n");
+        track_logger_state_t logger_state = purrgo_logger_get_state();
+
+        if (logger_state == LOGGER_STATE_IDLE || logger_state == LOGGER_STATE_ERROR) {
+            uint32_t current_epoch = 0;
+            if (purrgo_time_datetime_to_epoch(current_fix->year, current_fix->month, current_fix->day,
+                                              current_fix->hours, current_fix->minutes, current_fix->seconds,
+                                              &current_epoch)) {
+                if (current_epoch >= next_logger_retry_epoch) {
+                    if (purrgo_logger_start(current_fix)) {
+                        PURRGO_LOG("Auto-started track logging\n");
+                        logger_start_failures = 0;
+                        next_logger_retry_epoch = 0;
+                        logger_state = purrgo_logger_get_state();
+                    } else {
+                        logger_start_failures++;
+                        // 5 seconds delay for first failure, 30 seconds for second, 5 minutes for subsequent
+                        uint32_t delay;
+                        if (logger_start_failures == 1) {
+                            delay = 5;
+                        } else if (logger_start_failures == 2) {
+                            delay = 30;
+                        } else {
+                            delay = 300; // 5 minutes
+                            // Prevent overflow
+                            if (logger_start_failures == 255) {
+                                logger_start_failures = 3;
+                            }
+                        }
+                        next_logger_retry_epoch = current_epoch + delay;
+                    }
+                }
             }
         }
         
-        if (is_track_logging_active) {
+        if (logger_state == LOGGER_STATE_RECORDING) {
             // Передаем координаты в фильтр (он сам решит, записывать ли точку)
             if (purrgo_logger_add_point(current_fix)) {
                 purrgo_app_map_mark_dirty();

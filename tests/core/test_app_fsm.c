@@ -4,6 +4,7 @@
 #include "purrgo/map.h"
 #include "purrgo/geo.h"
 #include "purrgo/hardware_config.h"
+#include "purrgo/track_logger.h"
 #include <stdio.h>
 #include <assert.h>
 
@@ -353,6 +354,59 @@ void test_auto_follow_opposite_side() {
     assert(new_sy == map_vp.offset_y + map_vp.height / 2);
 }
 
+void test_logger_cooldown() {
+    purrgo_app_init();
+
+    purrgo_gnss_solution_t fix = {0};
+    fix.valid = true;
+    fix.year = 23; fix.month = 10; fix.day = 10;
+    fix.hours = 12; fix.minutes = 0; fix.seconds = 0; // 12:00:00
+
+    // Ensure logger fails to start (fs_open returns NULL)
+    // First update should try to start, fail, and set 5s cooldown
+    purrgo_app_update(&fix);
+
+    // Check state (should be ERROR)
+    assert(purrgo_logger_get_state() == LOGGER_STATE_ERROR);
+
+    // Update again at 12:00:01 (1 second later)
+    fix.seconds = 1;
+    // We can't directly check if start was called, but if it was called it would try to open fs.
+    // Let's use a global counter in purrgo_fs_open.
+    extern int mock_fs_open_calls;
+    mock_fs_open_calls = 0;
+
+    purrgo_app_update(&fix);
+    assert(mock_fs_open_calls == 0); // Cooldown active, shouldn't call start
+
+    // Update at 12:00:05 (5 seconds later)
+    fix.seconds = 5;
+    purrgo_app_update(&fix);
+    assert(mock_fs_open_calls == 1); // 5s elapsed, should retry
+
+    // Failed again. Cooldown is now 30s.
+    mock_fs_open_calls = 0;
+    fix.seconds = 10;
+    purrgo_app_update(&fix);
+    assert(mock_fs_open_calls == 0); // 5s passed, but need 30s
+
+    fix.seconds = 35; // 35 = 5 + 30
+    purrgo_app_update(&fix);
+    assert(mock_fs_open_calls == 1); // 30s elapsed, should retry
+
+    // Failed again. Cooldown is now 300s.
+    mock_fs_open_calls = 0;
+    fix.seconds = 65;
+    purrgo_app_update(&fix);
+    assert(mock_fs_open_calls == 0); // 30s passed, but need 300s
+
+    // Fast forward to 300s later. Previous failure was at 12:00:35.
+    fix.minutes = 5;
+    fix.seconds = 35;
+    purrgo_app_update(&fix);
+    assert(mock_fs_open_calls == 1); // 300s elapsed, should retry
+}
+
 int main() {
     // Setup basic mock or rely on defaults since config_init logic is needed.
     // config load creates PURRGO.CFG
@@ -363,6 +417,7 @@ int main() {
     test_map_dirty_state();
     test_map_clean_refresh_skips_render();
     test_auto_follow_opposite_side();
+    test_logger_cooldown();
 
     printf("App FSM tests passed!\n");
     return 0;
@@ -377,11 +432,14 @@ purrgo_dir_t* purrgo_fs_opendir(const char* path) { return NULL; }
 bool purrgo_fs_readdir(purrgo_dir_t* dir, purrgo_fs_dirent_t* entry) { return false; }
 void purrgo_fs_closedir(purrgo_dir_t* dir) {}
 
+int mock_fs_open_calls = 0;
+
 purrgo_file_t* purrgo_fs_open(const char* path, fs_mode_t mode) {
+    mock_fs_open_calls++;
     if (strcmp(path, "PURRGO.CFG") == 0 && mock_config_exists) {
         return (purrgo_file_t*)1; // valid handle
     }
-    return NULL;
+    return NULL; // Everything else (e.g., track logger files) fails
 }
 
 uint32_t purrgo_fs_read(purrgo_file_t* file, uint8_t* buffer, uint32_t size) {
