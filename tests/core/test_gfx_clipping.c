@@ -135,8 +135,8 @@ static bool test_draw_line_clipping() {
 
     // Check that part inside the map area is drawn
     if (!check_pixel(10, 50, 1)) passed = false;
-    // (63, 148) is a point on the line after clipping
-    if (!check_pixel(63, 148, 1)) passed = false;
+    // (97, 148) is a point on the line after clipping
+    if (!check_pixel(97, 148, 1)) passed = false;
 
     if (passed) printf("PASSED test_draw_line_clipping\n");
     return passed;
