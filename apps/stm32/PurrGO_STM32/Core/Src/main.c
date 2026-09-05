@@ -99,6 +99,11 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+
+    // Переключение состояния пина PC13
+      HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+    // Задержка 500 миллисекунд
+      HAL_Delay(500);
   }
   /* USER CODE END 3 */
 }
