@@ -16,6 +16,9 @@ endif()
 # Инициализация опции с динамическим значением по умолчанию
 option(BUILD_EMULATOR "Build hardware-in-the-loop PC emulator" ${DEFAULT_BUILD_EMULATOR})
 
+# Сборка прошивки STM32
+option(BUILD_STM32 "Build STM32 firmware" OFF)
+
 option(USE_MOCK_GNSS "Enable mock GNSS data generator" ON)
 if(USE_MOCK_GNSS)
     add_compile_definitions(USE_MOCK_GNSS)
@@ -57,8 +60,8 @@ set(CORE_SOURCES
     src/core/map_style.c
     src/core/navigation.c
     src/core/purrgo_time.c
+    src/core/system_time.c
     src/core/sun.c
-	src/core/system_time.c
     src/core/sun_tables.c
     src/core/track_logger.c
     src/core/track_renderer.c
@@ -90,16 +93,16 @@ target_link_libraries(purrgo_ublox7 PUBLIC purrgo_core)
 
 if (WIN32 OR UNIX)
     file(GLOB_RECURSE PC_PLATFORM_SOURCES CONFIGURE_DEPENDS "src/platform/pc/*.c")
-    
+
     add_library(purrgo_platform_pc
         ${PC_PLATFORM_SOURCES}
     )
-    
-target_include_directories(purrgo_platform_pc
+
+    target_include_directories(purrgo_platform_pc
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${CMAKE_CURRENT_SOURCE_DIR}/src/platform/pc
-)
+    )
 
     file(GLOB PC_APP_SOURCES CONFIGURE_DEPENDS "apps/pc/*.c")
     add_executable(purrgo_pc
@@ -154,16 +157,29 @@ target_include_directories(purrgo_platform_pc
     add_executable(test_navigation tests/core/test_navigation.c)
     target_link_libraries(test_navigation PRIVATE purrgo_core purrgo_platform_pc)
     add_test(NAME test_navigation COMMAND test_navigation)
+
     add_executable(test_map_mlp tests/core/test_map_mlp.c)
     target_link_libraries(test_map_mlp PRIVATE purrgo_core purrgo_platform_pc)
     add_test(NAME test_map_mlp COMMAND test_map_mlp)
+
     add_executable(test_track_renderer tests/core/test_track_renderer.c)
     target_link_libraries(test_track_renderer PRIVATE purrgo_core purrgo_platform_pc)
     add_test(NAME test_track_renderer COMMAND test_track_renderer)
 endif()
 
-# Подключение директории эмулятора перенесено в конец дерева сборки, 
+# Подключение директории эмулятора перенесено в конец дерева сборки,
 # чтобы цель purrgo_core уже существовала в контексте CMake на момент вызова.
 if(BUILD_EMULATOR)
     add_subdirectory(apps/emulator)
+endif()
+
+# Подключение STM32 target.
+#
+# По умолчанию выключено, поэтому обычная PC-сборка PurrGO
+# остаётся без изменений.
+#
+# Для STM32 этот target должен конфигурироваться с ARM
+# toolchain, поэтому BUILD_STM32 включается явно.
+if(BUILD_STM32)
+    add_subdirectory(apps/stm32/PurrGO_STM32)
 endif()
