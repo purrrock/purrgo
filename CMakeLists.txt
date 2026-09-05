@@ -1,185 +1,117 @@
 cmake_minimum_required(VERSION 3.20)
+# Указываем CMake не линковать исполняемый файл при проверке кросс-компилятора
+set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
+
+project(purrgo C)
+
+set(CMAKE_C_STANDARD 11)
+# ... остальной код файла без изменений ...
 project(purrgo C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
 
-# Определение значения по умолчанию в зависимости от целевой ОС
-if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
-    set(DEFAULT_BUILD_EMULATOR ON)
-else()
-    # Для кросс-компиляции (CMAKE_SYSTEM_NAME = "Generic" или "Linux")
-    set(DEFAULT_BUILD_EMULATOR OFF)
-endif()
-
-# Инициализация опции с динамическим значением по умолчанию
-option(BUILD_EMULATOR "Build hardware-in-the-loop PC emulator" ${DEFAULT_BUILD_EMULATOR})
-
-# Сборка прошивки STM32
-option(BUILD_STM32 "Build STM32 firmware" OFF)
-
+# Опции эмуляции GNSS
 option(USE_MOCK_GNSS "Enable mock GNSS data generator" ON)
 if(USE_MOCK_GNSS)
     add_compile_definitions(USE_MOCK_GNSS)
 endif()
 
+# Внешние зависимости (например, minmea)
 add_subdirectory(third_party)
 
-# Автоматический рекурсивный поиск всех .c файлов в директории src/core/.
-set(CORE_SOURCES
-    src/core/app_fsm.c
-    src/core/map_controller.c
-    src/core/config_controller.c
-    src/core/trip_computer.c
-    src/core/app_ui.c
-    src/core/ui/ui_map.c
-    src/core/ui/ui_trip.c
-    src/core/ui/ui_config.c
-    src/core/ui/ui_dir_select.c
-    src/core/config.c
-    src/core/geo.c
-    src/core/gfx/font5x7.c
-    src/core/gfx/gfx_circle.c
-    src/core/gfx/gfx_line.c
-    src/core/gfx/gfx_polygon.c
-    src/core/gfx/gfx_rect.c
-    src/core/gfx/gfx_renderer.c
-    src/core/gfx/gfx_text.c
-    src/core/gfx/gfx_icon.c
-    src/core/gnss.c
-    src/core/gnss_adapter.c
-    src/core/gnss_mock.c
-    src/core/gpx_parser.c
-    src/core/map.c
-    src/core/map_culling.c
-    src/core/map_idx.c
-    src/core/map_mlp.c
-    src/core/map_projection.c
-    src/core/map_render.c
-    src/core/map_style.c
-    src/core/navigation.c
-    src/core/purrgo_time.c
-    src/core/system_time.c
-    src/core/sun.c
-    src/core/sun_tables.c
-    src/core/track_logger.c
-    src/core/track_renderer.c
-    src/core/ubx.c
-)
+# ==============================================================================
+# 1. ПОРТАТИВНОЕ ЯДРО (Собирается для всех платформ)
+# ==============================================================================
 
-add_library(purrgo_core
-    ${CORE_SOURCES}
-)
+# Автоматически ищем все .c файлы в src/core и её подпапках
+file(GLOB_RECURSE CORE_SOURCES CONFIGURE_DEPENDS "src/core/*.c")
 
-target_include_directories(purrgo_core
-    PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
+add_library(purrgo_core STATIC ${CORE_SOURCES})
+
+target_include_directories(purrgo_core PUBLIC 
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
 target_link_libraries(purrgo_core PRIVATE minmea)
 
-file(GLOB_RECURSE UBLOX_SOURCES CONFIGURE_DEPENDS "src/platform/ublox/*.c")
-add_library(purrgo_ublox7
-    ${UBLOX_SOURCES}
-)
+# ==============================================================================
+# 2. МАРШРУТИЗАЦИЯ СБОРКИ НА ОСНОВЕ ВЫБРАННОГО КОМПИЛЯТОРА
+# ==============================================================================
 
-target_include_directories(purrgo_ublox7 PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/platform/ublox
-)
+if(CMAKE_C_COMPILER MATCHES "arm-none-eabi")
+    # ---------------------------------------------------------
+    # ВЕТКА МИКРОКОНТРОЛЛЕРА (Кросс-компиляция)
+    # ---------------------------------------------------------
+    message(STATUS "--- Target: STM32 Firmware (.elf) ---")
+    
+    # 1. Подключаем проект, сгенерированный STM32CubeMX
+    add_subdirectory(apps/stm32/PurrGO_STM32)
+    
+    # 2. Привязываем наше портативное ядро к сгенерированному таргету STM32.
+    # CubeMX обычно называет target именем проекта, т.е. PurrGO_STM32.
+    # Если CubeMX выдаст ошибку "Cannot specify link libraries for target...",
+    # убедитесь, что имя таргета в файле apps/stm32/PurrGO_STM32/CMakeLists.txt 
+    # действительно "PurrGO_STM32" (или ${CMAKE_PROJECT_NAME}).
+    
+    # Даем платформенному коду STM32 доступ к заголовкам ядра (#include "purrgo/...")
+    target_include_directories(PurrGO_STM32 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
-target_link_libraries(purrgo_ublox7 PUBLIC purrgo_core)
-
-if (WIN32 OR UNIX)
+else()
+    # ---------------------------------------------------------
+    # ВЕТКА ПК (Windows / Linux / macOS)
+    # ---------------------------------------------------------
+    message(STATUS "--- Target: PC Applications (.exe) ---")
+    
+    # Платформенный слой для ПК (Адаптеры файловой системы, Serial портов и т.д.)
     file(GLOB_RECURSE PC_PLATFORM_SOURCES CONFIGURE_DEPENDS "src/platform/pc/*.c")
-
-    add_library(purrgo_platform_pc
-        ${PC_PLATFORM_SOURCES}
-    )
-
-    target_include_directories(purrgo_platform_pc
-    PUBLIC
+    add_library(purrgo_platform_pc STATIC ${PC_PLATFORM_SOURCES})
+    target_include_directories(purrgo_platform_pc PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${CMAKE_CURRENT_SOURCE_DIR}/src/platform/pc
     )
 
+    # Сборка базового PC-приложения (заглушка)
     file(GLOB PC_APP_SOURCES CONFIGURE_DEPENDS "apps/pc/*.c")
-    add_executable(purrgo_pc
-        ${PC_APP_SOURCES}
-    )
-    target_link_libraries(purrgo_pc PRIVATE purrgo_core purrgo_platform_pc)
+    if(PC_APP_SOURCES)
+        add_executable(purrgo_pc ${PC_APP_SOURCES})
+        target_link_libraries(purrgo_pc PRIVATE purrgo_core purrgo_platform_pc)
+    endif()
 
+    # Сборка утилиты логирования с реального приемника (Realtime Logger)
     file(GLOB_RECURSE LOGGER_APP_SOURCES CONFIGURE_DEPENDS "apps/pc/pc_realtime_logger/*.c")
-    add_executable(pc_realtime_logger
-        ${LOGGER_APP_SOURCES}
-    )
-    target_link_libraries(pc_realtime_logger PRIVATE purrgo_core purrgo_platform_pc)
+    if(LOGGER_APP_SOURCES)
+        add_executable(pc_realtime_logger ${LOGGER_APP_SOURCES})
+        target_link_libraries(pc_realtime_logger PRIVATE purrgo_core purrgo_platform_pc)
+    endif()
 
+    # Подключаем графический эмулятор
+    add_subdirectory(apps/emulator)
+
+    # ---------------------------------------------------------
+    # МОДУЛЬНОЕ ТЕСТИРОВАНИЕ (Только для ПК)
+    # ---------------------------------------------------------
     enable_testing()
 
-    add_executable(test_geo tests/core/test_geo.c)
-    target_link_libraries(test_geo PRIVATE purrgo_core purrgo_platform_pc)
-    add_test(NAME test_geo COMMAND test_geo)
+    # Макрос для быстрого добавления тестов без дублирования кода
+    macro(add_purrgo_test test_name test_source)
+        add_executable(${test_name} ${test_source})
+        target_link_libraries(${test_name} PRIVATE purrgo_core purrgo_platform_pc)
+        add_test(NAME ${test_name} COMMAND ${test_name})
+    endmacro()
 
-    add_executable(test_gnss tests/core/test_gnss.c)
-    target_link_libraries(test_gnss PRIVATE purrgo_core purrgo_platform_pc)
-    add_test(NAME test_gnss COMMAND test_gnss)
+    add_purrgo_test(test_geo tests/core/test_geo.c)
+    add_purrgo_test(test_gnss tests/core/test_gnss.c)
+    add_purrgo_test(test_track_logger tests/core/test_track_logger.c)
+    add_purrgo_test(test_gfx_polygon tests/core/test_gfx_polygon.c)
+    add_purrgo_test(test_gfx_clipping tests/core/test_gfx_clipping.c)
+    add_purrgo_test(test_config tests/core/test_config.c)
+    add_purrgo_test(test_app_fsm tests/core/test_app_fsm.c)
+    add_purrgo_test(test_purrgo_time tests/core/test_purrgo_time.c)
+    add_purrgo_test(test_map_lod tests/core/test_map_lod.c)
+    add_purrgo_test(test_navigation tests/core/test_navigation.c)
+    add_purrgo_test(test_map_mlp tests/core/test_map_mlp.c)
+    add_purrgo_test(test_track_renderer tests/core/test_track_renderer.c)
 
-    add_executable(test_track_logger tests/core/test_track_logger.c)
-    target_link_libraries(test_track_logger PRIVATE purrgo_core purrgo_platform_pc)
-    add_test(NAME test_track_logger COMMAND test_track_logger)
-
-    add_executable(test_gfx_polygon tests/core/test_gfx_polygon.c)
-    target_link_libraries(test_gfx_polygon PRIVATE purrgo_core purrgo_platform_pc)
-    add_test(NAME test_gfx_polygon COMMAND test_gfx_polygon)
-
-    add_executable(test_gfx_clipping tests/core/test_gfx_clipping.c)
-    target_link_libraries(test_gfx_clipping PRIVATE purrgo_core purrgo_platform_pc)
-    add_test(NAME test_gfx_clipping COMMAND test_gfx_clipping)
-
-    add_executable(test_config tests/core/test_config.c)
-    target_link_libraries(test_config PRIVATE purrgo_core purrgo_platform_pc)
-    add_test(NAME test_config COMMAND test_config)
-
-    add_executable(test_app_fsm tests/core/test_app_fsm.c)
-    target_link_libraries(test_app_fsm PRIVATE purrgo_core purrgo_platform_pc)
-    add_test(NAME test_app_fsm COMMAND test_app_fsm)
-
-    add_executable(test_purrgo_time tests/core/test_purrgo_time.c)
-    target_link_libraries(test_purrgo_time PRIVATE purrgo_core purrgo_platform_pc)
-    add_test(NAME test_purrgo_time COMMAND test_purrgo_time)
-
-    add_executable(test_map_lod tests/core/test_map_lod.c)
-    target_link_libraries(test_map_lod PRIVATE purrgo_core purrgo_platform_pc)
-    add_test(NAME test_map_lod COMMAND test_map_lod)
-
-    add_executable(test_navigation tests/core/test_navigation.c)
-    target_link_libraries(test_navigation PRIVATE purrgo_core purrgo_platform_pc)
-    add_test(NAME test_navigation COMMAND test_navigation)
-
-    add_executable(test_map_mlp tests/core/test_map_mlp.c)
-    target_link_libraries(test_map_mlp PRIVATE purrgo_core purrgo_platform_pc)
-    add_test(NAME test_map_mlp COMMAND test_map_mlp)
-
-    add_executable(test_track_renderer tests/core/test_track_renderer.c)
-    target_link_libraries(test_track_renderer PRIVATE purrgo_core purrgo_platform_pc)
-    add_test(NAME test_track_renderer COMMAND test_track_renderer)
-endif()
-
-# Подключение директории эмулятора перенесено в конец дерева сборки,
-# чтобы цель purrgo_core уже существовала в контексте CMake на момент вызова.
-if(BUILD_EMULATOR)
-    add_subdirectory(apps/emulator)
-endif()
-
-# Подключение STM32 target.
-#
-# По умолчанию выключено, поэтому обычная PC-сборка PurrGO
-# остаётся без изменений.
-#
-# Для STM32 этот target должен конфигурироваться с ARM
-# toolchain, поэтому BUILD_STM32 включается явно.
-if(BUILD_STM32)
-    add_subdirectory(apps/stm32/PurrGO_STM32)
 endif()
