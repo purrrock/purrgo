@@ -47,343 +47,419 @@ build cmake_object_order_depends_target_purrgo_core: phony || cmake_object_order
 build CMakeFiles/purrgo_core.dir/src/core/app_fsm.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/app_fsm.c || cmake_object_order_depends_target_purrgo_core
   DEFINES = -DUSE_MOCK_GNSS
   DEP_FILE = CMakeFiles\purrgo_core.dir\src\core\app_fsm.c.obj.d
-  FLAGS = -std=c11
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -std=c11
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
+  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
+  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/map_controller.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/map_controller.c || cmake_object_order_depends_target_purrgo_core
   DEFINES = -DUSE_MOCK_GNSS
   DEP_FILE = CMakeFiles\purrgo_core.dir\src\core\map_controller.c.obj.d
-  FLAGS = -std=c11
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -std=c11
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
+  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
+  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/config_controller.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/config_controller.c || cmake_object_order_depends_target_purrgo_core
   DEFINES = -DUSE_MOCK_GNSS
   DEP_FILE = CMakeFiles\purrgo_core.dir\src\core\config_controller.c.obj.d
-  FLAGS = -std=c11
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -std=c11
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
+  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
+  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/trip_computer.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/trip_computer.c || cmake_object_order_depends_target_purrgo_core
   DEFINES = -DUSE_MOCK_GNSS
   DEP_FILE = CMakeFiles\purrgo_core.dir\src\core\trip_computer.c.obj.d
-  FLAGS = -std=c11
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -std=c11
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
+  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
+  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/app_ui.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/app_ui.c || cmake_object_order_depends_target_purrgo_core
   DEFINES = -DUSE_MOCK_GNSS
   DEP_FILE = CMakeFiles\purrgo_core.dir\src\core\app_ui.c.obj.d
-  FLAGS = -std=c11
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -std=c11
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
+  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
+  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/ui/ui_map.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/ui/ui_map.c || cmake_object_order_depends_target_purrgo_core
   DEFINES = -DUSE_MOCK_GNSS
   DEP_FILE = CMakeFiles\purrgo_core.dir\src\core\ui\ui_map.c.obj.d
-  FLAGS = -std=c11
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -std=c11
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core\ui
+  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
+  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/ui/ui_trip.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/ui/ui_trip.c || cmake_object_order_depends_target_purrgo_core
   DEFINES = -DUSE_MOCK_GNSS
   DEP_FILE = CMakeFiles\purrgo_core.dir\src\core\ui\ui_trip.c.obj.d
-  FLAGS = -std=c11
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -std=c11
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core\ui
+  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
+  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/ui/ui_config.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/ui/ui_config.c || cmake_object_order_depends_target_purrgo_core
   DEFINES = -DUSE_MOCK_GNSS
   DEP_FILE = CMakeFiles\purrgo_core.dir\src\core\ui\ui_config.c.obj.d
-  FLAGS = -std=c11
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -std=c11
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core\ui
+  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
+  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/ui/ui_dir_select.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/ui/ui_dir_select.c || cmake_object_order_depends_target_purrgo_core
   DEFINES = -DUSE_MOCK_GNSS
   DEP_FILE = CMakeFiles\purrgo_core.dir\src\core\ui\ui_dir_select.c.obj.d
-  FLAGS = -std=c11
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -std=c11
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core\ui
+  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
+  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/config.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/config.c || cmake_object_order_depends_target_purrgo_core
   DEFINES = -DUSE_MOCK_GNSS
   DEP_FILE = CMakeFiles\purrgo_core.dir\src\core\config.c.obj.d
-  FLAGS = -std=c11
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -std=c11
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
+  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
+  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/geo.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/geo.c || cmake_object_order_depends_target_purrgo_core
   DEFINES = -DUSE_MOCK_GNSS
   DEP_FILE = CMakeFiles\purrgo_core.dir\src\core\geo.c.obj.d
-  FLAGS = -std=c11
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -std=c11
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
+  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
+  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/gfx/font5x7.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/gfx/font5x7.c || cmake_object_order_depends_target_purrgo_core
   DEFINES = -DUSE_MOCK_GNSS
   DEP_FILE = CMakeFiles\purrgo_core.dir\src\core\gfx\font5x7.c.obj.d
-  FLAGS = -std=c11
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -std=c11
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core\gfx
+  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
+  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/gfx/gfx_circle.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/gfx/gfx_circle.c || cmake_object_order_depends_target_purrgo_core
   DEFINES = -DUSE_MOCK_GNSS
   DEP_FILE = CMakeFiles\purrgo_core.dir\src\core\gfx\gfx_circle.c.obj.d
-  FLAGS = -std=c11
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -std=c11
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core\gfx
+  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
+  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/gfx/gfx_line.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/gfx/gfx_line.c || cmake_object_order_depends_target_purrgo_core
   DEFINES = -DUSE_MOCK_GNSS
   DEP_FILE = CMakeFiles\purrgo_core.dir\src\core\gfx\gfx_line.c.obj.d
-  FLAGS = -std=c11
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -std=c11
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core\gfx
+  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
+  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/gfx/gfx_polygon.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/gfx/gfx_polygon.c || cmake_object_order_depends_target_purrgo_core
   DEFINES = -DUSE_MOCK_GNSS
   DEP_FILE = CMakeFiles\purrgo_core.dir\src\core\gfx\gfx_polygon.c.obj.d
-  FLAGS = -std=c11
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -std=c11
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core\gfx
+  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
+  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/gfx/gfx_rect.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/gfx/gfx_rect.c || cmake_object_order_depends_target_purrgo_core
   DEFINES = -DUSE_MOCK_GNSS
   DEP_FILE = CMakeFiles\purrgo_core.dir\src\core\gfx\gfx_rect.c.obj.d
-  FLAGS = -std=c11
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -std=c11
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core\gfx
+  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
+  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/gfx/gfx_renderer.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/gfx/gfx_renderer.c || cmake_object_order_depends_target_purrgo_core
   DEFINES = -DUSE_MOCK_GNSS
   DEP_FILE = CMakeFiles\purrgo_core.dir\src\core\gfx\gfx_renderer.c.obj.d
-  FLAGS = -std=c11
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -std=c11
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core\gfx
+  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
+  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/gfx/gfx_text.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/gfx/gfx_text.c || cmake_object_order_depends_target_purrgo_core
   DEFINES = -DUSE_MOCK_GNSS
   DEP_FILE = CMakeFiles\purrgo_core.dir\src\core\gfx\gfx_text.c.obj.d
-  FLAGS = -std=c11
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -std=c11
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core\gfx
+  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
+  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/gfx/gfx_icon.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/gfx/gfx_icon.c || cmake_object_order_depends_target_purrgo_core
   DEFINES = -DUSE_MOCK_GNSS
   DEP_FILE = CMakeFiles\purrgo_core.dir\src\core\gfx\gfx_icon.c.obj.d
-  FLAGS = -std=c11
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -std=c11
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core\gfx
+  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
+  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/gnss.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/gnss.c || cmake_object_order_depends_target_purrgo_core
   DEFINES = -DUSE_MOCK_GNSS
   DEP_FILE = CMakeFiles\purrgo_core.dir\src\core\gnss.c.obj.d
-  FLAGS = -std=c11
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -std=c11
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
+  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
+  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/gnss_adapter.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/gnss_adapter.c || cmake_object_order_depends_target_purrgo_core
   DEFINES = -DUSE_MOCK_GNSS
   DEP_FILE = CMakeFiles\purrgo_core.dir\src\core\gnss_adapter.c.obj.d
-  FLAGS = -std=c11
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -std=c11
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
+  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
+  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/gnss_mock.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/gnss_mock.c || cmake_object_order_depends_target_purrgo_core
   DEFINES = -DUSE_MOCK_GNSS
   DEP_FILE = CMakeFiles\purrgo_core.dir\src\core\gnss_mock.c.obj.d
-  FLAGS = -std=c11
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -std=c11
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
+  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
+  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/gpx_parser.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/gpx_parser.c || cmake_object_order_depends_target_purrgo_core
   DEFINES = -DUSE_MOCK_GNSS
   DEP_FILE = CMakeFiles\purrgo_core.dir\src\core\gpx_parser.c.obj.d
-  FLAGS = -std=c11
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -std=c11
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
+  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
+  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/map.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/map.c || cmake_object_order_depends_target_purrgo_core
   DEFINES = -DUSE_MOCK_GNSS
   DEP_FILE = CMakeFiles\purrgo_core.dir\src\core\map.c.obj.d
-  FLAGS = -std=c11
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -std=c11
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
+  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
+  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/map_culling.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/map_culling.c || cmake_object_order_depends_target_purrgo_core
   DEFINES = -DUSE_MOCK_GNSS
   DEP_FILE = CMakeFiles\purrgo_core.dir\src\core\map_culling.c.obj.d
-  FLAGS = -std=c11
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -std=c11
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
+  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
+  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/map_idx.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/map_idx.c || cmake_object_order_depends_target_purrgo_core
   DEFINES = -DUSE_MOCK_GNSS
   DEP_FILE = CMakeFiles\purrgo_core.dir\src\core\map_idx.c.obj.d
-  FLAGS = -std=c11
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -std=c11
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
+  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
+  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/map_mlp.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/map_mlp.c || cmake_object_order_depends_target_purrgo_core
   DEFINES = -DUSE_MOCK_GNSS
   DEP_FILE = CMakeFiles\purrgo_core.dir\src\core\map_mlp.c.obj.d
-  FLAGS = -std=c11
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -std=c11
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
+  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
+  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/map_projection.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/map_projection.c || cmake_object_order_depends_target_purrgo_core
   DEFINES = -DUSE_MOCK_GNSS
   DEP_FILE = CMakeFiles\purrgo_core.dir\src\core\map_projection.c.obj.d
-  FLAGS = -std=c11
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -std=c11
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
+  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
+  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/map_render.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/map_render.c || cmake_object_order_depends_target_purrgo_core
   DEFINES = -DUSE_MOCK_GNSS
   DEP_FILE = CMakeFiles\purrgo_core.dir\src\core\map_render.c.obj.d
-  FLAGS = -std=c11
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -std=c11
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
+  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
+  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/map_style.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/map_style.c || cmake_object_order_depends_target_purrgo_core
   DEFINES = -DUSE_MOCK_GNSS
   DEP_FILE = CMakeFiles\purrgo_core.dir\src\core\map_style.c.obj.d
-  FLAGS = -std=c11
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -std=c11
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
+  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
+  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/navigation.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/navigation.c || cmake_object_order_depends_target_purrgo_core
   DEFINES = -DUSE_MOCK_GNSS
   DEP_FILE = CMakeFiles\purrgo_core.dir\src\core\navigation.c.obj.d
-  FLAGS = -std=c11
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -std=c11
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
+  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
+  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/purrgo_time.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/purrgo_time.c || cmake_object_order_depends_target_purrgo_core
   DEFINES = -DUSE_MOCK_GNSS
   DEP_FILE = CMakeFiles\purrgo_core.dir\src\core\purrgo_time.c.obj.d
-  FLAGS = -std=c11
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -std=c11
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
-  TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
-
-build CMakeFiles/purrgo_core.dir/src/core/sun.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/sun.c || cmake_object_order_depends_target_purrgo_core
-  DEFINES = -DUSE_MOCK_GNSS
-  DEP_FILE = CMakeFiles\purrgo_core.dir\src\core\sun.c.obj.d
-  FLAGS = -std=c11
-  INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
-  OBJECT_DIR = CMakeFiles\purrgo_core.dir
-  OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
+  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
+  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/system_time.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/system_time.c || cmake_object_order_depends_target_purrgo_core
   DEFINES = -DUSE_MOCK_GNSS
   DEP_FILE = CMakeFiles\purrgo_core.dir\src\core\system_time.c.obj.d
-  FLAGS = -std=c11
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -std=c11
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
+  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
+  TARGET_PDB = libpurrgo_core.pdb
+  TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
+
+build CMakeFiles/purrgo_core.dir/src/core/sun.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/sun.c || cmake_object_order_depends_target_purrgo_core
+  DEFINES = -DUSE_MOCK_GNSS
+  DEP_FILE = CMakeFiles\purrgo_core.dir\src\core\sun.c.obj.d
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -std=c11
+  INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
+  OBJECT_DIR = CMakeFiles\purrgo_core.dir
+  OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
+  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
+  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/sun_tables.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/sun_tables.c || cmake_object_order_depends_target_purrgo_core
   DEFINES = -DUSE_MOCK_GNSS
   DEP_FILE = CMakeFiles\purrgo_core.dir\src\core\sun_tables.c.obj.d
-  FLAGS = -std=c11
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -std=c11
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
+  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
+  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/track_logger.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/track_logger.c || cmake_object_order_depends_target_purrgo_core
   DEFINES = -DUSE_MOCK_GNSS
   DEP_FILE = CMakeFiles\purrgo_core.dir\src\core\track_logger.c.obj.d
-  FLAGS = -std=c11
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -std=c11
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
+  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
+  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/track_renderer.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/track_renderer.c || cmake_object_order_depends_target_purrgo_core
   DEFINES = -DUSE_MOCK_GNSS
   DEP_FILE = CMakeFiles\purrgo_core.dir\src\core\track_renderer.c.obj.d
-  FLAGS = -std=c11
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -std=c11
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
+  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
+  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 build CMakeFiles/purrgo_core.dir/src/core/ubx.c.obj: C_COMPILER__purrgo_core_unscanned_ D$:/purrgo/src/core/ubx.c || cmake_object_order_depends_target_purrgo_core
   DEFINES = -DUSE_MOCK_GNSS
   DEP_FILE = CMakeFiles\purrgo_core.dir\src\core\ubx.c.obj.d
-  FLAGS = -std=c11
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -std=c11
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/third_party/minmea
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_core.dir\src\core
+  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
+  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 
@@ -394,12 +470,14 @@ build CMakeFiles/purrgo_core.dir/src/core/ubx.c.obj: C_COMPILER__purrgo_core_uns
 #############################################
 # Link the static library libpurrgo_core.a
 
-build libpurrgo_core.a: C_STATIC_LIBRARY_LINKER__purrgo_core_ CMakeFiles/purrgo_core.dir/src/core/app_fsm.c.obj CMakeFiles/purrgo_core.dir/src/core/map_controller.c.obj CMakeFiles/purrgo_core.dir/src/core/config_controller.c.obj CMakeFiles/purrgo_core.dir/src/core/trip_computer.c.obj CMakeFiles/purrgo_core.dir/src/core/app_ui.c.obj CMakeFiles/purrgo_core.dir/src/core/ui/ui_map.c.obj CMakeFiles/purrgo_core.dir/src/core/ui/ui_trip.c.obj CMakeFiles/purrgo_core.dir/src/core/ui/ui_config.c.obj CMakeFiles/purrgo_core.dir/src/core/ui/ui_dir_select.c.obj CMakeFiles/purrgo_core.dir/src/core/config.c.obj CMakeFiles/purrgo_core.dir/src/core/geo.c.obj CMakeFiles/purrgo_core.dir/src/core/gfx/font5x7.c.obj CMakeFiles/purrgo_core.dir/src/core/gfx/gfx_circle.c.obj CMakeFiles/purrgo_core.dir/src/core/gfx/gfx_line.c.obj CMakeFiles/purrgo_core.dir/src/core/gfx/gfx_polygon.c.obj CMakeFiles/purrgo_core.dir/src/core/gfx/gfx_rect.c.obj CMakeFiles/purrgo_core.dir/src/core/gfx/gfx_renderer.c.obj CMakeFiles/purrgo_core.dir/src/core/gfx/gfx_text.c.obj CMakeFiles/purrgo_core.dir/src/core/gfx/gfx_icon.c.obj CMakeFiles/purrgo_core.dir/src/core/gnss.c.obj CMakeFiles/purrgo_core.dir/src/core/gnss_adapter.c.obj CMakeFiles/purrgo_core.dir/src/core/gnss_mock.c.obj CMakeFiles/purrgo_core.dir/src/core/gpx_parser.c.obj CMakeFiles/purrgo_core.dir/src/core/map.c.obj CMakeFiles/purrgo_core.dir/src/core/map_culling.c.obj CMakeFiles/purrgo_core.dir/src/core/map_idx.c.obj CMakeFiles/purrgo_core.dir/src/core/map_mlp.c.obj CMakeFiles/purrgo_core.dir/src/core/map_projection.c.obj CMakeFiles/purrgo_core.dir/src/core/map_render.c.obj CMakeFiles/purrgo_core.dir/src/core/map_style.c.obj CMakeFiles/purrgo_core.dir/src/core/navigation.c.obj CMakeFiles/purrgo_core.dir/src/core/purrgo_time.c.obj CMakeFiles/purrgo_core.dir/src/core/sun.c.obj CMakeFiles/purrgo_core.dir/src/core/system_time.c.obj CMakeFiles/purrgo_core.dir/src/core/sun_tables.c.obj CMakeFiles/purrgo_core.dir/src/core/track_logger.c.obj CMakeFiles/purrgo_core.dir/src/core/track_renderer.c.obj CMakeFiles/purrgo_core.dir/src/core/ubx.c.obj || third_party/libminmea.a
+build libpurrgo_core.a: C_STATIC_LIBRARY_LINKER__purrgo_core_ CMakeFiles/purrgo_core.dir/src/core/app_fsm.c.obj CMakeFiles/purrgo_core.dir/src/core/map_controller.c.obj CMakeFiles/purrgo_core.dir/src/core/config_controller.c.obj CMakeFiles/purrgo_core.dir/src/core/trip_computer.c.obj CMakeFiles/purrgo_core.dir/src/core/app_ui.c.obj CMakeFiles/purrgo_core.dir/src/core/ui/ui_map.c.obj CMakeFiles/purrgo_core.dir/src/core/ui/ui_trip.c.obj CMakeFiles/purrgo_core.dir/src/core/ui/ui_config.c.obj CMakeFiles/purrgo_core.dir/src/core/ui/ui_dir_select.c.obj CMakeFiles/purrgo_core.dir/src/core/config.c.obj CMakeFiles/purrgo_core.dir/src/core/geo.c.obj CMakeFiles/purrgo_core.dir/src/core/gfx/font5x7.c.obj CMakeFiles/purrgo_core.dir/src/core/gfx/gfx_circle.c.obj CMakeFiles/purrgo_core.dir/src/core/gfx/gfx_line.c.obj CMakeFiles/purrgo_core.dir/src/core/gfx/gfx_polygon.c.obj CMakeFiles/purrgo_core.dir/src/core/gfx/gfx_rect.c.obj CMakeFiles/purrgo_core.dir/src/core/gfx/gfx_renderer.c.obj CMakeFiles/purrgo_core.dir/src/core/gfx/gfx_text.c.obj CMakeFiles/purrgo_core.dir/src/core/gfx/gfx_icon.c.obj CMakeFiles/purrgo_core.dir/src/core/gnss.c.obj CMakeFiles/purrgo_core.dir/src/core/gnss_adapter.c.obj CMakeFiles/purrgo_core.dir/src/core/gnss_mock.c.obj CMakeFiles/purrgo_core.dir/src/core/gpx_parser.c.obj CMakeFiles/purrgo_core.dir/src/core/map.c.obj CMakeFiles/purrgo_core.dir/src/core/map_culling.c.obj CMakeFiles/purrgo_core.dir/src/core/map_idx.c.obj CMakeFiles/purrgo_core.dir/src/core/map_mlp.c.obj CMakeFiles/purrgo_core.dir/src/core/map_projection.c.obj CMakeFiles/purrgo_core.dir/src/core/map_render.c.obj CMakeFiles/purrgo_core.dir/src/core/map_style.c.obj CMakeFiles/purrgo_core.dir/src/core/navigation.c.obj CMakeFiles/purrgo_core.dir/src/core/purrgo_time.c.obj CMakeFiles/purrgo_core.dir/src/core/system_time.c.obj CMakeFiles/purrgo_core.dir/src/core/sun.c.obj CMakeFiles/purrgo_core.dir/src/core/sun_tables.c.obj CMakeFiles/purrgo_core.dir/src/core/track_logger.c.obj CMakeFiles/purrgo_core.dir/src/core/track_renderer.c.obj CMakeFiles/purrgo_core.dir/src/core/ubx.c.obj || third_party/libminmea.a
+  LANGUAGE_COMPILE_FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage
   OBJECT_DIR = CMakeFiles\purrgo_core.dir
   POST_BUILD = cd .
   PRE_LINK = cd .
+  TARGET_COMPILE_PDB = CMakeFiles\purrgo_core.dir\purrgo_core.pdb
   TARGET_FILE = libpurrgo_core.a
-  TARGET_PDB = purrgo_core.a.dbg
+  TARGET_PDB = libpurrgo_core.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_core.dir
 
 # =============================================================================
@@ -414,10 +492,12 @@ build cmake_object_order_depends_target_purrgo_ublox7: phony || cmake_object_ord
 build CMakeFiles/purrgo_ublox7.dir/src/platform/ublox/ublox7_config.c.obj: C_COMPILER__purrgo_ublox7_unscanned_ D$:/purrgo/src/platform/ublox/ublox7_config.c || cmake_object_order_depends_target_purrgo_ublox7
   DEFINES = -DUSE_MOCK_GNSS
   DEP_FILE = CMakeFiles\purrgo_ublox7.dir\src\platform\ublox\ublox7_config.c.obj.d
-  FLAGS = -std=c11
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -std=c11
   INCLUDES = -ID:/purrgo/include -ID:/purrgo/src/platform/ublox
   OBJECT_DIR = CMakeFiles\purrgo_ublox7.dir
   OBJECT_FILE_DIR = CMakeFiles\purrgo_ublox7.dir\src\platform\ublox
+  TARGET_COMPILE_PDB = CMakeFiles\purrgo_ublox7.dir\purrgo_ublox7.pdb
+  TARGET_PDB = libpurrgo_ublox7.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_ublox7.dir
 
 
@@ -429,11 +509,13 @@ build CMakeFiles/purrgo_ublox7.dir/src/platform/ublox/ublox7_config.c.obj: C_COM
 # Link the static library libpurrgo_ublox7.a
 
 build libpurrgo_ublox7.a: C_STATIC_LIBRARY_LINKER__purrgo_ublox7_ CMakeFiles/purrgo_ublox7.dir/src/platform/ublox/ublox7_config.c.obj || libpurrgo_core.a third_party/libminmea.a
+  LANGUAGE_COMPILE_FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage
   OBJECT_DIR = CMakeFiles\purrgo_ublox7.dir
   POST_BUILD = cd .
   PRE_LINK = cd .
+  TARGET_COMPILE_PDB = CMakeFiles\purrgo_ublox7.dir\purrgo_ublox7.pdb
   TARGET_FILE = libpurrgo_ublox7.a
-  TARGET_PDB = purrgo_ublox7.a.dbg
+  TARGET_PDB = libpurrgo_ublox7.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\purrgo_ublox7.dir
 
 
@@ -476,10 +558,12 @@ build cmake_object_order_depends_target_minmea: phony || .
 build third_party/CMakeFiles/minmea.dir/minmea/minmea.c.obj: C_COMPILER__minmea_unscanned_ D$:/purrgo/third_party/minmea/minmea.c || cmake_object_order_depends_target_minmea
   DEFINES = -DUSE_MOCK_GNSS -Dtimegm=mktime
   DEP_FILE = third_party\CMakeFiles\minmea.dir\minmea\minmea.c.obj.d
-  FLAGS = -std=c11 -w
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -std=c11 -w
   INCLUDES = -ID:/purrgo/third_party/minmea
   OBJECT_DIR = third_party\CMakeFiles\minmea.dir
   OBJECT_FILE_DIR = third_party\CMakeFiles\minmea.dir\minmea
+  TARGET_COMPILE_PDB = third_party\CMakeFiles\minmea.dir\minmea.pdb
+  TARGET_PDB = third_party\libminmea.pdb
   TARGET_SUPPORT_DIR = third_party\CMakeFiles\minmea.dir
 
 
@@ -491,11 +575,13 @@ build third_party/CMakeFiles/minmea.dir/minmea/minmea.c.obj: C_COMPILER__minmea_
 # Link the static library third_party\libminmea.a
 
 build third_party/libminmea.a: C_STATIC_LIBRARY_LINKER__minmea_ third_party/CMakeFiles/minmea.dir/minmea/minmea.c.obj
+  LANGUAGE_COMPILE_FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage
   OBJECT_DIR = third_party\CMakeFiles\minmea.dir
   POST_BUILD = cd .
   PRE_LINK = cd .
+  TARGET_COMPILE_PDB = third_party\CMakeFiles\minmea.dir\minmea.pdb
   TARGET_FILE = third_party\libminmea.a
-  TARGET_PDB = minmea.a.dbg
+  TARGET_PDB = third_party\libminmea.pdb
   TARGET_SUPPORT_DIR = third_party\CMakeFiles\minmea.dir
 
 
@@ -522,7 +608,391 @@ build third_party/CMakeFiles/rebuild_cache.util: CUSTOM_COMMAND
 build third_party/rebuild_cache: phony third_party/CMakeFiles/rebuild_cache.util
 
 # =============================================================================
+# Write statements declared in CMakeLists.txt:
+# D:/purrgo/CMakeLists.txt
+# =============================================================================
+
+# =============================================================================
+# Object build statements for EXECUTABLE target PurrGO_STM32
+
+
+#############################################
+# Order-only phony target for PurrGO_STM32
+
+build cmake_object_order_depends_target_PurrGO_STM32: phony || cmake_object_order_depends_target_STM32_Drivers
+
+build apps/stm32/PurrGO_STM32/CMakeFiles/PurrGO_STM32.dir/Core/Src/main.c.obj: C_COMPILER__PurrGO_STM32_unscanned_Debug D$:/purrgo/apps/stm32/PurrGO_STM32/Core/Src/main.c || cmake_object_order_depends_target_PurrGO_STM32
+  CONFIG = Debug
+  DEFINES = -DDEBUG -DSTM32F411xE -DUSE_HAL_DRIVER -DUSE_MOCK_GNSS
+  DEP_FILE = apps\stm32\PurrGO_STM32\CMakeFiles\PurrGO_STM32.dir\Core\Src\main.c.obj.d
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -O0 -g3 -std=gnu11
+  INCLUDES = -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Core/Inc -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/CMSIS/Device/ST/STM32F4xx/Include -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/CMSIS/Include
+  OBJECT_DIR = apps\stm32\PurrGO_STM32\CMakeFiles\PurrGO_STM32.dir
+  OBJECT_FILE_DIR = apps\stm32\PurrGO_STM32\CMakeFiles\PurrGO_STM32.dir\Core\Src
+  TARGET_COMPILE_PDB = apps\stm32\PurrGO_STM32\CMakeFiles\PurrGO_STM32.dir\
+  TARGET_PDB = apps\stm32\PurrGO_STM32\PurrGO_STM32.pdb
+  TARGET_SUPPORT_DIR = apps\stm32\PurrGO_STM32\CMakeFiles\PurrGO_STM32.dir
+
+build apps/stm32/PurrGO_STM32/CMakeFiles/PurrGO_STM32.dir/Core/Src/gpio.c.obj: C_COMPILER__PurrGO_STM32_unscanned_Debug D$:/purrgo/apps/stm32/PurrGO_STM32/Core/Src/gpio.c || cmake_object_order_depends_target_PurrGO_STM32
+  CONFIG = Debug
+  DEFINES = -DDEBUG -DSTM32F411xE -DUSE_HAL_DRIVER -DUSE_MOCK_GNSS
+  DEP_FILE = apps\stm32\PurrGO_STM32\CMakeFiles\PurrGO_STM32.dir\Core\Src\gpio.c.obj.d
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -O0 -g3 -std=gnu11
+  INCLUDES = -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Core/Inc -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/CMSIS/Device/ST/STM32F4xx/Include -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/CMSIS/Include
+  OBJECT_DIR = apps\stm32\PurrGO_STM32\CMakeFiles\PurrGO_STM32.dir
+  OBJECT_FILE_DIR = apps\stm32\PurrGO_STM32\CMakeFiles\PurrGO_STM32.dir\Core\Src
+  TARGET_COMPILE_PDB = apps\stm32\PurrGO_STM32\CMakeFiles\PurrGO_STM32.dir\
+  TARGET_PDB = apps\stm32\PurrGO_STM32\PurrGO_STM32.pdb
+  TARGET_SUPPORT_DIR = apps\stm32\PurrGO_STM32\CMakeFiles\PurrGO_STM32.dir
+
+build apps/stm32/PurrGO_STM32/CMakeFiles/PurrGO_STM32.dir/Core/Src/usart.c.obj: C_COMPILER__PurrGO_STM32_unscanned_Debug D$:/purrgo/apps/stm32/PurrGO_STM32/Core/Src/usart.c || cmake_object_order_depends_target_PurrGO_STM32
+  CONFIG = Debug
+  DEFINES = -DDEBUG -DSTM32F411xE -DUSE_HAL_DRIVER -DUSE_MOCK_GNSS
+  DEP_FILE = apps\stm32\PurrGO_STM32\CMakeFiles\PurrGO_STM32.dir\Core\Src\usart.c.obj.d
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -O0 -g3 -std=gnu11
+  INCLUDES = -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Core/Inc -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/CMSIS/Device/ST/STM32F4xx/Include -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/CMSIS/Include
+  OBJECT_DIR = apps\stm32\PurrGO_STM32\CMakeFiles\PurrGO_STM32.dir
+  OBJECT_FILE_DIR = apps\stm32\PurrGO_STM32\CMakeFiles\PurrGO_STM32.dir\Core\Src
+  TARGET_COMPILE_PDB = apps\stm32\PurrGO_STM32\CMakeFiles\PurrGO_STM32.dir\
+  TARGET_PDB = apps\stm32\PurrGO_STM32\PurrGO_STM32.pdb
+  TARGET_SUPPORT_DIR = apps\stm32\PurrGO_STM32\CMakeFiles\PurrGO_STM32.dir
+
+build apps/stm32/PurrGO_STM32/CMakeFiles/PurrGO_STM32.dir/Core/Src/stm32f4xx_it.c.obj: C_COMPILER__PurrGO_STM32_unscanned_Debug D$:/purrgo/apps/stm32/PurrGO_STM32/Core/Src/stm32f4xx_it.c || cmake_object_order_depends_target_PurrGO_STM32
+  CONFIG = Debug
+  DEFINES = -DDEBUG -DSTM32F411xE -DUSE_HAL_DRIVER -DUSE_MOCK_GNSS
+  DEP_FILE = apps\stm32\PurrGO_STM32\CMakeFiles\PurrGO_STM32.dir\Core\Src\stm32f4xx_it.c.obj.d
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -O0 -g3 -std=gnu11
+  INCLUDES = -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Core/Inc -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/CMSIS/Device/ST/STM32F4xx/Include -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/CMSIS/Include
+  OBJECT_DIR = apps\stm32\PurrGO_STM32\CMakeFiles\PurrGO_STM32.dir
+  OBJECT_FILE_DIR = apps\stm32\PurrGO_STM32\CMakeFiles\PurrGO_STM32.dir\Core\Src
+  TARGET_COMPILE_PDB = apps\stm32\PurrGO_STM32\CMakeFiles\PurrGO_STM32.dir\
+  TARGET_PDB = apps\stm32\PurrGO_STM32\PurrGO_STM32.pdb
+  TARGET_SUPPORT_DIR = apps\stm32\PurrGO_STM32\CMakeFiles\PurrGO_STM32.dir
+
+build apps/stm32/PurrGO_STM32/CMakeFiles/PurrGO_STM32.dir/Core/Src/stm32f4xx_hal_msp.c.obj: C_COMPILER__PurrGO_STM32_unscanned_Debug D$:/purrgo/apps/stm32/PurrGO_STM32/Core/Src/stm32f4xx_hal_msp.c || cmake_object_order_depends_target_PurrGO_STM32
+  CONFIG = Debug
+  DEFINES = -DDEBUG -DSTM32F411xE -DUSE_HAL_DRIVER -DUSE_MOCK_GNSS
+  DEP_FILE = apps\stm32\PurrGO_STM32\CMakeFiles\PurrGO_STM32.dir\Core\Src\stm32f4xx_hal_msp.c.obj.d
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -O0 -g3 -std=gnu11
+  INCLUDES = -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Core/Inc -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/CMSIS/Device/ST/STM32F4xx/Include -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/CMSIS/Include
+  OBJECT_DIR = apps\stm32\PurrGO_STM32\CMakeFiles\PurrGO_STM32.dir
+  OBJECT_FILE_DIR = apps\stm32\PurrGO_STM32\CMakeFiles\PurrGO_STM32.dir\Core\Src
+  TARGET_COMPILE_PDB = apps\stm32\PurrGO_STM32\CMakeFiles\PurrGO_STM32.dir\
+  TARGET_PDB = apps\stm32\PurrGO_STM32\PurrGO_STM32.pdb
+  TARGET_SUPPORT_DIR = apps\stm32\PurrGO_STM32\CMakeFiles\PurrGO_STM32.dir
+
+build apps/stm32/PurrGO_STM32/CMakeFiles/PurrGO_STM32.dir/Core/Src/sysmem.c.obj: C_COMPILER__PurrGO_STM32_unscanned_Debug D$:/purrgo/apps/stm32/PurrGO_STM32/Core/Src/sysmem.c || cmake_object_order_depends_target_PurrGO_STM32
+  CONFIG = Debug
+  DEFINES = -DDEBUG -DSTM32F411xE -DUSE_HAL_DRIVER -DUSE_MOCK_GNSS
+  DEP_FILE = apps\stm32\PurrGO_STM32\CMakeFiles\PurrGO_STM32.dir\Core\Src\sysmem.c.obj.d
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -O0 -g3 -std=gnu11
+  INCLUDES = -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Core/Inc -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/CMSIS/Device/ST/STM32F4xx/Include -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/CMSIS/Include
+  OBJECT_DIR = apps\stm32\PurrGO_STM32\CMakeFiles\PurrGO_STM32.dir
+  OBJECT_FILE_DIR = apps\stm32\PurrGO_STM32\CMakeFiles\PurrGO_STM32.dir\Core\Src
+  TARGET_COMPILE_PDB = apps\stm32\PurrGO_STM32\CMakeFiles\PurrGO_STM32.dir\
+  TARGET_PDB = apps\stm32\PurrGO_STM32\PurrGO_STM32.pdb
+  TARGET_SUPPORT_DIR = apps\stm32\PurrGO_STM32\CMakeFiles\PurrGO_STM32.dir
+
+build apps/stm32/PurrGO_STM32/CMakeFiles/PurrGO_STM32.dir/Core/Src/syscalls.c.obj: C_COMPILER__PurrGO_STM32_unscanned_Debug D$:/purrgo/apps/stm32/PurrGO_STM32/Core/Src/syscalls.c || cmake_object_order_depends_target_PurrGO_STM32
+  CONFIG = Debug
+  DEFINES = -DDEBUG -DSTM32F411xE -DUSE_HAL_DRIVER -DUSE_MOCK_GNSS
+  DEP_FILE = apps\stm32\PurrGO_STM32\CMakeFiles\PurrGO_STM32.dir\Core\Src\syscalls.c.obj.d
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -O0 -g3 -std=gnu11
+  INCLUDES = -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Core/Inc -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/CMSIS/Device/ST/STM32F4xx/Include -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/CMSIS/Include
+  OBJECT_DIR = apps\stm32\PurrGO_STM32\CMakeFiles\PurrGO_STM32.dir
+  OBJECT_FILE_DIR = apps\stm32\PurrGO_STM32\CMakeFiles\PurrGO_STM32.dir\Core\Src
+  TARGET_COMPILE_PDB = apps\stm32\PurrGO_STM32\CMakeFiles\PurrGO_STM32.dir\
+  TARGET_PDB = apps\stm32\PurrGO_STM32\PurrGO_STM32.pdb
+  TARGET_SUPPORT_DIR = apps\stm32\PurrGO_STM32\CMakeFiles\PurrGO_STM32.dir
+
+build apps/stm32/PurrGO_STM32/CMakeFiles/PurrGO_STM32.dir/startup_stm32f411xe.s.obj: ASM_COMPILER__PurrGO_STM32_unscanned_Debug D$:/purrgo/apps/stm32/PurrGO_STM32/startup_stm32f411xe.s || cmake_object_order_depends_target_PurrGO_STM32
+  CONFIG = Debug
+  DEFINES = -DDEBUG -DSTM32F411xE -DUSE_HAL_DRIVER -DUSE_MOCK_GNSS
+  DEP_FILE = apps\stm32\PurrGO_STM32\CMakeFiles\PurrGO_STM32.dir\startup_stm32f411xe.s.obj.d
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -x assembler-with-cpp -MMD -MP -g
+  INCLUDES = -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Core/Inc -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/CMSIS/Device/ST/STM32F4xx/Include -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/CMSIS/Include
+  OBJECT_DIR = apps\stm32\PurrGO_STM32\CMakeFiles\PurrGO_STM32.dir
+  OBJECT_FILE_DIR = apps\stm32\PurrGO_STM32\CMakeFiles\PurrGO_STM32.dir
+  TARGET_COMPILE_PDB = apps\stm32\PurrGO_STM32\CMakeFiles\PurrGO_STM32.dir\
+  TARGET_PDB = apps\stm32\PurrGO_STM32\PurrGO_STM32.pdb
+  TARGET_SUPPORT_DIR = apps\stm32\PurrGO_STM32\CMakeFiles\PurrGO_STM32.dir
+
+
+# =============================================================================
+# Link build statements for EXECUTABLE target PurrGO_STM32
+
+
+#############################################
+# Link the executable apps\stm32\PurrGO_STM32\PurrGO_STM32.elf
+
+build apps/stm32/PurrGO_STM32/PurrGO_STM32.elf: C_EXECUTABLE_LINKER__PurrGO_STM32_Debug apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Core/Src/system_stm32f4xx.c.obj apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.c.obj apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc.c.obj apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc_ex.c.obj apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash.c.obj apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ex.c.obj apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ramfunc.c.obj apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.c.obj apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma_ex.c.obj apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c.obj apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr.c.obj apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr_ex.c.obj apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_cortex.c.obj apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c.obj apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_exti.c.obj apps/stm32/PurrGO_STM32/CMakeFiles/PurrGO_STM32.dir/Core/Src/main.c.obj apps/stm32/PurrGO_STM32/CMakeFiles/PurrGO_STM32.dir/Core/Src/gpio.c.obj apps/stm32/PurrGO_STM32/CMakeFiles/PurrGO_STM32.dir/Core/Src/usart.c.obj apps/stm32/PurrGO_STM32/CMakeFiles/PurrGO_STM32.dir/Core/Src/stm32f4xx_it.c.obj apps/stm32/PurrGO_STM32/CMakeFiles/PurrGO_STM32.dir/Core/Src/stm32f4xx_hal_msp.c.obj apps/stm32/PurrGO_STM32/CMakeFiles/PurrGO_STM32.dir/Core/Src/sysmem.c.obj apps/stm32/PurrGO_STM32/CMakeFiles/PurrGO_STM32.dir/Core/Src/syscalls.c.obj apps/stm32/PurrGO_STM32/CMakeFiles/PurrGO_STM32.dir/startup_stm32f411xe.s.obj || apps/stm32/PurrGO_STM32/cmake/stm32cubemx/STM32_Drivers
+  CONFIG = Debug
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -O0 -g3
+  LINK_FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -T "D:/purrgo/STM32F411xx_FLASH.ld" --specs=nano.specs -Wl,-Map=purrgo.map -Wl,--gc-sections -Wl,--print-memory-usage
+  LINK_LIBRARIES = -lm
+  OBJECT_DIR = apps\stm32\PurrGO_STM32\CMakeFiles\PurrGO_STM32.dir
+  POST_BUILD = cd .
+  PRE_LINK = cd .
+  TARGET_COMPILE_PDB = apps\stm32\PurrGO_STM32\CMakeFiles\PurrGO_STM32.dir\
+  TARGET_FILE = apps\stm32\PurrGO_STM32\PurrGO_STM32.elf
+  TARGET_PDB = apps\stm32\PurrGO_STM32\PurrGO_STM32.pdb
+  TARGET_SUPPORT_DIR = apps\stm32\PurrGO_STM32\CMakeFiles\PurrGO_STM32.dir
+
+
+#############################################
+# Utility command for edit_cache
+
+build apps/stm32/PurrGO_STM32/CMakeFiles/edit_cache.util: CUSTOM_COMMAND
+  COMMAND = C:\Windows\system32\cmd.exe /C "cd /D D:\purrgo\build-stm32\apps\stm32\PurrGO_STM32 && C:\msys64\ucrt64\bin\cmake.exe -E echo "No interactive CMake dialog available.""
+  DESC = No interactive CMake dialog available...
+  restat = 1
+
+build apps/stm32/PurrGO_STM32/edit_cache: phony apps/stm32/PurrGO_STM32/CMakeFiles/edit_cache.util
+
+
+#############################################
+# Utility command for rebuild_cache
+
+build apps/stm32/PurrGO_STM32/CMakeFiles/rebuild_cache.util: CUSTOM_COMMAND
+  COMMAND = C:\Windows\system32\cmd.exe /C "cd /D D:\purrgo\build-stm32\apps\stm32\PurrGO_STM32 && C:\msys64\ucrt64\bin\cmake.exe --regenerate-during-build -SD:\purrgo -BD:\purrgo\build-stm32"
+  DESC = Running CMake to regenerate build system...
+  pool = console
+  restat = 1
+
+build apps/stm32/PurrGO_STM32/rebuild_cache: phony apps/stm32/PurrGO_STM32/CMakeFiles/rebuild_cache.util
+
+# =============================================================================
+# Write statements declared in CMakeLists.txt:
+# D:/purrgo/apps/stm32/PurrGO_STM32/CMakeLists.txt
+# =============================================================================
+
+# =============================================================================
+# Object build statements for OBJECT_LIBRARY target STM32_Drivers
+
+
+#############################################
+# Order-only phony target for STM32_Drivers
+
+build cmake_object_order_depends_target_STM32_Drivers: phony || .
+
+build apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Core/Src/system_stm32f4xx.c.obj: C_COMPILER__STM32_Drivers_unscanned_Debug D$:/purrgo/apps/stm32/PurrGO_STM32/Core/Src/system_stm32f4xx.c || cmake_object_order_depends_target_STM32_Drivers
+  CONFIG = Debug
+  DEFINES = -DDEBUG -DSTM32F411xE -DUSE_HAL_DRIVER -DUSE_MOCK_GNSS
+  DEP_FILE = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir\__\__\Core\Src\system_stm32f4xx.c.obj.d
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -O0 -g3 -std=gnu11
+  INCLUDES = -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Core/Inc -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/CMSIS/Device/ST/STM32F4xx/Include -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/CMSIS/Include
+  OBJECT_DIR = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir
+  OBJECT_FILE_DIR = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir\__\__\Core\Src
+  TARGET_COMPILE_PDB = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir\
+  TARGET_PDB = ""
+  TARGET_SUPPORT_DIR = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir
+
+build apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.c.obj: C_COMPILER__STM32_Drivers_unscanned_Debug D$:/purrgo/apps/stm32/PurrGO_STM32/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.c || cmake_object_order_depends_target_STM32_Drivers
+  CONFIG = Debug
+  DEFINES = -DDEBUG -DSTM32F411xE -DUSE_HAL_DRIVER -DUSE_MOCK_GNSS
+  DEP_FILE = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir\__\__\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_uart.c.obj.d
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -O0 -g3 -std=gnu11
+  INCLUDES = -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Core/Inc -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/CMSIS/Device/ST/STM32F4xx/Include -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/CMSIS/Include
+  OBJECT_DIR = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir
+  OBJECT_FILE_DIR = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir\__\__\Drivers\STM32F4xx_HAL_Driver\Src
+  TARGET_COMPILE_PDB = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir\
+  TARGET_PDB = ""
+  TARGET_SUPPORT_DIR = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir
+
+build apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc.c.obj: C_COMPILER__STM32_Drivers_unscanned_Debug D$:/purrgo/apps/stm32/PurrGO_STM32/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc.c || cmake_object_order_depends_target_STM32_Drivers
+  CONFIG = Debug
+  DEFINES = -DDEBUG -DSTM32F411xE -DUSE_HAL_DRIVER -DUSE_MOCK_GNSS
+  DEP_FILE = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir\__\__\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_rcc.c.obj.d
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -O0 -g3 -std=gnu11
+  INCLUDES = -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Core/Inc -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/CMSIS/Device/ST/STM32F4xx/Include -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/CMSIS/Include
+  OBJECT_DIR = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir
+  OBJECT_FILE_DIR = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir\__\__\Drivers\STM32F4xx_HAL_Driver\Src
+  TARGET_COMPILE_PDB = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir\
+  TARGET_PDB = ""
+  TARGET_SUPPORT_DIR = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir
+
+build apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc_ex.c.obj: C_COMPILER__STM32_Drivers_unscanned_Debug D$:/purrgo/apps/stm32/PurrGO_STM32/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc_ex.c || cmake_object_order_depends_target_STM32_Drivers
+  CONFIG = Debug
+  DEFINES = -DDEBUG -DSTM32F411xE -DUSE_HAL_DRIVER -DUSE_MOCK_GNSS
+  DEP_FILE = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir\__\__\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_rcc_ex.c.obj.d
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -O0 -g3 -std=gnu11
+  INCLUDES = -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Core/Inc -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/CMSIS/Device/ST/STM32F4xx/Include -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/CMSIS/Include
+  OBJECT_DIR = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir
+  OBJECT_FILE_DIR = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir\__\__\Drivers\STM32F4xx_HAL_Driver\Src
+  TARGET_COMPILE_PDB = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir\
+  TARGET_PDB = ""
+  TARGET_SUPPORT_DIR = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir
+
+build apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash.c.obj: C_COMPILER__STM32_Drivers_unscanned_Debug D$:/purrgo/apps/stm32/PurrGO_STM32/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash.c || cmake_object_order_depends_target_STM32_Drivers
+  CONFIG = Debug
+  DEFINES = -DDEBUG -DSTM32F411xE -DUSE_HAL_DRIVER -DUSE_MOCK_GNSS
+  DEP_FILE = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir\__\__\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_flash.c.obj.d
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -O0 -g3 -std=gnu11
+  INCLUDES = -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Core/Inc -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/CMSIS/Device/ST/STM32F4xx/Include -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/CMSIS/Include
+  OBJECT_DIR = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir
+  OBJECT_FILE_DIR = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir\__\__\Drivers\STM32F4xx_HAL_Driver\Src
+  TARGET_COMPILE_PDB = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir\
+  TARGET_PDB = ""
+  TARGET_SUPPORT_DIR = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir
+
+build apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ex.c.obj: C_COMPILER__STM32_Drivers_unscanned_Debug D$:/purrgo/apps/stm32/PurrGO_STM32/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ex.c || cmake_object_order_depends_target_STM32_Drivers
+  CONFIG = Debug
+  DEFINES = -DDEBUG -DSTM32F411xE -DUSE_HAL_DRIVER -DUSE_MOCK_GNSS
+  DEP_FILE = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir\__\__\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_flash_ex.c.obj.d
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -O0 -g3 -std=gnu11
+  INCLUDES = -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Core/Inc -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/CMSIS/Device/ST/STM32F4xx/Include -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/CMSIS/Include
+  OBJECT_DIR = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir
+  OBJECT_FILE_DIR = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir\__\__\Drivers\STM32F4xx_HAL_Driver\Src
+  TARGET_COMPILE_PDB = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir\
+  TARGET_PDB = ""
+  TARGET_SUPPORT_DIR = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir
+
+build apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ramfunc.c.obj: C_COMPILER__STM32_Drivers_unscanned_Debug D$:/purrgo/apps/stm32/PurrGO_STM32/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ramfunc.c || cmake_object_order_depends_target_STM32_Drivers
+  CONFIG = Debug
+  DEFINES = -DDEBUG -DSTM32F411xE -DUSE_HAL_DRIVER -DUSE_MOCK_GNSS
+  DEP_FILE = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir\__\__\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_flash_ramfunc.c.obj.d
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -O0 -g3 -std=gnu11
+  INCLUDES = -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Core/Inc -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/CMSIS/Device/ST/STM32F4xx/Include -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/CMSIS/Include
+  OBJECT_DIR = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir
+  OBJECT_FILE_DIR = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir\__\__\Drivers\STM32F4xx_HAL_Driver\Src
+  TARGET_COMPILE_PDB = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir\
+  TARGET_PDB = ""
+  TARGET_SUPPORT_DIR = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir
+
+build apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.c.obj: C_COMPILER__STM32_Drivers_unscanned_Debug D$:/purrgo/apps/stm32/PurrGO_STM32/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.c || cmake_object_order_depends_target_STM32_Drivers
+  CONFIG = Debug
+  DEFINES = -DDEBUG -DSTM32F411xE -DUSE_HAL_DRIVER -DUSE_MOCK_GNSS
+  DEP_FILE = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir\__\__\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_gpio.c.obj.d
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -O0 -g3 -std=gnu11
+  INCLUDES = -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Core/Inc -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/CMSIS/Device/ST/STM32F4xx/Include -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/CMSIS/Include
+  OBJECT_DIR = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir
+  OBJECT_FILE_DIR = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir\__\__\Drivers\STM32F4xx_HAL_Driver\Src
+  TARGET_COMPILE_PDB = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir\
+  TARGET_PDB = ""
+  TARGET_SUPPORT_DIR = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir
+
+build apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma_ex.c.obj: C_COMPILER__STM32_Drivers_unscanned_Debug D$:/purrgo/apps/stm32/PurrGO_STM32/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma_ex.c || cmake_object_order_depends_target_STM32_Drivers
+  CONFIG = Debug
+  DEFINES = -DDEBUG -DSTM32F411xE -DUSE_HAL_DRIVER -DUSE_MOCK_GNSS
+  DEP_FILE = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir\__\__\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_dma_ex.c.obj.d
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -O0 -g3 -std=gnu11
+  INCLUDES = -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Core/Inc -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/CMSIS/Device/ST/STM32F4xx/Include -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/CMSIS/Include
+  OBJECT_DIR = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir
+  OBJECT_FILE_DIR = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir\__\__\Drivers\STM32F4xx_HAL_Driver\Src
+  TARGET_COMPILE_PDB = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir\
+  TARGET_PDB = ""
+  TARGET_SUPPORT_DIR = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir
+
+build apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c.obj: C_COMPILER__STM32_Drivers_unscanned_Debug D$:/purrgo/apps/stm32/PurrGO_STM32/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c || cmake_object_order_depends_target_STM32_Drivers
+  CONFIG = Debug
+  DEFINES = -DDEBUG -DSTM32F411xE -DUSE_HAL_DRIVER -DUSE_MOCK_GNSS
+  DEP_FILE = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir\__\__\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_dma.c.obj.d
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -O0 -g3 -std=gnu11
+  INCLUDES = -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Core/Inc -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/CMSIS/Device/ST/STM32F4xx/Include -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/CMSIS/Include
+  OBJECT_DIR = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir
+  OBJECT_FILE_DIR = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir\__\__\Drivers\STM32F4xx_HAL_Driver\Src
+  TARGET_COMPILE_PDB = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir\
+  TARGET_PDB = ""
+  TARGET_SUPPORT_DIR = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir
+
+build apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr.c.obj: C_COMPILER__STM32_Drivers_unscanned_Debug D$:/purrgo/apps/stm32/PurrGO_STM32/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr.c || cmake_object_order_depends_target_STM32_Drivers
+  CONFIG = Debug
+  DEFINES = -DDEBUG -DSTM32F411xE -DUSE_HAL_DRIVER -DUSE_MOCK_GNSS
+  DEP_FILE = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir\__\__\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_pwr.c.obj.d
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -O0 -g3 -std=gnu11
+  INCLUDES = -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Core/Inc -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/CMSIS/Device/ST/STM32F4xx/Include -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/CMSIS/Include
+  OBJECT_DIR = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir
+  OBJECT_FILE_DIR = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir\__\__\Drivers\STM32F4xx_HAL_Driver\Src
+  TARGET_COMPILE_PDB = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir\
+  TARGET_PDB = ""
+  TARGET_SUPPORT_DIR = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir
+
+build apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr_ex.c.obj: C_COMPILER__STM32_Drivers_unscanned_Debug D$:/purrgo/apps/stm32/PurrGO_STM32/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr_ex.c || cmake_object_order_depends_target_STM32_Drivers
+  CONFIG = Debug
+  DEFINES = -DDEBUG -DSTM32F411xE -DUSE_HAL_DRIVER -DUSE_MOCK_GNSS
+  DEP_FILE = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir\__\__\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_pwr_ex.c.obj.d
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -O0 -g3 -std=gnu11
+  INCLUDES = -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Core/Inc -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/CMSIS/Device/ST/STM32F4xx/Include -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/CMSIS/Include
+  OBJECT_DIR = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir
+  OBJECT_FILE_DIR = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir\__\__\Drivers\STM32F4xx_HAL_Driver\Src
+  TARGET_COMPILE_PDB = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir\
+  TARGET_PDB = ""
+  TARGET_SUPPORT_DIR = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir
+
+build apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_cortex.c.obj: C_COMPILER__STM32_Drivers_unscanned_Debug D$:/purrgo/apps/stm32/PurrGO_STM32/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_cortex.c || cmake_object_order_depends_target_STM32_Drivers
+  CONFIG = Debug
+  DEFINES = -DDEBUG -DSTM32F411xE -DUSE_HAL_DRIVER -DUSE_MOCK_GNSS
+  DEP_FILE = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir\__\__\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_cortex.c.obj.d
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -O0 -g3 -std=gnu11
+  INCLUDES = -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Core/Inc -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/CMSIS/Device/ST/STM32F4xx/Include -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/CMSIS/Include
+  OBJECT_DIR = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir
+  OBJECT_FILE_DIR = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir\__\__\Drivers\STM32F4xx_HAL_Driver\Src
+  TARGET_COMPILE_PDB = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir\
+  TARGET_PDB = ""
+  TARGET_SUPPORT_DIR = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir
+
+build apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c.obj: C_COMPILER__STM32_Drivers_unscanned_Debug D$:/purrgo/apps/stm32/PurrGO_STM32/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c || cmake_object_order_depends_target_STM32_Drivers
+  CONFIG = Debug
+  DEFINES = -DDEBUG -DSTM32F411xE -DUSE_HAL_DRIVER -DUSE_MOCK_GNSS
+  DEP_FILE = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir\__\__\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal.c.obj.d
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -O0 -g3 -std=gnu11
+  INCLUDES = -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Core/Inc -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/CMSIS/Device/ST/STM32F4xx/Include -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/CMSIS/Include
+  OBJECT_DIR = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir
+  OBJECT_FILE_DIR = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir\__\__\Drivers\STM32F4xx_HAL_Driver\Src
+  TARGET_COMPILE_PDB = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir\
+  TARGET_PDB = ""
+  TARGET_SUPPORT_DIR = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir
+
+build apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_exti.c.obj: C_COMPILER__STM32_Drivers_unscanned_Debug D$:/purrgo/apps/stm32/PurrGO_STM32/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_exti.c || cmake_object_order_depends_target_STM32_Drivers
+  CONFIG = Debug
+  DEFINES = -DDEBUG -DSTM32F411xE -DUSE_HAL_DRIVER -DUSE_MOCK_GNSS
+  DEP_FILE = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir\__\__\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_exti.c.obj.d
+  FLAGS = -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -O0 -g3 -std=gnu11
+  INCLUDES = -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Core/Inc -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/CMSIS/Device/ST/STM32F4xx/Include -ID:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/../../Drivers/CMSIS/Include
+  OBJECT_DIR = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir
+  OBJECT_FILE_DIR = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir\__\__\Drivers\STM32F4xx_HAL_Driver\Src
+  TARGET_COMPILE_PDB = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir\
+  TARGET_PDB = ""
+  TARGET_SUPPORT_DIR = apps\stm32\PurrGO_STM32\cmake\stm32cubemx\CMakeFiles\STM32_Drivers.dir
+
+
+
+#############################################
+# Object library STM32_Drivers
+
+build apps/stm32/PurrGO_STM32/cmake/stm32cubemx/STM32_Drivers: phony apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Core/Src/system_stm32f4xx.c.obj apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.c.obj apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc.c.obj apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc_ex.c.obj apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash.c.obj apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ex.c.obj apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ramfunc.c.obj apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.c.obj apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma_ex.c.obj apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c.obj apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr.c.obj apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr_ex.c.obj apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_cortex.c.obj apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c.obj apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_exti.c.obj
+
+
+#############################################
+# Utility command for edit_cache
+
+build apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeFiles/edit_cache.util: CUSTOM_COMMAND
+  COMMAND = C:\Windows\system32\cmd.exe /C "cd /D D:\purrgo\build-stm32\apps\stm32\PurrGO_STM32\cmake\stm32cubemx && C:\msys64\ucrt64\bin\cmake.exe -E echo "No interactive CMake dialog available.""
+  DESC = No interactive CMake dialog available...
+  restat = 1
+
+build apps/stm32/PurrGO_STM32/cmake/stm32cubemx/edit_cache: phony apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeFiles/edit_cache.util
+
+
+#############################################
+# Utility command for rebuild_cache
+
+build apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeFiles/rebuild_cache.util: CUSTOM_COMMAND
+  COMMAND = C:\Windows\system32\cmd.exe /C "cd /D D:\purrgo\build-stm32\apps\stm32\PurrGO_STM32\cmake\stm32cubemx && C:\msys64\ucrt64\bin\cmake.exe --regenerate-during-build -SD:\purrgo -BD:\purrgo\build-stm32"
+  DESC = Running CMake to regenerate build system...
+  pool = console
+  restat = 1
+
+build apps/stm32/PurrGO_STM32/cmake/stm32cubemx/rebuild_cache: phony apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeFiles/rebuild_cache.util
+
+# =============================================================================
 # Target aliases.
+
+build PurrGO_STM32: phony apps/stm32/PurrGO_STM32/PurrGO_STM32.elf
+
+build PurrGO_STM32.elf: phony apps/stm32/PurrGO_STM32/PurrGO_STM32.elf
+
+build STM32_Drivers: phony apps/stm32/PurrGO_STM32/cmake/stm32cubemx/STM32_Drivers
 
 build libminmea.a: phony third_party/libminmea.a
 
@@ -540,7 +1010,21 @@ build purrgo_ublox7: phony libpurrgo_ublox7.a
 #############################################
 # Folder: D:/purrgo/build-stm32
 
-build all: phony libpurrgo_core.a libpurrgo_ublox7.a third_party/all
+build all: phony libpurrgo_core.a libpurrgo_ublox7.a third_party/all apps/stm32/PurrGO_STM32/all
+
+# =============================================================================
+
+#############################################
+# Folder: D:/purrgo/build-stm32/apps/stm32/PurrGO_STM32
+
+build apps/stm32/PurrGO_STM32/all: phony apps/stm32/PurrGO_STM32/PurrGO_STM32.elf apps/stm32/PurrGO_STM32/cmake/stm32cubemx/all
+
+# =============================================================================
+
+#############################################
+# Folder: D:/purrgo/build-stm32/apps/stm32/PurrGO_STM32/cmake/stm32cubemx
+
+build apps/stm32/PurrGO_STM32/cmake/stm32cubemx/all: phony apps/stm32/PurrGO_STM32/cmake/stm32cubemx/STM32_Drivers
 
 # =============================================================================
 
@@ -570,14 +1054,14 @@ build D$:/purrgo/build-stm32/CMakeFiles/cmake.verify_globs: VERIFY_GLOBS | D$:/p
 #############################################
 # Re-run CMake if any of its inputs changed.
 
-build build.ninja D$:/purrgo/build-stm32/cmake_install.cmake D$:/purrgo/build-stm32/third_party/cmake_install.cmake: RERUN_CMAKE D$:/purrgo/build-stm32/CMakeFiles/cmake.verify_globs | C$:/msys64/ucrt64/share/cmake/Modules/CMakeCInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeCommonLanguageInclude.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeGenericSystem.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeInitializeConfigs.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeLanguageInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeSystemSpecificInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeSystemSpecificInitialize.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/CMakeCommonCompilerMacros.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/GNU-C.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/GNU.cmake C$:/msys64/ucrt64/share/cmake/Modules/Internal/CMakeCLinkerInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/Internal/CMakeCommonLinkerInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/Platform/Generic.cmake CMakeCache.txt CMakeFiles/4.4.2/CMakeCCompiler.cmake CMakeFiles/4.4.2/CMakeSystem.cmake D$:/purrgo/build-stm32/CMakeFiles/VerifyGlobs.cmake D$:/purrgo/CMakeLists.txt D$:/purrgo/stm32-toolchain.cmake D$:/purrgo/third_party/CMakeLists.txt
+build build.ninja D$:/purrgo/build-stm32/cmake_install.cmake D$:/purrgo/build-stm32/third_party/cmake_install.cmake D$:/purrgo/build-stm32/apps/stm32/PurrGO_STM32/cmake_install.cmake D$:/purrgo/build-stm32/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/cmake_install.cmake: RERUN_CMAKE D$:/purrgo/build-stm32/CMakeFiles/cmake.verify_globs | C$:/msys64/ucrt64/share/cmake/Modules/CMakeASMCompiler.cmake.in C$:/msys64/ucrt64/share/cmake/Modules/CMakeASMInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeCCompiler.cmake.in C$:/msys64/ucrt64/share/cmake/Modules/CMakeCCompilerABI.c C$:/msys64/ucrt64/share/cmake/Modules/CMakeCInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeCXXCompiler.cmake.in C$:/msys64/ucrt64/share/cmake/Modules/CMakeCXXCompilerABI.cpp C$:/msys64/ucrt64/share/cmake/Modules/CMakeCXXInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeCommonLanguageInclude.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeCompilerIdDetection.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeDetermineASMCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeDetermineCCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeDetermineCXXCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeDetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeDetermineCompilerABI.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeDetermineCompilerId.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeDetermineCompilerSupport.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeDetermineSystem.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeFindBinUtils.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeGenericSystem.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeInitializeConfigs.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeLanguageInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeNinjaFindMake.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeParseImplicitIncludeInfo.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeParseImplicitLinkInfo.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeParseLibraryArchitecture.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeSystem.cmake.in C$:/msys64/ucrt64/share/cmake/Modules/CMakeSystemSpecificInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeSystemSpecificInitialize.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeTestASMCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeTestCCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeTestCXXCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeTestCompilerCommon.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/ADSP-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/ARMCC-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/ARMClang-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/AppleClang-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Borland-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Bruce-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/CMakeCommonCompilerMacros.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Clang-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Clang-DetermineCompilerInternal.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Compaq-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Compaq-CXX-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Cray-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/CrayClang-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Diab-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Embarcadero-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Fujitsu-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/FujitsuClang-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/GHS-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/GNU-ASM.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/GNU-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/GNU-C.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/GNU-CXX-CXXImportStd.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/GNU-CXX-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/GNU-CXX.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/GNU-FindBinUtils.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/GNU.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/HP-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/HP-CXX-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/IAR-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/IBMCPP-C-DetermineVersionInternal.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/IBMCPP-CXX-DetermineVersionInternal.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/IBMClang-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/IBMClang-CXX-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Intel-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/IntelLLVM-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/LCC-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/LCC-CXX-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/MSVC-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/NVHPC-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/NVIDIA-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/OpenWatcom-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/OrangeC-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/PGI-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/PathScale-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/PellesC-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Renesas-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/SCO-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/SDCC-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/SunPro-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/SunPro-CXX-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/TI-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/TIClang-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Tasking-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/TinyCC-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/VisualAge-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/VisualAge-CXX-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Watcom-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/XL-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/XL-CXX-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/XLClang-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/XLClang-CXX-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/zOS-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/zOS-CXX-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Internal/CMakeASMLinkerInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/Internal/CMakeCLinkerInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/Internal/CMakeCXXLinkerInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/Internal/CMakeCommonLinkerInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/Internal/CMakeDetermineLinkerId.cmake C$:/msys64/ucrt64/share/cmake/Modules/Internal/CMakeInspectASMLinker.cmake C$:/msys64/ucrt64/share/cmake/Modules/Internal/CMakeInspectCLinker.cmake C$:/msys64/ucrt64/share/cmake/Modules/Internal/CMakeInspectCXXLinker.cmake C$:/msys64/ucrt64/share/cmake/Modules/Internal/FeatureTesting.cmake C$:/msys64/ucrt64/share/cmake/Modules/Platform/Generic.cmake CMakeCache.txt CMakeFiles/4.4.2/CMakeASMCompiler.cmake CMakeFiles/4.4.2/CMakeCCompiler.cmake CMakeFiles/4.4.2/CMakeCXXCompiler.cmake CMakeFiles/4.4.2/CMakeSystem.cmake D$:/purrgo/build-stm32/CMakeFiles/VerifyGlobs.cmake D$:/purrgo/CMakeLists.txt D$:/purrgo/apps/stm32/PurrGO_STM32/CMakeLists.txt D$:/purrgo/apps/stm32/PurrGO_STM32/cmake/gcc-arm-none-eabi.cmake D$:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeLists.txt D$:/purrgo/third_party/CMakeLists.txt
   pool = console
 
 
 #############################################
 # A missing CMake input file is not an error.
 
-build C$:/msys64/ucrt64/share/cmake/Modules/CMakeCInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeCommonLanguageInclude.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeGenericSystem.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeInitializeConfigs.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeLanguageInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeSystemSpecificInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeSystemSpecificInitialize.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/CMakeCommonCompilerMacros.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/GNU-C.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/GNU.cmake C$:/msys64/ucrt64/share/cmake/Modules/Internal/CMakeCLinkerInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/Internal/CMakeCommonLinkerInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/Platform/Generic.cmake CMakeCache.txt CMakeFiles/4.4.2/CMakeCCompiler.cmake CMakeFiles/4.4.2/CMakeSystem.cmake D$:/purrgo/build-stm32/CMakeFiles/VerifyGlobs.cmake D$:/purrgo/CMakeLists.txt D$:/purrgo/stm32-toolchain.cmake D$:/purrgo/third_party/CMakeLists.txt: phony
+build C$:/msys64/ucrt64/share/cmake/Modules/CMakeASMCompiler.cmake.in C$:/msys64/ucrt64/share/cmake/Modules/CMakeASMInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeCCompiler.cmake.in C$:/msys64/ucrt64/share/cmake/Modules/CMakeCCompilerABI.c C$:/msys64/ucrt64/share/cmake/Modules/CMakeCInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeCXXCompiler.cmake.in C$:/msys64/ucrt64/share/cmake/Modules/CMakeCXXCompilerABI.cpp C$:/msys64/ucrt64/share/cmake/Modules/CMakeCXXInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeCommonLanguageInclude.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeCompilerIdDetection.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeDetermineASMCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeDetermineCCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeDetermineCXXCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeDetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeDetermineCompilerABI.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeDetermineCompilerId.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeDetermineCompilerSupport.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeDetermineSystem.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeFindBinUtils.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeGenericSystem.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeInitializeConfigs.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeLanguageInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeNinjaFindMake.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeParseImplicitIncludeInfo.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeParseImplicitLinkInfo.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeParseLibraryArchitecture.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeSystem.cmake.in C$:/msys64/ucrt64/share/cmake/Modules/CMakeSystemSpecificInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeSystemSpecificInitialize.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeTestASMCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeTestCCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeTestCXXCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/CMakeTestCompilerCommon.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/ADSP-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/ARMCC-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/ARMClang-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/AppleClang-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Borland-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Bruce-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/CMakeCommonCompilerMacros.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Clang-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Clang-DetermineCompilerInternal.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Compaq-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Compaq-CXX-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Cray-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/CrayClang-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Diab-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Embarcadero-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Fujitsu-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/FujitsuClang-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/GHS-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/GNU-ASM.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/GNU-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/GNU-C.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/GNU-CXX-CXXImportStd.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/GNU-CXX-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/GNU-CXX.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/GNU-FindBinUtils.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/GNU.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/HP-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/HP-CXX-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/IAR-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/IBMCPP-C-DetermineVersionInternal.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/IBMCPP-CXX-DetermineVersionInternal.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/IBMClang-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/IBMClang-CXX-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Intel-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/IntelLLVM-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/LCC-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/LCC-CXX-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/MSVC-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/NVHPC-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/NVIDIA-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/OpenWatcom-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/OrangeC-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/PGI-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/PathScale-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/PellesC-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Renesas-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/SCO-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/SDCC-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/SunPro-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/SunPro-CXX-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/TI-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/TIClang-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Tasking-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/TinyCC-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/VisualAge-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/VisualAge-CXX-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/Watcom-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/XL-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/XL-CXX-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/XLClang-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/XLClang-CXX-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/zOS-C-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Compiler/zOS-CXX-DetermineCompiler.cmake C$:/msys64/ucrt64/share/cmake/Modules/Internal/CMakeASMLinkerInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/Internal/CMakeCLinkerInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/Internal/CMakeCXXLinkerInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/Internal/CMakeCommonLinkerInformation.cmake C$:/msys64/ucrt64/share/cmake/Modules/Internal/CMakeDetermineLinkerId.cmake C$:/msys64/ucrt64/share/cmake/Modules/Internal/CMakeInspectASMLinker.cmake C$:/msys64/ucrt64/share/cmake/Modules/Internal/CMakeInspectCLinker.cmake C$:/msys64/ucrt64/share/cmake/Modules/Internal/CMakeInspectCXXLinker.cmake C$:/msys64/ucrt64/share/cmake/Modules/Internal/FeatureTesting.cmake C$:/msys64/ucrt64/share/cmake/Modules/Platform/Generic.cmake CMakeCache.txt CMakeFiles/4.4.2/CMakeASMCompiler.cmake CMakeFiles/4.4.2/CMakeCCompiler.cmake CMakeFiles/4.4.2/CMakeCXXCompiler.cmake CMakeFiles/4.4.2/CMakeSystem.cmake D$:/purrgo/build-stm32/CMakeFiles/VerifyGlobs.cmake D$:/purrgo/CMakeLists.txt D$:/purrgo/apps/stm32/PurrGO_STM32/CMakeLists.txt D$:/purrgo/apps/stm32/PurrGO_STM32/cmake/gcc-arm-none-eabi.cmake D$:/purrgo/apps/stm32/PurrGO_STM32/cmake/stm32cubemx/CMakeLists.txt D$:/purrgo/third_party/CMakeLists.txt: phony
 
 
 #############################################
