@@ -102,8 +102,8 @@ int main(void)
 
     // Переключение состояния пина PC13
       HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
-    // Задержка 500 миллисекунд
-      HAL_Delay(500);
+    // Задержка 50 миллисекунд
+      HAL_Delay(50);
   }
   /* USER CODE END 3 */
 }
