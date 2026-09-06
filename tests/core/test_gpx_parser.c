@@ -203,6 +203,67 @@ static void test_gpx_parser_edge_cases(void) {
     purrgo_gpx_parser_feed(&parser, chunk6, strlen(chunk6));
 
     printf("test_gpx_parser_edge_cases passed\n");
+static void test_gpx_parser_invalid_coords(void) {
+    purrgo_gpx_parser_t parser;
+    purrgo_waypoint_t wps[1];
+
+    // Completely non-numeric characters
+    purrgo_gpx_parser_init(&parser, wps, 1);
+    const char* chunk1 = "<wpt lat=\"abc\" lon=\"def\"></wpt>";
+    purrgo_gpx_parser_feed(&parser, chunk1, strlen(chunk1));
+    assert(parser.current_count == 1);
+    assert(wps[0].lat_1e7 == 0);
+    assert(wps[0].lon_1e7 == 0);
+
+    // Characters mixed with numbers in integer part
+    purrgo_gpx_parser_init(&parser, wps, 1);
+    const char* chunk2 = "<wpt lat=\"12a.34\" lon=\"56b\"></wpt>";
+    purrgo_gpx_parser_feed(&parser, chunk2, strlen(chunk2));
+    assert(parser.current_count == 1);
+    assert(wps[0].lat_1e7 == 120000000); // Should parse up to 'a'
+    assert(wps[0].lon_1e7 == 560000000); // Should parse up to 'b'
+
+    // Characters mixed with numbers in fraction part
+    purrgo_gpx_parser_init(&parser, wps, 1);
+    const char* chunk3 = "<wpt lat=\"12.3a4\" lon=\"56.7b8\"></wpt>";
+    purrgo_gpx_parser_feed(&parser, chunk3, strlen(chunk3));
+    assert(parser.current_count == 1);
+    assert(wps[0].lat_1e7 == 123000000); // Should parse up to 'a'
+    assert(wps[0].lon_1e7 == 567000000); // Should parse up to 'b'
+
+    // Multiple decimal points
+    purrgo_gpx_parser_init(&parser, wps, 1);
+    const char* chunk4 = "<wpt lat=\"12.3.4\" lon=\"56.7.8\"></wpt>";
+    purrgo_gpx_parser_feed(&parser, chunk4, strlen(chunk4));
+    assert(parser.current_count == 1);
+    assert(wps[0].lat_1e7 == 123000000); // Should parse up to second '.'
+    assert(wps[0].lon_1e7 == 567000000);
+
+    // Multiple signs
+    purrgo_gpx_parser_init(&parser, wps, 1);
+    const char* chunk5 = "<wpt lat=\"--12.3\" lon=\"++56.7\"></wpt>";
+    purrgo_gpx_parser_feed(&parser, chunk5, strlen(chunk5));
+    assert(parser.current_count == 1);
+    assert(wps[0].lat_1e7 == 0); // Stops at second sign
+    assert(wps[0].lon_1e7 == 0);
+
+    // Just decimal point
+    purrgo_gpx_parser_init(&parser, wps, 1);
+    const char* chunk6 = "<wpt lat=\".\" lon=\".\"></wpt>";
+    purrgo_gpx_parser_feed(&parser, chunk6, strlen(chunk6));
+    assert(parser.current_count == 1);
+    assert(wps[0].lat_1e7 == 0);
+    assert(wps[0].lon_1e7 == 0);
+
+    // Fraction part longer than 7 digits (should be truncated normally, already tested but let's double check boundary)
+    purrgo_gpx_parser_init(&parser, wps, 1);
+    const char* chunk7 = "<wpt lat=\"1.00000009\" lon=\"1.00000001\"></wpt>";
+    purrgo_gpx_parser_feed(&parser, chunk7, strlen(chunk7));
+    assert(parser.current_count == 1);
+    assert(wps[0].lat_1e7 == 10000000); // 1.0000000
+    assert(wps[0].lon_1e7 == 10000000);
+
+    printf("test_gpx_parser_invalid_coords passed\n");
 }
 
 int main(void) {
@@ -211,6 +272,7 @@ int main(void) {
     test_gpx_parser_max_waypoints();
     test_parse_coord_1e7();
     test_gpx_parser_edge_cases();
+    test_gpx_parser_invalid_coords();
 
     printf("All GPX parser tests passed.\n");
     return 0;
