@@ -79,7 +79,7 @@ def format_c(font: list[list[int]]) -> str:
     for code in range(FONT_COUNT):
         values = font[code]
         lines.append(
-            "    " + ", ".join(f"0x{value:02X}" for value in values) + ","
+            "    { " + ", ".join(f"0x{value:02X}" for value in values) + " },"
         )
 
     lines.append("};")
