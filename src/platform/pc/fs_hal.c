@@ -210,17 +210,13 @@ bool purrgo_fs_readdir(
     /*
      * Copy the filesystem entry name into the platform-independent
      * PurrGo directory entry structure.
-     *
-     * We use snprintf to ensure the string is explicitly bounded
-     * and always terminated with '\0', avoiding any manual null
-     * termination risks associated with strncpy.
      */
-    snprintf(
+    strncpy(
         dirent->name,
-        sizeof(dirent->name),
-        "%s",
-        ep->d_name
+        ep->d_name,
+        sizeof(dirent->name) - 1
     );
+    dirent->name[sizeof(dirent->name) - 1] = '\0';
 
 
     /*
