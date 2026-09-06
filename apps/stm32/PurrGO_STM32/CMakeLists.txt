@@ -54,6 +54,7 @@ target_sources(PurrGO_STM32 PRIVATE
     Core/Src/purrgo_logger.c
 	# STM32 implementation of the common GNSS byte-stream interface.
     ../../../src/platform/stm32/gnss_io_stm32.c
+    ../../../src/platform/stm32/display_stm32.c
 )
 
 # Add include paths
