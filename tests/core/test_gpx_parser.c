@@ -78,12 +78,6 @@ static void test_gpx_parser_max_waypoints(void) {
     assert(waypoints[0].lat_1e7 == 10000000);
 }
 
-int main(void) {
-    test_gpx_parser_wpt();
-    test_gpx_parser_wpt_multiple();
-    test_gpx_parser_max_waypoints();
-
-    printf("All GPX parser tests passed.\n");
 static void test_parse_coord_1e7(void) {
     purrgo_gpx_parser_t parser;
     purrgo_waypoint_t wps[1];
@@ -164,6 +158,10 @@ static void test_parse_coord_1e7(void) {
 }
 
 int main(void) {
+    test_gpx_parser_wpt();
+    test_gpx_parser_wpt_multiple();
+    test_gpx_parser_max_waypoints();
     test_parse_coord_1e7();
+    printf("All GPX parser tests passed.\n");
     return 0;
 }

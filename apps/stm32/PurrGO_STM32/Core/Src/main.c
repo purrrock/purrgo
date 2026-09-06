@@ -24,6 +24,12 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "purrgo_logger.h"
+#include <purrgo/gnss_io.h>
+#include "purrgo/gnss.h"
+#include "purrgo/gnss_adapter.h"
+#include "purrgo/gnss_types.h"
+
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -96,11 +102,29 @@ int main(void)
  * Теперь можно использовать UART для диагностического вывода.
  */
 purrgo_logger_init();
-
 purrgo_logger_write("PurrGO STM32 boot\r\n");
 purrgo_logger_write("UART2 logger OK\r\n");
 
-  /* USER CODE END 2 */
+    /*
+     * Состояние разобранного GNSS-решения.
+     *
+     * Оно заполняется Core-кодом через purrgo_gnss_process_nmea().
+     */
+    purrgo_gnss_solution_t gnss_solution = {0};
+
+    /*
+     * Инкрементальный NMEA parser.
+     *
+     * Он получает данные побайтно и собирает из них законченные
+     * NMEA-предложения.
+     */
+    purrgo_gnss_parser_t gnss_parser;
+
+    purrgo_gnss_parser_init(&gnss_parser);
+
+    purrgo_logger_write("GNSS MOCK parser test\r\n");
+
+/* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
@@ -109,14 +133,85 @@ purrgo_logger_write("UART2 logger OK\r\n");
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+       /*
+         * Обрабатываем доступные байты GNSS.
+         *
+         * В текущей реализации это байты из STM32 GNSS MOCK.
+         * В будущем здесь будут байты реального UART/DMA.
+         */
+        uint8_t gnss_byte;
 
-    /*
-     * Проверяем, что программа продолжает выполняться после
-     * первоначальной инициализации.
-     */
-    HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
-    purrgo_logger_write("PurrGO STM32 alive\r\n");
-    HAL_Delay(1000);
+        /*
+         * Ограничиваем количество обрабатываемых байтов за одну
+         * итерацию main loop.
+         *
+         * Это не позволяет GNSS-потоку полностью занять CPU.
+         */
+        uint16_t bytes_processed = 0U;
+
+        while (
+            purrgo_gnss_read_byte(&gnss_byte) &&
+            bytes_processed < 256U
+        )
+        {
+            /*
+             * Передаём очередной байт в потоковый NMEA parser.
+             *
+             * true означает, что получено полное предложение,
+             * заканчивающееся символом '\n'.
+             */
+            if (purrgo_gnss_parser_feed(&gnss_parser, gnss_byte))
+            {
+                /*
+                 * В parser.line находится готовая NMEA-строка
+                 * без завершающего '\r'/'\n'.
+                 *
+                 * Передаём её в существующий Core GNSS adapter.
+                 */
+                purrgo_gnss_process_nmea(
+                    gnss_parser.line,
+                    &gnss_solution
+                );
+
+                /*
+                 * Показываем результат обработки через UART.
+                 *
+                 * Координаты хранятся в формате градусов * 10^7.
+                 * Поэтому выводим отдельно целую и дробную части,
+                 * не используя float.
+                 */
+                purrgo_logger_write(
+                    "GNSS: valid=%d lat=%ld lon=%ld "
+                    "speed=%ld alt=%ld sats=%d time=%02d:%02d:%02d\r\n",
+                    gnss_solution.valid ? 1 : 0,
+                    (long)gnss_solution.lat_1e7,
+                    (long)gnss_solution.lon_1e7,
+                    (long)gnss_solution.speed_knots,
+                    (long)gnss_solution.alt_m,
+                    gnss_solution.satellites_tracked,
+                    gnss_solution.hours,
+                    gnss_solution.minutes,
+                    gnss_solution.seconds
+                );
+
+                /*
+                 * Сбрасываем parser для следующего NMEA-предложения.
+                 */
+                purrgo_gnss_parser_init(&gnss_parser);
+            }
+
+            bytes_processed++;
+        }
+
+        /*
+         * Светодиод и диагностическое сообщение остаются,
+         * чтобы было видно, что main loop продолжает работать.
+         */
+        HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+
+        purrgo_logger_write("PurrGO STM32 alive\r\n");
+
+        HAL_Delay(1000);
   }
   
   /* USER CODE END 3 */

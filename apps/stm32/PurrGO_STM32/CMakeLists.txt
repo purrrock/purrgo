@@ -52,6 +52,8 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 target_sources(PurrGO_STM32 PRIVATE
     # Platform-dependent PurrGO logger.
     Core/Src/purrgo_logger.c
+	# STM32 implementation of the common GNSS byte-stream interface.
+    ../../../src/platform/stm32/gnss_io_stm32.c
 )
 
 # Add include paths
