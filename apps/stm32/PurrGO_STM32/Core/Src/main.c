@@ -29,6 +29,7 @@
 #include "purrgo/gnss_adapter.h"
 #include "purrgo/gnss_types.h"
 #include "purrgo/gnss_mock.h"
+#include "../../../../../src/platform/stm32/buttons.h"
 
 
 /* USER CODE END Includes */
@@ -126,6 +127,8 @@ purrgo_logger_write("UART2 logger OK\r\n");
     purrgo_logger_write("GNSS MOCK parser test\r\n");
     purrgo_gnss_mock_init();
 
+    purrgo_stm32_buttons_init();
+
 /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -203,6 +206,28 @@ purrgo_logger_write("UART2 logger OK\r\n");
             }
 
             bytes_processed++;
+        }
+
+        /*
+         * Опрашиваем состояние кнопок.
+         */
+        purrgo_btn_t all_buttons[] = {
+            PURRGO_BTN_UP,
+            PURRGO_BTN_DOWN,
+            PURRGO_BTN_LEFT,
+            PURRGO_BTN_RIGHT,
+            PURRGO_BTN_PLUS,
+            PURRGO_BTN_MINUS,
+            PURRGO_BTN_MENU,
+            PURRGO_BTN_OK
+        };
+        for (size_t i = 0; i < sizeof(all_buttons) / sizeof(all_buttons[0]); i++)
+        {
+            if (purrgo_stm32_button_is_pressed(all_buttons[i]))
+            {
+                /* Currently a stub, this branch will not be hit */
+                purrgo_app_handle_button(all_buttons[i]);
+            }
         }
 
         /*
