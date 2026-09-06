@@ -31,6 +31,18 @@ void test_polar_division_by_zero() {
     EXPECT_EQ(SUN_STATUS_POLAR_NIGHT, info.status);
     EXPECT_FALSE(info.is_daytime);
     EXPECT_EQ(-1, info.time_to_event_min);
+
+    // Equinox at North Pole
+    purrgo_sun_calc(900000000, 0, 23, 3, 21, 12, 0, 0, &info);
+    EXPECT_EQ(SUN_STATUS_POLAR_DAY, info.status);
+    EXPECT_TRUE(info.is_daytime);
+    EXPECT_EQ(-1, info.time_to_event_min);
+
+    // Winter at North Pole
+    purrgo_sun_calc(900000000, 0, 23, 12, 21, 12, 0, 0, &info);
+    EXPECT_EQ(SUN_STATUS_POLAR_NIGHT, info.status);
+    EXPECT_FALSE(info.is_daytime);
+    EXPECT_EQ(-1, info.time_to_event_min);
 }
 
 void test_normal_day() {
