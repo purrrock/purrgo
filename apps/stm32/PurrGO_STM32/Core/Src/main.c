@@ -23,7 +23,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "purrgo_logger.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -88,7 +88,17 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_USART2_UART_Init();
+  MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
+
+/*
+ * USART2 уже полностью инициализирован.
+ * Теперь можно использовать UART для диагностического вывода.
+ */
+purrgo_logger_init();
+
+purrgo_logger_write("PurrGO STM32 boot\r\n");
+purrgo_logger_write("UART2 logger OK\r\n");
 
   /* USER CODE END 2 */
 
@@ -100,11 +110,15 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 
-    // Переключение состояния пина PC13
-      HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
-    // Задержка 50 миллисекунд
-      HAL_Delay(50);
+    /*
+     * Проверяем, что программа продолжает выполняться после
+     * первоначальной инициализации.
+     */
+    HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+    purrgo_logger_write("PurrGO STM32 alive\r\n");
+    HAL_Delay(1000);
   }
+  
   /* USER CODE END 3 */
 }
 
