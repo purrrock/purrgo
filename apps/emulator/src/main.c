@@ -6,6 +6,7 @@
 #include "display.h"
 #include <purrgo/gnss_types.h>
 #include "purrgo/track_logger.h"
+#include <purrgo/gnss_io.h>
 
 #ifdef USE_MOCK_GNSS
 #include <purrgo/gnss_mock.h>
@@ -162,7 +163,7 @@ static void emulator_run_loop(void) {
             int bytes_processed = 0;
 
             while (
-                serial_hal_read_byte(&rx_byte) == 1 &&
+                purrgo_gnss_read_byte(&rx_byte) == 1 &&
                 bytes_processed < 256
             ) {
                 if (line_pos < sizeof(line_buffer) - 1) {
