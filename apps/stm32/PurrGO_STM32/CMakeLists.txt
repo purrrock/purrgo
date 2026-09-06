@@ -56,8 +56,6 @@ target_sources(PurrGO_STM32 PRIVATE
     ../../../src/platform/stm32/gnss_io_stm32.c
     # STM32 button driver stub.
     ../../../src/platform/stm32/buttons.c
-    # STM32 filesystem stub.
-    ../../../src/platform/stm32/fs_hal_stm32.c
 )
 
 # Add include paths
