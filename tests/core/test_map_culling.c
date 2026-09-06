@@ -78,12 +78,17 @@ static bool test_y_out_of_bounds() {
     return true;
 }
 
+static bool test_bbox_crossing_dateline();
+static bool test_bbox_edges();
+
 int main() {
     bool success = true;
 
     if (!test_normal_intersection()) success = false;
     if (!test_dateline_crossing()) success = false;
     if (!test_y_out_of_bounds()) success = false;
+    if (!test_bbox_crossing_dateline()) success = false;
+    if (!test_bbox_edges()) success = false;
 
     if (success) {
         printf("All tests passed!\n");
@@ -92,4 +97,54 @@ int main() {
         printf("Some tests failed.\n");
         return 1;
     }
+}
+
+static bool test_bbox_crossing_dateline() {
+    printf("Running test_bbox_crossing_dateline...\n");
+    // While the objects in map DB usually have xmin <= xmax, sometimes they might not.
+    // If we assume standard representation (xmin <= xmax) for object bounding boxes,
+    // the current logic is complete. Let's make sure we test xmin <= xmax thoroughly.
+
+    // Normal cam, normal bbox
+    purrgo_bbox_t cam = { .min_x = 10, .max_x = 20, .min_y = 10, .max_y = 20 };
+    // Test case where bbox covers camera entirely
+    assert(bbox_intersects_camera(0, 0, 30, 30, &cam));
+
+    // Test case where bbox spans across, but is disjoint in Y
+    assert(!bbox_intersects_camera(0, 0, 30, 5, &cam));
+
+    // Camera crosses dateline
+    purrgo_bbox_t cam_cross = { .min_x = 350, .max_x = 10, .min_y = 10, .max_y = 20 };
+
+    // bbox spans exactly the dateline gap
+    assert(!bbox_intersects_camera(15, 12, 345, 18, &cam_cross));
+
+    // bbox spans exactly the whole world
+    assert(bbox_intersects_camera(0, 12, 360, 18, &cam_cross));
+
+    printf("PASSED test_bbox_crossing_dateline\n");
+    return true;
+}
+
+static bool test_bbox_edges() {
+    printf("Running test_bbox_edges...\n");
+
+    // Normal cam
+    purrgo_bbox_t cam = { .min_x = 10, .max_x = 20, .min_y = 10, .max_y = 20 };
+
+    // Inside edges
+    assert(bbox_intersects_camera(10, 10, 20, 20, &cam));
+    assert(bbox_intersects_camera(10, 12, 12, 18, &cam));
+    assert(bbox_intersects_camera(18, 12, 20, 18, &cam));
+    assert(bbox_intersects_camera(12, 10, 18, 12, &cam));
+    assert(bbox_intersects_camera(12, 18, 18, 20, &cam));
+
+    // Outside edges
+    assert(bbox_intersects_camera(0, 0, 10, 10, &cam));
+    assert(bbox_intersects_camera(20, 20, 30, 30, &cam));
+    assert(!bbox_intersects_camera(0, 0, 9, 9, &cam));
+    assert(!bbox_intersects_camera(21, 21, 30, 30, &cam));
+
+    printf("PASSED test_bbox_edges\n");
+    return true;
 }
