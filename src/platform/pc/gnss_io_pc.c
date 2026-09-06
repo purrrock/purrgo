@@ -25,16 +25,15 @@ bool purrgo_gnss_read_byte(uint8_t *byte)
 
 #else
 
+#include "purrgo/gnss_mock.h"
+
 /*
- * При использовании MOCK GNSS байтового потока нет.
- *
- * MOCK непосредственно изменяет purrgo_gnss_solution_t,
- * поэтому эта функция в данном режиме не вызывается.
+ * При использовании MOCK GNSS байтового потока,
+ * читаем байты из сгенерированных MOCK NMEA предложений.
  */
 bool purrgo_gnss_read_byte(uint8_t *byte)
 {
-    (void)byte;
-    return false;
+    return purrgo_gnss_mock_read_byte(byte);
 }
 
 #endif /* USE_MOCK_GNSS */

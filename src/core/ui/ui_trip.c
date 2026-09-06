@@ -77,7 +77,7 @@ void ui_trip_render_values(gfx_context_t* gfx, const purrgo_gnss_solution_t* gns
     y_pos += 12;
 
     // ALT
-    snprintf(buf, sizeof(buf), "%d m        ", gnss->alt_m);
+    snprintf(buf, sizeof(buf), "%d m        ", (int)gnss->alt_m);
     gfx_draw_string(gfx, val_x, y_pos, buf);
     y_pos += 12;
 
