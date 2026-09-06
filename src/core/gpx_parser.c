@@ -1,5 +1,6 @@
 #include "purrgo/gpx_parser.h"
 #include <string.h>
+#include <stdio.h>
 
 // Парсинг строки с плавающей точкой в формат 1e7 без использования float
 static int32_t parse_coord_1e7(const char* str) {
@@ -85,8 +86,13 @@ static void process_tag(purrgo_gpx_parser_t *p) {
         p->in_name = false;
         if (p->in_wpt) {
             // Копируем имя, защищаясь от переполнения
-            strncpy(p->temp_wp.name, p->text_buffer, sizeof(p->temp_wp.name) - 1);
-            p->temp_wp.name[sizeof(p->temp_wp.name) - 1] = '\0';
+            snprintf(
+                p->temp_wp.name,
+                sizeof(p->temp_wp.name),
+                "%.*s",
+                (int)(sizeof(p->temp_wp.name) - 1),
+                p->text_buffer
+            );
         }
     }
     // Тег высоты: <ele>

@@ -214,13 +214,12 @@ bool purrgo_fs_readdir(
      * The destination buffer has a fixed size, so the copy is explicitly
      * bounded and always terminated with '\0'.
      */
-    strncpy(
+    snprintf(
         dirent->name,
-        ep->d_name,
-        sizeof(dirent->name) - 1
+        sizeof(dirent->name),
+        "%s",
+        ep->d_name
     );
-
-    dirent->name[sizeof(dirent->name) - 1] = '\0';
 
 
     /*

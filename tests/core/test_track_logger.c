@@ -19,8 +19,7 @@ static char last_filename[256];
 
 purrgo_file_t* purrgo_fs_open(const char* path, uint32_t mode) {
     mock_file_opened = true;
-    strncpy(last_filename, path, sizeof(last_filename));
-    last_filename[sizeof(last_filename)-1] = '\0';
+    snprintf(last_filename, sizeof(last_filename), "%s", path);
     return &mock_file;
 }
 
