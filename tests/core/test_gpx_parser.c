@@ -157,11 +157,60 @@ static void test_parse_coord_1e7(void) {
     printf("test_parse_coord_1e7 passed\n");
 }
 
+static void test_gpx_parser_edge_cases(void) {
+    purrgo_waypoint_t waypoints[5];
+    purrgo_gpx_parser_t parser;
+
+    // Test NULL parser
+    purrgo_gpx_parser_init(NULL, waypoints, 5);
+    purrgo_gpx_parser_feed(NULL, "<wpt></wpt>", 11);
+
+    // Test NULL waypoints
+    purrgo_gpx_parser_init(&parser, NULL, 5);
+    const char* chunk1 = "<wpt lat=\"1.0\" lon=\"1.0\"></wpt>";
+    purrgo_gpx_parser_feed(&parser, chunk1, strlen(chunk1));
+    assert(parser.current_count == 0); // Should not save anything
+
+    // Test </wpt> without opening <wpt> (p->in_wpt is false)
+    purrgo_gpx_parser_init(&parser, waypoints, 5);
+    const char* chunk2 = "</wpt>";
+    purrgo_gpx_parser_feed(&parser, chunk2, strlen(chunk2));
+    assert(parser.current_count == 0);
+
+    // Test <name> and <ele> outside of <wpt> (p->in_wpt is false)
+    purrgo_gpx_parser_init(&parser, waypoints, 5);
+    const char* chunk3 = "<name>TestName</name><ele>100</ele>";
+    purrgo_gpx_parser_feed(&parser, chunk3, strlen(chunk3));
+    assert(parser.current_count == 0);
+
+    // Test missing lat and lon
+    purrgo_gpx_parser_init(&parser, waypoints, 5);
+    const char* chunk4 = "<wpt></wpt>";
+    purrgo_gpx_parser_feed(&parser, chunk4, strlen(chunk4));
+    assert(parser.current_count == 1);
+    assert(waypoints[0].lat_1e7 == 0);
+    assert(waypoints[0].lon_1e7 == 0);
+
+    // Test long names and elevations to test buffer bounds
+    purrgo_gpx_parser_init(&parser, waypoints, 5);
+    const char* chunk5 = "<wpt lat=\"1.0\" lon=\"1.0\"><name>ThisIsAVeryLongNameThatExceedsTheThirtyTwoCharacterLimitOfTextBufferAndAlsoTheWPNameBuffer</name><ele>12345</ele></wpt>";
+    purrgo_gpx_parser_feed(&parser, chunk5, strlen(chunk5));
+    assert(parser.current_count == 1);
+
+    // Test long tag names to exceed tag_buffer (128 chars)
+    purrgo_gpx_parser_init(&parser, waypoints, 5);
+    const char* chunk6 = "<thisisaverylongtagnameveryverylongthatwillsurelyexceedthetagbufferlimitoftonehundredandtwentyeightcharactersonceweputiteverywhereandkeepgoing>test</thisisaverylongtagnameveryverylongthatwillsurelyexceedthetagbufferlimitoftonehundredandtwentyeightcharactersonceweputiteverywhereandkeepgoing>";
+    purrgo_gpx_parser_feed(&parser, chunk6, strlen(chunk6));
+
+    printf("test_gpx_parser_edge_cases passed\n");
+}
+
 int main(void) {
     test_gpx_parser_wpt();
     test_gpx_parser_wpt_multiple();
     test_gpx_parser_max_waypoints();
     test_parse_coord_1e7();
+    test_gpx_parser_edge_cases();
 
     printf("All GPX parser tests passed.\n");
     return 0;
