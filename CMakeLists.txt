@@ -114,6 +114,7 @@ else()
     add_purrgo_test(test_navigation tests/core/test_navigation.c)
     add_purrgo_test(test_map_mlp tests/core/test_map_mlp.c)
     add_purrgo_test(test_track_renderer tests/core/test_track_renderer.c)
+    add_purrgo_test(test_sun tests/core/test_sun.c)
     add_purrgo_test(test_gpx_parser tests/core/test_gpx_parser.c)
 
 endif()
