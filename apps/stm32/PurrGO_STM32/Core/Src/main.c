@@ -30,6 +30,8 @@
 #include "purrgo/gnss_types.h"
 #include "purrgo/gnss_mock.h"
 #include "../../../../../src/platform/stm32/buttons.h"
+#include "../../../../../src/platform/stm32/display_stm32.h"
+#include "../../../../../src/platform/stm32/platform_stm32.h"
 
 
 /* USER CODE END Includes */
@@ -123,8 +125,15 @@ purrgo_logger_write("UART2 logger OK\r\n");
 
     purrgo_logger_write("GNSS MOCK parser test\r\n");
     purrgo_gnss_mock_init();
+    purrgo_logger_write("GNSS OK\r\n");
+
+    display_init();
+    purrgo_logger_write("Display OK\r\n");
 
     purrgo_stm32_buttons_init();
+    purrgo_logger_write("Buttons OK\r\n");
+
+    purrgo_logger_write("Filesystem OK\r\n");
 
 /* USER CODE END 2 */
 
