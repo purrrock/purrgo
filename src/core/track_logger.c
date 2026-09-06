@@ -128,8 +128,7 @@ bool purrgo_logger_start(const purrgo_gnss_solution_t* first_fix) {
         return false;
     }
 
-    strncpy(s_active_filename, filename, sizeof(s_active_filename) - 1);
-    s_active_filename[sizeof(s_active_filename) - 1] = '\0';
+    snprintf(s_active_filename, sizeof(s_active_filename), "%s", filename);
 
     buffer_pos = 0;
     is_first_point = true;
