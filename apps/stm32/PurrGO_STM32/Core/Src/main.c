@@ -28,6 +28,7 @@
 #include "purrgo/gnss.h"
 #include "purrgo/gnss_adapter.h"
 #include "purrgo/gnss_types.h"
+#include "purrgo/gnss_mock.h"
 
 
 /* USER CODE END Includes */
@@ -123,6 +124,7 @@ purrgo_logger_write("UART2 logger OK\r\n");
     purrgo_gnss_parser_init(&gnss_parser);
 
     purrgo_logger_write("GNSS MOCK parser test\r\n");
+    purrgo_gnss_mock_init();
 
 /* USER CODE END 2 */
 
@@ -210,6 +212,7 @@ purrgo_logger_write("UART2 logger OK\r\n");
         HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
 
         purrgo_logger_write("PurrGO STM32 alive\r\n");
+        purrgo_gnss_mock_update();
 
         HAL_Delay(1000);
   }

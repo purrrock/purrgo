@@ -7,6 +7,8 @@
 #include <purrgo/gnss_types.h>
 #include "purrgo/track_logger.h"
 #include <purrgo/gnss_io.h>
+#include <purrgo/gnss.h>
+#include <purrgo/gnss_adapter.h>
 
 #ifdef USE_MOCK_GNSS
 #include <purrgo/gnss_mock.h>
@@ -74,6 +76,7 @@ static purrgo_gnss_solution_t gnss_solution;
 static purrgo_sun_info_t sun_info;
 static bool first_fix_obtained = false;
 static uint32_t last_sun_update = 0;
+static purrgo_gnss_parser_t gnss_parser;
 
 static bool emulator_sys_init(int argc, char* argv[]) {
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) < 0) {
@@ -95,15 +98,12 @@ static bool emulator_sys_init(int argc, char* argv[]) {
 
     display_init();
 
-#ifdef USE_MOCK_GNSS
-    purrgo_gnss_mock_init(&gnss_solution);
-#else
-    memset(
-        &gnss_solution,
-        0,
-        sizeof(gnss_solution)
-    );
+    memset(&gnss_solution, 0, sizeof(gnss_solution));
+    purrgo_gnss_parser_init(&gnss_parser);
 
+#ifdef USE_MOCK_GNSS
+    purrgo_gnss_mock_init();
+#else
     if (argc > 1) {
         if (!serial_hal_open(argv[1], 9600)) {
             fprintf(
@@ -154,45 +154,30 @@ static void emulator_run_loop(void) {
         /*
          * 1. Обновление GNSS.
          */
-#ifndef USE_MOCK_GNSS
         {
-            static char line_buffer[128];
-            static uint16_t line_pos = 0;
-
             uint8_t rx_byte;
             int bytes_processed = 0;
 
             while (
-                purrgo_gnss_read_byte(&rx_byte) == 1 &&
+                purrgo_gnss_read_byte(&rx_byte) &&
                 bytes_processed < 256
             ) {
-                if (line_pos < sizeof(line_buffer) - 1) {
-                    line_buffer[line_pos++] = (char)rx_byte;
-                } else {
-                    line_pos = 0;
-                }
-
-                if (rx_byte == '\n') {
-                    line_buffer[line_pos] = '\0';
-
+                if (purrgo_gnss_parser_feed(&gnss_parser, rx_byte)) {
                     purrgo_gnss_process_nmea(
-                        line_buffer,
+                        gnss_parser.line,
                         &gnss_solution
                     );
-
-                    line_pos = 0;
+                    purrgo_gnss_parser_init(&gnss_parser);
                 }
-
                 bytes_processed++;
             }
         }
-#endif
 
         if (current_time - last_gnss_time >= 1000) {
             last_gnss_time = current_time;
 
 #ifdef USE_MOCK_GNSS
-            purrgo_gnss_mock_update(&gnss_solution);
+            purrgo_gnss_mock_update();
 #endif
 
             purrgo_app_update(&gnss_solution);
