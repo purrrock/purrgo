@@ -22,7 +22,7 @@ PurrGO — автономный GNSS-навигатор и трекер без �
 
 | Назначение | Development |
 |---|---|
-| MCU | NUCLEO-F446RE **или** STM32F411CEU6 |
+| MCU | STM32F411CEU6 **или** NUCLEO-F446RE |
 | GNSS | GY-NEO6MV2 |
 | Дисплей | Waveshare 2.7inch e-Paper HAT |
 | Разрешение | 176 × 264 px |
