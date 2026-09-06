@@ -10,7 +10,7 @@
 
 void ui_render_menu_config(gfx_context_t* gfx)
 {
-    char buf[PURRGO_FS_MAX_PATH];
+    char buf[PURRGO_FS_MAX_PATH + 64];
 
     gfx_set_color(gfx, 0, 3);
     gfx_clear(gfx);
