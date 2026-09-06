@@ -108,13 +108,12 @@ void purrgo_config_init(void)
     /*
      * Базовый путь к картам для PC-эмулятора.
      */
-    strncpy(
+    snprintf(
         app_config.map_dir,
-        "../../../tests/data/maps",
-        sizeof(app_config.map_dir) - 1
+        sizeof(app_config.map_dir),
+        "%s",
+        "../../../tests/data/maps"
     );
-
-    app_config.map_dir[sizeof(app_config.map_dir) - 1] = '\0';
 
     /*
      * Последние координаты.
@@ -239,15 +238,13 @@ bool purrgo_config_load(void)
              * Каталог карт.
              */
             else if (strcmp(key, "MAP_DIR") == 0) {
-                strncpy(
+                snprintf(
                     app_config.map_dir,
-                    val,
-                    sizeof(app_config.map_dir) - 1
+                    sizeof(app_config.map_dir),
+                    "%.*s",
+                    (int)(sizeof(app_config.map_dir) - 1),
+                    val
                 );
-
-                app_config.map_dir[
-                    sizeof(app_config.map_dir) - 1
-                ] = '\0';
             }
 
             /*
