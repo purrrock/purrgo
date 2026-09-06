@@ -203,6 +203,8 @@ static void test_gpx_parser_edge_cases(void) {
     purrgo_gpx_parser_feed(&parser, chunk6, strlen(chunk6));
 
     printf("test_gpx_parser_edge_cases passed\n");
+}
+
 static void test_gpx_parser_invalid_coords(void) {
     purrgo_gpx_parser_t parser;
     purrgo_waypoint_t wps[1];
