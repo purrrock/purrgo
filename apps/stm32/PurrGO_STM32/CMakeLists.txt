@@ -56,6 +56,7 @@ target_sources(PurrGO_STM32 PRIVATE
     ../../../src/platform/stm32/gnss_io_stm32.c
     # STM32 stub implementation of the filesystem HAL
     ../../../src/platform/stm32/fs_hal_stm32.c
+    ../../../src/platform/stm32/display_stm32.c
 )
 
 # Add include paths
