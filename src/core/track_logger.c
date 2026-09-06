@@ -202,9 +202,9 @@ bool purrgo_logger_add_point(const purrgo_gnss_solution_t* fix) {
              "  <ele>%d</ele>\n"
              "  <time>20%02d-%02d-%02dT%02d:%02d:%02dZ</time>\n"
              "</trkpt>\n",
-             fix->lat_1e7 < 0 ? "-" : "", lat_abs / 10000000, lat_abs % 10000000,
-             fix->lon_1e7 < 0 ? "-" : "", lon_abs / 10000000, lon_abs % 10000000,
-             fix->alt_m,
+             fix->lat_1e7 < 0 ? "-" : "", (int)(lat_abs / 10000000), (int)(lat_abs % 10000000),
+             fix->lon_1e7 < 0 ? "-" : "", (int)(lon_abs / 10000000), (int)(lon_abs % 10000000),
+             (int)fix->alt_m,
              fix->year, fix->month, fix->day,
              fix->hours, fix->minutes, fix->seconds);
 
