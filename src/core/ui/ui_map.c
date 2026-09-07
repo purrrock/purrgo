@@ -605,7 +605,7 @@ static void ui_map_render_gnss_marker(
                        (new_marker_state.lat_1e7 != prev_marker_state.lat_1e7) ||
                        (new_marker_state.lon_1e7 != prev_marker_state.lon_1e7);
 
-        if (changed || track_dirty) {
+        if (changed || (track_dirty && app_config.track_display_enabled)) {
             const char* reason = "MARKER: unknown";
             if (new_marker_state.gnss_valid != prev_marker_state.gnss_valid) {
                 reason = "MARKER: validity changed";
@@ -642,7 +642,7 @@ static void ui_map_render_gnss_marker(
                 if (new_marker_state.max_y > max_y) max_y = new_marker_state.max_y;
             }
 
-            if (track_dirty) {
+            if (track_dirty && app_config.track_display_enabled) {
                 int16_t t_min_x, t_min_y, t_max_x, t_max_y;
                 if (purrgo_track_render_last_segment(gfx, dynamic_cam, map_vp, &t_min_x, &t_min_y, &t_max_x, &t_max_y)) {
                     // Extend region to include track segment
