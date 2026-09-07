@@ -29,7 +29,6 @@
 #include <purrgo/map.h>
 #include <purrgo/fs_hal.h>
 
-#include "emu_fs.h"
 #include "emu_window.h"
 #include <purrgo/app_ui.h>
 
