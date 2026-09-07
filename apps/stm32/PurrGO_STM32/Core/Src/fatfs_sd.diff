@@ -1,0 +1,265 @@
+--- a/apps/stm32/PurrGO_STM32/Core/Src/fatfs_sd.c
++++ b/apps/stm32/PurrGO_STM32/Core/Src/fatfs_sd.c
+@@ -4,6 +4,7 @@
+ #include "stm32f4xx_hal.h"
+
+ #include "diskio.h"
+ #include "fatfs_sd.h"
++#include "purrgo_logger.h"
+
+ static volatile DSTATUS Stat = STA_NOINIT;  /* Disk Status */
+ static uint8_t CardType;                    /* Type 0:MMC, 1:SDC, 2:Block addressing */
+@@ -108,6 +109,8 @@ static BYTE SD_SendCmd(BYTE cmd, uint32_t arg)
+ /* initialize SD */
+ DSTATUS SD_disk_initialize(BYTE drv)
+ {
+     uint8_t n, type, ocr[4];
+
++    purrgo_logger_write("SD: initialize start\r\n");
++
+     /* single drive, drv should be 0 */
+     if(drv) return STA_NOINIT;
+
+@@ -119,35 +122,66 @@ DSTATUS SD_disk_initialize(BYTE drv)
+     /* check disk type */
+     type = 0;
+
+     /* send GO_IDLE_STATE command */
+-    if (SD_SendCmd(CMD0, 0) == 1)
++    {
++        BYTE res;
++
++        res = SD_SendCmd(CMD0, 0);
++        purrgo_logger_write("SD: CMD0 = 0x%02X\r\n", res);
++
++        if (res == 1)
++        {
++            /* SDC V2+ accept CMD8 command */
++            res = SD_SendCmd(CMD8, 0x1AA);
++            purrgo_logger_write("SD: CMD8 = 0x%02X\r\n", res);
++
++            if (res == 1)
++            {
++                /* operation condition register / R7 response */
++                for (n = 0; n < 4; n++)
++                {
++                    ocr[n] = SPI_RxByte();
++                }
++
++                purrgo_logger_write(
++                    "SD: CMD8 R7 = %02X %02X %02X %02X\r\n",
++                    ocr[0], ocr[1], ocr[2], ocr[3]);
++
++                /* voltage range 2.7-3.6V */
++                if (ocr[2] == 0x01 && ocr[3] == 0xAA)
++                {
++                    /* ACMD41 with HCS bit */
++                    uint32_t tickstart = HAL_GetTick();
++                    uint8_t timeout = 0;
++                    BYTE cmd55_res;
++                    BYTE cmd41_res;
++
++                    do
++                    {
++                        cmd55_res = SD_SendCmd(CMD55, 0);
++                        cmd41_res = SD_SendCmd(CMD41, 1UL << 30);
++
++                        purrgo_logger_write(
++                            "SD: ACMD41 CMD55=0x%02X CMD41=0x%02X\r\n",
++                            cmd55_res, cmd41_res);
++
++                        if (cmd55_res <= 1 && cmd41_res == 0)
++                        {
++                            break;
++                        }
++
++                        if ((HAL_GetTick() - tickstart) >= 1000)
++                        {
++                            timeout = 1;
++                            purrgo_logger_write("SD: ACMD41 TIMEOUT\r\n");
++                            break;
++                        }
++                    } while (1);
++
++                    /* READ_OCR */
++                    if (!timeout)
++                    {
++                        res = SD_SendCmd(CMD58, 0);
++                        purrgo_logger_write("SD: CMD58 = 0x%02X\r\n", res);
++
++                        if (res == 0)
++                        {
++                            /* Check CCS bit */
++                            for (n = 0; n < 4; n++)
++                            {
++                                ocr[n] = SPI_RxByte();
++                            }
++
++                            purrgo_logger_write(
++                                "SD: OCR = %02X %02X %02X %02X\r\n",
++                                ocr[0], ocr[1], ocr[2], ocr[3]);
++
++                            /* SDv2 (HC or SC) */
++                            type = (ocr[0] & 0x40)
++                                ? CT_SD2 | CT_BLOCK
++                                : CT_SD2;
++
++                            purrgo_logger_write(
++                                "SD: card type = SDv2%s\r\n",
++                                (type & CT_BLOCK) ? " BLOCK" : "");
++                        }
++                        else
++                        {
++                            purrgo_logger_write(
++                                "SD: CMD58 failed\r\n");
++                        }
++                    }
++                }
++                else
++                {
++                    purrgo_logger_write(
++                        "SD: CMD8 voltage/check pattern invalid\r\n");
++                }
++            }
++            else
++            {
++                purrgo_logger_write(
++                    "SD: CMD8 indicates legacy card\r\n");
++            }
++        }
++        else
++        {
++            purrgo_logger_write(
++                "SD: CMD0 failed, initialization aborted\r\n");
++        }
++    }
++
++    /*
++     * Legacy SD/MMC path.
++     *
++     * This block is intentionally left unchanged for now.
++     * Diagnostics for this path will be added only if the card
++     * actually reaches it during the hardware test.
++     */
++    if (type == 0)
+     {
+-        /* SDC V2+ accept CMD8 command, http://elm-chan.org/docs/mmc/mmc_e.html */
+-        if (SD_SendCmd(CMD8, 0x1AA) == 1)
+-        {
+-            /* operation condition register */
+-            for (n = 0; n < 4; n++)
+-            {
+-                ocr[n] = SPI_RxByte();
+-            }
+-
+-            /* voltage range 2.7-3.6V */
+-            if (ocr[2] == 0x01 && ocr[3] == 0xAA)
+-            {
+-                /* ACMD41 with HCS bit */
+-                uint32_t tickstart = HAL_GetTick();
+-                uint8_t timeout = 0;
+-                do {
+-                    if (SD_SendCmd(CMD55, 0) <= 1 && SD_SendCmd(CMD41, 1UL << 30) == 0) break;
+-                    if ((HAL_GetTick() - tickstart) >= 1000)
+-                    {
+-                        timeout = 1;
+-                        break;
+-                    }
+-                } while (1);
+-
+-                /* READ_OCR */
+-                if (!timeout && SD_SendCmd(CMD58, 0) == 0)
+-                {
+-                    /* Check CCS bit */
+-                    for (n = 0; n < 4; n++)
+-                    {
+-                        ocr[n] = SPI_RxByte();
+-                    }
+-
+-                    /* SDv2 (HC or SC) */
+-                    type = (ocr[0] & 0x40) ? CT_SD2 | CT_BLOCK : CT_SD2;
+-                }
+-            }
+-        }
+-        else
+-        {
+-            /* SDC V1 or MMC */
+-            type = (SD_SendCmd(CMD55, 0) <= 1 && SD_SendCmd(CMD41, 0) <= 1) ? CT_SD1 : CT_MMC;
+-
+-            uint32_t tickstart = HAL_GetTick();
+-            uint8_t timeout = 0;
+-            do
+-            {
+-                if (type == CT_SD1)
+-                {
+-                    if (SD_SendCmd(CMD55, 0) <= 1 && SD_SendCmd(CMD41, 0) == 0) break; /* ACMD41 */
+-                }
+-                else
+-                {
+-                    if (SD_SendCmd(CMD1, 0) == 0) break; /* CMD1 */
+-                }
+-
+-                if ((HAL_GetTick() - tickstart) >= 1000)
+-                {
+-                    timeout = 1;
+-                    break;
+-                }
+-            } while (1);
+-
+-            /* SET_BLOCKLEN */
+-            if (timeout || SD_SendCmd(CMD16, 512) != 0) type = 0;
+-        }
++        /* SDC V1 or MMC */
++        type = (SD_SendCmd(CMD55, 0) <= 1 &&
++                SD_SendCmd(CMD41, 0) <= 1)
++             ? CT_SD1 : CT_MMC;
++
++        uint32_t tickstart = HAL_GetTick();
++        uint8_t timeout = 0;
++        do
++        {
++            if (type == CT_SD1)
++            {
++                if (SD_SendCmd(CMD55, 0) <= 1 &&
++                    SD_SendCmd(CMD41, 0) == 0)
++                    break;
++            }
++            else
++            {
++                if (SD_SendCmd(CMD1, 0) == 0)
++                    break;
++            }
++
++            if ((HAL_GetTick() - tickstart) >= 1000)
++            {
++                timeout = 1;
++                break;
++            }
++        } while (1);
++
++        /* SET_BLOCKLEN */
++        if (timeout || SD_SendCmd(CMD16, 512) != 0)
++            type = 0;
+     }
+
+     CardType = type;
+
+@@ -155,6 +189,15 @@ DSTATUS SD_disk_initialize(BYTE drv)
+     if (type)
+     {
+         Stat &= ~STA_NOINIT;
++        purrgo_logger_write(
++            "SD: initialize OK, CardType=0x%02X\r\n",
++            CardType);
+     }
+     else
+     {
+         /* Initialization failed */
+         SD_PowerOff();
++        purrgo_logger_write(
++            "SD: initialize FAILED, Stat=0x%02X\r\n",
++            Stat);
+     }
+
+     return Stat;
+ }
