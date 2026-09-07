@@ -459,6 +459,8 @@ static void ui_draw_marker(gfx_context_t* gfx, const marker_state_t* state) {
 
     if (state->filled) {
         gfx_fill_polygon(gfx, (gfx_point_t*)state->pts, state->point_count);
+        gfx_set_color(gfx, WHITE, gfx->color_bg);
+        gfx_draw_polygon(gfx, (gfx_point_t*)state->pts, state->point_count);
     } else {
         gfx_draw_polygon(gfx, (gfx_point_t*)state->pts, state->point_count);
     }
