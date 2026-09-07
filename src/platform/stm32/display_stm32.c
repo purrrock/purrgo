@@ -1,5 +1,6 @@
 #include "display_stm32.h"
 #include "purrgo/display_hal.h"
+#include "purrgo_logger.h"
 #include <stddef.h>
 #include <string.h>
 
@@ -68,13 +69,11 @@ const uint8_t* display_get_framebuffer(void) {
  * Implementation of common PurrGO display HAL.
  */
 void display_refresh(void) {
+    purrgo_logger_write("FULL REFRESH\r\n");
     /* Stub: physical display is not connected yet. */
 }
 
 void display_refresh_region(int16_t x, int16_t y, int16_t w, int16_t h) {
-    (void)x;
-    (void)y;
-    (void)w;
-    (void)h;
+    purrgo_logger_write("PARTIAL REFRESH x=%d y=%d w=%d h=%d\r\n", x, y, w, h);
     /* Stub: physical display is not connected yet. */
 }
