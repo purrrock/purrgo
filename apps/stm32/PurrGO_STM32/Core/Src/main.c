@@ -22,7 +22,9 @@
 #include "spi.h"
 #include "usart.h"
 #include "gpio.h"
-
+#include "fatfs.h"
+#include <stdio.h>
+#include <string.h>
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "purrgo_logger.h"
@@ -138,7 +140,123 @@ purrgo_logger_write("UART2 logger OK\r\n");
     purrgo_stm32_buttons_init();
     purrgo_logger_write("Buttons OK\r\n");
 
-    purrgo_logger_write("Filesystem OK\r\n");
+FRESULT res;
+UINT bytes_written;
+UINT bytes_read;
+
+char write_buffer[] = "PurrGO SD test\r\n";
+char read_buffer[32] = {0};
+
+/*
+ * 1. Подключаем файловую систему к SD-карте.
+ */
+res = f_mount(&USERFatFS, (TCHAR const*)USERPath, 1);
+
+if (res == FR_OK)
+{
+    printf("SD: f_mount OK\r\n");
+}
+else
+{
+    printf("SD: f_mount ERROR = %d\r\n", res);
+}
+
+/*
+ * Продолжаем тест только если файловая система смонтирована.
+ */
+if (res == FR_OK)
+{
+    /*
+     * 2. Создаём тестовый файл.
+     *
+     * FA_CREATE_ALWAYS:
+     * файл создаётся заново, если он уже существовал.
+     */
+    res = f_open(&USERFile,
+                 "sd:test.txt",
+                 FA_CREATE_ALWAYS | FA_WRITE | FA_READ);
+
+    if (res == FR_OK)
+    {
+        printf("SD: f_open OK\r\n");
+
+        /*
+         * 3. Записываем тестовую строку.
+         */
+        res = f_write(&USERFile,
+                      write_buffer,
+                      strlen(write_buffer),
+                      &bytes_written);
+
+        if ((res == FR_OK) &&
+            (bytes_written == strlen(write_buffer)))
+        {
+            printf("SD: f_write OK, bytes = %u\r\n",
+                   bytes_written);
+        }
+        else
+        {
+            printf("SD: f_write ERROR = %d, bytes = %u\r\n",
+                   res,
+                   bytes_written);
+        }
+
+        /*
+         * После записи возвращаем указатель файла
+         * в начало перед чтением.
+         */
+        if (res == FR_OK)
+        {
+            res = f_lseek(&USERFile, 0);
+
+            if (res != FR_OK)
+            {
+                printf("SD: f_lseek ERROR = %d\r\n", res);
+            }
+        }
+
+        /*
+         * 4. Читаем файл обратно.
+         */
+        if (res == FR_OK)
+        {
+            memset(read_buffer, 0, sizeof(read_buffer));
+
+            res = f_read(&USERFile,
+                         read_buffer,
+                         sizeof(read_buffer) - 1,
+                         &bytes_read);
+
+            if (res == FR_OK)
+            {
+                printf("SD: f_read OK, bytes = %u\r\n",
+                       bytes_read);
+
+                printf("SD: DATA: %s", read_buffer);
+            }
+            else
+            {
+                printf("SD: f_read ERROR = %d\r\n", res);
+            }
+        }
+
+        /*
+         * 5. Закрываем файл.
+         */
+        f_close(&USERFile);
+    }
+    else
+    {
+        printf("SD: f_open ERROR = %d\r\n", res);
+    }
+
+    /*
+     * 6. Размонтируем файловую систему.
+     */
+    f_mount(NULL, (TCHAR const*)USERPath, 0);
+}
+
+    // purrgo_logger_write("Filesystem OK\r\n");
 
   /* USER CODE END 2 */
 
