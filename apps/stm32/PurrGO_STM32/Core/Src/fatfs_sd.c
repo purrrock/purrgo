@@ -7,10 +7,6 @@
 #include "diskio.h"
 #include "fatfs_sd.h"
 
-// FIX 1: volatile 키워드 추가
-// 인터럽트에 의해 값이 변경되는 변수는 컴파일러 최적화로 인한 오작동을 막기 위해 volatile로 선언해야 합니다.
-volatile uint16_t Timer1, Timer2;           /* 1ms Timer Counter */
-
 static volatile DSTATUS Stat = STA_NOINIT;  /* Disk Status */
 static uint8_t CardType;                    /* Type 0:MMC, 1:SDC, 2:Block addressing */
 static uint8_t PowerFlag = 0;               /* Power flag */
@@ -73,14 +69,12 @@ static void SPI_RxBytePtr(uint8_t *buff)
 static uint8_t SD_ReadyWait(void)
 {
     uint8_t res;
+    uint32_t tickstart = HAL_GetTick();
 
-    /* timeout 500ms */
-    Timer2 = 500;
-
-    /* if SD goes ready, receives 0xFF */
+    /* if SD goes ready, receives 0xFF. Timeout: 500ms */
     do {
         res = SPI_RxByte();
-    } while ((res != 0xFF) && Timer2);
+    } while ((res != 0xFF) && ((HAL_GetTick() - tickstart) < 500));
 
     return res;
 }
@@ -139,14 +133,12 @@ static uint8_t SD_CheckPower(void)
 static bool SD_RxDataBlock(BYTE *buff, UINT len)
 {
     uint8_t token;
-
-    /* timeout 200ms */
-    Timer1 = 200;
+    uint32_t tickstart = HAL_GetTick();
 
     /* loop until receive a response or timeout */
     do {
         token = SPI_RxByte();
-    } while((token == 0xFF) && Timer1);
+    } while((token == 0xFF) && ((HAL_GetTick() - tickstart) < 200));
 
     /* invalid response */
     if(token != 0xFE) return FALSE;
@@ -200,8 +192,8 @@ static bool SD_TxDataBlock(const uint8_t *buff, BYTE token)
 
         // FIX 3: 타임아웃 없는 무한 루프 수정
         // 카드가 계속 busy(0x00) 상태일 경우 시스템이 멈추는 것을 방지하기 위해 타임아웃을 추가합니다.
-        Timer1 = 200; // 200ms 타임아웃
-        while ((SPI_RxByte() == 0) && Timer1);
+        uint32_t tickstart = HAL_GetTick();
+        while ((SPI_RxByte() == 0) && ((HAL_GetTick() - tickstart) < 200));
     }
     
     // resp가 초기화되지 않은 상태로 사용될 수 있어 수정
@@ -274,7 +266,7 @@ DSTATUS SD_disk_initialize(BYTE drv)
     if (SD_SendCmd(CMD0, 0) == 1)
     {
         /* timeout 1 sec */
-        Timer1 = 1000;
+        uint32_t tickstart = HAL_GetTick();
 
         /* SDC V2+ accept CMD8 command, http://elm-chan.org/docs/mmc/mmc_e.html */
         if (SD_SendCmd(CMD8, 0x1AA) == 1)
@@ -291,10 +283,10 @@ DSTATUS SD_disk_initialize(BYTE drv)
                 /* ACMD41 with HCS bit */
                 do {
                     if (SD_SendCmd(CMD55, 0) <= 1 && SD_SendCmd(CMD41, 1UL << 30) == 0) break;
-                } while (Timer1);
+                } while ((HAL_GetTick() - tickstart) < 1000);
 
                 /* READ_OCR */
-                if (Timer1 && SD_SendCmd(CMD58, 0) == 0)
+                if (((HAL_GetTick() - tickstart) < 1000) && SD_SendCmd(CMD58, 0) == 0)
                 {
                     /* Check CCS bit */
                     for (n = 0; n < 4; n++)
@@ -323,10 +315,10 @@ DSTATUS SD_disk_initialize(BYTE drv)
                     if (SD_SendCmd(CMD1, 0) == 0) break; /* CMD1 */
                 }
 
-            } while (Timer1);
+            } while ((HAL_GetTick() - tickstart) < 1000);
 
             /* SET_BLOCKLEN */
-            if (!Timer1 || SD_SendCmd(CMD16, 512) != 0) type = 0;
+            if (((HAL_GetTick() - tickstart) >= 1000) || SD_SendCmd(CMD16, 512) != 0) type = 0;
         }
     }
 
