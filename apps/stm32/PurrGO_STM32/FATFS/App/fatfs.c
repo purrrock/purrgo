@@ -24,7 +24,8 @@ FATFS USERFatFS;    /* File system object for USER logical drive */
 FIL USERFile;       /* File object for USER */
 
 /* USER CODE BEGIN Variables */
-
+#include "purrgo/gnss_types.h"
+extern purrgo_gnss_solution_t gnss_solution;
 /* USER CODE END Variables */
 
 void MX_FATFS_Init(void)
