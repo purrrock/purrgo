@@ -44,7 +44,7 @@ static status_bar_state_t prev_status_state = {0};
 
 /*
  * Background cache to avoid re-rendering the whole map when marker changes.
- * Size 24x24 is enough for the marker size + safety margin.
+ * Size 16x16 is enough for the marker size + safety margin.
  */
 #define MARKER_BG_CACHE_W 16
 #define MARKER_BG_CACHE_H 16
