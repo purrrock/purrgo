@@ -24,6 +24,8 @@ FATFS USERFatFS;    /* File system object for USER logical drive */
 FIL USERFile;       /* File object for USER */
 
 /* USER CODE BEGIN Variables */
+#include "purrgo/gnss_types.h"
+
 
 /* USER CODE END Variables */
 
@@ -38,16 +40,48 @@ void MX_FATFS_Init(void)
 }
 
 /**
-  * @brief  Gets Time from RTC
+  * @brief  Gets Time from RTC (Uses GNSS time for FAT timestamps)
   * @param  None
   * @retval Time in DWORD
   */
 DWORD get_fattime(void)
 {
   /* USER CODE BEGIN get_fattime */
-  return 0;
+  extern purrgo_gnss_solution_t gnss_solution;
+
+  // If there is no valid GNSS solution yet or the year is 0,
+  // return a deterministic default timestamp: January 1, 2026, 00:00:00.
+  if (!gnss_solution.valid || gnss_solution.year == 0) {
+      return ((DWORD)(2026 - 1980) << 25)
+           | ((DWORD)1 << 21)
+           | ((DWORD)1 << 16)
+           | ((DWORD)0 << 11)
+           | ((DWORD)0 << 5)
+           | ((DWORD)(0 / 2));
+  }
+
+  uint32_t year = gnss_solution.year;
+  // If the GNSS solution contains a two-digit year, convert it to a full year.
+  if (year < 100) {
+      year += 2000;
+  }
+
+  // Pack the GNSS date/time into the FAT timestamp bit layout:
+  // bits 31..25: year offset from 1980
+  // bits 24..21: month
+  // bits 20..16: day
+  // bits 15..11: hour
+  // bits 10..5: minute
+  // bits 4..0: seconds divided by 2
+  return ((DWORD)(year - 1980) << 25)
+       | ((DWORD)gnss_solution.month << 21)
+       | ((DWORD)gnss_solution.day << 16)
+       | ((DWORD)gnss_solution.hours << 11)
+       | ((DWORD)gnss_solution.minutes << 5)
+       | ((DWORD)(gnss_solution.seconds / 2));
   /* USER CODE END get_fattime */
 }
+
 
 /* USER CODE BEGIN Application */
 
