@@ -172,7 +172,6 @@ purrgo_logger_write("UART2 logger OK\r\n");
         {
             /*
              * Передаём очередной байт в потоковый NMEA parser.
-             *
              * true означает, что получено полное предложение,
              * заканчивающееся символом '\n'.
              */
@@ -181,7 +180,6 @@ purrgo_logger_write("UART2 logger OK\r\n");
                 /*
                  * В parser.line находится готовая NMEA-строка
                  * без завершающего '\r'/'\n'.
-                 *
                  * Передаём её в существующий Core GNSS adapter.
                  */
                 purrgo_gnss_process_nmea(
@@ -191,7 +189,6 @@ purrgo_logger_write("UART2 logger OK\r\n");
 
                 /*
                  * Показываем результат обработки через UART.
-                 *
                  * Координаты хранятся в формате градусов * 10^7.
                  * Поэтому выводим отдельно целую и дробную части,
                  * не используя float.
@@ -242,15 +239,16 @@ purrgo_logger_write("UART2 logger OK\r\n");
         }
 
         /*
-         * Светодиод и диагностическое сообщение остаются,
+         * Светодиод и диагностическое сообщение,
          * чтобы было видно, что main loop продолжает работать.
          */
-        HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
-
-        purrgo_logger_write("PurrGO STM32 alive\r\n");
-        purrgo_gnss_mock_update();
-
-        HAL_Delay(1000);
+		static uint32_t last_tick = 0;
+		if (HAL_GetTick() - last_tick >= 1000) {
+		last_tick = HAL_GetTick();
+		HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+		purrgo_logger_write("PurrGO STM32 alive\r\n");
+		purrgo_gnss_mock_update();
+		}
   }
   
   /* USER CODE END 3 */
