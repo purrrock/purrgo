@@ -9,4 +9,7 @@ void purrgo_gnss_process_nmea(const char *nmea_line, purrgo_gnss_solution_t *sol
 // Получает указатель на текущее авторитетное GNSS-решение (управляется адаптером)
 const purrgo_gnss_solution_t *purrgo_gnss_get_solution(void);
 
+// Сбрасывает авторитетное GNSS-решение (для тестов)
+void purrgo_gnss_reset_solution(void);
+
 #endif // PURRGO_GNSS_ADAPTER_H

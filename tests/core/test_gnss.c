@@ -166,6 +166,7 @@ static void test_gnss_parser_framing(void) {
 }
 
 static void test_gnss_adapter_nmea(void) {
+    purrgo_gnss_reset_solution();
     purrgo_gnss_solution_t sol;
     memset(&sol, 0, sizeof(sol));
 
@@ -234,6 +235,7 @@ int main(void)
 }
 
 void test_partial_gnss_sentences(void) {
+    purrgo_gnss_reset_solution();
     purrgo_gnss_solution_t sol = {0};
 
     // Process only GGA. Should not set valid to true, but should update altitude, satellites, etc.

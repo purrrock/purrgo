@@ -39,6 +39,7 @@ int main(int argc, char *argv[]) {
     printf("Port %s opened at %d bps.\n", com_port, BAUD_RATE);
     printf("Listening for U-blox stream. Press Ctrl+C to stop and save GPX.\n\n");
 
+    purrgo_gnss_solution_t solution = {0};
     char line_buffer[NMEA_BUFFER_SIZE];
     uint16_t line_pos = 0;
     
@@ -60,17 +61,15 @@ int main(int argc, char *argv[]) {
             if (rx_byte == '\n') {
                 line_buffer[line_pos] = '\0';
                 
-                // Передаем NULL, чтобы обновить авторитетное состояние адаптера
-                purrgo_gnss_process_nmea(line_buffer, NULL);
-                const purrgo_gnss_solution_t *current_gnss = purrgo_gnss_get_solution();
+                purrgo_gnss_process_nmea(line_buffer, &solution);
                 
                 // Фильтрация дубликатов: запись и вывод осуществляются только 1 раз за эпоху,
                 // после обработки сообщения GGA (содержащего высоту). К этому моменту 
                 // координаты и время уже гарантированно обновлены сообщением RMC.
-                if (current_gnss->valid && strncmp(&line_buffer[3], "GGA", 3) == 0) {
+                if (solution.valid && strncmp(&line_buffer[3], "GGA", 3) == 0) {
                     // 1. Инициализация логгера при первом получении 3D Fix
                     if (!is_logging_active) {
-                        if (purrgo_logger_start(current_gnss)) {
+                        if (purrgo_logger_start(&solution)) {
                             is_logging_active = true;
                             printf(">>> Valid fix acquired. Started recording GPX file.\n");
                         }
@@ -78,25 +77,25 @@ int main(int argc, char *argv[]) {
                     
                     // 2. Добавление точки в буфер (сброс на диск происходит автоматически внутри функции)
                     if (is_logging_active) {
-                        purrgo_logger_add_point(current_gnss);
+                        purrgo_logger_add_point(&solution);
                     }
 
                     // Консольный вывод для контроля
-                    int32_t lat_int = current_gnss->lat_1e7 / 10000000;
-                    int32_t lat_frac = current_gnss->lat_1e7 % 10000000;
+                    int32_t lat_int = solution.lat_1e7 / 10000000;
+                    int32_t lat_frac = solution.lat_1e7 % 10000000;
                     if (lat_frac < 0) lat_frac = -lat_frac;
 
-                    int32_t lon_int = current_gnss->lon_1e7 / 10000000;
-                    int32_t lon_frac = current_gnss->lon_1e7 % 10000000;
+                    int32_t lon_int = solution.lon_1e7 / 10000000;
+                    int32_t lon_frac = solution.lon_1e7 % 10000000;
                     if (lon_frac < 0) lon_frac = -lon_frac;
 
                     printf("[GNSS FIX] %02d:%02d:%02d UTC | Sats: %02d | "
                            "Lat: %d.%07d, Lon: %d.%07d | Alt: %4dm\n",
-                           current_gnss->hours, current_gnss->minutes, current_gnss->seconds,
-                           current_gnss->satellites_tracked,
+                           solution.hours, solution.minutes, solution.seconds,
+                           solution.satellites_tracked,
                            lat_int, lat_frac,
                            lon_int, lon_frac,
-                           current_gnss->alt_m);
+                           solution.alt_m);
                 }
                 
                 line_pos = 0;

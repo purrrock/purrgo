@@ -115,6 +115,11 @@ purrgo_logger_write("PurrGO STM32 boot\r\n");
 purrgo_logger_write("UART2 logger OK\r\n");
 
     /*
+     * Состояние разобранного GNSS-решения.
+     * Оно заполняется Core-кодом через purrgo_gnss_process_nmea().
+     */
+    purrgo_gnss_solution_t gnss_solution = {0};
+    /*
      * Инкрементальный NMEA parser.
      * Он получает данные побайтно и собирает из них законченные
      * NMEA-предложения.
@@ -176,11 +181,10 @@ purrgo_logger_write("UART2 logger OK\r\n");
                  * В parser.line находится готовая NMEA-строка
                  * без завершающего '\r'/'\n'.
                  * Передаём её в существующий Core GNSS adapter.
-                 * Передавая NULL, мы используем внутреннее авторитетное состояние адаптера.
                  */
                 purrgo_gnss_process_nmea(
                     gnss_parser.line,
-                    NULL
+                    &gnss_solution
                 );
 
                 /*
@@ -189,19 +193,18 @@ purrgo_logger_write("UART2 logger OK\r\n");
                  * Поэтому выводим отдельно целую и дробную части,
                  * не используя float.
                  */
-                const purrgo_gnss_solution_t* current_gnss = purrgo_gnss_get_solution();
                 purrgo_logger_write(
                     "GNSS: valid=%d lat=%ld lon=%ld "
                     "speed=%ld alt=%ld sats=%d time=%02d:%02d:%02d\r\n",
-                    current_gnss->valid ? 1 : 0,
-                    (long)current_gnss->lat_1e7,
-                    (long)current_gnss->lon_1e7,
-                    (long)current_gnss->speed_knots,
-                    (long)current_gnss->alt_m,
-                    current_gnss->satellites_tracked,
-                    current_gnss->hours,
-                    current_gnss->minutes,
-                    current_gnss->seconds
+                    gnss_solution.valid ? 1 : 0,
+                    (long)gnss_solution.lat_1e7,
+                    (long)gnss_solution.lon_1e7,
+                    (long)gnss_solution.speed_knots,
+                    (long)gnss_solution.alt_m,
+                    gnss_solution.satellites_tracked,
+                    gnss_solution.hours,
+                    gnss_solution.minutes,
+                    gnss_solution.seconds
                 );
 
                 /*
