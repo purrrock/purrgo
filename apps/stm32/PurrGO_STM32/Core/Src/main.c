@@ -173,7 +173,7 @@ if (res == FR_OK)
      * файл создаётся заново, если он уже существовал.
      */
     res = f_open(&USERFile,
-                 "sd:test.txt",
+                 "0:test.txt",
                  FA_CREATE_ALWAYS | FA_WRITE | FA_READ);
 
     if (res == FR_OK)
