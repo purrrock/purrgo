@@ -32,14 +32,22 @@ static void DESELECT(void)
 /* SPI transmit a byte */
 static void SPI_TxByte(uint8_t data)
 {
-    while(!__HAL_SPI_GET_FLAG(HSPI_SDCARD, SPI_FLAG_TXE));
+    uint32_t tickstart = HAL_GetTick();
+    while(!__HAL_SPI_GET_FLAG(HSPI_SDCARD, SPI_FLAG_TXE))
+    {
+        if ((HAL_GetTick() - tickstart) >= SPI_TIMEOUT) break;
+    }
     HAL_SPI_Transmit(HSPI_SDCARD, &data, 1, SPI_TIMEOUT);
 }
 
 /* SPI transmit buffer */
 static void SPI_TxBuffer(uint8_t *buffer, uint16_t len)
 {
-    while(!__HAL_SPI_GET_FLAG(HSPI_SDCARD, SPI_FLAG_TXE));
+    uint32_t tickstart = HAL_GetTick();
+    while(!__HAL_SPI_GET_FLAG(HSPI_SDCARD, SPI_FLAG_TXE))
+    {
+        if ((HAL_GetTick() - tickstart) >= SPI_TIMEOUT) break;
+    }
     HAL_SPI_Transmit(HSPI_SDCARD, buffer, len, SPI_TIMEOUT);
 }
 
@@ -49,7 +57,11 @@ static uint8_t SPI_RxByte(void)
     uint8_t dummy, data;
     dummy = 0xFF;
 
-    while(!__HAL_SPI_GET_FLAG(HSPI_SDCARD, SPI_FLAG_TXE));
+    uint32_t tickstart = HAL_GetTick();
+    while(!__HAL_SPI_GET_FLAG(HSPI_SDCARD, SPI_FLAG_TXE))
+    {
+        if ((HAL_GetTick() - tickstart) >= SPI_TIMEOUT) break;
+    }
     HAL_SPI_TransmitReceive(HSPI_SDCARD, &dummy, &data, 1, SPI_TIMEOUT);
 
     return data;
@@ -144,9 +156,6 @@ static bool SD_RxDataBlock(BYTE *buff, UINT len)
     if(token != 0xFE) return FALSE;
 
     /* receive data */
-    // FIX 2: do-while(len--) 루프 수정
-    // 기존 코드는 len+1 만큼 실행되어 버퍼 오버플로우를 유발할 수 있습니다.
-    // while(len--) 형태로 변경하여 정확히 len 만큼만 실행되도록 합니다.
     while(len--) {
         SPI_RxBytePtr(buff++);
     }
@@ -190,13 +199,11 @@ static bool SD_TxDataBlock(const uint8_t *buff, BYTE token)
             i++;
         }
 
-        // FIX 3: 타임아웃 없는 무한 루프 수정
-        // 카드가 계속 busy(0x00) 상태일 경우 시스템이 멈추는 것을 방지하기 위해 타임아웃을 추가합니다.
+        /* timeout 200ms */
         uint32_t tickstart = HAL_GetTick();
         while ((SPI_RxByte() == 0) && ((HAL_GetTick() - tickstart) < 200));
     }
     
-    // resp가 초기화되지 않은 상태로 사용될 수 있어 수정
     if ((resp & 0x1F) == 0x05) return TRUE;
 
     return FALSE;
@@ -265,9 +272,6 @@ DSTATUS SD_disk_initialize(BYTE drv)
     /* send GO_IDLE_STATE command */
     if (SD_SendCmd(CMD0, 0) == 1)
     {
-        /* timeout 1 sec */
-        uint32_t tickstart = HAL_GetTick();
-
         /* SDC V2+ accept CMD8 command, http://elm-chan.org/docs/mmc/mmc_e.html */
         if (SD_SendCmd(CMD8, 0x1AA) == 1)
         {
@@ -281,12 +285,19 @@ DSTATUS SD_disk_initialize(BYTE drv)
             if (ocr[2] == 0x01 && ocr[3] == 0xAA)
             {
                 /* ACMD41 with HCS bit */
+                uint32_t tickstart = HAL_GetTick();
+                uint8_t timeout = 0;
                 do {
                     if (SD_SendCmd(CMD55, 0) <= 1 && SD_SendCmd(CMD41, 1UL << 30) == 0) break;
-                } while ((HAL_GetTick() - tickstart) < 1000);
+                    if ((HAL_GetTick() - tickstart) >= 1000)
+                    {
+                        timeout = 1;
+                        break;
+                    }
+                } while (1);
 
                 /* READ_OCR */
-                if (((HAL_GetTick() - tickstart) < 1000) && SD_SendCmd(CMD58, 0) == 0)
+                if (!timeout && SD_SendCmd(CMD58, 0) == 0)
                 {
                     /* Check CCS bit */
                     for (n = 0; n < 4; n++)
@@ -304,6 +315,8 @@ DSTATUS SD_disk_initialize(BYTE drv)
             /* SDC V1 or MMC */
             type = (SD_SendCmd(CMD55, 0) <= 1 && SD_SendCmd(CMD41, 0) <= 1) ? CT_SD1 : CT_MMC;
 
+            uint32_t tickstart = HAL_GetTick();
+            uint8_t timeout = 0;
             do
             {
                 if (type == CT_SD1)
@@ -315,10 +328,15 @@ DSTATUS SD_disk_initialize(BYTE drv)
                     if (SD_SendCmd(CMD1, 0) == 0) break; /* CMD1 */
                 }
 
-            } while ((HAL_GetTick() - tickstart) < 1000);
+                if ((HAL_GetTick() - tickstart) >= 1000)
+                {
+                    timeout = 1;
+                    break;
+                }
+            } while (1);
 
             /* SET_BLOCKLEN */
-            if (((HAL_GetTick() - tickstart) >= 1000) || SD_SendCmd(CMD16, 512) != 0) type = 0;
+            if (timeout || SD_SendCmd(CMD16, 512) != 0) type = 0;
         }
     }
 
@@ -491,8 +509,6 @@ DRESULT SD_disk_ioctl(BYTE drv, BYTE ctrl, void *buff)
             {
                 if ((csd[0] >> 6) == 1) /* SDC V2 */
                 {
-                    // FIX 5: SDv2 CSD 파싱 및 용량 계산 로직 수정
-                    // 기존 로직은 C_SIZE 필드를 일부만 사용하여 대용량 카드에서 용량을 잘못 계산합니다.
                     DWORD c_size;
                     c_size = (DWORD)(csd[7] & 0x3F) << 16 | (WORD)csd[8] << 8 | csd[9];
                     *(DWORD*)buff = (c_size + 1) << 10;
@@ -532,8 +548,6 @@ DRESULT SD_disk_ioctl(BYTE drv, BYTE ctrl, void *buff)
                 }
                 res = RES_OK;
             }
-            // FIX 4: 누락된 break 추가
-            // break가 없어 default case로 넘어가 res값이 RES_PARERR로 덮어쓰이는 문제를 수정합니다.
             break; 
         default:
             res = RES_PARERR;
