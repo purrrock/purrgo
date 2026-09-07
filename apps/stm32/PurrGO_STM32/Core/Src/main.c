@@ -119,6 +119,9 @@ purrgo_logger_write("UART2 logger OK\r\n");
      * Оно заполняется Core-кодом через purrgo_gnss_process_nmea().
      */
     purrgo_gnss_solution_t gnss_solution = {0};
+
+    /* Регистрируем решение для глобального доступа (например, для get_fattime()) */
+    purrgo_gnss_set_active_solution(&gnss_solution);
     /*
      * Инкрементальный NMEA parser.
      * Он получает данные побайтно и собирает из них законченные

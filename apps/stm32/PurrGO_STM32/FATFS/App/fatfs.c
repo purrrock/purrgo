@@ -25,8 +25,7 @@ FIL USERFile;       /* File object for USER */
 
 /* USER CODE BEGIN Variables */
 #include "purrgo/gnss_types.h"
-/* The current GNSS state is instantiated in main.c and updated continuously */
-extern purrgo_gnss_solution_t gnss_solution;
+#include "purrgo/gnss_adapter.h"
 /* USER CODE END Variables */
 
 void MX_FATFS_Init(void)
@@ -64,7 +63,9 @@ DWORD get_fattime(void)
    * If there is no valid GNSS fix or the date hasn't been set,
    * return a deterministic default timestamp: 2026-01-01 00:00:00.
    */
-  if (!gnss_solution.valid || gnss_solution.year == 0) {
+  const purrgo_gnss_solution_t* sol = purrgo_gnss_get_active_solution();
+
+  if (!sol || !sol->valid || sol->year == 0) {
       return ((DWORD)(2026 - 1980) << 25)
            | ((DWORD)1 << 21)
            | ((DWORD)1 << 16)
@@ -73,7 +74,7 @@ DWORD get_fattime(void)
            | ((DWORD)0);
   }
 
-  uint16_t year = gnss_solution.year;
+  uint16_t year = sol->year;
 
   /*
    * The GNSS solution year might be given as a two-digit offset from 2000.
@@ -84,11 +85,11 @@ DWORD get_fattime(void)
   }
 
   return ((DWORD)(year - 1980) << 25)
-       | ((DWORD)gnss_solution.month << 21)
-       | ((DWORD)gnss_solution.day << 16)
-       | ((DWORD)gnss_solution.hours << 11)
-       | ((DWORD)gnss_solution.minutes << 5)
-       | ((DWORD)(gnss_solution.seconds / 2));
+       | ((DWORD)sol->month << 21)
+       | ((DWORD)sol->day << 16)
+       | ((DWORD)sol->hours << 11)
+       | ((DWORD)sol->minutes << 5)
+       | ((DWORD)(sol->seconds / 2));
   /* USER CODE END get_fattime */
 }
 

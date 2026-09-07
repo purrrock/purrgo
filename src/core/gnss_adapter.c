@@ -1,5 +1,16 @@
 #include "purrgo/gnss_adapter.h"
 #include "minmea.h"
+#include <stddef.h>
+
+static const purrgo_gnss_solution_t *g_active_solution = NULL;
+
+void purrgo_gnss_set_active_solution(const purrgo_gnss_solution_t *solution) {
+    g_active_solution = solution;
+}
+
+const purrgo_gnss_solution_t* purrgo_gnss_get_active_solution(void) {
+    return g_active_solution;
+}
 
 // Вспомогательная функция для перевода формата minmea_float (значение, масштаб) 
 // в микроградусы (1e7) с использованием исключительно целочисленной арифметики.
