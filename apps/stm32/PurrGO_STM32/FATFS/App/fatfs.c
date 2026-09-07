@@ -24,7 +24,9 @@ FATFS USERFatFS;    /* File system object for USER logical drive */
 FIL USERFile;       /* File object for USER */
 
 /* USER CODE BEGIN Variables */
-
+#include "purrgo/gnss_types.h"
+/* The current GNSS state is instantiated in main.c and updated continuously */
+extern purrgo_gnss_solution_t gnss_solution;
 /* USER CODE END Variables */
 
 void MX_FATFS_Init(void)
@@ -45,7 +47,48 @@ void MX_FATFS_Init(void)
 DWORD get_fattime(void)
 {
   /* USER CODE BEGIN get_fattime */
-  return 0;
+  /*
+   * Use the GNSS time to ensure SD card log files and other files
+   * get the correct creation and modification timestamps.
+   *
+   * FAT timestamp bit layout:
+   * bits 31..25: Year from 1980 (0..127 = 1980..2107)
+   * bits 24..21: Month (1..12)
+   * bits 20..16: Day (1..31)
+   * bits 15..11: Hour (0..23)
+   * bits 10..5:  Minute (0..59)
+   * bits 4..0:   Second divided by 2 (0..29)
+   */
+
+  /*
+   * If there is no valid GNSS fix or the date hasn't been set,
+   * return a deterministic default timestamp: 2026-01-01 00:00:00.
+   */
+  if (!gnss_solution.valid || gnss_solution.year == 0) {
+      return ((DWORD)(2026 - 1980) << 25)
+           | ((DWORD)1 << 21)
+           | ((DWORD)1 << 16)
+           | ((DWORD)0 << 11)
+           | ((DWORD)0 << 5)
+           | ((DWORD)0);
+  }
+
+  uint16_t year = gnss_solution.year;
+
+  /*
+   * The GNSS solution year might be given as a two-digit offset from 2000.
+   * For example, '26' -> '2026'.
+   */
+  if (year < 100) {
+      year += 2000;
+  }
+
+  return ((DWORD)(year - 1980) << 25)
+       | ((DWORD)gnss_solution.month << 21)
+       | ((DWORD)gnss_solution.day << 16)
+       | ((DWORD)gnss_solution.hours << 11)
+       | ((DWORD)gnss_solution.minutes << 5)
+       | ((DWORD)(gnss_solution.seconds / 2));
   /* USER CODE END get_fattime */
 }
 
