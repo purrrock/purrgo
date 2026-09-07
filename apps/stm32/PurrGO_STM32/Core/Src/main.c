@@ -113,8 +113,8 @@ int main(void)
  * Теперь можно использовать UART для диагностического вывода.
  */
 purrgo_logger_init();
-//purrgo_logger_write("PurrGO STM32 boot\r\n");
-//purrgo_logger_write("UART2 logger OK\r\n");
+purrgo_logger_write("PurrGO STM32 boot\r\n");
+purrgo_logger_write("UART2 logger OK\r\n");
 
     /*
      * Состояние разобранного GNSS-решения.
@@ -130,15 +130,15 @@ purrgo_logger_init();
 
     purrgo_gnss_parser_init(&gnss_parser);
 
-  //  purrgo_logger_write("GNSS MOCK parser test\r\n");
+    purrgo_logger_write("GNSS MOCK parser test\r\n");
     purrgo_gnss_mock_init();
-  //  purrgo_logger_write("GNSS OK\r\n");
+    purrgo_logger_write("GNSS OK\r\n");
 
     display_init();
-  //  purrgo_logger_write("Display OK\r\n");
+    purrgo_logger_write("Display OK\r\n");
 
     purrgo_stm32_buttons_init();
-  //  purrgo_logger_write("Buttons OK\r\n");
+    purrgo_logger_write("Buttons OK\r\n");
 
 FRESULT res;
 UINT bytes_written;
@@ -256,7 +256,7 @@ if (res == FR_OK)
     f_mount(NULL, (TCHAR const*)USERPath, 0);
 }
 
-    // purrgo_logger_write("Filesystem OK\r\n");
+   purrgo_logger_write("Filesystem OK\r\n");
 
   /* USER CODE END 2 */
 
@@ -361,11 +361,11 @@ if (res == FR_OK)
          * чтобы было видно, что main loop продолжает работать.
          */
 		static uint32_t last_tick = 0;
-		if (HAL_GetTick() - last_tick >= 1000) {
+		if (HAL_GetTick() - last_tick >= 5000) {
 		last_tick = HAL_GetTick();
 		HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
-		// purrgo_logger_write("PurrGO STM32 alive\r\n");
-		// purrgo_gnss_mock_update();
+		 purrgo_logger_write("PurrGO STM32 alive\r\n");
+		 purrgo_gnss_mock_update();
 		}
   }
   
