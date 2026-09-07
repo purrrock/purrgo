@@ -58,13 +58,12 @@ DWORD get_fattime(void)
    * bits 10..5:  Minute (0..59)
    * bits 4..0:   Second divided by 2 (0..29)
    */
+  const purrgo_gnss_solution_t* sol = purrgo_gnss_get_solution();
 
   /*
    * If there is no valid GNSS fix or the date hasn't been set,
    * return a deterministic default timestamp: 2026-01-01 00:00:00.
    */
-  const purrgo_gnss_solution_t* sol = purrgo_gnss_get_active_solution();
-
   if (!sol || !sol->valid || sol->year == 0) {
       return ((DWORD)(2026 - 1980) << 25)
            | ((DWORD)1 << 21)
@@ -77,8 +76,7 @@ DWORD get_fattime(void)
   uint16_t year = sol->year;
 
   /*
-   * The GNSS solution year might be given as a two-digit offset from 2000.
-   * For example, '26' -> '2026'.
+   * The GNSS solution year is an offset from 2000 (e.g. '26' -> 2026).
    */
   if (year < 100) {
       year += 2000;
