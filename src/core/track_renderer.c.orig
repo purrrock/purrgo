@@ -106,18 +106,10 @@ bool purrgo_track_render_last_segment(
     gfx_get_color(gfx, &old_fg, &old_bg);
     gfx_set_color(gfx, BLACK, gfx->color_bg);
 
-    // Save current clip and clip to viewport
-    int16_t old_clip_x, old_clip_y, old_clip_w, old_clip_h;
-    old_clip_x = gfx->clip_x;
-    old_clip_y = gfx->clip_y;
-    old_clip_w = gfx->clip_w;
-    old_clip_h = gfx->clip_h;
-    gfx_set_clip(gfx, vp->offset_x, vp->offset_y, vp->width, vp->height);
-
     // Draw the segment
     gfx_draw_line(gfx, sx1, sy1, sx2, sy2);
 
-    // Restore color state and clip
+    // Restore color state
     gfx_set_color(gfx, old_fg, old_bg);
 
     // Return the bounding box

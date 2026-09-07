@@ -90,6 +90,11 @@ void purrgo_app_map_mark_dirty(void);
 bool purrgo_app_map_is_dirty(void);
 void purrgo_app_map_clear_dirty(void);
 
+// Геттеры для состояния трека (инкрементальная отрисовка)
+void purrgo_app_track_mark_dirty(void);
+bool purrgo_app_track_is_dirty(void);
+void purrgo_app_track_clear_dirty(void);
+
 void purrgo_app_status_bar_mark_dirty(void);
 bool purrgo_app_status_bar_is_dirty(void);
 void purrgo_app_status_bar_clear_dirty(void);

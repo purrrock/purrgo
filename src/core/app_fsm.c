@@ -13,6 +13,7 @@
 // Текущее состояние конечного автомата
 static purrgo_state_t current_state;
 static bool ui_dirty = true;
+static bool track_dirty = false;
 static bool status_bar_dirty = true;
 static purrgo_gnss_solution_t prev_fix = {0};
 
@@ -58,6 +59,19 @@ bool purrgo_app_ui_is_dirty(void) {
 
 void purrgo_app_ui_clear_dirty(void) {
     ui_dirty = false;
+}
+
+void purrgo_app_track_mark_dirty(void) {
+    track_dirty = true;
+    ui_dirty = true;
+}
+
+bool purrgo_app_track_is_dirty(void) {
+    return track_dirty;
+}
+
+void purrgo_app_track_clear_dirty(void) {
+    track_dirty = false;
 }
 
 void purrgo_app_handle_button(purrgo_btn_t button) {
@@ -203,7 +217,7 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
         if (logger_state == LOGGER_STATE_RECORDING) {
             // Передаем координаты в фильтр (он сам решит, записывать ли точку)
             if (purrgo_logger_add_point(current_fix)) {
-                purrgo_app_map_mark_dirty();
+                purrgo_app_track_mark_dirty();
             }
         }
     }

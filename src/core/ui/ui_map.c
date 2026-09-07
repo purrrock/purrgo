@@ -557,7 +557,8 @@ static void ui_map_render_gnss_marker(
     const purrgo_gnss_solution_t* gnss,
     const purrgo_viewport_t* map_vp,
     const purrgo_bbox_t* dynamic_cam,
-    bool full_redraw)
+    bool full_redraw,
+    bool track_dirty)
 {
     marker_state_t new_marker_state;
     ui_calc_marker_state(gnss, map_vp, dynamic_cam, &new_marker_state);
@@ -604,7 +605,7 @@ static void ui_map_render_gnss_marker(
                        (new_marker_state.lat_1e7 != prev_marker_state.lat_1e7) ||
                        (new_marker_state.lon_1e7 != prev_marker_state.lon_1e7);
 
-        if (changed) {
+        if (changed || track_dirty) {
             const char* reason = "MARKER: unknown";
             if (new_marker_state.gnss_valid != prev_marker_state.gnss_valid) {
                 reason = "MARKER: validity changed";
@@ -614,6 +615,8 @@ static void ui_map_render_gnss_marker(
                 reason = "MARKER: course changed";
             } else if (new_marker_state.rendered != prev_marker_state.rendered) {
                 reason = "MARKER: visibility changed";
+            } else if (track_dirty) {
+                reason = "MARKER: track updated";
             }
             log_marker_diagnostic(reason, &new_marker_state);
 
@@ -637,6 +640,19 @@ static void ui_map_render_gnss_marker(
                 if (new_marker_state.max_x > max_x) max_x = new_marker_state.max_x;
                 if (new_marker_state.min_y < min_y) min_y = new_marker_state.min_y;
                 if (new_marker_state.max_y > max_y) max_y = new_marker_state.max_y;
+            }
+
+            if (track_dirty) {
+                int16_t t_min_x, t_min_y, t_max_x, t_max_y;
+                if (purrgo_track_render_last_segment(gfx, dynamic_cam, map_vp, &t_min_x, &t_min_y, &t_max_x, &t_max_y)) {
+                    // Extend region to include track segment
+                    if (t_min_x < min_x) min_x = t_min_x;
+                    if (t_max_x > max_x) max_x = t_max_x;
+                    if (t_min_y < min_y) min_y = t_min_y;
+                    if (t_max_y > max_y) max_y = t_max_y;
+                }
+                // We clear track_dirty later in ui_render_map so that both full redraw
+                // and partial redraw correctly process it.
             }
 
             ui_save_marker_bg(gfx, &new_marker_state);
@@ -703,12 +719,14 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
 
     ui_map_render_overlays(gfx, gnss, &map_vp);
 
+    bool track_dirty = purrgo_app_track_is_dirty();
+
     if (purrgo_app_map_is_dirty()) {
         bool map_success = ui_map_render_base_layers(gfx, &map_vp, &dynamic_cam);
 
         ui_map_render_dynamic_data(gfx, &map_vp, &dynamic_cam);
 
-        ui_map_render_gnss_marker(gfx, gnss, &map_vp, &dynamic_cam, true);
+        ui_map_render_gnss_marker(gfx, gnss, &map_vp, &dynamic_cam, true, track_dirty);
 
         // Restore clipping so status UI can be drawn
         gfx_reset_clip(gfx);
@@ -719,6 +737,9 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
         display_refresh();
         dbg_map_render_calls++;
     } else {
-        ui_map_render_gnss_marker(gfx, gnss, &map_vp, &dynamic_cam, false);
+        ui_map_render_gnss_marker(gfx, gnss, &map_vp, &dynamic_cam, false, track_dirty);
+        if (track_dirty) {
+            purrgo_app_track_clear_dirty();
+        }
     }
 }
