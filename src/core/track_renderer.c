@@ -120,6 +120,8 @@ bool purrgo_track_render_last_segment(
     // Restore color state and clip
     gfx_set_color(gfx, old_fg, old_bg);
 
+    gfx_set_clip(gfx, old_clip_x, old_clip_y, old_clip_w, old_clip_h);
+
     // Return the bounding box
     *min_x = lx;
     *max_x = hx;

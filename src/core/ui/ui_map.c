@@ -735,6 +735,9 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
             purrgo_app_map_clear_dirty();
         }
         display_refresh();
+        if (map_success) {
+            purrgo_app_track_clear_dirty();
+        }
         dbg_map_render_calls++;
     } else {
         ui_map_render_gnss_marker(gfx, gnss, &map_vp, &dynamic_cam, false, track_dirty);
