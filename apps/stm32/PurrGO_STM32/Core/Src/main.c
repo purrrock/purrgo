@@ -58,7 +58,7 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-
+purrgo_gnss_solution_t gnss_solution = {0};
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -120,7 +120,7 @@ purrgo_logger_write("UART2 logger OK\r\n");
      * Состояние разобранного GNSS-решения.
      * Оно заполняется Core-кодом через purrgo_gnss_process_nmea().
      */
-    purrgo_gnss_solution_t gnss_solution = {0};
+
     /*
      * Инкрементальный NMEA parser.
      * Он получает данные побайтно и собирает из них законченные
