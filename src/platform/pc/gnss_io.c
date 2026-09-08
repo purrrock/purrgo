@@ -2,6 +2,7 @@
 
 #ifndef USE_MOCK_GNSS
 
+#include <stdio.h>
 #include "serial_hal.h"
 
 /*
@@ -20,7 +21,19 @@ bool purrgo_gnss_read_byte(uint8_t *byte)
      * Сохраняем его семантику: ненулевой результат означает,
      * что байт был получен.
      */
-    return serial_hal_read_byte(byte) != 0;
+    if (serial_hal_read_byte(byte) != 0) {
+        return true;
+    }
+
+    /* Fallback to standard input for basic PC emulation
+       if no serial data is available or used */
+    const int c = getchar();
+    if (c != EOF) {
+        *byte = (uint8_t)c;
+        return true;
+    }
+
+    return false;
 }
 
 #else

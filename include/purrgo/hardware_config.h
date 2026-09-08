@@ -33,27 +33,6 @@
 
 /*
  * ============================================================================
- * MCU / execution platform
- * ============================================================================
- */
-
-#define PURRGO_PLATFORM_PC             1
-#define PURRGO_MCU_STM32F446RE         2
-#define PURRGO_MCU_STM32U5             3
-
-#if PURRGO_HW_PROFILE == PURRGO_HW_PROFILE_DEVELOPMENT
-#define PURRGO_HW_MCU PURRGO_PLATFORM_PC
-#elif PURRGO_HW_PROFILE == PURRGO_HW_PROFILE_PROTOTYPE
-#define PURRGO_HW_MCU PURRGO_MCU_STM32F446RE
-#elif PURRGO_HW_PROFILE == PURRGO_HW_PROFILE_RELEASE
-#define PURRGO_HW_MCU PURRGO_MCU_STM32U5
-#else
-#error "Unknown PURRGO_HW_PROFILE"
-#endif
-
-
-/*
- * ============================================================================
  * GNSS receiver
  * ============================================================================
  */
@@ -160,25 +139,16 @@
  */
 
 #if PURRGO_HW_PROFILE == PURRGO_HW_PROFILE_DEVELOPMENT
-#if PURRGO_HW_MCU != PURRGO_PLATFORM_PC
-#error "DEVELOPMENT profile must use the PC platform"
-#endif
 #if PURRGO_HW_GNSS != PURRGO_GNSS_MOCK
 #error "DEVELOPMENT profile must use the mock GNSS receiver"
 #endif
 
 #elif PURRGO_HW_PROFILE == PURRGO_HW_PROFILE_PROTOTYPE
-#if PURRGO_HW_MCU != PURRGO_MCU_STM32F446RE
-#error "PROTOTYPE profile must use STM32F446RE"
-#endif
 #if PURRGO_HW_GNSS != PURRGO_GNSS_GY_NEO6MV2
 #error "PROTOTYPE profile must use GY-NEO6MV2"
 #endif
 
 #elif PURRGO_HW_PROFILE == PURRGO_HW_PROFILE_RELEASE
-#if PURRGO_HW_MCU != PURRGO_MCU_STM32U5
-#error "RELEASE profile must use STM32U5"
-#endif
 #if PURRGO_HW_GNSS != PURRGO_GNSS_UBLOX_M10
 #error "RELEASE profile must use u-blox M10"
 #endif
