@@ -35,7 +35,7 @@ void purrgo_track_render(
  * @param camera Current geographic bounding box of the camera.
  * @param vp Current screen viewport.
  */
-void purrgo_track_render_last_segment(
+bool purrgo_track_render_last_segment(
     gfx_context_t *gfx,
     const purrgo_bbox_t *camera,
     const purrgo_viewport_t *vp
