@@ -65,3 +65,5 @@ test_geo
 third_party/libminmea.a
 apps/emulator/purrgo_emulator
 .ninja_log
+.settings
+.clangd
