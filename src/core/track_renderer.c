@@ -2,7 +2,6 @@
 #include "purrgo/track_logger.h"
 #include "map_projection.h"
 #include "purrgo/gfx_line.h"
-#include "purrgo/display_hal.h"
 
 void purrgo_track_render(
     gfx_context_t *gfx,
@@ -41,9 +40,10 @@ void purrgo_track_render(
 bool purrgo_track_render_last_segment(
     gfx_context_t *gfx,
     const purrgo_bbox_t *camera,
-    const purrgo_viewport_t *vp)
+    const purrgo_viewport_t *vp,
+    purrgo_rect_t *out_rect)
 {
-    if (!gfx || !camera || !vp) return false;
+    if (!gfx || !camera || !vp || !out_rect) return false;
 
     track_point_t prev_point, last_point;
     if (!purrgo_logger_get_last_two_points(&prev_point, &last_point)) {
@@ -80,8 +80,12 @@ bool purrgo_track_render_last_segment(
     int16_t clip_h = max_y - min_y + 1;
 
     if (clip_w > 0 && clip_h > 0) {
-        display_refresh_region(min_x, min_y, clip_w, clip_h);
+        out_rect->x = min_x;
+        out_rect->y = min_y;
+        out_rect->w = clip_w;
+        out_rect->h = clip_h;
+        return true;
     }
 
-    return true;
+    return false;
 }
