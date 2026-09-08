@@ -749,8 +749,8 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
             int16_t min_y = prev_sy < sy ? prev_sy : sy;
             int16_t max_y = prev_sy > sy ? prev_sy : sy;
 
-            // Add a margin to account for line width and anti-aliasing/rounding
-            int16_t margin = 2;
+            // Add a margin strictly for the line width
+            int16_t margin = 1;
             min_x -= margin;
             max_x += margin;
             min_y -= margin;
@@ -768,12 +768,9 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
             if (w > 0 && h > 0) {
                 display_refresh_region(min_x, min_y, w, h);
             }
+
+            purrgo_map_controller_clear_track_dirty();
         }
-
-        // Also update the GNSS marker incrementally, which does its own display_refresh_region
-        ui_map_render_gnss_marker(gfx, gnss, &map_vp, &dynamic_cam, false);
-
-        purrgo_map_controller_clear_track_dirty();
     } else {
         // Finally, if nothing else is dirty, perform the usual GNSS marker-only update
         ui_map_render_gnss_marker(gfx, gnss, &map_vp, &dynamic_cam, false);
