@@ -5,6 +5,9 @@
 // sin(-0.833) * 10000 = -145
 #define SIN_SUNSET_10K -145
 
+// Максимальное значение дня в году (високосный год)
+#define MAX_DAY_OF_YEAR 366
+
 // Таблица арккосинуса (от -10000 до 10000 -> углы от 180 до 0 градусов)
 // 201 элемент (шаг 0.01) позволяет получить точность до ~1 градуса (4 минуты времени)
 extern const uint8_t acos_lut[201]; 
@@ -32,7 +35,7 @@ void purrgo_sun_calc(int32_t lat_1e7, int32_t lon_1e7,
                      purrgo_sun_info_t *info) {
     
     uint16_t doy = get_day_of_year(year_2digit, month, day);
-    if (doy > 366) doy = 366;
+    if (doy > MAX_DAY_OF_YEAR) doy = MAX_DAY_OF_YEAR;
 
     // 1. Получение астрономических параметров на текущий день из Flash (масштаб 10000)
     int32_t sin_dec = sun_sin_dec_lut[doy];
