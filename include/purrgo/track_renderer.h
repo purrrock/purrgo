@@ -24,4 +24,21 @@ void purrgo_track_render(
     const char *gpx_filepath
 );
 
+/**
+ * @brief Renders only the newest track segment between the two latest recorded points.
+ *
+ * This function is intended for incremental rendering of the active track to
+ * avoid a full redraw of all track points. It retrieves the last two points
+ * from the track logger and draws a single segment connecting them.
+ *
+ * @param gfx Graphics context to draw the track segment on.
+ * @param camera Current geographic bounding box of the camera.
+ * @param vp Current screen viewport.
+ */
+void purrgo_track_render_last_segment(
+    gfx_context_t *gfx,
+    const purrgo_bbox_t *camera,
+    const purrgo_viewport_t *vp
+);
+
 #endif // PURRGO_TRACK_RENDERER_H
