@@ -39,6 +39,11 @@ size_t purrgo_logger_get_track_points(
     size_t max_points
 );
 
+bool purrgo_logger_get_last_two_points(
+    track_point_t *previous,
+    track_point_t *last
+);
+
 track_logger_state_t purrgo_logger_get_state(void);
 
 #endif // PURRGO_TRACK_LOGGER_H

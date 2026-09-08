@@ -290,3 +290,30 @@ size_t purrgo_logger_get_track_points(
 
     return points_copied;
 }
+
+bool purrgo_logger_get_last_two_points(
+    track_point_t *previous,
+    track_point_t *last
+) {
+    if (previous == NULL || last == NULL) {
+        return false;
+    }
+
+    if (ram_track_count < 2) {
+        return false;
+    }
+
+    // `ram_track_head` points to the next available slot for writing.
+    // Therefore, the newest element is at index `ram_track_head - 1`
+    // (with wraparound handling for circular buffer).
+    size_t last_idx = (ram_track_head == 0) ? (TRACK_RAM_MAX_POINTS - 1) : (ram_track_head - 1);
+
+    // The second newest element is at index `ram_track_head - 2`
+    // (with wraparound handling).
+    size_t prev_idx = (last_idx == 0) ? (TRACK_RAM_MAX_POINTS - 1) : (last_idx - 1);
+
+    *last = ram_track_buffer[last_idx];
+    *previous = ram_track_buffer[prev_idx];
+
+    return true;
+}
