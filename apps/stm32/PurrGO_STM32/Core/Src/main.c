@@ -27,6 +27,10 @@
 #include <string.h>
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <purrgo/display_hal.h>
+#include <purrgo/app_fsm.h>
+#include <purrgo/app_ui.h>
+#include <purrgo/gfx_renderer.h>
 #include "purrgo_logger.h"
 #include <purrgo/gnss_io.h>
 #include "purrgo/gnss.h"
@@ -59,6 +63,12 @@
 
 /* USER CODE BEGIN PV */
 purrgo_gnss_solution_t gnss_solution = {0};
+/*
+ * Графический контекст приложения.
+ * Он связывает общий графический код PurrGO
+ * с framebuffer STM32.
+ */
+static gfx_context_t global_gfx_ctx;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -69,7 +79,41 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+/*
+ * Callback от общего графического ядра PurrGO
+ * к STM32 framebuffer.
+ *
+ * GFX работает только с абстрактным framebuffer и не знает,
+ * как именно STM32 хранит пиксели.
+ */
+static void stm32_draw_pixel_cb(
+    void *fb,
+    int16_t x,
+    int16_t y,
+    gfx_color_t color
+)
+{
+    /*
+     * Текущий STM32 display driver сам владеет framebuffer.
+     * Параметр fb пока не используется.
+     */
+    (void)fb;
+    display_set_pixel(x, y, color);
+}
 
+/*
+ * Callback чтения пикселя из STM32 framebuffer.
+ */
+static gfx_color_t stm32_read_pixel_cb(
+    void *fb,
+    int16_t x,
+    int16_t y
+)
+{
+    (void)fb;
+
+    return display_get_pixel(x, y);
+}
 /* USER CODE END 0 */
 
 /**
@@ -140,123 +184,37 @@ purrgo_logger_write("UART2 logger OK\r\n");
     purrgo_stm32_buttons_init();
     purrgo_logger_write("Buttons OK\r\n");
 
-FRESULT res;
-UINT bytes_written;
-UINT bytes_read;
-
-char write_buffer[] = "PurrGO SD test\r\n";
-char read_buffer[32] = {0};
-
 /*
- * 1. Подключаем файловую систему к SD-карте.
+ * Инициализация конечного автомата приложения.
+ * После этого PurrGO находится в начальном состоянии
+ * APP_STATE_MAP.
  */
-res = f_mount(&USERFatFS, (TCHAR const*)USERPath, 1);
-
-if (res == FR_OK)
-{
-    purrgo_logger_write("SD: f_mount OK\r\n");
-}
-else
-{
-    purrgo_logger_write("SD: f_mount ERROR = %d\r\n", res);
-}
-
+purrgo_app_init();
+purrgo_logger_write("App FSM OK\r\n");
 /*
- * Продолжаем тест только если файловая система смонтирована.
+ * Инициализация графического контекста.
+ * Общий UI-код PurrGO будет рисовать через этот контекст,
+ * а callbacks выше будут записывать пиксели в STM32 framebuffer.
+ * framebuffer передаём как непрозрачный указатель.
+ * Сам STM32 display driver предоставляет доступ к нему
+ * через display_get_framebuffer().
  */
-if (res == FR_OK)
+if (!gfx_init(
+        &global_gfx_ctx,
+        DISPLAY_WIDTH,
+        DISPLAY_HEIGHT,
+        (void *)display_get_framebuffer(),
+        stm32_draw_pixel_cb,
+        stm32_read_pixel_cb))
 {
+    purrgo_logger_write("GFX INIT ERROR\r\n");
     /*
-     * 2. Создаём тестовый файл.
-     *
-     * FA_CREATE_ALWAYS:
-     * файл создаётся заново, если он уже существовал.
+     * Без графического контекста приложение продолжать
+     * работу не должно.
      */
-    res = f_open(&USERFile,
-                 "0:test.txt",
-                 FA_CREATE_ALWAYS | FA_WRITE | FA_READ);
-
-    if (res == FR_OK)
-    {
-        purrgo_logger_write("SD: f_open OK\r\n");
-
-        /*
-         * 3. Записываем тестовую строку.
-         */
-        res = f_write(&USERFile,
-                      write_buffer,
-                      strlen(write_buffer),
-                      &bytes_written);
-
-        if ((res == FR_OK) &&
-            (bytes_written == strlen(write_buffer)))
-        {
-            purrgo_logger_write("SD: f_write OK, bytes = %u\r\n",
-                   bytes_written);
-        }
-        else
-        {
-            purrgo_logger_write("SD: f_write ERROR = %d, bytes = %u\r\n",
-                   res,
-                   bytes_written);
-        }
-
-        /*
-         * После записи возвращаем указатель файла
-         * в начало перед чтением.
-         */
-        if (res == FR_OK)
-        {
-            res = f_lseek(&USERFile, 0);
-
-            if (res != FR_OK)
-            {
-                purrgo_logger_write("SD: f_lseek ERROR = %d\r\n", res);
-            }
-        }
-
-        /*
-         * 4. Читаем файл обратно.
-         */
-        if (res == FR_OK)
-        {
-            memset(read_buffer, 0, sizeof(read_buffer));
-
-            res = f_read(&USERFile,
-                         read_buffer,
-                         sizeof(read_buffer) - 1,
-                         &bytes_read);
-
-            if (res == FR_OK)
-            {
-                purrgo_logger_write("SD: f_read OK, bytes = %u\r\n",
-                       bytes_read);
-
-                purrgo_logger_write("SD: DATA: %s", read_buffer);
-            }
-            else
-            {
-                purrgo_logger_write("SD: f_read ERROR = %d\r\n", res);
-            }
-        }
-
-        /*
-         * 5. Закрываем файл.
-         */
-        f_close(&USERFile);
-    }
-    else
-    {
-        purrgo_logger_write("SD: f_open ERROR = %d\r\n", res);
-    }
-
-    /*
-     * 6. Размонтируем файловую систему.
-     */
-    f_mount(NULL, (TCHAR const*)USERPath, 0);
+    Error_Handler();
 }
-
-   purrgo_logger_write("Filesystem OK\r\n");
+purrgo_logger_write("GFX OK\r\n");
 
   /* USER CODE END 2 */
 
@@ -264,80 +222,77 @@ if (res == FR_OK)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    /* USER CODE END WHILE */
-
-    /* USER CODE BEGIN 3 */
-       /*
-         * Обрабатываем доступные байты GNSS.
-         *
-         * В текущей реализации это байты из STM32 GNSS MOCK.
-         * В будущем здесь будут байты реального UART/DMA.
-         */
+    /*
+     * ---------------------------------------------------------
+     * 1. Получение и обработка GNSS.
+     * ---------------------------------------------------------
+     * Пока используется GNSS MOCK.
+     * В будущем источник байтов здесь будет заменён
+     * на реальный UART/DMA GNSS.
+     */
+    {
         uint8_t gnss_byte;
-
-        /*
-         * Ограничиваем количество обрабатываемых байтов за одну
-         * итерацию main loop.
-         *
-         * Это не позволяет GNSS-потоку полностью занять CPU.
-         */
         uint16_t bytes_processed = 0U;
-
         while (
             purrgo_gnss_read_byte(&gnss_byte) &&
             bytes_processed < 256U
         )
         {
             /*
-             * Передаём очередной байт в потоковый NMEA parser.
-             * true означает, что получено полное предложение,
-             * заканчивающееся символом '\n'.
+             * Передаём байт потоковому NMEA parser.
+             * true означает, что получено полное NMEA предложение.
              */
             if (purrgo_gnss_parser_feed(&gnss_parser, gnss_byte))
             {
                 /*
-                 * В parser.line находится готовая NMEA-строка
-                 * без завершающего '\r'/'\n'.
-                 * Передаём её в существующий Core GNSS adapter.
+                 * Передаём готовое NMEA предложение
+                 * в общий GNSS adapter.
                  */
                 purrgo_gnss_process_nmea(
                     gnss_parser.line,
                     &gnss_solution
                 );
-
                 /*
-                 * Показываем результат обработки через UART.
-                 * Координаты хранятся в формате градусов * 10^7.
-                 * Поэтому выводим отдельно целую и дробную части,
-                 * не используя float.
-                 */
-                purrgo_logger_write(
-                    "GNSS: valid=%d lat=%ld lon=%ld "
-                    "speed=%ld alt=%ld sats=%d time=%02d:%02d:%02d\r\n",
-                    gnss_solution.valid ? 1 : 0,
-                    (long)gnss_solution.lat_1e7,
-                    (long)gnss_solution.lon_1e7,
-                    (long)gnss_solution.speed_knots,
-                    (long)gnss_solution.alt_m,
-                    gnss_solution.satellites_tracked,
-                    gnss_solution.hours,
-                    gnss_solution.minutes,
-                    gnss_solution.seconds
-                );
-
-                /*
-                 * Сбрасываем parser для следующего NMEA-предложения.
+                 * Parser готов к следующему предложению.
                  */
                 purrgo_gnss_parser_init(&gnss_parser);
             }
-
             bytes_processed++;
         }
-
-        /*
-         * Опрашиваем состояние кнопок.
-         */
-        purrgo_btn_t all_buttons[] = {
+    }
+    /*
+     * ---------------------------------------------------------
+     * 2. Периодическое обновление GNSS MOCK и application FSM.
+     * ---------------------------------------------------------
+     * Один раз в секунду передаём актуальное GNSS решение
+     * в application layer.
+     */
+    {
+        static uint32_t last_app_update = 0U;
+        uint32_t now = HAL_GetTick();
+        if ((now - last_app_update) >= 1000U)
+        {
+            last_app_update = now;
+            /*
+             * Временно двигаем GNSS MOCK.
+             * Для реального GNSS этот вызов здесь больше не понадобится.
+             */
+            purrgo_gnss_mock_update();
+            /*
+             * Передаём текущее GNSS решение конечному автомату
+             * приложения.
+             */
+            purrgo_app_update(&gnss_solution);
+            purrgo_logger_write("APP: update\r\n");
+        }
+    }
+    /*
+     * ---------------------------------------------------------
+     * 3. Обработка кнопок.
+     * ---------------------------------------------------------
+     */
+    {
+        const purrgo_btn_t all_buttons[] = {
             PURRGO_BTN_UP,
             PURRGO_BTN_DOWN,
             PURRGO_BTN_LEFT,
@@ -347,18 +302,54 @@ if (res == FR_OK)
             PURRGO_BTN_MENU,
             PURRGO_BTN_OK
         };
-        for (size_t i = 0; i < sizeof(all_buttons) / sizeof(all_buttons[0]); i++)
+        for (
+            size_t i = 0;
+            i < sizeof(all_buttons) / sizeof(all_buttons[0]);
+            i++
+        )
         {
             if (purrgo_stm32_button_is_pressed(all_buttons[i]))
             {
-                /* Currently a stub, this branch will not be hit */
                 purrgo_app_handle_button(all_buttons[i]);
             }
         }
+    }
+    /*
+     * ---------------------------------------------------------
+     * 4. Отрисовка UI.
+     * ---------------------------------------------------------
+     * UI должен перерисовываться только когда есть изменения.
+     * Это особенно важно для E-Ink, поскольку обновление экрана
+     * является медленной операцией.
+     */
+    if (
+        purrgo_app_ui_is_dirty() ||
+        purrgo_app_map_is_dirty()
+    )
+    {
+        purrgo_logger_write("APP: UI render\r\n");
+        purrgo_app_ui_render(
+            &global_gfx_ctx,
+            &gnss_solution,
+            NULL
+        );
 
+        purrgo_app_ui_clear_dirty();
         /*
-         * Светодиод и диагностическое сообщение,
-         * чтобы было видно, что main loop продолжает работать.
+         * Пока физический E-Ink дисплей не подключён,
+         * этот вызов работает как stub и только сообщает
+         * о refresh через UART.
+         */
+        display_refresh();
+    }
+    /*
+     * Небольшая задержка освобождает CPU между итерациями
+     * главного цикла.
+     */
+    HAL_Delay(10);
+
+         /*
+         * Светодиод и диагностическое сообщение, чтобы было видно, что main loop продолжает работать.
          */
 		static uint32_t last_tick = 0;
 		if (HAL_GetTick() - last_tick >= 5000) {
@@ -368,8 +359,7 @@ if (res == FR_OK)
 		 purrgo_gnss_mock_update();
 		}
   }
-  
-  /* USER CODE END 3 */
+    /* USER CODE END 3 */
 }
 
 /**
