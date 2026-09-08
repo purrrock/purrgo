@@ -22,9 +22,7 @@
 #include "spi.h"
 #include "usart.h"
 #include "gpio.h"
-#include "fatfs.h"
-#include <stdio.h>
-#include <string.h>
+
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <purrgo/display_hal.h>
@@ -148,8 +146,8 @@ int main(void)
   MX_USART2_UART_Init();
   MX_USART1_UART_Init();
   MX_SPI1_Init();
-  MX_SPI2_Init();
   MX_FATFS_Init();
+  MX_SPI2_Init();
   /* USER CODE BEGIN 2 */
 
 /*
@@ -222,144 +220,11 @@ purrgo_logger_write("GFX OK\r\n");
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    /*
-     * ---------------------------------------------------------
-     * 1. Получение и обработка GNSS.
-     * ---------------------------------------------------------
-     * Пока используется GNSS MOCK.
-     * В будущем источник байтов здесь будет заменён
-     * на реальный UART/DMA GNSS.
-     */
-    {
-        uint8_t gnss_byte;
-        uint16_t bytes_processed = 0U;
-        while (
-            purrgo_gnss_read_byte(&gnss_byte) &&
-            bytes_processed < 256U
-        )
-        {
-            /*
-             * Передаём байт потоковому NMEA parser.
-             * true означает, что получено полное NMEA предложение.
-             */
-            if (purrgo_gnss_parser_feed(&gnss_parser, gnss_byte))
-            {
-                /*
-                 * Передаём готовое NMEA предложение
-                 * в общий GNSS adapter.
-                 */
-                purrgo_gnss_process_nmea(
-                    gnss_parser.line,
-                    &gnss_solution
-                );
-                /*
-                 * Parser готов к следующему предложению.
-                 */
-                purrgo_gnss_parser_init(&gnss_parser);
-            }
-            bytes_processed++;
-        }
-    }
-    /*
-     * ---------------------------------------------------------
-     * 2. Периодическое обновление GNSS MOCK и application FSM.
-     * ---------------------------------------------------------
-     * Один раз в секунду передаём актуальное GNSS решение
-     * в application layer.
-     */
-    {
-        static uint32_t last_app_update = 0U;
-        uint32_t now = HAL_GetTick();
-        if ((now - last_app_update) >= 1000U)
-        {
-            last_app_update = now;
-            /*
-             * Временно двигаем GNSS MOCK.
-             * Для реального GNSS этот вызов здесь больше не понадобится.
-             */
-            purrgo_gnss_mock_update();
-            /*
-             * Передаём текущее GNSS решение конечному автомату
-             * приложения. Не работает, пока не решим проблему с purrgo_system_time
-             */
-            // purrgo_app_update(&gnss_solution);
-            purrgo_logger_write("APP: update\r\n");
-        }
-    }
-    /*
-     * ---------------------------------------------------------
-     * 3. Обработка кнопок.
-     * ---------------------------------------------------------
-     */
-    {
-        const purrgo_btn_t all_buttons[] = {
-            PURRGO_BTN_UP,
-            PURRGO_BTN_DOWN,
-            PURRGO_BTN_LEFT,
-            PURRGO_BTN_RIGHT,
-            PURRGO_BTN_PLUS,
-            PURRGO_BTN_MINUS,
-            PURRGO_BTN_MENU,
-            PURRGO_BTN_OK
-        };
-        for (
-            size_t i = 0;
-            i < sizeof(all_buttons) / sizeof(all_buttons[0]);
-            i++
-        )
-        {
-            if (purrgo_stm32_button_is_pressed(all_buttons[i]))
-            {
-                purrgo_app_handle_button(all_buttons[i]);
-            }
-        }
-    }
-    /*
-     * ---------------------------------------------------------
-     * 4. Отрисовка UI.
-     * ---------------------------------------------------------
-     * UI должен перерисовываться только когда есть изменения.
-     * Это особенно важно для E-Ink, поскольку обновление экрана
-     * является медленной операцией.
-     */
-    if (
-        purrgo_app_ui_is_dirty() ||
-        purrgo_app_map_is_dirty()
-    )
-    {
-        purrgo_logger_write("APP: UI render\r\n");
-        purrgo_app_ui_render(
-            &global_gfx_ctx,
-            &gnss_solution,
-            NULL
-        );
+    /* USER CODE END WHILE */
 
-        purrgo_app_ui_clear_dirty();
-        /*
-         * Пока физический E-Ink дисплей не подключён,
-         * этот вызов работает как stub и только сообщает
-         * о refresh через UART.
-         */
-        display_refresh();
-    }
-    /*
-     * Небольшая задержка освобождает CPU между итерациями
-     * главного цикла.
-     */
-    HAL_Delay(10);
-
-         /*
-         * Светодиод и диагностическое сообщение, чтобы было видно, что main loop продолжает работать.
-         */
-		static uint32_t last_tick = 0;
-		if (HAL_GetTick() - last_tick >= 5000) {
-		last_tick = HAL_GetTick();
-		HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
-		 purrgo_logger_write("PurrGO STM32 alive\r\n");
-		 purrgo_gnss_mock_update();
-		}
+    /* USER CODE BEGIN 3 */
   }
-    /* USER CODE END 3 */
+  /* USER CODE END 3 */
 }
 
 /**
