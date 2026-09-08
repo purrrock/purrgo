@@ -68,12 +68,19 @@ const uint8_t* display_get_framebuffer(void) {
 /*
  * Implementation of common PurrGO display HAL.
  */
+static int partial_refresh_count = 0;
+
 void display_refresh(void) {
     purrgo_logger_write("FULL REFRESH\r\n");
+    partial_refresh_count = 0;
     /* Stub: physical display is not connected yet. */
 }
 
 void display_refresh_region(int16_t x, int16_t y, int16_t w, int16_t h) {
+    if (partial_refresh_count >= MAX_PARTIAL_REFRESHES) {
+        display_refresh();
+    }
     purrgo_logger_write("PARTIAL REFRESH x=%d y=%d w=%d h=%d\r\n", x, y, w, h);
+    partial_refresh_count++;
     /* Stub: physical display is not connected yet. */
 }
