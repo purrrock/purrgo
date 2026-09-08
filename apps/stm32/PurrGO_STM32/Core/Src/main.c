@@ -25,10 +25,16 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+
+#include <stdbool.h>
+#include <stdint.h>
+#include <purrgo/config.h>
 #include <purrgo/display_hal.h>
 #include <purrgo/app_fsm.h>
 #include <purrgo/app_ui.h>
 #include <purrgo/gfx_renderer.h>
+#include <purrgo/system_time.h>
+#include <purrgo/sun.h>
 #include "purrgo_logger.h"
 #include <purrgo/gnss_io.h>
 #include "purrgo/gnss.h"
@@ -49,6 +55,33 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 
+/*
+ * Интервал обновления логики GNSS/FSM.
+ *
+ * Это не частота чтения UART: входные байты обрабатываются
+ * при каждом проходе главного цикла.
+ */
+#define GNSS_UPDATE_PERIOD_MS 1000U
+
+/*
+ * Период опроса кнопок.
+ */
+#define BUTTON_POLL_PERIOD_MS 10U
+
+/*
+ * Период пересчёта параметров восхода/заката.
+ */
+#define SUN_UPDATE_PERIOD_MS 60000U
+
+/*
+ * Максимальное количество GNSS-байтов, обрабатываемых за один
+ * проход главного цикла.
+ *
+ * Ограничение не позволяет бесконечному потоку входных данных
+ * полностью заблокировать остальную логику приложения.
+ */
+#define GNSS_MAX_BYTES_PER_LOOP 256U
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -59,29 +92,94 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-purrgo_gnss_solution_t gnss_solution = {0};
+
 /*
- * Графический контекст приложения.
- * Он связывает общий графический код PurrGO
- * с framebuffer STM32.
+ * Последнее разобранное GNSS-решение.
+ *
+ * Эта структура передаётся в FSM и UI.
+ */
+static purrgo_gnss_solution_t gnss_solution = {0};
+
+/*
+ * Контекст общего графического ядра PurrGO.
+ *
+ * Сам GFX-код не знает ничего о STM32.
+ * Доступ к framebuffer осуществляется через callbacks,
+ * определённые ниже.
  */
 static gfx_context_t global_gfx_ctx;
+
+/*
+ * Инкрементальный NMEA parser.
+ *
+ * Он получает входные байты и формирует законченные NMEA-предложения.
+ */
+static purrgo_gnss_parser_t gnss_parser;
+
+/*
+ * Результат расчёта восхода/заката.
+ */
+static purrgo_sun_info_t sun_info = {0};
+
+/*
+ * Флаг наличия первого корректного GNSS fix.
+ *
+ * Он используется для определения того, можно ли передавать
+ * sun_info в UI.
+ */
+static bool first_fix_obtained = false;
+
+/*
+ * Время последнего расчёта восхода/заката.
+ */
+static uint32_t last_sun_update_ms = 0U;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
 
+static void process_gnss_input(void);
+static void update_sun_info(uint32_t current_time_ms);
+static void process_buttons(void);
+
+/*
+ * Callback GFX -> STM32 framebuffer.
+ */
+static void stm32_draw_pixel_cb(
+    void *fb,
+    int16_t x,
+    int16_t y,
+    gfx_color_t color
+);
+
+/*
+ * Callback чтения пикселя из STM32 framebuffer.
+ */
+static gfx_color_t stm32_read_pixel_cb(
+    void *fb,
+    int16_t x,
+    int16_t y
+);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-/*
- * Callback от общего графического ядра PurrGO
- * к STM32 framebuffer.
+
+
+/**
+ * @brief Callback от общего графического ядра к STM32 framebuffer.
  *
- * GFX работает только с абстрактным framebuffer и не знает,
- * как именно STM32 хранит пиксели.
+ * GFX не знает, где физически находится framebuffer и как в нём
+ * кодируются пиксели. Поэтому для записи пикселя он вызывает
+ * эту платформенную функцию.
+ *
+ * @param fb    Непрозрачный указатель на framebuffer.
+ *              В текущем драйвере framebuffer принадлежит display_stm32.
+ * @param x     Координата X.
+ * @param y     Координата Y.
+ * @param color Цвет пикселя.
  */
 static void stm32_draw_pixel_cb(
     void *fb,
@@ -91,15 +189,23 @@ static void stm32_draw_pixel_cb(
 )
 {
     /*
-     * Текущий STM32 display driver сам владеет framebuffer.
-     * Параметр fb пока не используется.
+     * Текущий display_stm32 предоставляет собственный framebuffer
+     * и API display_set_pixel(). Поэтому fb здесь непосредственно
+     * не используется.
      */
     (void)fb;
+
     display_set_pixel(x, y, color);
 }
 
-/*
- * Callback чтения пикселя из STM32 framebuffer.
+/**
+ * @brief Callback чтения пикселя из STM32 framebuffer.
+ *
+ * @param fb Непрозрачный указатель на framebuffer.
+ * @param x  Координата X.
+ * @param y  Координата Y.
+ *
+ * @return Цвет пикселя.
  */
 static gfx_color_t stm32_read_pixel_cb(
     void *fb,
@@ -107,10 +213,178 @@ static gfx_color_t stm32_read_pixel_cb(
     int16_t y
 )
 {
+    /*
+     * Аналогично callback записи, framebuffer принадлежит
+     * display_stm32 и доступен через display_get_pixel().
+     */
     (void)fb;
 
     return display_get_pixel(x, y);
 }
+
+/**
+ * @brief Обработка входного потока GNSS.
+ *
+ * purrgo_gnss_read_byte() является платформенным API.
+ * На текущем этапе STM32 его реализация подключена к GNSS MOCK,
+ * поэтому эта функция работает без физического GNSS-модуля.
+ *
+ * Байты передаются в инкрементальный NMEA parser.
+ * Как только parser получает полное предложение, оно передаётся
+ * в purrgo_gnss_process_nmea().
+ */
+static void process_gnss_input(void)
+{
+    uint8_t rx_byte;
+    uint16_t bytes_processed = 0U;
+
+    while (
+        bytes_processed < GNSS_MAX_BYTES_PER_LOOP &&
+        purrgo_gnss_read_byte(&rx_byte)
+    )
+    {
+        /*
+         * parser_feed() возвращает true после получения
+         * законченного NMEA-предложения.
+         */
+        if (purrgo_gnss_parser_feed(&gnss_parser, rx_byte))
+        {
+            /*
+             * Разбираем готовое NMEA-предложение и обновляем
+             * глобальное GNSS-решение.
+             */
+            purrgo_gnss_process_nmea(
+                gnss_parser.line,
+                &gnss_solution
+            );
+
+            /*
+             * После обработки законченного предложения
+             * начинаем собирать следующее.
+             */
+            purrgo_gnss_parser_init(&gnss_parser);
+        }
+
+        bytes_processed++;
+    }
+}
+
+/**
+ * @brief Периодическое обновление расчёта восхода/заката.
+ *
+ * Расчёт выполняется:
+ *   1. сразу после получения первого корректного GNSS fix;
+ *   2. затем не чаще одного раза в минуту.
+ *
+ * Сам purrgo_sun_calc() не возвращает статус — функция имеет
+ * тип void. Результат записывается непосредственно в sun_info.
+ *
+ * @param current_time_ms Текущее системное время в миллисекундах.
+ */
+static void update_sun_info(uint32_t current_time_ms)
+{
+    /*
+     * Без корректного GNSS fix координаты и время для расчёта
+     * восхода/заката отсутствуют.
+     */
+    if (!gnss_solution.valid)
+    {
+        return;
+    }
+
+    /*
+     * Первый расчёт выполняем сразу после получения fix.
+     */
+    if (!first_fix_obtained)
+    {
+        first_fix_obtained = true;
+
+        purrgo_sun_calc(
+            gnss_solution.lat_1e7,
+            gnss_solution.lon_1e7,
+            gnss_solution.year % 100U,
+            gnss_solution.month,
+            gnss_solution.day,
+            gnss_solution.hours,
+            gnss_solution.minutes,
+            app_config.tz_offset_minutes,
+            &sun_info
+        );
+
+        last_sun_update_ms = current_time_ms;
+
+        return;
+    }
+
+    /*
+     * После первого расчёта обновляем его раз в минуту.
+     *
+     * unsigned arithmetic здесь используется намеренно:
+     * разность двух uint32_t корректно работает при обычном
+     * переполнении системного счётчика HAL_GetTick().
+     */
+    if (
+        (uint32_t)(current_time_ms - last_sun_update_ms)
+        >= SUN_UPDATE_PERIOD_MS
+    )
+    {
+        purrgo_sun_calc(
+            gnss_solution.lat_1e7,
+            gnss_solution.lon_1e7,
+            gnss_solution.year % 100U,
+            gnss_solution.month,
+            gnss_solution.day,
+            gnss_solution.hours,
+            gnss_solution.minutes,
+            app_config.tz_offset_minutes,
+            &sun_info
+        );
+
+        last_sun_update_ms = current_time_ms;
+    }
+}
+
+/**
+ * @brief Опрос аппаратных кнопок.
+ *
+ * На текущем этапе драйвер buttons.c является заглушкой:
+ * purrgo_stm32_button_is_pressed() всегда возвращает false.
+ *
+ * Поэтому этот код уже подключён к FSM, но физические кнопки
+ * пока не будут вызывать переходы состояний.
+ */
+static void process_buttons(void)
+{
+    /*
+     * Обрабатываем все кнопки, определённые в app_fsm.h.
+     *
+     * Драйвер кнопок возвращает true только для реально нажатой
+     * кнопки. Сейчас реализация-заглушка всегда возвращает false.
+     */
+    static const purrgo_btn_t buttons[] =
+    {
+        PURRGO_BTN_UP,
+        PURRGO_BTN_DOWN,
+        PURRGO_BTN_LEFT,
+        PURRGO_BTN_RIGHT,
+        PURRGO_BTN_PLUS,
+        PURRGO_BTN_MINUS,
+        PURRGO_BTN_MENU,
+        PURRGO_BTN_OK
+    };
+
+    const size_t button_count =
+        sizeof(buttons) / sizeof(buttons[0]);
+
+    for (size_t i = 0U; i < button_count; ++i)
+    {
+        if (purrgo_stm32_button_is_pressed(buttons[i]))
+        {
+            purrgo_app_handle_button(buttons[i]);
+        }
+    }
+}
+
 /* USER CODE END 0 */
 
 /**
@@ -145,83 +419,244 @@ int main(void)
   MX_USART2_UART_Init();
   MX_USART1_UART_Init();
   MX_SPI1_Init();
-  MX_FATFS_Init();
   MX_SPI2_Init();
+  MX_FATFS_Init();
   /* USER CODE BEGIN 2 */
 
-/*
- * USART2 уже полностью инициализирован.
- * Теперь можно использовать UART для диагностического вывода.
- */
-purrgo_logger_init();
-purrgo_logger_write("PurrGO STM32 boot\r\n");
-purrgo_logger_write("UART2 logger OK\r\n");
 
-    /*
-     * Состояние разобранного GNSS-решения.
-     * Оно заполняется Core-кодом через purrgo_gnss_process_nmea().
-     */
+  /*
+   * -------------------------------------------------------------------------
+   * Диагностический UART.
+   * -------------------------------------------------------------------------
+   *
+   * purrgo_logger использует платформенную реализацию logger,
+   * которая уже привязана к USART2.
+   */
+  purrgo_logger_init();
 
-    /*
-     * Инкрементальный NMEA parser.
-     * Он получает данные побайтно и собирает из них законченные
-     * NMEA-предложения.
-     */
-    purrgo_gnss_parser_t gnss_parser;
+  purrgo_logger_write("PurrGO STM32 boot\r\n");
+  purrgo_logger_write("UART2 logger OK\r\n");
 
-    purrgo_gnss_parser_init(&gnss_parser);
+  /*
+   * -------------------------------------------------------------------------
+   * GNSS parser + MOCK.
+   * -------------------------------------------------------------------------
+   *
+   * На текущем этапе gnss_io.c направляет purrgo_gnss_read_byte()
+   * в GNSS MOCK. Физический USART1 пока не используется для GNSS.
+   */
+  purrgo_gnss_parser_init(&gnss_parser);
 
-    purrgo_logger_write("GNSS MOCK parser test\r\n");
-    purrgo_gnss_mock_init();
-    purrgo_logger_write("GNSS OK\r\n");
+  purrgo_logger_write("GNSS MOCK parser test\r\n");
 
-    display_init();
-    purrgo_logger_write("Display OK\r\n");
+  purrgo_gnss_mock_init();
 
-    purrgo_stm32_buttons_init();
-    purrgo_logger_write("Buttons OK\r\n");
+  purrgo_logger_write("GNSS OK\r\n");
 
-/*
- * Инициализация конечного автомата приложения.
- * После этого PurrGO находится в начальном состоянии
- * APP_STATE_MAP.
- */
-purrgo_app_init();
-purrgo_logger_write("App FSM OK\r\n");
-/*
- * Инициализация графического контекста.
- * Общий UI-код PurrGO будет рисовать через этот контекст,
- * а callbacks выше будут записывать пиксели в STM32 framebuffer.
- * framebuffer передаём как непрозрачный указатель.
- * Сам STM32 display driver предоставляет доступ к нему
- * через display_get_framebuffer().
- */
-if (!gfx_init(
-        &global_gfx_ctx,
-        DISPLAY_WIDTH,
-        DISPLAY_HEIGHT,
-        (void *)display_get_framebuffer(),
-        stm32_draw_pixel_cb,
-        stm32_read_pixel_cb))
-{
-    purrgo_logger_write("GFX INIT ERROR\r\n");
-    /*
-     * Без графического контекста приложение продолжать
-     * работу не должно.
-     */
-    Error_Handler();
-}
-purrgo_logger_write("GFX OK\r\n");
+  /*
+   * -------------------------------------------------------------------------
+   * Display framebuffer.
+   * -------------------------------------------------------------------------
+   *
+   * Сейчас display_stm32 является заглушкой аппаратного доступа:
+   * display_init() создаёт/очищает framebuffer, а display_refresh()
+   * только выдаёт диагностическое сообщение.
+   */
+  display_init();
+
+  purrgo_logger_write("Display OK\r\n");
+
+  /*
+   * -------------------------------------------------------------------------
+   * Buttons.
+   * -------------------------------------------------------------------------
+   *
+   * Драйвер пока является заглушкой.
+   */
+  purrgo_stm32_buttons_init();
+
+  purrgo_logger_write("Buttons OK\r\n");
+
+  /*
+   * -------------------------------------------------------------------------
+   * Application FSM.
+   * -------------------------------------------------------------------------
+   */
+  purrgo_app_init();
+
+  purrgo_logger_write("App FSM OK\r\n");
+
+  /*
+   * -------------------------------------------------------------------------
+   * Graphics context.
+   * -------------------------------------------------------------------------
+   *
+   * GFX получает:
+   *   - физический размер дисплея;
+   *   - framebuffer;
+   *   - callback записи пикселя;
+   *   - callback чтения пикселя.
+   *
+   * Сам GFX остаётся платформенно-независимым.
+   */
+  if (!gfx_init(
+          &global_gfx_ctx,
+          DISPLAY_WIDTH,
+          DISPLAY_HEIGHT,
+          (void *)display_get_framebuffer(),
+          stm32_draw_pixel_cb,
+          stm32_read_pixel_cb))
+  {
+      /*
+       * gfx_init() возвращает false только при некорректных
+       * аргументах/нулевых указателях согласно его API.
+       */
+      purrgo_logger_write("GFX INIT ERROR\r\n");
+
+      Error_Handler();
+  }
+
+  purrgo_logger_write("GFX OK\r\n");
+
+  /*
+   * Начальные значения состояния расчёта Солнца.
+   */
+  first_fix_obtained = false;
+  last_sun_update_ms = 0U;
 
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  
+   /*
+   * Время последнего периодического обновления GNSS/FSM.
+   */
+  uint32_t last_gnss_update_ms = purrgo_system_time_ms();
+
+  /*
+   * Время последнего опроса кнопок.
+   */
+  uint32_t last_button_poll_ms = purrgo_system_time_ms();
+  
   while (1)
   {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+	
+	uint32_t current_time_ms = purrgo_system_time_ms();
+
+    /*
+     * -----------------------------------------------------------------------
+     * 1. Обработка входных GNSS-данных.
+     * -----------------------------------------------------------------------
+     *
+     * Читаем доступные байты на каждом проходе цикла.
+     * Для MOCK это позволяет разобрать сгенерированное NMEA-предложение.
+     */
+    process_gnss_input();
+
+    /*
+     * -----------------------------------------------------------------------
+     * 2. Периодическое обновление GNSS/FSM.
+     * -----------------------------------------------------------------------
+     *
+     * Раз в секунду:
+     *   - MOCK генерирует следующую GNSS-строку;
+     *   - строка сразу разбирается;
+     *   - обновляется FSM;
+     *   - при наличии fix обновляется расчёт Солнца.
+     */
+    if (
+        (uint32_t)(current_time_ms - last_gnss_update_ms)
+        >= GNSS_UPDATE_PERIOD_MS
+    )
+    {
+      last_gnss_update_ms = current_time_ms;
+
+      /*
+       * На текущем этапе STM32 использует MOCK GNSS.
+       */
+      purrgo_gnss_mock_update();
+
+      /*
+       * После генерации очередного mock-предложения сразу
+       * обрабатываем доступные байты.
+       */
+      process_gnss_input();
+
+      /*
+       * Передаём актуальное GNSS-решение конечному автомату.
+       */
+      purrgo_app_update(&gnss_solution);
+
+      /*
+       * Обновляем данные восхода/заката.
+       */
+      update_sun_info(current_time_ms);
+    }
+
+    /*
+     * -----------------------------------------------------------------------
+     * 3. Опрос кнопок.
+     * -----------------------------------------------------------------------
+     *
+     * Реальный драйвер кнопок пока не подключён, но FSM уже получает
+     * события через единый API purrgo_app_handle_button().
+     */
+    if (
+        (uint32_t)(current_time_ms - last_button_poll_ms)
+        >= BUTTON_POLL_PERIOD_MS
+    )
+    {
+      last_button_poll_ms = current_time_ms;
+
+      process_buttons();
+    }
+
+    /*
+     * -----------------------------------------------------------------------
+     * 4. Перерисовка UI.
+     * -----------------------------------------------------------------------
+     *
+     * UI перерисовывается только при наличии dirty-флага.
+     *
+     * Проверяем как общий UI-флаг, так и флаг карты.
+     * Это соответствует циклу PC-эмулятора.
+     */
+    if (
+        purrgo_app_ui_is_dirty() ||
+        purrgo_app_map_is_dirty()
+    )
+    {
+      /*
+       * Если корректного GNSS fix ещё не было, передаём NULL
+       * вместо sun_info.
+       */
+      const purrgo_sun_info_t *sun =
+          first_fix_obtained ? &sun_info : NULL;
+
+      purrgo_app_ui_render(
+          &global_gfx_ctx,
+          &gnss_solution,
+          sun
+      );
+
+      /*
+       * После отрисовки считаем UI обновлённым.
+       */
+      purrgo_app_ui_clear_dirty();
+    }
+
+    /*
+     * Небольшая задержка разгружает CPU.
+     *
+     * Она не определяет периоды GNSS/FSM/button processing:
+     * эти периоды контролируются через system_time_ms().
+     */
+    HAL_Delay(1);
+	
   }
   /* USER CODE END 3 */
 }
@@ -298,6 +733,9 @@ void assert_failed(uint8_t *file, uint32_t line)
   /* USER CODE BEGIN 6 */
   /* User can add his own implementation to report the file name and line number,
      ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
+
+	purrgo_logger_write("Wrong parameters value: file %s on line %d\r\n", file, line)
+ 
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
