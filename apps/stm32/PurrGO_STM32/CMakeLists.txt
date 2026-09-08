@@ -70,6 +70,9 @@ target_sources(PurrGO_STM32 PRIVATE
 
     # STM32 display implementation.
     Core/Src/display_stm32.c
+
+    # Temporary TFT display driver for debug
+    Core/Src/display_st7789.c
 )
 
 # Add include paths
