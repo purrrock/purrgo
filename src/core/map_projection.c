@@ -72,17 +72,17 @@ void project_to_screen(
     projected_y +=
         (int64_t)vp->offset_y;
 
-    if (projected_x < -32768) {
-        projected_x = -32768;
+    if (projected_x < INT16_MIN) {
+        projected_x = INT16_MIN;
     }
-    if (projected_x > 32767) {
-        projected_x = 32767;
+    if (projected_x > INT16_MAX) {
+        projected_x = INT16_MAX;
     }
-    if (projected_y < -32768) {
-        projected_y = -32768;
+    if (projected_y < INT16_MIN) {
+        projected_y = INT16_MIN;
     }
-    if (projected_y > 32767) {
-        projected_y = 32767;
+    if (projected_y > INT16_MAX) {
+        projected_y = INT16_MAX;
     }
 
     *sx = (int16_t)projected_x;
