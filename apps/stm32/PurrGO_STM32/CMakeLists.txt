@@ -37,11 +37,6 @@ add_executable(${CMAKE_PROJECT_NAME})
 # Add STM32CubeMX generated sources
 add_subdirectory(cmake/stm32cubemx)
 
-# ДОБАВЛЕНО: Подключаем портативное ядро из корня проекта.
-# Так как папка src/core находится на 3 уровня выше, мы обязаны указать 
-# второй аргумент (purrgo_core_build) — это папка, куда CMake положит бинарники ядра.
-add_subdirectory(../../../third_party purrgo_third_party_build)
-
 # Link directories setup
 target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined library search paths
