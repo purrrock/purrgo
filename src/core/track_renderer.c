@@ -36,3 +36,25 @@ void purrgo_track_render(
         has_prev = true;
     }
 }
+
+void purrgo_track_render_last_segment(
+    gfx_context_t *gfx,
+    const purrgo_bbox_t *camera,
+    const purrgo_viewport_t *vp)
+{
+    if (!gfx || !camera || !vp) return;
+
+    track_point_t prev_point, last_point;
+    if (!purrgo_logger_get_last_two_points(&prev_point, &last_point)) {
+        return;
+    }
+
+    // Отрисовывать трек нужно тонкой черной линией.
+    gfx_set_color(gfx, BLACK, gfx->color_bg);
+
+    int16_t prev_sx, prev_sy, sx, sy;
+    project_to_screen(prev_point.lon_1e7, prev_point.lat_1e7, camera, vp, &prev_sx, &prev_sy);
+    project_to_screen(last_point.lon_1e7, last_point.lat_1e7, camera, vp, &sx, &sy);
+
+    gfx_draw_line(gfx, prev_sx, prev_sy, sx, sy);
+}
