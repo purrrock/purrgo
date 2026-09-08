@@ -72,20 +72,6 @@ else()
         ${CMAKE_CURRENT_SOURCE_DIR}/src/platform/pc
     )
 
-    # Сборка базового PC-приложения (заглушка)
-    file(GLOB PC_APP_SOURCES CONFIGURE_DEPENDS "apps/pc/*.c")
-    if(PC_APP_SOURCES)
-        add_executable(purrgo_pc ${PC_APP_SOURCES})
-        target_link_libraries(purrgo_pc PRIVATE purrgo_core purrgo_platform_pc)
-    endif()
-
-    # Сборка утилиты логирования с реального приемника (Realtime Logger)
-    file(GLOB_RECURSE LOGGER_APP_SOURCES CONFIGURE_DEPENDS "apps/pc/pc_realtime_logger/*.c")
-    if(LOGGER_APP_SOURCES)
-        add_executable(pc_realtime_logger ${LOGGER_APP_SOURCES})
-        target_link_libraries(pc_realtime_logger PRIVATE purrgo_core purrgo_platform_pc)
-    endif()
-
     # Подключаем графический эмулятор
     add_subdirectory(apps/emulator)
 

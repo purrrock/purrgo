@@ -40,7 +40,6 @@ add_subdirectory(cmake/stm32cubemx)
 # ДОБАВЛЕНО: Подключаем портативное ядро из корня проекта.
 # Так как папка src/core находится на 3 уровня выше, мы обязаны указать 
 # второй аргумент (purrgo_core_build) — это папка, куда CMake положит бинарники ядра.
-add_subdirectory(../../../src/core purrgo_core_build)
 add_subdirectory(../../../third_party purrgo_third_party_build)
 
 # Link directories setup
@@ -54,17 +53,19 @@ target_sources(PurrGO_STM32 PRIVATE
     Core/Src/purrgo_logger.c
     Core/Src/fatfs_sd.c
 	# STM32 implementation of the common GNSS byte-stream interface.
-    ../../../src/platform/stm32/gnss_io_stm32.c
+    Core/Src/gnss_io.c
+    # STM32 system time implementation.
+    Core/Src/system_time.c
     # STM32 button driver stub.
-    ../../../src/platform/stm32/buttons.c
+    Core/Src/buttons.c
     # STM32 stub implementation of the filesystem HAL
-    ../../../src/platform/stm32/fs_hal_stm32.c
-    ../../../src/platform/stm32/display_stm32.c
-    ../../../src/platform/stm32/platform_stm32.c
+    Core/Src/fs_hal_stm32.c
+    Core/Src/display_stm32.c
 )
 
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
+    ../../../include
     # Add user defined include paths
 )
 
