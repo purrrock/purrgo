@@ -724,7 +724,9 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
         dbg_map_render_calls++;
     } else {
         if (purrgo_map_controller_is_track_dirty()) {
-            if (purrgo_track_render_last_segment(gfx, &dynamic_cam, &map_vp)) {
+            purrgo_rect_t rect;
+            if (purrgo_track_render_last_segment(gfx, &dynamic_cam, &map_vp, &rect)) {
+                display_refresh_region(rect.x, rect.y, rect.w, rect.h);
                 purrgo_map_controller_clear_track_dirty();
             }
         }
