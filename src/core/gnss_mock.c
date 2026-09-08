@@ -14,7 +14,9 @@ static void format_lat(int32_t lat_1e7, char* buf, size_t size) {
     int32_t min_1e7 = frac * 60;
     int32_t min_int = min_1e7 / 10000000;
     int32_t min_frac = (min_1e7 % 10000000) / 1000;
-    snprintf(buf, size, "%02d%02d.%04d,%c", (int)deg, (int)min_int, (int)min_frac, lat_1e7 >= 0 ? 'N' : 'S');
+    snprintf(buf, size, "%02d%02d.%04d,%c",
+             (int)deg, (int)min_int, (int)min_frac,
+             lat_1e7 >= 0 ? 'N' : 'S');
 }
 
 static void format_lon(int32_t lon_1e7, char* buf, size_t size) {
@@ -24,7 +26,9 @@ static void format_lon(int32_t lon_1e7, char* buf, size_t size) {
     int32_t min_1e7 = frac * 60;
     int32_t min_int = min_1e7 / 10000000;
     int32_t min_frac = (min_1e7 % 10000000) / 1000;
-    snprintf(buf, size, "%03d%02d.%04d,%c", (int)deg, (int)min_int, (int)min_frac, lon_1e7 >= 0 ? 'E' : 'W');
+    snprintf(buf, size, "%03d%02d.%04d,%c",
+             (int)deg, (int)min_int, (int)min_frac,
+             lon_1e7 >= 0 ? 'E' : 'W');
 }
 
 static uint8_t calc_checksum(const char* sentence) {
@@ -43,11 +47,14 @@ static void generate_nmea(void) {
 
     char course_str[16] = "";
     if (state.course_valid) {
-        snprintf(course_str, sizeof(course_str), "%d.%02d", (int)(state.course_deg_100 / 100), (int)(state.course_deg_100 % 100));
+        snprintf(course_str, sizeof(course_str), "%d.%02d",
+                 (int)(state.course_deg_100 / 100),
+                 (int)(state.course_deg_100 % 100));
     }
 
     char rmc[128];
-    snprintf(rmc, sizeof(rmc), "$GPRMC,%02d%02d%02d,A,%s,%s,%d.%02d,%s,%02d%02d%02d,,,A*",
+    snprintf(rmc, sizeof(rmc),
+             "$GPRMC,%02d%02d%02d,A,%s,%s,%d.%02d,%s,%02d%02d%02d,,,A*",
              (int)state.hours, (int)state.minutes, (int)state.seconds,
              lat_str, lon_str,
              (int)(state.speed_knots / 100), (int)(state.speed_knots % 100),
@@ -57,7 +64,8 @@ static void generate_nmea(void) {
     uint8_t rmc_cksum = calc_checksum(rmc);
 
     char gga[128];
-    snprintf(gga, sizeof(gga), "$GPGGA,%02d%02d%02d,%s,%s,1,%02d,1.0,%d.0,M,0.0,M,,*",
+    snprintf(gga, sizeof(gga),
+             "$GPGGA,%02d%02d%02d,%s,%s,1,%02d,1.0,%d.0,M,0.0,M,,*",
              (int)state.hours, (int)state.minutes, (int)state.seconds,
              lat_str, lon_str,
              (int)state.satellites_tracked,
@@ -65,7 +73,8 @@ static void generate_nmea(void) {
 
     uint8_t gga_cksum = calc_checksum(gga);
 
-    snprintf(nmea_buffer, sizeof(nmea_buffer), "%s%02X\r\n%s%02X\r\n", rmc, (int)rmc_cksum, gga, (int)gga_cksum);
+    snprintf(nmea_buffer, sizeof(nmea_buffer), "%s%02X\r\n%s%02X\r\n",
+             rmc, (int)rmc_cksum, gga, (int)gga_cksum);
     nmea_len = strlen(nmea_buffer);
     nmea_pos = 0;
 }
