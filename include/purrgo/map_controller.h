@@ -10,6 +10,12 @@ void purrgo_map_controller_init(void);
 void purrgo_map_controller_update(const purrgo_gnss_solution_t* current_fix);
 bool purrgo_map_controller_handle_button(purrgo_btn_t button);
 
+// map_dirty = full map redraw required
+// track_dirty = only the newest track segment needs to be rendered
+void purrgo_map_controller_mark_track_dirty(void);
+bool purrgo_map_controller_is_track_dirty(void);
+void purrgo_map_controller_clear_track_dirty(void);
+
 // COMPATIBILITY API DECLARED IN APP_FSM.H
 void map_app_map_mark_dirty(void);
 bool map_app_map_is_dirty(void);
