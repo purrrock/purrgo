@@ -35,9 +35,8 @@
 #include "purrgo/gnss_adapter.h"
 #include "purrgo/gnss_types.h"
 #include "purrgo/gnss_mock.h"
-#include "../../../../../src/platform/stm32/buttons.h"
-#include "../../../../../src/platform/stm32/display_stm32.h"
-#include "../../../../../src/platform/stm32/platform_stm32.h"
+#include "buttons.h"
+#include "display_stm32.h"
 
 
 /* USER CODE END Includes */
