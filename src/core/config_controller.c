@@ -69,17 +69,25 @@ static track_logger_mode_t draft_log_mode;
 static bool draft_track_display_enabled;
 
 
+#define CONFIG_CURSOR_TZ 0
+#define CONFIG_CURSOR_DIR 1
+#define CONFIG_CURSOR_POI 2
+#define CONFIG_CURSOR_POI_LABELS 3
+
+#define CONFIG_CURSOR_LOG_MODE(poi_mode) ((poi_mode) != PURRGO_POI_MODE_NO ? 4 : 3)
+#define CONFIG_CURSOR_TRACK_DISPLAY(poi_mode) ((poi_mode) != PURRGO_POI_MODE_NO ? 5 : 4)
+
 /*
  * Индекс курсора в меню настроек.
  *
  * Логические позиции:
  *
- *     0 = TZ
- *     1 = DIR
- *     2 = POI
- *     3 = POI labels (только при draft_poi_mode != PURRGO_POI_MODE_NO)
- *     4 или 3 = LOG_MODE (зависит от POI labels)
- *     5 или 4 = TRACK_DISPLAY (зависит от POI labels)
+ *     CONFIG_CURSOR_TZ = TZ
+ *     CONFIG_CURSOR_DIR = DIR
+ *     CONFIG_CURSOR_POI = POI
+ *     CONFIG_CURSOR_POI_LABELS = POI labels (только при draft_poi_mode != PURRGO_POI_MODE_NO)
+ *     CONFIG_CURSOR_LOG_MODE = LOG_MODE (зависит от POI labels)
+ *     CONFIG_CURSOR_TRACK_DISPLAY = TRACK_DISPLAY (зависит от POI labels)
  */
 static int config_cursor_idx = 0;
 
@@ -91,11 +99,7 @@ static int config_cursor_idx = 0;
  */
 static int get_config_last_cursor(void)
 {
-    if (draft_poi_mode != PURRGO_POI_MODE_NO) {
-        return 5;
-    }
-
-    return 4;
+    return CONFIG_CURSOR_TRACK_DISPLAY(draft_poi_mode);
 }
 
 
@@ -416,9 +420,9 @@ bool purrgo_config_controller_handle_button(
                      */
                     if (
                         draft_poi_mode == PURRGO_POI_MODE_NO &&
-                        config_cursor_idx > 2
+                        config_cursor_idx > CONFIG_CURSOR_POI
                     ) {
-                        config_cursor_idx = 2;
+                        config_cursor_idx = CONFIG_CURSOR_POI;
                     }
                 }
 
@@ -453,7 +457,7 @@ bool purrgo_config_controller_handle_button(
                 /*
                  * Часовой пояс.
                  */
-                if (config_cursor_idx == 0) {
+                if (config_cursor_idx == CONFIG_CURSOR_TZ) {
 
                     if (
                         draft_tz_offset_minutes + 15 <= 840
@@ -465,7 +469,7 @@ bool purrgo_config_controller_handle_button(
                 /*
                  * POI: Да / Нет.
                  */
-                else if (config_cursor_idx == 2) {
+                else if (config_cursor_idx == CONFIG_CURSOR_POI) {
 
                     if (draft_poi_mode == PURRGO_POI_MODE_ICONS) {
                         draft_poi_mode = PURRGO_POI_MODE_NO;
@@ -482,9 +486,9 @@ bool purrgo_config_controller_handle_button(
                      */
                     if (
                         draft_poi_mode == PURRGO_POI_MODE_NO &&
-                        config_cursor_idx > 2
+                        config_cursor_idx > CONFIG_CURSOR_POI
                     ) {
-                        config_cursor_idx = 2;
+                        config_cursor_idx = CONFIG_CURSOR_POI;
                     }
                 }
 
@@ -496,7 +500,7 @@ bool purrgo_config_controller_handle_button(
                  *     Все -> Важные -> Выкл -> Все
                  */
                 else if (
-                    config_cursor_idx == 3 &&
+                    config_cursor_idx == CONFIG_CURSOR_POI_LABELS &&
                     draft_poi_mode != PURRGO_POI_MODE_NO
                 ) {
                     if (
@@ -519,7 +523,7 @@ bool purrgo_config_controller_handle_button(
                  *     Выкл -> Стандарт -> Экспедиция -> Выкл
                  */
                 else if (
-                    config_cursor_idx == (draft_poi_mode != PURRGO_POI_MODE_NO ? 4 : 3)
+                    config_cursor_idx == CONFIG_CURSOR_LOG_MODE(draft_poi_mode)
                 ) {
                     if (draft_log_mode == LOGGER_MODE_OFF) {
                         draft_log_mode = LOGGER_MODE_STANDARD;
@@ -536,7 +540,7 @@ bool purrgo_config_controller_handle_button(
                  * Отображение трека.
                  */
                 else if (
-                    config_cursor_idx == (draft_poi_mode != PURRGO_POI_MODE_NO ? 5 : 4)
+                    config_cursor_idx == CONFIG_CURSOR_TRACK_DISPLAY(draft_poi_mode)
                 ) {
                     draft_track_display_enabled =
                         !draft_track_display_enabled;
@@ -556,7 +560,7 @@ bool purrgo_config_controller_handle_button(
                 /*
                  * Часовой пояс.
                  */
-                if (config_cursor_idx == 0) {
+                if (config_cursor_idx == CONFIG_CURSOR_TZ) {
 
                     if (
                         draft_tz_offset_minutes - 15 >= -720
@@ -568,7 +572,7 @@ bool purrgo_config_controller_handle_button(
                 /*
                  * POI: Да / Нет.
                  */
-                else if (config_cursor_idx == 2) {
+                else if (config_cursor_idx == CONFIG_CURSOR_POI) {
 
                     if (draft_poi_mode == PURRGO_POI_MODE_NO) {
                         draft_poi_mode = PURRGO_POI_MODE_ICONS;
@@ -579,9 +583,9 @@ bool purrgo_config_controller_handle_button(
 
                     if (
                         draft_poi_mode == PURRGO_POI_MODE_NO &&
-                        config_cursor_idx > 2
+                        config_cursor_idx > CONFIG_CURSOR_POI
                     ) {
-                        config_cursor_idx = 2;
+                        config_cursor_idx = CONFIG_CURSOR_POI;
                     }
                 }
 
@@ -593,7 +597,7 @@ bool purrgo_config_controller_handle_button(
                  *     Все <- Важные <- Выкл <- Все
                  */
                 else if (
-                    config_cursor_idx == 3 &&
+                    config_cursor_idx == CONFIG_CURSOR_POI_LABELS &&
                     draft_poi_mode != PURRGO_POI_MODE_NO
                 ) {
                     if (
@@ -616,7 +620,7 @@ bool purrgo_config_controller_handle_button(
                  *     Выкл <- Стандарт <- Экспедиция <- Выкл
                  */
                 else if (
-                    config_cursor_idx == (draft_poi_mode != PURRGO_POI_MODE_NO ? 4 : 3)
+                    config_cursor_idx == CONFIG_CURSOR_LOG_MODE(draft_poi_mode)
                 ) {
                     if (draft_log_mode == LOGGER_MODE_OFF) {
                         draft_log_mode = LOGGER_MODE_EXPEDITION;
@@ -633,7 +637,7 @@ bool purrgo_config_controller_handle_button(
                  * Отображение трека.
                  */
                 else if (
-                    config_cursor_idx == (draft_poi_mode != PURRGO_POI_MODE_NO ? 5 : 4)
+                    config_cursor_idx == CONFIG_CURSOR_TRACK_DISPLAY(draft_poi_mode)
                 ) {
                     draft_track_display_enabled =
                         !draft_track_display_enabled;
@@ -652,7 +656,7 @@ bool purrgo_config_controller_handle_button(
                 /*
                  * TZ.
                  */
-                if (config_cursor_idx == 0) {
+                if (config_cursor_idx == CONFIG_CURSOR_TZ) {
 
                     app_config.tz_offset_minutes =
                         draft_tz_offset_minutes;
@@ -668,7 +672,7 @@ bool purrgo_config_controller_handle_button(
                 /*
                  * DIR.
                  */
-                else if (config_cursor_idx == 1) {
+                else if (config_cursor_idx == CONFIG_CURSOR_DIR) {
 
                     *next_state_out =
                         APP_STATE_MENU_DIR_SELECT;
@@ -684,8 +688,8 @@ bool purrgo_config_controller_handle_button(
                  * Настройки POI сохраняются вместе.
                  */
                 else if (
-                    config_cursor_idx == 2 ||
-                    config_cursor_idx == 3
+                    config_cursor_idx == CONFIG_CURSOR_POI ||
+                    config_cursor_idx == CONFIG_CURSOR_POI_LABELS
                 ) {
 
                     app_config.poi_mode =
@@ -706,8 +710,8 @@ bool purrgo_config_controller_handle_button(
                  * TRACK SETTINGS
                  */
                 else if (
-                    config_cursor_idx == (draft_poi_mode != PURRGO_POI_MODE_NO ? 4 : 3) ||
-                    config_cursor_idx == (draft_poi_mode != PURRGO_POI_MODE_NO ? 5 : 4)
+                    config_cursor_idx == CONFIG_CURSOR_LOG_MODE(draft_poi_mode) ||
+                    config_cursor_idx == CONFIG_CURSOR_TRACK_DISPLAY(draft_poi_mode)
                 ) {
 
                     app_config.log_mode =
