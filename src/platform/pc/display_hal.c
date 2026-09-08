@@ -11,6 +11,7 @@ void display_refresh(void) {
 void display_refresh_region(int16_t x, int16_t y, int16_t w, int16_t h) {
     if (partial_refresh_count >= MAX_PARTIAL_REFRESHES) {
         display_refresh();
+        return;
     }
     PURRGO_LOG("PARTIAL REFRESH x=%d y=%d w=%d h=%d\r\n", x, y, w, h);
     partial_refresh_count++;
