@@ -2,6 +2,7 @@
 #include "purrgo/track_logger.h"
 #include "map_projection.h"
 #include "purrgo/gfx_line.h"
+#include "purrgo/display_hal.h"
 
 void purrgo_track_render(
     gfx_context_t *gfx,
@@ -37,16 +38,16 @@ void purrgo_track_render(
     }
 }
 
-void purrgo_track_render_last_segment(
+bool purrgo_track_render_last_segment(
     gfx_context_t *gfx,
     const purrgo_bbox_t *camera,
     const purrgo_viewport_t *vp)
 {
-    if (!gfx || !camera || !vp) return;
+    if (!gfx || !camera || !vp) return false;
 
     track_point_t prev_point, last_point;
     if (!purrgo_logger_get_last_two_points(&prev_point, &last_point)) {
-        return;
+        return false;
     }
 
     // Отрисовывать трек нужно тонкой черной линией.
@@ -57,4 +58,30 @@ void purrgo_track_render_last_segment(
     project_to_screen(last_point.lon_1e7, last_point.lat_1e7, camera, vp, &sx, &sy);
 
     gfx_draw_line(gfx, prev_sx, prev_sy, sx, sy);
+
+    int16_t min_x = (prev_sx < sx) ? prev_sx : sx;
+    int16_t max_x = (prev_sx > sx) ? prev_sx : sx;
+    int16_t min_y = (prev_sy < sy) ? prev_sy : sy;
+    int16_t max_y = (prev_sy > sy) ? prev_sy : sy;
+
+    // Add strict 1-pixel margin
+    min_x -= 1;
+    max_x += 1;
+    min_y -= 1;
+    max_y += 1;
+
+    // Clamp to viewport
+    if (min_x < vp->offset_x) min_x = vp->offset_x;
+    if (max_x >= vp->offset_x + vp->width) max_x = vp->offset_x + vp->width - 1;
+    if (min_y < vp->offset_y) min_y = vp->offset_y;
+    if (max_y >= vp->offset_y + vp->height) max_y = vp->offset_y + vp->height - 1;
+
+    int16_t clip_w = max_x - min_x + 1;
+    int16_t clip_h = max_y - min_y + 1;
+
+    if (clip_w > 0 && clip_h > 0) {
+        display_refresh_region(min_x, min_y, clip_w, clip_h);
+    }
+
+    return true;
 }
