@@ -730,49 +730,48 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
 
         display_refresh();
         dbg_map_render_calls++;
-    } else if (purrgo_map_controller_is_track_dirty()) {
-        // If track_dirty is true, we have a new track point. We incrementally
-        // draw just the last segment of the track and refresh only a small
-        // bounding box surrounding it.
-
-        track_point_t prev_point, last_point;
-        if (purrgo_logger_get_last_two_points(&prev_point, &last_point)) {
-            purrgo_track_render_last_segment(gfx, &dynamic_cam, &map_vp);
-
-            // Calculate screen coordinates to refresh a small region
-            int16_t prev_sx, prev_sy, sx, sy;
-            project_to_screen(prev_point.lon_1e7, prev_point.lat_1e7, &dynamic_cam, &map_vp, &prev_sx, &prev_sy);
-            project_to_screen(last_point.lon_1e7, last_point.lat_1e7, &dynamic_cam, &map_vp, &sx, &sy);
-
-            int16_t min_x = prev_sx < sx ? prev_sx : sx;
-            int16_t max_x = prev_sx > sx ? prev_sx : sx;
-            int16_t min_y = prev_sy < sy ? prev_sy : sy;
-            int16_t max_y = prev_sy > sy ? prev_sy : sy;
-
-            // Add a margin strictly for the line width
-            int16_t margin = 1;
-            min_x -= margin;
-            max_x += margin;
-            min_y -= margin;
-            max_y += margin;
-
-            // Clamp to map viewport bounds
-            if (min_x < map_vp.offset_x) min_x = map_vp.offset_x;
-            if (max_x >= map_vp.offset_x + map_vp.width) max_x = map_vp.offset_x + map_vp.width - 1;
-            if (min_y < map_vp.offset_y) min_y = map_vp.offset_y;
-            if (max_y >= map_vp.offset_y + map_vp.height) max_y = map_vp.offset_y + map_vp.height - 1;
-
-            int16_t w = max_x - min_x + 1;
-            int16_t h = max_y - min_y + 1;
-
-            if (w > 0 && h > 0) {
-                display_refresh_region(min_x, min_y, w, h);
-            }
-
-            purrgo_map_controller_clear_track_dirty();
-        }
     } else {
-        // Finally, if nothing else is dirty, perform the usual GNSS marker-only update
+        if (purrgo_map_controller_is_track_dirty()) {
+            // A new track segment and a moved GNSS marker are two independent state changes.
+            // If track_dirty is true, we incrementally draw just the last segment of the
+            // track and refresh only a small bounding box surrounding it, without
+            // interfering with or replacing the GNSS marker update.
+
+            track_point_t prev_point, last_point;
+            if (purrgo_logger_get_last_two_points(&prev_point, &last_point)) {
+                purrgo_track_render_last_segment(gfx, &dynamic_cam, &map_vp);
+
+                // Calculate screen coordinates to refresh a small region
+                int16_t prev_sx, prev_sy, sx, sy;
+                project_to_screen(prev_point.lon_1e7, prev_point.lat_1e7, &dynamic_cam, &map_vp, &prev_sx, &prev_sy);
+                project_to_screen(last_point.lon_1e7, last_point.lat_1e7, &dynamic_cam, &map_vp, &sx, &sy);
+
+                int16_t min_x = prev_sx < sx ? prev_sx : sx;
+                int16_t max_x = prev_sx > sx ? prev_sx : sx;
+                int16_t min_y = prev_sy < sy ? prev_sy : sy;
+                int16_t max_y = prev_sy > sy ? prev_sy : sy;
+
+                // Bresenham line draws strictly on exact pixels, margin of 0 is correct
+                // for the actual line implementation to get the exact bounding box.
+
+                // Clamp to map viewport bounds
+                if (min_x < map_vp.offset_x) min_x = map_vp.offset_x;
+                if (max_x >= map_vp.offset_x + map_vp.width) max_x = map_vp.offset_x + map_vp.width - 1;
+                if (min_y < map_vp.offset_y) min_y = map_vp.offset_y;
+                if (max_y >= map_vp.offset_y + map_vp.height) max_y = map_vp.offset_y + map_vp.height - 1;
+
+                int16_t w = max_x - min_x + 1;
+                int16_t h = max_y - min_y + 1;
+
+                if (w > 0 && h > 0) {
+                    display_refresh_region(min_x, min_y, w, h);
+                }
+
+                purrgo_map_controller_clear_track_dirty();
+            }
+        }
+
+        // GNSS marker update is always processed independently of the track update.
         ui_map_render_gnss_marker(gfx, gnss, &map_vp, &dynamic_cam, false);
     }
 }
