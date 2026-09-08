@@ -731,40 +731,47 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
         display_refresh();
         dbg_map_render_calls++;
     } else {
-        if (purrgo_map_controller_is_track_dirty()) {
-            // A new track segment and a moved GNSS marker are two independent state changes.
-            // If track_dirty is true, we incrementally draw just the last segment of the
-            // track and refresh only a small bounding box surrounding it, without
-            // interfering with or replacing the GNSS marker update.
+        bool force_marker_redraw = false;
 
+        int16_t refresh_min_x = 32767;
+        int16_t refresh_max_x = -32768;
+        int16_t refresh_min_y = 32767;
+        int16_t refresh_max_y = -32768;
+
+        if (purrgo_map_controller_is_track_dirty()) {
             track_point_t prev_point, last_point;
             if (purrgo_logger_get_last_two_points(&prev_point, &last_point)) {
+
+                // To prevent the GNSS marker's background cache restoration from erasing
+                // the newly drawn track segment (if they intersect), we must manually restore
+                // the old background *before* drawing the track.
+                ui_restore_marker_bg(gfx);
+
                 purrgo_track_render_last_segment(gfx, &dynamic_cam, &map_vp);
 
-                // Calculate screen coordinates to refresh a small region
+                // We must force the GNSS marker update logic to perform a full redraw of the marker
+                // so it saves a *new* background cache (which will correctly include the new track pixels)
+                // and draws the marker on top.
+                force_marker_redraw = true;
+
+                // Calculate screen coordinates for the track line bounding box
                 int16_t prev_sx, prev_sy, sx, sy;
                 project_to_screen(prev_point.lon_1e7, prev_point.lat_1e7, &dynamic_cam, &map_vp, &prev_sx, &prev_sy);
                 project_to_screen(last_point.lon_1e7, last_point.lat_1e7, &dynamic_cam, &map_vp, &sx, &sy);
 
-                int16_t min_x = prev_sx < sx ? prev_sx : sx;
-                int16_t max_x = prev_sx > sx ? prev_sx : sx;
-                int16_t min_y = prev_sy < sy ? prev_sy : sy;
-                int16_t max_y = prev_sy > sy ? prev_sy : sy;
+                refresh_min_x = prev_sx < sx ? prev_sx : sx;
+                refresh_max_x = prev_sx > sx ? prev_sx : sx;
+                refresh_min_y = prev_sy < sy ? prev_sy : sy;
+                refresh_max_y = prev_sy > sy ? prev_sy : sy;
 
-                // Bresenham line draws strictly on exact pixels, margin of 0 is correct
-                // for the actual line implementation to get the exact bounding box.
-
-                // Clamp to map viewport bounds
-                if (min_x < map_vp.offset_x) min_x = map_vp.offset_x;
-                if (max_x >= map_vp.offset_x + map_vp.width) max_x = map_vp.offset_x + map_vp.width - 1;
-                if (min_y < map_vp.offset_y) min_y = map_vp.offset_y;
-                if (max_y >= map_vp.offset_y + map_vp.height) max_y = map_vp.offset_y + map_vp.height - 1;
-
-                int16_t w = max_x - min_x + 1;
-                int16_t h = max_y - min_y + 1;
-
-                if (w > 0 && h > 0) {
-                    display_refresh_region(min_x, min_y, w, h);
+                // If we are forcing a marker redraw, `ui_map_render_gnss_marker` will NOT call
+                // `display_refresh_region()` internally. So we must expand our refresh bounding
+                // box to include the old marker pixels (which were restored/erased).
+                if (prev_marker_state.rendered) {
+                    if (prev_marker_state.min_x < refresh_min_x) refresh_min_x = prev_marker_state.min_x;
+                    if (prev_marker_state.max_x > refresh_max_x) refresh_max_x = prev_marker_state.max_x;
+                    if (prev_marker_state.min_y < refresh_min_y) refresh_min_y = prev_marker_state.min_y;
+                    if (prev_marker_state.max_y > refresh_max_y) refresh_max_y = prev_marker_state.max_y;
                 }
 
                 purrgo_map_controller_clear_track_dirty();
@@ -772,6 +779,34 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
         }
 
         // GNSS marker update is always processed independently of the track update.
-        ui_map_render_gnss_marker(gfx, gnss, &map_vp, &dynamic_cam, false);
+        // If force_marker_redraw is true, this draws the marker and re-caches the background,
+        // but DOES NOT call display_refresh_region(). If force_marker_redraw is false, it
+        // handles the marker update exactly as before (including its own display_refresh_region).
+        ui_map_render_gnss_marker(gfx, gnss, &map_vp, &dynamic_cam, force_marker_redraw);
+
+        if (force_marker_redraw) {
+            // Include the new marker's bounding box in the refresh region
+            if (prev_marker_state.rendered) { // `prev_marker_state` is now the NEW state!
+                if (prev_marker_state.min_x < refresh_min_x) refresh_min_x = prev_marker_state.min_x;
+                if (prev_marker_state.max_x > refresh_max_x) refresh_max_x = prev_marker_state.max_x;
+                if (prev_marker_state.min_y < refresh_min_y) refresh_min_y = prev_marker_state.min_y;
+                if (prev_marker_state.max_y > refresh_max_y) refresh_max_y = prev_marker_state.max_y;
+            }
+
+            if (refresh_min_x <= refresh_max_x && refresh_min_y <= refresh_max_y) {
+                // Clamp to map viewport bounds
+                if (refresh_min_x < map_vp.offset_x) refresh_min_x = map_vp.offset_x;
+                if (refresh_max_x >= map_vp.offset_x + map_vp.width) refresh_max_x = map_vp.offset_x + map_vp.width - 1;
+                if (refresh_min_y < map_vp.offset_y) refresh_min_y = map_vp.offset_y;
+                if (refresh_max_y >= map_vp.offset_y + map_vp.height) refresh_max_y = map_vp.offset_y + map_vp.height - 1;
+
+                int16_t w = refresh_max_x - refresh_min_x + 1;
+                int16_t h = refresh_max_y - refresh_min_y + 1;
+
+                if (w > 0 && h > 0) {
+                    display_refresh_region(refresh_min_x, refresh_min_y, w, h);
+                }
+            }
+        }
     }
 }
