@@ -508,13 +508,6 @@ static void ui_update_status_bar(gfx_context_t* gfx, const purrgo_gnss_solution_
     else if (new_state.rec_state == LOGGER_STATE_ERROR) rec_str = "ERR-REC";
     gfx_draw_string(gfx, next_x, 1, rec_str);
 
-#if PURRGO_HW_MCU == PURRGO_PLATFORM_PC
-    const char* bat_str = "75%";
-    int16_t bat_x = PURRGO_HW_DISPLAY_WIDTH_PX - get_string_width(bat_str) - 2;
-    if (bat_x > next_x + get_string_width(rec_str)) {
-        gfx_draw_string(gfx, bat_x, 1, bat_str);
-    }
-#endif
 
     if (prev_status_state.valid && !purrgo_app_map_is_dirty()) {
         display_refresh_region(0, 0, PURRGO_HW_DISPLAY_WIDTH_PX, status_h);

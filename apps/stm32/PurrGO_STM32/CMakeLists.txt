@@ -54,13 +54,14 @@ target_sources(PurrGO_STM32 PRIVATE
     Core/Src/purrgo_logger.c
     Core/Src/fatfs_sd.c
 	# STM32 implementation of the common GNSS byte-stream interface.
-    ../../../src/platform/stm32/gnss_io_stm32.c
+    Core/Src/gnss_io.c
+    # STM32 system time implementation.
+    Core/Src/system_time.c
     # STM32 button driver stub.
-    ../../../src/platform/stm32/buttons.c
+    Core/Src/buttons.c
     # STM32 stub implementation of the filesystem HAL
-    ../../../src/platform/stm32/fs_hal_stm32.c
-    ../../../src/platform/stm32/display_stm32.c
-    ../../../src/platform/stm32/platform_stm32.c
+    Core/Src/fs_hal_stm32.c
+    Core/Src/display_stm32.c
 )
 
 # Add include paths
