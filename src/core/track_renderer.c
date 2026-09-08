@@ -50,14 +50,9 @@ bool purrgo_track_render_last_segment(
         return false;
     }
 
-    // Отрисовывать трек нужно тонкой черной линией.
-    gfx_set_color(gfx, BLACK, gfx->color_bg);
-
     int16_t prev_sx, prev_sy, sx, sy;
     project_to_screen(prev_point.lon_1e7, prev_point.lat_1e7, camera, vp, &prev_sx, &prev_sy);
     project_to_screen(last_point.lon_1e7, last_point.lat_1e7, camera, vp, &sx, &sy);
-
-    gfx_draw_line(gfx, prev_sx, prev_sy, sx, sy);
 
     int16_t min_x = (prev_sx < sx) ? prev_sx : sx;
     int16_t max_x = (prev_sx > sx) ? prev_sx : sx;
@@ -69,6 +64,16 @@ bool purrgo_track_render_last_segment(
     max_x += 1;
     min_y -= 1;
     max_y += 1;
+
+    // Early out if strictly outside viewport
+    if (max_x < vp->offset_x || min_x >= vp->offset_x + vp->width ||
+        max_y < vp->offset_y || min_y >= vp->offset_y + vp->height) {
+        return false;
+    }
+
+    // Отрисовывать трек нужно тонкой черной линией.
+    gfx_set_color(gfx, BLACK, gfx->color_bg);
+    gfx_draw_line(gfx, prev_sx, prev_sy, sx, sy);
 
     // Clamp to viewport
     if (min_x < vp->offset_x) min_x = vp->offset_x;
