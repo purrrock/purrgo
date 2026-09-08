@@ -280,9 +280,9 @@ purrgo_logger_write("GFX OK\r\n");
             purrgo_gnss_mock_update();
             /*
              * Передаём текущее GNSS решение конечному автомату
-             * приложения.
+             * приложения. Не работает, пока не решим проблему с purrgo_system_time
              */
-            purrgo_app_update(&gnss_solution);
+            // purrgo_app_update(&gnss_solution);
             purrgo_logger_write("APP: update\r\n");
         }
     }
