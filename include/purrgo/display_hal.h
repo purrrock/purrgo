@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#define MAX_PARTIAL_REFRESHES 5
+
 /*
  * Full screen refresh.
  */
