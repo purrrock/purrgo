@@ -14,6 +14,7 @@ static int32_t map_center_lon_1e7;
 static purrgo_map_scale_t map_zoom_level;
 static bool manual_pan_active;
 static bool map_dirty = true;
+static bool track_dirty = false;
 static purrgo_gnss_solution_t prev_fix_for_map = {0};
 
 // Значения физической ширины BBox в метрах для расчета координат.
@@ -45,6 +46,18 @@ bool map_app_map_is_dirty(void) {
 
 void map_app_map_clear_dirty(void) {
     map_dirty = false;
+}
+
+void purrgo_map_controller_mark_track_dirty(void) {
+    track_dirty = true;
+}
+
+bool purrgo_map_controller_is_track_dirty(void) {
+    return track_dirty;
+}
+
+void purrgo_map_controller_clear_track_dirty(void) {
+    track_dirty = false;
 }
 
 int32_t map_app_get_map_center_lat(void) {

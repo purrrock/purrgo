@@ -203,7 +203,7 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
         if (logger_state == LOGGER_STATE_RECORDING) {
             // Передаем координаты в фильтр (он сам решит, записывать ли точку)
             if (purrgo_logger_add_point(current_fix)) {
-                purrgo_app_map_mark_dirty();
+                purrgo_map_controller_mark_track_dirty();
             }
         }
     }
