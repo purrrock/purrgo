@@ -1,5 +1,6 @@
 #include "ui_map.h"
 #include "purrgo/app_fsm.h"
+#include "purrgo/map_controller.h"
 #include "purrgo/gfx_rect.h"
 #include "purrgo/gfx_text.h"
 #include "purrgo/geo.h"
@@ -718,9 +719,17 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
         if (map_success) {
             purrgo_app_map_clear_dirty();
         }
+        purrgo_map_controller_clear_track_dirty();
         display_refresh();
         dbg_map_render_calls++;
     } else {
+        if (purrgo_map_controller_is_track_dirty()) {
+            purrgo_rect_t rect;
+            if (purrgo_track_render_last_segment(gfx, &dynamic_cam, &map_vp, &rect)) {
+                display_refresh_region(rect.x, rect.y, rect.w, rect.h);
+                purrgo_map_controller_clear_track_dirty();
+            }
+        }
         ui_map_render_gnss_marker(gfx, gnss, &map_vp, &dynamic_cam, false);
     }
 }
