@@ -5,7 +5,7 @@
 #include <string.h>
 
 
-#define CONFIG_FILENAME "PURRGO.CFG"
+#define purrgo_fs_get_config_path() "PURRGO.CFG"
 #define CONFIG_MAX_SIZE 512
 
 
@@ -112,7 +112,7 @@ void purrgo_config_init(void)
         app_config.map_dir,
         sizeof(app_config.map_dir),
         "%s",
-        "../../../tests/data/maps"
+        purrgo_fs_get_maps_path()
     );
 
     /*
@@ -134,7 +134,7 @@ bool purrgo_config_load(void)
     purrgo_config_init();
 
     purrgo_file_t* file = purrgo_fs_open(
-        CONFIG_FILENAME,
+        purrgo_fs_get_config_path(),
         FS_READ
     );
 
@@ -387,11 +387,11 @@ bool purrgo_config_save(void)
 {
     PURRGO_LOG(
         "Saving configuration to: %s\n",
-        CONFIG_FILENAME
+        purrgo_fs_get_config_path()
     );
 
     purrgo_file_t* file = purrgo_fs_open(
-        CONFIG_FILENAME,
+        purrgo_fs_get_config_path(),
         FS_WRITE_CREATE
     );
 
