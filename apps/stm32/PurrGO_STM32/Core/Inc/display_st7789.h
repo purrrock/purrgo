@@ -38,4 +38,10 @@ void ST7789_FillRect(uint16_t x, uint16_t y, uint16_t width, uint16_t height, ui
 
 void ST7789_FillScreen(uint16_t color);
 
+void ST7789_WriteDataBlock(uint8_t *data, uint16_t size);
+
+void ST7789_StartPixels(void);
+void ST7789_WritePixels(uint8_t *data, uint16_t size);
+void ST7789_EndPixels(void);
+
 #endif /* DISPLAY_ST7789_H */
