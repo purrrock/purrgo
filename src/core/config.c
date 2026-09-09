@@ -241,7 +241,8 @@ bool purrgo_config_load(void)
                 snprintf(
                     app_config.map_dir,
                     sizeof(app_config.map_dir),
-                    "%s",
+                    "%.*s",
+                    (int)(sizeof(app_config.map_dir) - 1),
                     val
                 );
             }
