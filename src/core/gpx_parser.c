@@ -86,7 +86,11 @@ static void process_tag(purrgo_gpx_parser_t *p) {
         p->in_name = false;
         if (p->in_wpt) {
             // Копируем имя, защищаясь от переполнения
-            snprintf(p->temp_wp.name, sizeof(p->temp_wp.name), "%.*s", (int)(sizeof(p->temp_wp.name) - 1), p->text_buffer);
+            snprintf(p->temp_wp.name,
+                     sizeof(p->temp_wp.name),
+                     "%.*s",
+                     (int)(sizeof(p->temp_wp.name) - 1),
+                     p->text_buffer);
         }
     }
     // Тег высоты: <ele>
