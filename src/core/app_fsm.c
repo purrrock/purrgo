@@ -2,7 +2,6 @@
 #include "purrgo/config.h"
 #include "purrgo/gnss.h"
 #include "purrgo/gnss_adapter.h"
-#include "purrgo/gnss_io.h"
 #include "purrgo/sun.h"
 #include "purrgo/purrgo_time.h"
 #include "purrgo/map_controller.h"
@@ -24,6 +23,7 @@ static purrgo_gnss_solution_t internal_gnss_solution = {0};
 static purrgo_sun_info_t internal_sun_info = {0};
 static bool first_fix_obtained = false;
 static uint32_t last_sun_update_ms = 0;
+static uint32_t last_gnss_update_ms = 0;
 static purrgo_gnss_parser_t gnss_parser;
 
 // Состояние логгера для механизма отката попыток
@@ -37,6 +37,7 @@ void purrgo_app_init(void) {
     purrgo_gnss_parser_init(&gnss_parser);
     first_fix_obtained = false;
     last_sun_update_ms = 0;
+    last_gnss_update_ms = 0;
     logger_start_failures = 0;
     /*
      * First try to load the persistent configuration.
@@ -129,20 +130,14 @@ const purrgo_sun_info_t* purrgo_app_get_sun_info(void) {
     return first_fix_obtained ? &internal_sun_info : NULL;
 }
 
-void purrgo_app_tick(uint32_t current_time_ms) {
-    uint8_t rx_byte;
-    uint16_t bytes_processed = 0U;
-
-    // Process up to 256 bytes per tick to avoid locking up
-    while (bytes_processed < 256U && purrgo_gnss_read_byte(&rx_byte)) {
-        if (purrgo_gnss_parser_feed(&gnss_parser, rx_byte)) {
-            purrgo_gnss_process_nmea(gnss_parser.line, &internal_gnss_solution);
-            purrgo_gnss_parser_init(&gnss_parser);
-        }
-        bytes_processed++;
+void purrgo_app_feed_gnss_byte(uint8_t byte) {
+    if (purrgo_gnss_parser_feed(&gnss_parser, byte)) {
+        purrgo_gnss_process_nmea(gnss_parser.line, &internal_gnss_solution);
+        purrgo_gnss_parser_init(&gnss_parser);
     }
+}
 
-    static uint32_t last_gnss_update_ms = 0;
+void purrgo_app_tick(uint32_t current_time_ms) {
     if (current_time_ms - last_gnss_update_ms >= 1000U) {
         last_gnss_update_ms = current_time_ms;
 
