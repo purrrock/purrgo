@@ -67,6 +67,42 @@ const uint8_t* display_get_framebuffer(void) {
 }
 
 /*
+ * Implementation of GFX-to-display pixel callbacks.
+ */
+
+void stm32_draw_pixel_cb(
+    void *fb,
+    int16_t x,
+    int16_t y,
+    gfx_color_t color
+)
+{
+    /*
+     * Текущий display_stm32 предоставляет собственный framebuffer
+     * и API display_set_pixel(). Поэтому fb здесь непосредственно
+     * не используется.
+     */
+    (void)fb;
+
+    display_set_pixel(x, y, color);
+}
+
+gfx_color_t stm32_read_pixel_cb(
+    void *fb,
+    int16_t x,
+    int16_t y
+)
+{
+    /*
+     * Аналогично callback записи, framebuffer принадлежит
+     * display_stm32 и доступен через display_get_pixel().
+     */
+    (void)fb;
+
+    return display_get_pixel(x, y);
+}
+
+/*
  * Implementation of common PurrGO display HAL.
  */
 static int partial_refresh_count = 0;

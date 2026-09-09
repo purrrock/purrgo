@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include "purrgo/hardware_config.h"
+#include <purrgo/gfx_renderer.h>
 
 /*
  * Геометрия дисплея и глубина цвета транслируются напрямую
@@ -38,5 +39,19 @@ void display_set_pixel(int16_t x, int16_t y, uint8_t color);
 uint8_t display_get_pixel(int16_t x, int16_t y);
 
 const uint8_t* display_get_framebuffer(void);
+
+/* GFX-to-display pixel callbacks */
+void stm32_draw_pixel_cb(
+    void *fb,
+    int16_t x,
+    int16_t y,
+    gfx_color_t color
+);
+
+gfx_color_t stm32_read_pixel_cb(
+    void *fb,
+    int16_t x,
+    int16_t y
+);
 
 #endif /* DISPLAY_STM32_H */
