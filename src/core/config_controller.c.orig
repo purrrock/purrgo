@@ -88,11 +88,6 @@ static bool draft_track_display_enabled;
 #define CONFIG_CURSOR_LOG_MODE      4
 #define CONFIG_CURSOR_TRACK_DISPLAY 5
 
-/* Timezone Configuration Boundaries */
-#define CONFIG_TZ_STEP_MINS         15
-#define CONFIG_TZ_MIN_MINS          -720
-#define CONFIG_TZ_MAX_MINS          840
-
 static int config_cursor_idx = CONFIG_CURSOR_TZ;
 
 
@@ -468,9 +463,9 @@ bool purrgo_config_controller_handle_button(
                 if (config_cursor_idx == CONFIG_CURSOR_TZ) {
 
                     if (
-                        draft_tz_offset_minutes + CONFIG_TZ_STEP_MINS <= CONFIG_TZ_MAX_MINS
+                        draft_tz_offset_minutes + 15 <= 840
                     ) {
-                        draft_tz_offset_minutes += CONFIG_TZ_STEP_MINS;
+                        draft_tz_offset_minutes += 15;
                     }
                 }
 
@@ -571,9 +566,9 @@ bool purrgo_config_controller_handle_button(
                 if (config_cursor_idx == CONFIG_CURSOR_TZ) {
 
                     if (
-                        draft_tz_offset_minutes - CONFIG_TZ_STEP_MINS >= CONFIG_TZ_MIN_MINS
+                        draft_tz_offset_minutes - 15 >= -720
                     ) {
-                        draft_tz_offset_minutes -= CONFIG_TZ_STEP_MINS;
+                        draft_tz_offset_minutes -= 15;
                     }
                 }
 
