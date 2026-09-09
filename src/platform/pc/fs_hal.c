@@ -24,7 +24,7 @@ struct purrgo_dir_s {
 };
 
 
-__attribute__((weak)) purrgo_file_t* purrgo_fs_open(const char* filepath, fs_mode_t mode) {
+purrgo_file_t* purrgo_fs_open(const char* filepath, fs_mode_t mode) {
     const char* c_mode = "wb";
 
     if (mode == FS_READ) {
@@ -41,7 +41,7 @@ __attribute__((weak)) purrgo_file_t* purrgo_fs_open(const char* filepath, fs_mod
 }
 
 
-__attribute__((weak)) uint32_t purrgo_fs_read(
+uint32_t purrgo_fs_read(
     purrgo_file_t* file,
     uint8_t* buffer,
     uint32_t size
@@ -66,7 +66,7 @@ __attribute__((weak)) uint32_t purrgo_fs_read(
 }
 
 
-__attribute__((weak)) uint32_t purrgo_fs_write(
+uint32_t purrgo_fs_write(
     purrgo_file_t* file,
     const uint8_t* data,
     uint32_t size
@@ -84,7 +84,7 @@ __attribute__((weak)) uint32_t purrgo_fs_write(
 }
 
 
-__attribute__((weak)) bool purrgo_fs_seek(
+bool purrgo_fs_seek(
     purrgo_file_t* file,
     uint32_t offset
 ) {
@@ -100,14 +100,14 @@ __attribute__((weak)) bool purrgo_fs_seek(
 }
 
 
-__attribute__((weak)) void purrgo_fs_sync(purrgo_file_t* file) {
+void purrgo_fs_sync(purrgo_file_t* file) {
     if (file) {
         fflush((FILE*)file);
     }
 }
 
 
-__attribute__((weak)) void purrgo_fs_close(purrgo_file_t* file) {
+void purrgo_fs_close(purrgo_file_t* file) {
     if (file) {
         fclose((FILE*)file);
     }
@@ -121,7 +121,7 @@ __attribute__((weak)) void purrgo_fs_close(purrgo_file_t* file) {
  * to purrgo_dir_t* because the PC implementation also needs to retain
  * the directory path for stat().
  */
-__attribute__((weak)) purrgo_dir_t* purrgo_fs_opendir(const char* path) {
+purrgo_dir_t* purrgo_fs_opendir(const char* path) {
     if (!path) {
         return NULL;
     }
@@ -190,7 +190,7 @@ __attribute__((weak)) purrgo_dir_t* purrgo_fs_opendir(const char* path) {
  * Instead, the complete path is constructed and stat() is used to
  * determine the actual filesystem object type.
  */
-__attribute__((weak)) bool purrgo_fs_readdir(
+bool purrgo_fs_readdir(
     purrgo_dir_t* dir,
     purrgo_fs_dirent_t* dirent
 ) {
@@ -283,7 +283,7 @@ __attribute__((weak)) bool purrgo_fs_readdir(
 /*
  * Close a directory opened by purrgo_fs_opendir().
  */
-__attribute__((weak)) __attribute__((weak)) void purrgo_fs_closedir(purrgo_dir_t* dir) {
+void purrgo_fs_closedir(purrgo_dir_t* dir) {
     if (!dir) {
         return;
     }
