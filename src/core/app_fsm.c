@@ -1,5 +1,9 @@
 #include "purrgo/app_fsm.h"
 #include "purrgo/config.h"
+#include "purrgo/gnss.h"
+#include "purrgo/gnss_adapter.h"
+#include "purrgo/gnss_io.h"
+#include "purrgo/sun.h"
 #include "purrgo/purrgo_time.h"
 #include "purrgo/map_controller.h"
 #include "purrgo/trip_computer.h"
@@ -16,6 +20,12 @@ static bool ui_dirty = true;
 static bool status_bar_dirty = true;
 static purrgo_gnss_solution_t prev_fix = {0};
 
+static purrgo_gnss_solution_t internal_gnss_solution = {0};
+static purrgo_sun_info_t internal_sun_info = {0};
+static bool first_fix_obtained = false;
+static uint32_t last_sun_update_ms = 0;
+static purrgo_gnss_parser_t gnss_parser;
+
 // Состояние логгера для механизма отката попыток
 static uint32_t next_logger_retry_ms = 0;
 static uint8_t logger_start_failures = 0;
@@ -24,6 +34,9 @@ static purrgo_gnss_solution_t last_rendered_fix = {0};
 
 void purrgo_app_init(void) {
     next_logger_retry_ms = 0;
+    purrgo_gnss_parser_init(&gnss_parser);
+    first_fix_obtained = false;
+    last_sun_update_ms = 0;
     logger_start_failures = 0;
     /*
      * First try to load the persistent configuration.
@@ -105,6 +118,53 @@ void purrgo_app_notify_marker_rendered(const purrgo_gnss_solution_t* rendered_fi
         last_rendered_pos_valid = true;
     } else {
         last_rendered_pos_valid = false;
+    }
+}
+
+const purrgo_gnss_solution_t* purrgo_app_get_gnss_solution(void) {
+    return &internal_gnss_solution;
+}
+
+const purrgo_sun_info_t* purrgo_app_get_sun_info(void) {
+    return first_fix_obtained ? &internal_sun_info : NULL;
+}
+
+void purrgo_app_tick(uint32_t current_time_ms) {
+    uint8_t rx_byte;
+    uint16_t bytes_processed = 0U;
+
+    // Process up to 256 bytes per tick to avoid locking up
+    while (bytes_processed < 256U && purrgo_gnss_read_byte(&rx_byte)) {
+        if (purrgo_gnss_parser_feed(&gnss_parser, rx_byte)) {
+            purrgo_gnss_process_nmea(gnss_parser.line, &internal_gnss_solution);
+            purrgo_gnss_parser_init(&gnss_parser);
+        }
+        bytes_processed++;
+    }
+
+    static uint32_t last_gnss_update_ms = 0;
+    if (current_time_ms - last_gnss_update_ms >= 1000U) {
+        last_gnss_update_ms = current_time_ms;
+
+        purrgo_app_update(&internal_gnss_solution);
+
+        if (internal_gnss_solution.valid) {
+            if (!first_fix_obtained || (current_time_ms - last_sun_update_ms >= 60000U)) {
+                purrgo_sun_calc(
+                    internal_gnss_solution.lat_1e7,
+                    internal_gnss_solution.lon_1e7,
+                    internal_gnss_solution.year % 100U,
+                    internal_gnss_solution.month,
+                    internal_gnss_solution.day,
+                    internal_gnss_solution.hours,
+                    internal_gnss_solution.minutes,
+                    app_config.tz_offset_minutes,
+                    &internal_sun_info
+                );
+                first_fix_obtained = true;
+                last_sun_update_ms = current_time_ms;
+            }
+        }
     }
 }
 
