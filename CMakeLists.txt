@@ -64,6 +64,7 @@ endmacro()
 
 add_purrgo_test(test_geo tests/core/test_geo.c)
 add_purrgo_test(test_gnss tests/core/test_gnss.c)
+add_purrgo_test(test_gnss_adapter tests/core/test_gnss_adapter.c)
 add_purrgo_test(test_track_logger tests/core/test_track_logger.c)
 add_purrgo_test(test_gfx_polygon tests/core/test_gfx_polygon.c)
 add_purrgo_test(test_gfx_clipping tests/core/test_gfx_clipping.c)
