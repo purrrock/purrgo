@@ -83,6 +83,8 @@ static void do_refresh_region(int16_t x, int16_t y, int16_t w, int16_t h) {
 
     ST7789_SetWindow(x, y, x + w - 1, y + h - 1);
 
+    ST7789_StartPixels();
+
     #define TRANSFER_BUF_PIXELS 128
     uint8_t buf[TRANSFER_BUF_PIXELS * 2];
     int buf_idx = 0;
@@ -107,15 +109,17 @@ static void do_refresh_region(int16_t x, int16_t y, int16_t w, int16_t h) {
             buf_idx++;
 
             if (buf_idx >= TRANSFER_BUF_PIXELS) {
-                ST7789_WriteDataBlock(buf, buf_idx * 2);
+                ST7789_WritePixels(buf, buf_idx * 2);
                 buf_idx = 0;
             }
         }
     }
 
     if (buf_idx > 0) {
-        ST7789_WriteDataBlock(buf, buf_idx * 2);
+        ST7789_WritePixels(buf, buf_idx * 2);
     }
+
+    ST7789_EndPixels();
 }
 
 void display_refresh(void) {

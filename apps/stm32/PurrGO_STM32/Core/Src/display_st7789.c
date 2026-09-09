@@ -167,3 +167,18 @@ void ST7789_FillRect(uint16_t x, uint16_t y, uint16_t width, uint16_t height, ui
 void ST7789_FillScreen(uint16_t color) {
     ST7789_FillRect(0, 0, ST7789_WIDTH, ST7789_HEIGHT, color);
 }
+
+void ST7789_StartPixels(void) {
+    HAL_GPIO_WritePin(TFT_DC_GPIO_Port, TFT_DC_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(TFT_CS_GPIO_Port, TFT_CS_Pin, GPIO_PIN_RESET);
+}
+
+void ST7789_WritePixels(uint8_t *data, uint16_t size) {
+    if (HAL_SPI_Transmit(&hspi1, data, size, HAL_MAX_DELAY) != HAL_OK) {
+        Error_Handler();
+    }
+}
+
+void ST7789_EndPixels(void) {
+    HAL_GPIO_WritePin(TFT_CS_GPIO_Port, TFT_CS_Pin, GPIO_PIN_SET);
+}
