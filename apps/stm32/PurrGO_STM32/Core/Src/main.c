@@ -104,7 +104,6 @@ void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
 
 static void process_buttons(void);
-extern void stm32_gnss_mock_update(void);
 
 /* USER CODE END PFP */
 
@@ -318,12 +317,6 @@ int main(void)
     {
         purrgo_app_feed_gnss_byte(rx_byte);
         bytes_processed++;
-    }
-
-    static uint32_t last_mock_update_ms = 0;
-    if (current_time_ms - last_mock_update_ms >= GNSS_UPDATE_PERIOD_MS) {
-        last_mock_update_ms = current_time_ms;
-        stm32_gnss_mock_update();
     }
 
     /*
