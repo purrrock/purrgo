@@ -19,27 +19,8 @@
  * @return false
  *     Если входной поток временно не содержит данных.
  */
-#include "purrgo/system_time.h"
-
 bool purrgo_gnss_read_byte(uint8_t *byte)
 {
-    static bool mock_initialized = false;
-    static uint32_t last_mock_update_ms = 0;
-
-    if (!mock_initialized)
-    {
-        purrgo_gnss_mock_init();
-        mock_initialized = true;
-        last_mock_update_ms = purrgo_system_time_ms();
-    }
-
-    uint32_t current_time_ms = purrgo_system_time_ms();
-    if (current_time_ms - last_mock_update_ms >= 1000U)
-    {
-        purrgo_gnss_mock_update();
-        last_mock_update_ms = current_time_ms;
-    }
-
     if (byte == NULL)
     {
         return false;
