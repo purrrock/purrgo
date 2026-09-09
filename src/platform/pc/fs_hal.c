@@ -24,7 +24,7 @@ struct purrgo_dir_s {
 };
 
 
-purrgo_file_t* purrgo_fs_open(const char* filepath, fs_mode_t mode) {
+__attribute__((weak)) purrgo_file_t* purrgo_fs_open(const char* filepath, fs_mode_t mode) {
     const char* c_mode = "wb";
 
     if (mode == FS_READ) {
@@ -41,7 +41,7 @@ purrgo_file_t* purrgo_fs_open(const char* filepath, fs_mode_t mode) {
 }
 
 
-uint32_t purrgo_fs_read(
+__attribute__((weak)) uint32_t purrgo_fs_read(
     purrgo_file_t* file,
     uint8_t* buffer,
     uint32_t size
@@ -66,7 +66,7 @@ uint32_t purrgo_fs_read(
 }
 
 
-uint32_t purrgo_fs_write(
+__attribute__((weak)) uint32_t purrgo_fs_write(
     purrgo_file_t* file,
     const uint8_t* data,
     uint32_t size
@@ -84,7 +84,7 @@ uint32_t purrgo_fs_write(
 }
 
 
-bool purrgo_fs_seek(
+__attribute__((weak)) bool purrgo_fs_seek(
     purrgo_file_t* file,
     uint32_t offset
 ) {
@@ -100,14 +100,14 @@ bool purrgo_fs_seek(
 }
 
 
-void purrgo_fs_sync(purrgo_file_t* file) {
+__attribute__((weak)) void purrgo_fs_sync(purrgo_file_t* file) {
     if (file) {
         fflush((FILE*)file);
     }
 }
 
 
-void purrgo_fs_close(purrgo_file_t* file) {
+__attribute__((weak)) void purrgo_fs_close(purrgo_file_t* file) {
     if (file) {
         fclose((FILE*)file);
     }
@@ -121,7 +121,7 @@ void purrgo_fs_close(purrgo_file_t* file) {
  * to purrgo_dir_t* because the PC implementation also needs to retain
  * the directory path for stat().
  */
-purrgo_dir_t* purrgo_fs_opendir(const char* path) {
+__attribute__((weak)) purrgo_dir_t* purrgo_fs_opendir(const char* path) {
     if (!path) {
         return NULL;
     }
@@ -190,7 +190,7 @@ purrgo_dir_t* purrgo_fs_opendir(const char* path) {
  * Instead, the complete path is constructed and stat() is used to
  * determine the actual filesystem object type.
  */
-bool purrgo_fs_readdir(
+__attribute__((weak)) bool purrgo_fs_readdir(
     purrgo_dir_t* dir,
     purrgo_fs_dirent_t* dirent
 ) {
@@ -283,7 +283,7 @@ bool purrgo_fs_readdir(
 /*
  * Close a directory opened by purrgo_fs_opendir().
  */
-void purrgo_fs_closedir(purrgo_dir_t* dir) {
+__attribute__((weak)) __attribute__((weak)) void purrgo_fs_closedir(purrgo_dir_t* dir) {
     if (!dir) {
         return;
     }
@@ -293,4 +293,15 @@ void purrgo_fs_closedir(purrgo_dir_t* dir) {
     }
 
     free(dir);
+}
+const char* purrgo_fs_get_config_path(void) {
+    return "PURRGO.CFG";
+}
+
+const char* purrgo_fs_get_maps_path(void) {
+    return "../../../tests/data/maps";
+}
+
+const char* purrgo_fs_get_tracks_path(void) {
+    return "";
 }
