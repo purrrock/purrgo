@@ -39,7 +39,7 @@ static void ST7789_WriteData(uint8_t data) {
 }
 
 /* Helper for writing block data */
-static void ST7789_WriteDataBlock(uint8_t *data, uint16_t size) {
+void ST7789_WriteDataBlock(uint8_t *data, uint16_t size) {
     HAL_GPIO_WritePin(TFT_DC_GPIO_Port, TFT_DC_Pin, GPIO_PIN_SET);
     HAL_GPIO_WritePin(TFT_CS_GPIO_Port, TFT_CS_Pin, GPIO_PIN_RESET);
     if (HAL_SPI_Transmit(&hspi1, data, size, HAL_MAX_DELAY) != HAL_OK) {
