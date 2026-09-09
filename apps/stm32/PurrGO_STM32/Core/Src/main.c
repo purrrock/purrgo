@@ -36,6 +36,7 @@
 #include <purrgo/gfx_text.h>
 #include <purrgo/system_time.h>
 #include <purrgo/sun.h>
+#include "purrgo/gnss_io.h"
 #include "purrgo_logger.h"
 #include "buttons.h"
 #include "display_stm32.h"
@@ -103,6 +104,7 @@ void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
 
 static void process_buttons(void);
+extern void stm32_gnss_mock_update(void);
 
 /* USER CODE END PFP */
 
@@ -304,17 +306,39 @@ int main(void)
 
     /*
      * -----------------------------------------------------------------------
-     * 1. Обновление FSM/GNSS.
+     * 1. Обработка входных GNSS-данных.
+     * -----------------------------------------------------------------------
+     */
+    uint8_t rx_byte;
+    uint16_t bytes_processed = 0U;
+    while (
+        bytes_processed < GNSS_MAX_BYTES_PER_LOOP &&
+        purrgo_gnss_read_byte(&rx_byte)
+    )
+    {
+        purrgo_app_feed_gnss_byte(rx_byte);
+        bytes_processed++;
+    }
+
+    static uint32_t last_mock_update_ms = 0;
+    if (current_time_ms - last_mock_update_ms >= GNSS_UPDATE_PERIOD_MS) {
+        last_mock_update_ms = current_time_ms;
+        stm32_gnss_mock_update();
+    }
+
+    /*
+     * -----------------------------------------------------------------------
+     * 2. Обновление FSM/GNSS.
      * -----------------------------------------------------------------------
      *
-     * Передаём текущее время в FSM, где происходит чтение GNSS-байтов,
-     * парсинг NMEA, расчёт Солнца и обновление состояния.
+     * Передаём текущее время в FSM, где происходит
+     * расчёт Солнца и обновление состояния.
      */
     purrgo_app_tick(current_time_ms);
 
     /*
      * -----------------------------------------------------------------------
-     * 2. Опрос кнопок.
+     * 3. Опрос кнопок.
      * -----------------------------------------------------------------------
      *
      * Реальный драйвер кнопок пока не подключён, но FSM уже получает

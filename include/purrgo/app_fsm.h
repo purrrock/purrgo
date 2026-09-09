@@ -43,7 +43,10 @@ void purrgo_app_handle_button(purrgo_btn_t button);
 // (Оставлен для обратной совместимости, если используется напрямую)
 void purrgo_app_update(const purrgo_gnss_solution_t* current_fix);
 
-// Главный тик приложения (обрабатывает вход GNSS, парсинг, обновление состояния и солнце)
+// Передача байта из потока GNSS в парсер конечного автомата
+void purrgo_app_feed_gnss_byte(uint8_t byte);
+
+// Главный тик приложения (обновление состояния и солнце)
 void purrgo_app_tick(uint32_t current_time_ms);
 
 // Геттеры для состояния GNSS и Солнца

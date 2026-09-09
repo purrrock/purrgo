@@ -137,6 +137,18 @@ static void emulator_run_loop(void) {
     while (!quit) {
         uint32_t current_time = SDL_GetTicks();
 
+        {
+            uint8_t rx_byte;
+            int bytes_processed = 0;
+            while (
+                purrgo_gnss_read_byte(&rx_byte) &&
+                bytes_processed < 256
+            ) {
+                purrgo_app_feed_gnss_byte(rx_byte);
+                bytes_processed++;
+            }
+        }
+
         if (current_time - last_gnss_time >= 1000) {
             last_gnss_time = current_time;
 #ifdef USE_MOCK_GNSS

@@ -21,6 +21,13 @@
  */
 bool purrgo_gnss_read_byte(uint8_t *byte)
 {
+    static bool mock_initialized = false;
+    if (!mock_initialized)
+    {
+        purrgo_gnss_mock_init();
+        mock_initialized = true;
+    }
+
     if (byte == NULL)
     {
         return false;
@@ -32,4 +39,15 @@ bool purrgo_gnss_read_byte(uint8_t *byte)
      * но читать из кольцевого буфера.
      */
     return purrgo_gnss_mock_read_byte(byte);
+}
+
+/*
+ * This platform mock driver implementation does not currently provide
+ * an explicit update trigger loop since main.c handles byte polling,
+ * but purrgo_gnss_mock_update is exposed in gnss_mock.h and needs to
+ * be called periodically if we want to simulate movement.
+ * For STM32 mock, we can expose a dedicated function or hook it into SysTick.
+ */
+void stm32_gnss_mock_update(void) {
+    purrgo_gnss_mock_update();
 }
