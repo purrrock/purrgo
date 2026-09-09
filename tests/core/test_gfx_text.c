@@ -47,6 +47,20 @@ static bool test_null_pointers() {
 
     gfx_draw_string(&ctx, 10, 10, NULL);
 
+    // Test nulls in gfx_draw_string_halo
+    gfx_draw_string_halo(NULL, 10, 10, "Hello");
+    gfx_draw_string_halo(&ctx, 10, 10, NULL);
+
+    // Test nulls in gfx_draw_char
+    gfx_draw_char(NULL, 10, 10, 'A');
+
+    // Test with missing draw_pixel callback
+    gfx_context_t no_draw_ctx;
+    gfx_init(&no_draw_ctx, WIDTH, HEIGHT, framebuffer, NULL, read_pixel);
+    gfx_draw_string(&no_draw_ctx, 10, 10, "Hello");
+    gfx_draw_string_halo(&no_draw_ctx, 10, 10, "Hello");
+    gfx_draw_char(&no_draw_ctx, 10, 10, 'A');
+
     printf("PASSED test_null_pointers\n");
     return true;
 }
@@ -115,6 +129,21 @@ static bool test_string_halo() {
     // Halo draws quite a few pixels (3x3 brush per font pixel), plus text.
     // Just ensuring we drew > 0 pixels and didn't crash.
 
+    // Test newline in halo
+    reset_test_state(&ctx);
+    gfx_draw_string_halo(&ctx, 10, 10, "Hi\nThere");
+
+    if (pixels_drawn == 0) {
+        printf("FAILED test_string_halo: No pixels drawn for newline\n");
+        return false;
+    }
+
+    // We check that it went down to the second line. 'last_pixel_y' reached at least 18 + 7 = 25
+    if (last_pixel_y < 18 || last_pixel_y > 35) {
+         printf("FAILED test_string_halo: last_pixel_y %d is out of expected bounds for newline\n", last_pixel_y);
+         return false;
+    }
+
     printf("PASSED test_string_halo\n");
     return true;
 }
@@ -138,6 +167,8 @@ static bool test_single_char() {
 
 static bool test_out_of_bounds() {
     printf("Running test_out_of_bounds...\n");
+static bool test_single_char_string() {
+    printf("Running test_single_char_string...\n");
     gfx_context_t ctx;
     gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, draw_pixel, read_pixel);
     reset_test_state(&ctx);
@@ -165,6 +196,19 @@ static bool test_out_of_bounds() {
 
 static bool test_extended_ascii() {
     printf("Running test_extended_ascii...\n");
+    gfx_draw_string(&ctx, 10, 10, "A");
+
+    if (pixels_drawn != 48) {
+         printf("FAILED test_single_char_string: Expected 48 pixels (6x8 cell), got %d\n", pixels_drawn);
+         return false;
+    }
+
+    printf("PASSED test_single_char_string\n");
+    return true;
+}
+
+static bool test_multiple_newlines() {
+    printf("Running test_multiple_newlines...\n");
     gfx_context_t ctx;
     gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, draw_pixel, read_pixel);
     reset_test_state(&ctx);
@@ -201,6 +245,76 @@ static bool test_multiple_newlines() {
     }
 
     printf("PASSED test_multiple_newlines\n");
+    gfx_draw_string(&ctx, 10, 10, "\n\n\n");
+
+    if (pixels_drawn != 0) {
+        printf("FAILED test_multiple_newlines: Expected 0 pixels, got %d\n", pixels_drawn);
+        return false;
+    }
+
+    // Now test with characters between newlines
+    reset_test_state(&ctx);
+    gfx_draw_string(&ctx, 10, 10, "A\n\nB");
+
+    // A at 10,10. B should be at 10, 10 + 8*2 = 26
+    if (pixels_drawn != 96) {
+        printf("FAILED test_multiple_newlines: Expected 96 pixels, got %d\n", pixels_drawn);
+        return false;
+    }
+
+    // B is drawn at y=26 to 33. Check last pixel bounds.
+    if (last_pixel_y < 26 || last_pixel_y > 33) {
+         printf("FAILED test_multiple_newlines: last_pixel_y %d is out of expected bounds\n", last_pixel_y);
+         return false;
+    }
+
+    printf("PASSED test_multiple_newlines\n");
+    return true;
+}
+
+static bool test_out_of_bounds_text() {
+    printf("Running test_out_of_bounds_text...\n");
+    gfx_context_t ctx;
+    gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, draw_pixel, read_pixel);
+
+    // Negative coordinates
+    reset_test_state(&ctx);
+    gfx_draw_string(&ctx, -10, -10, "A");
+
+    // Some pixels may be drawn in the buffer if they overlap, but clipping prevents drawing outside 0..WIDTH-1, 0..HEIGHT-1.
+    // At x=-10, y=-10, a 6x8 char ends at x=-5, y=-3. It should draw 0 pixels.
+    if (pixels_drawn != 0) {
+        printf("FAILED test_out_of_bounds_text: Expected 0 pixels, got %d\n", pixels_drawn);
+        return false;
+    }
+
+    // Coordinates past the right edge
+    reset_test_state(&ctx);
+    gfx_draw_string(&ctx, WIDTH + 10, 10, "A");
+    if (pixels_drawn != 0) {
+        printf("FAILED test_out_of_bounds_text: Expected 0 pixels, got %d\n", pixels_drawn);
+        return false;
+    }
+
+    // Coordinates past the bottom edge
+    reset_test_state(&ctx);
+    gfx_draw_string(&ctx, 10, HEIGHT + 10, "A");
+    if (pixels_drawn != 0) {
+        printf("FAILED test_out_of_bounds_text: Expected 0 pixels, got %d\n", pixels_drawn);
+        return false;
+    }
+
+    // Partially out of bounds
+    reset_test_state(&ctx);
+    gfx_draw_string(&ctx, WIDTH - 3, 10, "A"); // 3 pixels of the 6-pixel char width should draw
+    // The character writes pixels inside the framebuffer bounds.
+    // Instead of exactly guessing the number, just ensure it doesn't crash and draws something.
+    if (pixels_drawn == 0 || pixels_drawn > 48) {
+        printf("FAILED test_out_of_bounds_text (partial): Drew %d pixels\n", pixels_drawn);
+        return false;
+    }
+
+    printf("PASSED test_out_of_bounds_text\n");
     return true;
 }
 
@@ -215,6 +329,9 @@ int main() {
     if (!test_out_of_bounds()) success = false;
     if (!test_extended_ascii()) success = false;
     if (!test_multiple_newlines()) success = false;
+    if (!test_single_char_string()) success = false;
+    if (!test_multiple_newlines()) success = false;
+    if (!test_out_of_bounds_text()) success = false;
 
     if (success) {
         printf("All tests passed!\n");
