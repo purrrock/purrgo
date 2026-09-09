@@ -162,7 +162,6 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
     // Пересчет UTC времени в локальное с использованием специализированного модуля purrgo_time
     if (!purrgo_time_apply_timezone(current_fix, &display_fix, app_config.tz_offset_minutes)) {
         display_fix = *current_fix; // fallback to UTC if conversion fails (e.g. out of bounds)
-        display_fix.valid = false;
     }
 
 
