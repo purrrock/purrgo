@@ -3,6 +3,7 @@
 #include "purrgo_logger.h"
 #include <stddef.h>
 #include <string.h>
+#include "display_st7789.h"
 
 /*
  * STM32 Display Stub Driver with Framebuffer
@@ -73,7 +74,7 @@ static int partial_refresh_count = 0;
 void display_refresh(void) {
     purrgo_logger_write("FULL REFRESH\r\n");
     partial_refresh_count = 0;
-    /* Stub: physical display is not connected yet. */
+    display_refresh_region(0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT);
 }
 
 void display_refresh_region(int16_t x, int16_t y, int16_t w, int16_t h) {
@@ -83,5 +84,49 @@ void display_refresh_region(int16_t x, int16_t y, int16_t w, int16_t h) {
     }
     purrgo_logger_write("PARTIAL REFRESH x=%d y=%d w=%d h=%d\r\n", x, y, w, h);
     partial_refresh_count++;
-    /* Stub: physical display is not connected yet. */
+
+    if (x < 0) { w += x; x = 0; }
+    if (y < 0) { h += y; y = 0; }
+    if (x + w > DISPLAY_WIDTH) { w = DISPLAY_WIDTH - x; }
+    if (y + h > DISPLAY_HEIGHT) { h = DISPLAY_HEIGHT - y; }
+
+    if (w <= 0 || h <= 0) {
+        return;
+    }
+
+    ST7789_SetWindow(x, y, x + w - 1, y + h - 1);
+
+    #define TRANSFER_BUF_PIXELS 128
+    uint8_t buf[TRANSFER_BUF_PIXELS * 2];
+    int buf_idx = 0;
+
+    for (int row = y; row < y + h; row++) {
+        for (int col = x; col < x + w; col++) {
+            int pixel_idx = row * DISPLAY_WIDTH + col;
+            int byte_idx = pixel_idx / 4;
+            int bit_shift = (3 - (pixel_idx % 4)) * 2;
+            uint8_t color2bpp = (framebuffer[byte_idx] >> bit_shift) & 0x03;
+
+            uint16_t rgb565 = ST7789_COLOR_BLACK;
+            switch (color2bpp) {
+                case COLOR_BLACK: rgb565 = ST7789_COLOR_BLACK; break;
+                case COLOR_DARK_GRAY: rgb565 = 0x52AA; break;
+                case COLOR_LIGHT_GRAY: rgb565 = 0xAD55; break; /* Appropriate light-gray RGB565 */
+                case COLOR_WHITE: rgb565 = ST7789_COLOR_WHITE; break;
+            }
+
+            buf[buf_idx * 2] = rgb565 >> 8;
+            buf[buf_idx * 2 + 1] = rgb565 & 0xFF;
+            buf_idx++;
+
+            if (buf_idx >= TRANSFER_BUF_PIXELS) {
+                ST7789_WriteDataBlock(buf, buf_idx * 2);
+                buf_idx = 0;
+            }
+        }
+    }
+
+    if (buf_idx > 0) {
+        ST7789_WriteDataBlock(buf, buf_idx * 2);
+    }
 }
