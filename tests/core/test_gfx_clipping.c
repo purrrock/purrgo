@@ -258,10 +258,59 @@ static bool test_draw_hv_line_clipping() {
 }
 
 
+static bool test_set_clip_edge_cases() {
+    printf("Running test_set_clip_edge_cases...\n");
+    gfx_context_t ctx;
+    gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, draw_pixel, read_pixel);
+    reset_framebuffer(&ctx);
+
+    // Test 1: NULL context
+    gfx_set_clip(NULL, 0, 0, 10, 10); // Should not crash
+
+    // Test 2: Negative width and height
+    gfx_set_clip(&ctx, 10, 10, -5, -5);
+    if (ctx.clip_x != 10 || ctx.clip_y != 10 || ctx.clip_w != 0 || ctx.clip_h != 0) {
+        printf("FAILED: gfx_set_clip did not clamp negative width/height correctly\n");
+        return false;
+    }
+
+    // Test 3: Negative x/y that reduce width/height to negative
+    gfx_set_clip(&ctx, -20, -20, 10, 10);
+    if (ctx.clip_x != 0 || ctx.clip_y != 0 || ctx.clip_w != 0 || ctx.clip_h != 0) {
+        printf("FAILED: gfx_set_clip did not clamp extremely negative x/y correctly\n");
+        return false;
+    }
+
+    // Test 4: x/y beyond width/height
+    gfx_set_clip(&ctx, WIDTH + 10, HEIGHT + 10, 10, 10);
+    if (ctx.clip_x != WIDTH || ctx.clip_y != HEIGHT || ctx.clip_w != 0 || ctx.clip_h != 0) {
+        printf("FAILED: gfx_set_clip did not clamp x/y beyond dimensions correctly\n");
+        return false;
+    }
+
+    // Test 5: x+w and y+h exceed width/height
+    gfx_set_clip(&ctx, WIDTH - 10, HEIGHT - 10, 50, 50);
+    if (ctx.clip_x != WIDTH - 10 || ctx.clip_y != HEIGHT - 10 || ctx.clip_w != 10 || ctx.clip_h != 10) {
+        printf("FAILED: gfx_set_clip did not clamp width/height extending beyond dimensions correctly\n");
+        return false;
+    }
+
+    // Test 6: Negative x/y with large enough width/height
+    gfx_set_clip(&ctx, -5, -5, 10, 10);
+    if (ctx.clip_x != 0 || ctx.clip_y != 0 || ctx.clip_w != 5 || ctx.clip_h != 5) {
+        printf("FAILED: gfx_set_clip did not clamp negative x/y correctly\n");
+        return false;
+    }
+
+    printf("PASSED test_set_clip_edge_cases\n");
+    return true;
+}
+
 int main() {
     bool success = true;
 
     if (!test_clipping_bounds()) success = false;
+    if (!test_set_clip_edge_cases()) success = false;
     if (!test_draw_pixel_clipping()) success = false;
     if (!test_draw_line_clipping()) success = false;
     if (!test_draw_polygon_clipping()) success = false;
