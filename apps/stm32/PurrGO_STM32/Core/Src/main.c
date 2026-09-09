@@ -33,6 +33,7 @@
 #include <purrgo/app_fsm.h>
 #include <purrgo/app_ui.h>
 #include <purrgo/gfx_renderer.h>
+#include <purrgo/gfx_text.h>
 #include <purrgo/system_time.h>
 #include <purrgo/sun.h>
 #include "purrgo_logger.h"
@@ -525,16 +526,21 @@ int main(void)
   first_fix_obtained = false;
   last_sun_update_ms = 0U;
 
-  /* Minimal TFT Display Test */
-  purrgo_logger_write("ST7789 TFT Display Test Begin\r\n");
+  purrgo_logger_write("ST7789 Splash Screen\r\n");
   ST7789_Init();
-  ST7789_FillScreen(ST7789_COLOR_BLACK);
-  ST7789_FillRect(50, 50, 100, 100, ST7789_COLOR_RED);
-  ST7789_DrawPixel(10, 10, ST7789_COLOR_WHITE);
-  ST7789_DrawPixel(10, 11, ST7789_COLOR_WHITE);
-  ST7789_DrawPixel(11, 10, ST7789_COLOR_WHITE);
-  ST7789_DrawPixel(11, 11, ST7789_COLOR_WHITE);
-  purrgo_logger_write("ST7789 TFT Display Test End\r\n");
+
+  /* Splash: Purr... */
+  gfx_set_color(&global_gfx_ctx, COLOR_WHITE, COLOR_BLACK);
+  gfx_clear(&global_gfx_ctx);
+  gfx_draw_string(&global_gfx_ctx, DISPLAY_WIDTH / 2 - 20, DISPLAY_HEIGHT / 2, "Purr...");
+  display_refresh();
+  HAL_Delay(300);
+
+  /* Splash: GO! */
+  gfx_clear(&global_gfx_ctx);
+  gfx_draw_string(&global_gfx_ctx, DISPLAY_WIDTH / 2 - 10, DISPLAY_HEIGHT / 2, "GO!");
+  display_refresh();
+  HAL_Delay(300);
 
   /* USER CODE END 2 */
 
