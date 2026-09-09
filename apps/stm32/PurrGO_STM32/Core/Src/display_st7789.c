@@ -22,7 +22,9 @@
 static void ST7789_WriteCommand(uint8_t cmd) {
     HAL_GPIO_WritePin(TFT_DC_GPIO_Port, TFT_DC_Pin, GPIO_PIN_RESET);
     HAL_GPIO_WritePin(TFT_CS_GPIO_Port, TFT_CS_Pin, GPIO_PIN_RESET);
-    HAL_SPI_Transmit(&hspi1, &cmd, 1, HAL_MAX_DELAY);
+    if (HAL_SPI_Transmit(&hspi1, &cmd, 1, HAL_MAX_DELAY) != HAL_OK) {
+        Error_Handler();
+    }
     HAL_GPIO_WritePin(TFT_CS_GPIO_Port, TFT_CS_Pin, GPIO_PIN_SET);
 }
 
@@ -30,7 +32,9 @@ static void ST7789_WriteCommand(uint8_t cmd) {
 static void ST7789_WriteData(uint8_t data) {
     HAL_GPIO_WritePin(TFT_DC_GPIO_Port, TFT_DC_Pin, GPIO_PIN_SET);
     HAL_GPIO_WritePin(TFT_CS_GPIO_Port, TFT_CS_Pin, GPIO_PIN_RESET);
-    HAL_SPI_Transmit(&hspi1, &data, 1, HAL_MAX_DELAY);
+    if (HAL_SPI_Transmit(&hspi1, &data, 1, HAL_MAX_DELAY) != HAL_OK) {
+        Error_Handler();
+    }
     HAL_GPIO_WritePin(TFT_CS_GPIO_Port, TFT_CS_Pin, GPIO_PIN_SET);
 }
 
@@ -38,7 +42,9 @@ static void ST7789_WriteData(uint8_t data) {
 static void ST7789_WriteDataBlock(uint8_t *data, uint16_t size) {
     HAL_GPIO_WritePin(TFT_DC_GPIO_Port, TFT_DC_Pin, GPIO_PIN_SET);
     HAL_GPIO_WritePin(TFT_CS_GPIO_Port, TFT_CS_Pin, GPIO_PIN_RESET);
-    HAL_SPI_Transmit(&hspi1, data, size, HAL_MAX_DELAY);
+    if (HAL_SPI_Transmit(&hspi1, data, size, HAL_MAX_DELAY) != HAL_OK) {
+        Error_Handler();
+    }
     HAL_GPIO_WritePin(TFT_CS_GPIO_Port, TFT_CS_Pin, GPIO_PIN_SET);
 }
 
@@ -62,7 +68,9 @@ void ST7789_Init(void) {
     ST7789_WriteData(0x55); /* 16 bits/pixel */
 
     /* Memory Access Control */
-    /* Note: Using standard defaults, orientation and offsets are unverified */
+    /* Note: Using generic ST7789 default controller values.
+     * MADCTL orientation, RGB color order, and any X/Y offsets
+     * are unverified for the specific GMT024-08-SPI8P panel. */
     ST7789_WriteCommand(ST7789_MADCTL);
     ST7789_WriteData(0x00);
 
@@ -79,19 +87,23 @@ void ST7789_Init(void) {
 }
 
 void ST7789_SetWindow(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1) {
+    uint8_t data[4];
+
     /* Set column address */
     ST7789_WriteCommand(ST7789_CASET);
-    ST7789_WriteData(x0 >> 8);
-    ST7789_WriteData(x0 & 0xFF);
-    ST7789_WriteData(x1 >> 8);
-    ST7789_WriteData(x1 & 0xFF);
+    data[0] = x0 >> 8;
+    data[1] = x0 & 0xFF;
+    data[2] = x1 >> 8;
+    data[3] = x1 & 0xFF;
+    ST7789_WriteDataBlock(data, 4);
 
     /* Set row address */
     ST7789_WriteCommand(ST7789_RASET);
-    ST7789_WriteData(y0 >> 8);
-    ST7789_WriteData(y0 & 0xFF);
-    ST7789_WriteData(y1 >> 8);
-    ST7789_WriteData(y1 & 0xFF);
+    data[0] = y0 >> 8;
+    data[1] = y0 & 0xFF;
+    data[2] = y1 >> 8;
+    data[3] = y1 & 0xFF;
+    ST7789_WriteDataBlock(data, 4);
 
     /* Write to RAM */
     ST7789_WriteCommand(ST7789_RAMWR);
@@ -143,7 +155,9 @@ void ST7789_FillRect(uint16_t x, uint16_t y, uint16_t width, uint16_t height, ui
 
     while (pixels_to_write > 0) {
         uint16_t chunk_pixels = (pixels_to_write > FILL_BUF_SIZE) ? FILL_BUF_SIZE : pixels_to_write;
-        HAL_SPI_Transmit(&hspi1, buf, chunk_pixels * 2, HAL_MAX_DELAY);
+        if (HAL_SPI_Transmit(&hspi1, buf, chunk_pixels * 2, HAL_MAX_DELAY) != HAL_OK) {
+            Error_Handler();
+        }
         pixels_to_write -= chunk_pixels;
     }
 
