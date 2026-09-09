@@ -10,6 +10,7 @@
 #include "map_projection.h"
 #include "purrgo/purrgo_poi_icons.h"
 #include "purrgo/gfx_icon.h"
+#include <string.h>
 
 /*
  * Радиусы POI.
@@ -158,8 +159,7 @@ bool map_idx_parse_node(
                 db_fs != NULL) {
                 char name[64];
                 if (map_db_read_name(db_fs, v2, true, name, sizeof(name))) {
-                    int len = 0;
-                    while (name[len]) len++;
+                    int len = strlen(name);
                     
                     int16_t text_w = len * 6; // Ширина: 5px символ + 1px промежуток
                     int16_t text_h = 8;       // Высота: 8px
@@ -241,10 +241,7 @@ if (style == PURRGO_STYLE_NONE) {
                     int16_t sx, sy;
                     project_to_screen(center_x, center_y, cam, vp, &sx, &sy);
 
-                    int len = 0;
-                    while (name[len]) {
-                        len++;
-                    }
+                    int len = strlen(name);
 
                     int16_t text_w = len * 6;
                     int16_t text_h = 8;
