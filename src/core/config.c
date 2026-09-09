@@ -413,7 +413,7 @@ bool purrgo_config_save(void)
         sizeof(buf),
 
         "TZ_MIN=%d\n"
-        "MAP_DIR=%s\n"
+        "MAP_DIR=%.*s\n"
         "LAST_LAT_1E7=%d\n"
         "LAST_LON_1E7=%d\n"
         "POI_MODE=%d\n"
@@ -423,6 +423,7 @@ bool purrgo_config_save(void)
 
         (int)app_config.tz_offset_minutes,
 
+        (int)(sizeof(app_config.map_dir) - 1),
         app_config.map_dir,
 
         (int)app_config.last_lat_1e7,
