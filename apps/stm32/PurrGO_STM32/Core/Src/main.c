@@ -211,18 +211,16 @@ int main(void)
    * -------------------------------------------------------------------------
    */
   purrgo_gnss_mock_init();
+  purrgo_logger_write("GNSS MOCK OK\r\n");
 
   /*
    * -------------------------------------------------------------------------
    * Display framebuffer.
    * -------------------------------------------------------------------------
-   *
-   * Сейчас display_stm32 является заглушкой аппаратного доступа:
-   * display_init() создаёт/очищает framebuffer, а display_refresh()
-   * только выдаёт диагностическое сообщение.
    */
   display_init();
-
+  purrgo_logger_write("ST7789 display init...\r\n");
+  ST7789_Init();
   purrgo_logger_write("Display OK\r\n");
 
   /*
@@ -233,7 +231,6 @@ int main(void)
    * Драйвер пока является заглушкой.
    */
   purrgo_stm32_buttons_init();
-
   purrgo_logger_write("Buttons OK\r\n");
 
   /*
@@ -242,7 +239,6 @@ int main(void)
    * -------------------------------------------------------------------------
    */
   purrgo_app_init();
-
   purrgo_logger_write("App FSM OK\r\n");
 
   /*
@@ -271,15 +267,11 @@ int main(void)
        * аргументах/нулевых указателях согласно его API.
        */
       purrgo_logger_write("GFX INIT ERROR\r\n");
-
       Error_Handler();
   }
-
   purrgo_logger_write("GFX OK\r\n");
 
-  purrgo_logger_write("ST7789 Splash Screen\r\n");
-  ST7789_Init();
-
+  purrgo_logger_write("Splash Screen\r\n");
   /* Splash: Purr... */
   gfx_set_color(&global_gfx_ctx, COLOR_WHITE, COLOR_BLACK);
   gfx_clear(&global_gfx_ctx);
@@ -315,7 +307,9 @@ int main(void)
     if (current_time_ms - last_mock_update_ms >= GNSS_UPDATE_PERIOD_MS) {
         last_mock_update_ms = current_time_ms;
         purrgo_gnss_mock_update();
-    }
+        // мигаем светодиодом
+	      HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+	  }
 
     /*
      * -----------------------------------------------------------------------
@@ -365,11 +359,8 @@ int main(void)
      * -----------------------------------------------------------------------
      * 4. Перерисовка UI.
      * -----------------------------------------------------------------------
-     *
      * UI перерисовывается только при наличии dirty-флага.
-     *
      * Проверяем как общий UI-флаг, так и флаг карты.
-     * Это соответствует циклу PC-эмулятора.
      */
     if (
         purrgo_app_ui_is_dirty() ||
@@ -387,16 +378,13 @@ int main(void)
        */
       purrgo_app_ui_clear_dirty();
     }
-
     /*
      * Небольшая задержка разгружает CPU.
-     *
      * Она не определяет периоды GNSS/FSM/button processing:
      * эти периоды контролируются через system_time_ms().
      */
     HAL_Delay(1);
-	
-  }
+	  }
   /* USER CODE END 3 */
 }
 
