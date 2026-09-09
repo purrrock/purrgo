@@ -11,7 +11,7 @@
 #include <purrgo/gnss_adapter.h>
 
 #ifdef USE_MOCK_GNSS
-#include "pc_gnss_mock.h"
+#include <purrgo/pc_gnss_mock.h>
 #else
 #include "purrgo/gnss_adapter.h"
 #include "serial_hal.h"

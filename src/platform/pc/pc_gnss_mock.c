@@ -1,4 +1,4 @@
-#include "pc_gnss_mock.h"
+#include <purrgo/pc_gnss_mock.h>
 #include <stdio.h>
 #include <string.h>
 
