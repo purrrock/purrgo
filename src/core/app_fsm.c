@@ -1,5 +1,6 @@
 #include "purrgo/app_fsm.h"
 #include "purrgo/config.h"
+#include "purrgo/system_time.h"
 #include "purrgo/gnss.h"
 #include "purrgo/gnss_adapter.h"
 #include "purrgo/sun.h"
@@ -37,7 +38,7 @@ void purrgo_app_init(void) {
     purrgo_gnss_parser_init(&gnss_parser);
     first_fix_obtained = false;
     last_sun_update_ms = 0;
-    last_gnss_update_ms = 0;
+    last_gnss_update_ms = purrgo_system_time_ms();
     logger_start_failures = 0;
     /*
      * First try to load the persistent configuration.
@@ -220,7 +221,6 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
     }
 
 
-#include "purrgo/system_time.h"
 // === БЛОК ТРЕК-ЛОГГЕРА ===
     if (current_fix->valid) {
         track_logger_state_t logger_state = purrgo_logger_get_state();

@@ -37,6 +37,7 @@
 #include <purrgo/system_time.h>
 #include <purrgo/sun.h>
 #include "purrgo/gnss_io.h"
+#include "purrgo/gnss_mock.h"
 #include "purrgo_logger.h"
 #include "buttons.h"
 #include "display_stm32.h"
@@ -206,6 +207,13 @@ int main(void)
 
   /*
    * -------------------------------------------------------------------------
+   * GNSS MOCK Initialization.
+   * -------------------------------------------------------------------------
+   */
+  purrgo_gnss_mock_init();
+
+  /*
+   * -------------------------------------------------------------------------
    * Display framebuffer.
    * -------------------------------------------------------------------------
    *
@@ -302,6 +310,12 @@ int main(void)
     /* USER CODE BEGIN 3 */
 	
 	uint32_t current_time_ms = purrgo_system_time_ms();
+
+    static uint32_t last_mock_update_ms = 0;
+    if (current_time_ms - last_mock_update_ms >= GNSS_UPDATE_PERIOD_MS) {
+        last_mock_update_ms = current_time_ms;
+        purrgo_gnss_mock_update();
+    }
 
     /*
      * -----------------------------------------------------------------------
