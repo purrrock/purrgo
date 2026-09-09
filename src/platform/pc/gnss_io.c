@@ -25,7 +25,7 @@ bool purrgo_gnss_read_byte(uint8_t *byte)
 
 #else
 
-#include "purrgo/gnss_mock.h"
+extern bool pc_gnss_mock_read_byte(uint8_t *byte);
 
 /*
  * При использовании MOCK GNSS байтового потока,
@@ -33,7 +33,7 @@ bool purrgo_gnss_read_byte(uint8_t *byte)
  */
 bool purrgo_gnss_read_byte(uint8_t *byte)
 {
-    return purrgo_gnss_mock_read_byte(byte);
+    return pc_gnss_mock_read_byte(byte);
 }
 
 #endif /* USE_MOCK_GNSS */

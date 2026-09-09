@@ -11,7 +11,7 @@
 #include <purrgo/gnss_adapter.h>
 
 #ifdef USE_MOCK_GNSS
-#include <purrgo/gnss_mock.h>
+#include "pc_gnss_mock.h"
 #else
 #include "purrgo/gnss_adapter.h"
 #include "serial_hal.h"
@@ -101,7 +101,7 @@ static bool emulator_sys_init(int argc, char* argv[]) {
     purrgo_gnss_parser_init(&gnss_parser);
 
 #ifdef USE_MOCK_GNSS
-    purrgo_gnss_mock_init();
+    pc_gnss_mock_init();
 #else
     if (argc > 1) {
         if (!serial_hal_open(argv[1], 9600)) {
@@ -176,7 +176,7 @@ static void emulator_run_loop(void) {
             last_gnss_time = current_time;
 
 #ifdef USE_MOCK_GNSS
-            purrgo_gnss_mock_update();
+            pc_gnss_mock_update();
 #endif
 
             purrgo_app_update(&gnss_solution);
