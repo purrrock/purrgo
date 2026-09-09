@@ -59,7 +59,6 @@ enable_testing()
 macro(add_purrgo_test test_name test_source)
     add_executable(${test_name} ${test_source})
     target_link_libraries(${test_name} PRIVATE purrgo_core purrgo_platform_pc)
-    target_link_options(${test_name} PRIVATE "-Wl,--allow-multiple-definition")
     add_test(NAME ${test_name} COMMAND ${test_name})
 endmacro()
 
