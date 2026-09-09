@@ -47,6 +47,20 @@ static bool test_null_pointers() {
 
     gfx_draw_string(&ctx, 10, 10, NULL);
 
+    // Test nulls in gfx_draw_string_halo
+    gfx_draw_string_halo(NULL, 10, 10, "Hello");
+    gfx_draw_string_halo(&ctx, 10, 10, NULL);
+
+    // Test nulls in gfx_draw_char
+    gfx_draw_char(NULL, 10, 10, 'A');
+
+    // Test with missing draw_pixel callback
+    gfx_context_t no_draw_ctx;
+    gfx_init(&no_draw_ctx, WIDTH, HEIGHT, framebuffer, NULL, read_pixel);
+    gfx_draw_string(&no_draw_ctx, 10, 10, "Hello");
+    gfx_draw_string_halo(&no_draw_ctx, 10, 10, "Hello");
+    gfx_draw_char(&no_draw_ctx, 10, 10, 'A');
+
     printf("PASSED test_null_pointers\n");
     return true;
 }
@@ -114,6 +128,21 @@ static bool test_string_halo() {
 
     // Halo draws quite a few pixels (3x3 brush per font pixel), plus text.
     // Just ensuring we drew > 0 pixels and didn't crash.
+
+    // Test newline in halo
+    reset_test_state(&ctx);
+    gfx_draw_string_halo(&ctx, 10, 10, "Hi\nThere");
+
+    if (pixels_drawn == 0) {
+        printf("FAILED test_string_halo: No pixels drawn for newline\n");
+        return false;
+    }
+
+    // We check that it went down to the second line. 'last_pixel_y' reached at least 18 + 7 = 25
+    if (last_pixel_y < 18 || last_pixel_y > 35) {
+         printf("FAILED test_string_halo: last_pixel_y %d is out of expected bounds for newline\n", last_pixel_y);
+         return false;
+    }
 
     printf("PASSED test_string_halo\n");
     return true;
