@@ -122,11 +122,37 @@ static void test_gnss_adapter_empty_fields(void) {
     assert(sol.pdop_100 == 0);
     assert(sol.hdop_100 == 0);
     assert(sol.vdop_100 == 0);
+
+    // Test RMC valid but with missing coordinates (scale == 0)
+    const char *rmc_missing_coords = "$GPRMC,123519,A,,,,,,,230394,003.1,W*5F\n";
+    memset(&sol, 0, sizeof(sol));
+    purrgo_gnss_process_nmea(rmc_missing_coords, &sol);
+    assert(sol.valid == true);
+    assert(sol.lat_1e7 == 0);
+    assert(sol.lon_1e7 == 0);
+}
+
+static void test_gnss_adapter_unhandled_sentences(void) {
+    purrgo_gnss_solution_t sol;
+    memset(&sol, 0, sizeof(sol));
+
+    const char *gsv = "$GPGSV,3,1,11,03,03,111,00,04,15,270,00,06,01,010,00,13,06,292,00*74\n";
+    purrgo_gnss_process_nmea(gsv, &sol);
+
+    const char *vtg = "$GPVTG,054.7,T,034.4,M,005.5,N,010.2,K*48\n";
+    purrgo_gnss_process_nmea(vtg, &sol);
+
+    // This is an invalid sentence id
+    const char *unknown = "$GPXYZ,1,2,3*50\n";
+    purrgo_gnss_process_nmea(unknown, &sol);
+
+    assert(sol.valid == false);
 }
 
 int main(void) {
     test_gnss_adapter_nmea();
     test_partial_gnss_sentences();
     test_gnss_adapter_empty_fields();
+    test_gnss_adapter_unhandled_sentences();
     return 0;
 }
