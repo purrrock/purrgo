@@ -43,6 +43,7 @@
 #include "purrgo/gnss_mock.h"
 #include "buttons.h"
 #include "display_stm32.h"
+#include "display_st7789.h"
 
 
 /* USER CODE END Includes */
@@ -523,6 +524,17 @@ int main(void)
    */
   first_fix_obtained = false;
   last_sun_update_ms = 0U;
+
+  /* Minimal TFT Display Test */
+  purrgo_logger_write("ST7789 TFT Display Test Begin\r\n");
+  ST7789_Init();
+  ST7789_FillScreen(ST7789_COLOR_BLACK);
+  ST7789_FillRect(50, 50, 100, 100, ST7789_COLOR_RED);
+  ST7789_DrawPixel(10, 10, ST7789_COLOR_WHITE);
+  ST7789_DrawPixel(10, 11, ST7789_COLOR_WHITE);
+  ST7789_DrawPixel(11, 10, ST7789_COLOR_WHITE);
+  ST7789_DrawPixel(11, 11, ST7789_COLOR_WHITE);
+  purrgo_logger_write("ST7789 TFT Display Test End\r\n");
 
   /* USER CODE END 2 */
 
