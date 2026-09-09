@@ -37,8 +37,21 @@ void purrgo_app_init(void);
 // Обработчик нажатий кнопок (вызывается из ISR или потока опроса GPIO)
 void purrgo_app_handle_button(purrgo_btn_t button);
 
+#include "purrgo/sun.h"
+
 // Основной цикл обновления логики
+// (Оставлен для обратной совместимости, если используется напрямую)
 void purrgo_app_update(const purrgo_gnss_solution_t* current_fix);
+
+// Передача байта из потока GNSS в парсер конечного автомата
+void purrgo_app_feed_gnss_byte(uint8_t byte);
+
+// Главный тик приложения (обновление состояния и солнце)
+void purrgo_app_tick(uint32_t current_time_ms);
+
+// Геттеры для состояния GNSS и Солнца
+const purrgo_gnss_solution_t* purrgo_app_get_gnss_solution(void);
+const purrgo_sun_info_t* purrgo_app_get_sun_info(void);
 
 // Уведомление конечного автомата о том, что маркер был успешно отрисован
 void purrgo_app_notify_marker_rendered(const purrgo_gnss_solution_t* rendered_fix);

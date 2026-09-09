@@ -71,11 +71,6 @@ static gfx_color_t emulator_read_pixel_cb(
 static SDL_Window* window = NULL;
 static SDL_Renderer* renderer = NULL;
 static SDL_Texture* fb_texture = NULL;
-static purrgo_gnss_solution_t gnss_solution;
-static purrgo_sun_info_t sun_info;
-static bool first_fix_obtained = false;
-static uint32_t last_sun_update = 0;
-static purrgo_gnss_parser_t gnss_parser;
 
 static bool emulator_sys_init(int argc, char* argv[]) {
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) < 0) {
@@ -96,9 +91,6 @@ static bool emulator_sys_init(int argc, char* argv[]) {
     }
 
     display_init();
-
-    memset(&gnss_solution, 0, sizeof(gnss_solution));
-    purrgo_gnss_parser_init(&gnss_parser);
 
 #ifdef USE_MOCK_GNSS
     pc_gnss_mock_init();
@@ -133,11 +125,6 @@ static bool emulator_sys_init(int argc, char* argv[]) {
         emulator_read_pixel_cb
     );
 
-    memset(&sun_info, 0, sizeof(sun_info));
-
-    first_fix_obtained = false;
-    last_sun_update = 0;
-
     return true;
 }
 
@@ -150,73 +137,29 @@ static void emulator_run_loop(void) {
     while (!quit) {
         uint32_t current_time = SDL_GetTicks();
 
-        /*
-         * 1. Обновление GNSS.
-         */
         {
             uint8_t rx_byte;
             int bytes_processed = 0;
-
             while (
                 purrgo_gnss_read_byte(&rx_byte) &&
                 bytes_processed < 256
             ) {
-                if (purrgo_gnss_parser_feed(&gnss_parser, rx_byte)) {
-                    purrgo_gnss_process_nmea(
-                        gnss_parser.line,
-                        &gnss_solution
-                    );
-                    purrgo_gnss_parser_init(&gnss_parser);
-                }
+                purrgo_app_feed_gnss_byte(rx_byte);
                 bytes_processed++;
             }
         }
 
         if (current_time - last_gnss_time >= 1000) {
             last_gnss_time = current_time;
-
 #ifdef USE_MOCK_GNSS
             pc_gnss_mock_update();
 #endif
-
-            purrgo_app_update(&gnss_solution);
-
-            if (gnss_solution.valid) {
-                if (!first_fix_obtained) {
-                    first_fix_obtained = true;
-
-                    purrgo_sun_calc(
-                        gnss_solution.lat_1e7,
-                        gnss_solution.lon_1e7,
-                        gnss_solution.year % 100,
-                        gnss_solution.month,
-                        gnss_solution.day,
-                        gnss_solution.hours,
-                        gnss_solution.minutes,
-                        app_config.tz_offset_minutes,
-                        &sun_info
-                    );
-
-                    last_sun_update = current_time;
-                } else if (
-                    current_time - last_sun_update >= 60000
-                ) {
-                    purrgo_sun_calc(
-                        gnss_solution.lat_1e7,
-                        gnss_solution.lon_1e7,
-                        gnss_solution.year % 100,
-                        gnss_solution.month,
-                        gnss_solution.day,
-                        gnss_solution.hours,
-                        gnss_solution.minutes,
-                        app_config.tz_offset_minutes,
-                        &sun_info
-                    );
-
-                    last_sun_update = current_time;
-                }
-            }
         }
+
+        /*
+         * 1. Обновление FSM/GNSS.
+         */
+        purrgo_app_tick(current_time);
 
         /*
          * 2. Отрисовка framebuffer с частотой 3 FPS.
@@ -230,7 +173,7 @@ static void emulator_run_loop(void) {
             if (purrgo_app_ui_is_dirty() || purrgo_app_map_is_dirty()) {
                 int last_calls = dbg_map_render_calls;
 
-                purrgo_app_ui_render(&global_gfx_ctx, &gnss_solution, first_fix_obtained ? &sun_info : NULL);
+                purrgo_app_ui_render(&global_gfx_ctx, purrgo_app_get_gnss_solution(), purrgo_app_get_sun_info());
                 purrgo_app_ui_clear_dirty();
 
                 if (last_calls != dbg_map_render_calls) {

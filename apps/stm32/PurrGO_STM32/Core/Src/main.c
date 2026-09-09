@@ -36,12 +36,9 @@
 #include <purrgo/gfx_text.h>
 #include <purrgo/system_time.h>
 #include <purrgo/sun.h>
-#include "purrgo_logger.h"
-#include <purrgo/gnss_io.h>
-#include "purrgo/gnss.h"
-#include "purrgo/gnss_adapter.h"
-#include "purrgo/gnss_types.h"
+#include "purrgo/gnss_io.h"
 #include "purrgo/gnss_mock.h"
+#include "purrgo_logger.h"
 #include "buttons.h"
 #include "display_stm32.h"
 #include "display_st7789.h"
@@ -96,45 +93,10 @@
 /* USER CODE BEGIN PV */
 
 /*
- * Последнее разобранное GNSS-решение.
- *
- * Эта структура передаётся в FSM и UI.
- */
-static purrgo_gnss_solution_t gnss_solution = {0};
-
-/*
- * Контекст общего графического ядра PurrGO.
- *
- * Сам GFX-код не знает ничего о STM32.
  * Доступ к framebuffer осуществляется через callbacks,
  * определённые ниже.
  */
 static gfx_context_t global_gfx_ctx;
-
-/*
- * Инкрементальный NMEA parser.
- *
- * Он получает входные байты и формирует законченные NMEA-предложения.
- */
-static purrgo_gnss_parser_t gnss_parser;
-
-/*
- * Результат расчёта восхода/заката.
- */
-static purrgo_sun_info_t sun_info = {0};
-
-/*
- * Флаг наличия первого корректного GNSS fix.
- *
- * Он используется для определения того, можно ли передавать
- * sun_info в UI.
- */
-static bool first_fix_obtained = false;
-
-/*
- * Время последнего расчёта восхода/заката.
- */
-static uint32_t last_sun_update_ms = 0U;
 
 /* USER CODE END PV */
 
@@ -142,137 +104,12 @@ static uint32_t last_sun_update_ms = 0U;
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
 
-static void process_gnss_input(void);
-static void update_sun_info(uint32_t current_time_ms);
 static void process_buttons(void);
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
-
-/**
- * @brief Обработка входного потока GNSS.
- *
- * purrgo_gnss_read_byte() является платформенным API.
- * На текущем этапе STM32 его реализация подключена к GNSS MOCK,
- * поэтому эта функция работает без физического GNSS-модуля.
- *
- * Байты передаются в инкрементальный NMEA parser.
- * Как только parser получает полное предложение, оно передаётся
- * в purrgo_gnss_process_nmea().
- */
-static void process_gnss_input(void)
-{
-    uint8_t rx_byte;
-    uint16_t bytes_processed = 0U;
-
-    while (
-        bytes_processed < GNSS_MAX_BYTES_PER_LOOP &&
-        purrgo_gnss_read_byte(&rx_byte)
-    )
-    {
-        /*
-         * parser_feed() возвращает true после получения
-         * законченного NMEA-предложения.
-         */
-        if (purrgo_gnss_parser_feed(&gnss_parser, rx_byte))
-        {
-            /*
-             * Разбираем готовое NMEA-предложение и обновляем
-             * глобальное GNSS-решение.
-             */
-            purrgo_gnss_process_nmea(
-                gnss_parser.line,
-                &gnss_solution
-            );
-
-            /*
-             * После обработки законченного предложения
-             * начинаем собирать следующее.
-             */
-            purrgo_gnss_parser_init(&gnss_parser);
-        }
-
-        bytes_processed++;
-    }
-}
-
-/**
- * @brief Периодическое обновление расчёта восхода/заката.
- *
- * Расчёт выполняется:
- *   1. сразу после получения первого корректного GNSS fix;
- *   2. затем не чаще одного раза в минуту.
- *
- * Сам purrgo_sun_calc() не возвращает статус — функция имеет
- * тип void. Результат записывается непосредственно в sun_info.
- *
- * @param current_time_ms Текущее системное время в миллисекундах.
- */
-static void update_sun_info(uint32_t current_time_ms)
-{
-    /*
-     * Без корректного GNSS fix координаты и время для расчёта
-     * восхода/заката отсутствуют.
-     */
-    if (!gnss_solution.valid)
-    {
-        return;
-    }
-
-    /*
-     * Первый расчёт выполняем сразу после получения fix.
-     */
-    if (!first_fix_obtained)
-    {
-        first_fix_obtained = true;
-
-        purrgo_sun_calc(
-            gnss_solution.lat_1e7,
-            gnss_solution.lon_1e7,
-            gnss_solution.year % 100U,
-            gnss_solution.month,
-            gnss_solution.day,
-            gnss_solution.hours,
-            gnss_solution.minutes,
-            app_config.tz_offset_minutes,
-            &sun_info
-        );
-
-        last_sun_update_ms = current_time_ms;
-
-        return;
-    }
-
-    /*
-     * После первого расчёта обновляем его раз в минуту.
-     *
-     * unsigned arithmetic здесь используется намеренно:
-     * разность двух uint32_t корректно работает при обычном
-     * переполнении системного счётчика HAL_GetTick().
-     */
-    if (
-        (uint32_t)(current_time_ms - last_sun_update_ms)
-        >= SUN_UPDATE_PERIOD_MS
-    )
-    {
-        purrgo_sun_calc(
-            gnss_solution.lat_1e7,
-            gnss_solution.lon_1e7,
-            gnss_solution.year % 100U,
-            gnss_solution.month,
-            gnss_solution.day,
-            gnss_solution.hours,
-            gnss_solution.minutes,
-            app_config.tz_offset_minutes,
-            &sun_info
-        );
-
-        last_sun_update_ms = current_time_ms;
-    }
-}
 
 /**
  * @brief Опрос аппаратных кнопок.
@@ -367,21 +204,13 @@ int main(void)
   purrgo_logger_write("PurrGO STM32 boot\r\n");
   purrgo_logger_write("UART2 logger OK\r\n");
 
+
   /*
    * -------------------------------------------------------------------------
-   * GNSS parser + MOCK.
+   * GNSS MOCK Initialization.
    * -------------------------------------------------------------------------
-   *
-   * На текущем этапе gnss_io.c направляет purrgo_gnss_read_byte()
-   * в GNSS MOCK. Физический USART1 пока не используется для GNSS.
    */
-  purrgo_gnss_parser_init(&gnss_parser);
-
-  purrgo_logger_write("GNSS MOCK parser test\r\n");
-
   purrgo_gnss_mock_init();
-
-  purrgo_logger_write("GNSS OK\r\n");
 
   /*
    * -------------------------------------------------------------------------
@@ -448,12 +277,6 @@ int main(void)
 
   purrgo_logger_write("GFX OK\r\n");
 
-  /*
-   * Начальные значения состояния расчёта Солнца.
-   */
-  first_fix_obtained = false;
-  last_sun_update_ms = 0U;
-
   purrgo_logger_write("ST7789 Splash Screen\r\n");
   ST7789_Init();
 
@@ -475,11 +298,6 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   
-   /*
-   * Время последнего периодического обновления GNSS/FSM.
-   */
-  uint32_t last_gnss_update_ms = purrgo_system_time_ms();
-
   /*
    * Время последнего опроса кнопок.
    */
@@ -493,55 +311,37 @@ int main(void)
 	
 	uint32_t current_time_ms = purrgo_system_time_ms();
 
+    static uint32_t last_mock_update_ms = 0;
+    if (current_time_ms - last_mock_update_ms >= GNSS_UPDATE_PERIOD_MS) {
+        last_mock_update_ms = current_time_ms;
+        purrgo_gnss_mock_update();
+    }
+
     /*
      * -----------------------------------------------------------------------
      * 1. Обработка входных GNSS-данных.
      * -----------------------------------------------------------------------
-     *
-     * Читаем доступные байты на каждом проходе цикла.
-     * Для MOCK это позволяет разобрать сгенерированное NMEA-предложение.
      */
-    process_gnss_input();
+    uint8_t rx_byte;
+    uint16_t bytes_processed = 0U;
+    while (
+        bytes_processed < GNSS_MAX_BYTES_PER_LOOP &&
+        purrgo_gnss_read_byte(&rx_byte)
+    )
+    {
+        purrgo_app_feed_gnss_byte(rx_byte);
+        bytes_processed++;
+    }
 
     /*
      * -----------------------------------------------------------------------
-     * 2. Периодическое обновление GNSS/FSM.
+     * 2. Обновление FSM/GNSS.
      * -----------------------------------------------------------------------
      *
-     * Раз в секунду:
-     *   - MOCK генерирует следующую GNSS-строку;
-     *   - строка сразу разбирается;
-     *   - обновляется FSM;
-     *   - при наличии fix обновляется расчёт Солнца.
+     * Передаём текущее время в FSM, где происходит
+     * расчёт Солнца и обновление состояния.
      */
-    if (
-        (uint32_t)(current_time_ms - last_gnss_update_ms)
-        >= GNSS_UPDATE_PERIOD_MS
-    )
-    {
-      last_gnss_update_ms = current_time_ms;
-
-      /*
-       * На текущем этапе STM32 использует MOCK GNSS.
-       */
-      purrgo_gnss_mock_update();
-
-      /*
-       * После генерации очередного mock-предложения сразу
-       * обрабатываем доступные байты.
-       */
-      process_gnss_input();
-
-      /*
-       * Передаём актуальное GNSS-решение конечному автомату.
-       */
-      purrgo_app_update(&gnss_solution);
-
-      /*
-       * Обновляем данные восхода/заката.
-       */
-      update_sun_info(current_time_ms);
-    }
+    purrgo_app_tick(current_time_ms);
 
     /*
      * -----------------------------------------------------------------------
@@ -576,17 +376,10 @@ int main(void)
         purrgo_app_map_is_dirty()
     )
     {
-      /*
-       * Если корректного GNSS fix ещё не было, передаём NULL
-       * вместо sun_info.
-       */
-      const purrgo_sun_info_t *sun =
-          first_fix_obtained ? &sun_info : NULL;
-
       purrgo_app_ui_render(
           &global_gfx_ctx,
-          &gnss_solution,
-          sun
+          purrgo_app_get_gnss_solution(),
+          purrgo_app_get_sun_info()
       );
 
       /*
