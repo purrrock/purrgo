@@ -1,4 +1,3 @@
-#include "purrgo/gnss_types.h"
 #include "purrgo/fs_hal.h"
 #include "fatfs.h"
 #include <stdlib.h>
@@ -129,9 +128,3 @@ void purrgo_fs_closedir(purrgo_dir_t* dir) {
     f_closedir(&dir->dir);
     free(dir);
 }
-
-/*
- * Dummy to resolve the extern purrgo_gnss_solution_t gnss_solution
- * requested by fatfs.c, without modifying unrelated files like main.c.
- */
-purrgo_gnss_solution_t gnss_solution = {0};

@@ -5,7 +5,6 @@
 #include <string.h>
 
 
-#define purrgo_fs_get_config_path() "PURRGO.CFG"
 #define CONFIG_MAX_SIZE 512
 
 
