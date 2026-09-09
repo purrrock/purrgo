@@ -146,83 +146,11 @@ static void process_gnss_input(void);
 static void update_sun_info(uint32_t current_time_ms);
 static void process_buttons(void);
 
-/*
- * Callback GFX -> STM32 framebuffer.
- */
-static void stm32_draw_pixel_cb(
-    void *fb,
-    int16_t x,
-    int16_t y,
-    gfx_color_t color
-);
-
-/*
- * Callback чтения пикселя из STM32 framebuffer.
- */
-static gfx_color_t stm32_read_pixel_cb(
-    void *fb,
-    int16_t x,
-    int16_t y
-);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-
-/**
- * @brief Callback от общего графического ядра к STM32 framebuffer.
- *
- * GFX не знает, где физически находится framebuffer и как в нём
- * кодируются пиксели. Поэтому для записи пикселя он вызывает
- * эту платформенную функцию.
- *
- * @param fb    Непрозрачный указатель на framebuffer.
- *              В текущем драйвере framebuffer принадлежит display_stm32.
- * @param x     Координата X.
- * @param y     Координата Y.
- * @param color Цвет пикселя.
- */
-static void stm32_draw_pixel_cb(
-    void *fb,
-    int16_t x,
-    int16_t y,
-    gfx_color_t color
-)
-{
-    /*
-     * Текущий display_stm32 предоставляет собственный framebuffer
-     * и API display_set_pixel(). Поэтому fb здесь непосредственно
-     * не используется.
-     */
-    (void)fb;
-
-    display_set_pixel(x, y, color);
-}
-
-/**
- * @brief Callback чтения пикселя из STM32 framebuffer.
- *
- * @param fb Непрозрачный указатель на framebuffer.
- * @param x  Координата X.
- * @param y  Координата Y.
- *
- * @return Цвет пикселя.
- */
-static gfx_color_t stm32_read_pixel_cb(
-    void *fb,
-    int16_t x,
-    int16_t y
-)
-{
-    /*
-     * Аналогично callback записи, framebuffer принадлежит
-     * display_stm32 и доступен через display_get_pixel().
-     */
-    (void)fb;
-
-    return display_get_pixel(x, y);
-}
 
 /**
  * @brief Обработка входного потока GNSS.
