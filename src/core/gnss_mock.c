@@ -47,9 +47,11 @@ static void generate_nmea(void) {
 
     char course_str[16] = "";
     if (state.course_valid) {
-        snprintf(course_str, sizeof(course_str), "%d.%02d",
-                 (int)(state.course_deg_100 / 100),
-                 (int)(state.course_deg_100 % 100));
+        snprintf(
+            course_str, sizeof(course_str), "%d.%02d",
+            (int)(state.course_deg_100 / 100),
+            (int)(state.course_deg_100 % 100)
+        );
     }
 
     char rmc[128];
