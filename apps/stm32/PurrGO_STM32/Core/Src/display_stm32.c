@@ -71,20 +71,7 @@ const uint8_t* display_get_framebuffer(void) {
  */
 static int partial_refresh_count = 0;
 
-void display_refresh(void) {
-    purrgo_logger_write("FULL REFRESH\r\n");
-    partial_refresh_count = 0;
-    display_refresh_region(0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT);
-}
-
-void display_refresh_region(int16_t x, int16_t y, int16_t w, int16_t h) {
-    if (partial_refresh_count >= MAX_PARTIAL_REFRESHES) {
-        display_refresh();
-        return;
-    }
-    purrgo_logger_write("PARTIAL REFRESH x=%d y=%d w=%d h=%d\r\n", x, y, w, h);
-    partial_refresh_count++;
-
+static void do_refresh_region(int16_t x, int16_t y, int16_t w, int16_t h) {
     if (x < 0) { w += x; x = 0; }
     if (y < 0) { h += y; y = 0; }
     if (x + w > DISPLAY_WIDTH) { w = DISPLAY_WIDTH - x; }
@@ -129,4 +116,20 @@ void display_refresh_region(int16_t x, int16_t y, int16_t w, int16_t h) {
     if (buf_idx > 0) {
         ST7789_WriteDataBlock(buf, buf_idx * 2);
     }
+}
+
+void display_refresh(void) {
+    purrgo_logger_write("FULL REFRESH\r\n");
+    partial_refresh_count = 0;
+    do_refresh_region(0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT);
+}
+
+void display_refresh_region(int16_t x, int16_t y, int16_t w, int16_t h) {
+    if (partial_refresh_count >= MAX_PARTIAL_REFRESHES) {
+        display_refresh();
+        return;
+    }
+    purrgo_logger_write("PARTIAL REFRESH x=%d y=%d w=%d h=%d\r\n", x, y, w, h);
+    partial_refresh_count++;
+    do_refresh_region(x, y, w, h);
 }

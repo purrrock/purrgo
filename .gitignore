@@ -67,4 +67,3 @@ apps/emulator/purrgo_emulator
 .ninja_log
 .settings
 .clangd
-build_tests/
