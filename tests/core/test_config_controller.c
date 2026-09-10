@@ -28,56 +28,56 @@ void test_config_controller_menu_navigation(void) {
     assert(config_app_get_config_cursor() == 0);
 
     // Test DOWN
-    purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_BTN_DOWN, &next_state);
+    purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_ACTION_DOWN, &next_state);
     assert(config_app_get_config_cursor() == 1); // CONFIG_CURSOR_DIR
 
-    purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_BTN_DOWN, &next_state);
+    purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_ACTION_DOWN, &next_state);
     assert(config_app_get_config_cursor() == 2); // CONFIG_CURSOR_POI
 
-    purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_BTN_DOWN, &next_state);
+    purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_ACTION_DOWN, &next_state);
     assert(config_app_get_config_cursor() == 3); // CONFIG_CURSOR_POI_LABELS
 
-    purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_BTN_DOWN, &next_state);
+    purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_ACTION_DOWN, &next_state);
     assert(config_app_get_config_cursor() == 4); // CONFIG_CURSOR_LOG_MODE
 
-    purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_BTN_DOWN, &next_state);
+    purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_ACTION_DOWN, &next_state);
     assert(config_app_get_config_cursor() == 5); // CONFIG_CURSOR_TRACK_DISPLAY
 
-    purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_BTN_DOWN, &next_state);
+    purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_ACTION_DOWN, &next_state);
     assert(config_app_get_config_cursor() == 6); // CONFIG_CURSOR_MAP_LAYERS
 
     // Test bounds (Should not go past 6)
-    purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_BTN_DOWN, &next_state);
+    purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_ACTION_DOWN, &next_state);
     assert(config_app_get_config_cursor() == 6);
 
     // Test UP
-    purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_BTN_UP, &next_state);
+    purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_ACTION_UP, &next_state);
     assert(config_app_get_config_cursor() == 5);
 
     // Now disable POI (it will collapse the menu)
     // First let's go to POI setting
-    purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_BTN_UP, &next_state);
-    purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_BTN_UP, &next_state);
-    purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_BTN_UP, &next_state);
+    purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_ACTION_UP, &next_state);
+    purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_ACTION_UP, &next_state);
+    purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_ACTION_UP, &next_state);
     assert(config_app_get_config_cursor() == 2);
 
     // Toggle POI mode to PURRGO_POI_MODE_NO using LEFT
     // Icons (2) -> Circles (1) -> No (0)
-    purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_BTN_LEFT, &next_state);
-    purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_BTN_LEFT, &next_state);
+    purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_ACTION_LEFT, &next_state);
+    purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_ACTION_LEFT, &next_state);
     assert(config_app_get_draft_poi_mode() == PURRGO_POI_MODE_NO);
 
     // Now test bounds with POI=NO (Last cursor should be 4, as POI_LABELS is skipped)
-    purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_BTN_DOWN, &next_state);
+    purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_ACTION_DOWN, &next_state);
     assert(config_app_get_config_cursor() == 3); // CONFIG_CURSOR_LOG_MODE is now at index 3
 
-    purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_BTN_DOWN, &next_state);
+    purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_ACTION_DOWN, &next_state);
     assert(config_app_get_config_cursor() == 4); // CONFIG_CURSOR_TRACK_DISPLAY is now at index 4
 
-    purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_BTN_DOWN, &next_state);
+    purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_ACTION_DOWN, &next_state);
     assert(config_app_get_config_cursor() == 5); // CONFIG_CURSOR_MAP_LAYERS is now at index 5
 
-    purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_BTN_DOWN, &next_state);
+    purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_ACTION_DOWN, &next_state);
     assert(config_app_get_config_cursor() == 5); // Bounds check
 }
 
@@ -92,14 +92,14 @@ void test_config_controller_tz_editing(void) {
     assert(config_app_get_config_cursor() == 0);
 
     // Increment timezone (Right)
-    purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_BTN_RIGHT, &next_state);
+    purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_ACTION_RIGHT, &next_state);
     assert(config_app_get_draft_tz_offset() == 15);
 
     // Decrement timezone (Left)
-    purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_BTN_LEFT, &next_state);
+    purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_ACTION_LEFT, &next_state);
     assert(config_app_get_draft_tz_offset() == 0);
 
-    purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_BTN_LEFT, &next_state);
+    purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_ACTION_LEFT, &next_state);
     assert(config_app_get_draft_tz_offset() == -15);
 }
 
@@ -115,24 +115,24 @@ void test_map_layers_navigation_and_toggles(void) {
     assert(config_app_get_draft_layer_landuse() == true);
 
     // Test UP/DOWN and Wrap Around
-    purrgo_config_controller_handle_button(APP_STATE_MENU_MAP_LAYERS, PURRGO_BTN_UP, &next_state);
+    purrgo_config_controller_handle_button(APP_STATE_MENU_MAP_LAYERS, PURRGO_ACTION_UP, &next_state);
     assert(config_app_get_map_layers_cursor() == 8); // Should wrap to Track
 
-    purrgo_config_controller_handle_button(APP_STATE_MENU_MAP_LAYERS, PURRGO_BTN_DOWN, &next_state);
+    purrgo_config_controller_handle_button(APP_STATE_MENU_MAP_LAYERS, PURRGO_ACTION_DOWN, &next_state);
     assert(config_app_get_map_layers_cursor() == 0); // Wrap back to Landuse
 
-    purrgo_config_controller_handle_button(APP_STATE_MENU_MAP_LAYERS, PURRGO_BTN_DOWN, &next_state);
+    purrgo_config_controller_handle_button(APP_STATE_MENU_MAP_LAYERS, PURRGO_ACTION_DOWN, &next_state);
     assert(config_app_get_map_layers_cursor() == 1); // Water
 
     // Toggle state
     bool initial_water = config_app_get_draft_layer_water();
-    purrgo_config_controller_handle_button(APP_STATE_MENU_MAP_LAYERS, PURRGO_BTN_LEFT, &next_state);
+    purrgo_config_controller_handle_button(APP_STATE_MENU_MAP_LAYERS, PURRGO_ACTION_LEFT, &next_state);
     assert(config_app_get_draft_layer_water() == !initial_water);
-    purrgo_config_controller_handle_button(APP_STATE_MENU_MAP_LAYERS, PURRGO_BTN_RIGHT, &next_state);
+    purrgo_config_controller_handle_button(APP_STATE_MENU_MAP_LAYERS, PURRGO_ACTION_RIGHT, &next_state);
     assert(config_app_get_draft_layer_water() == initial_water);
 
     // Test Cancel (MENU)
-    purrgo_config_controller_handle_button(APP_STATE_MENU_MAP_LAYERS, PURRGO_BTN_MENU, &next_state);
+    purrgo_config_controller_handle_button(APP_STATE_MENU_MAP_LAYERS, PURRGO_ACTION_MENU, &next_state);
     assert(next_state == APP_STATE_MENU_CONFIG);
 
     // Re-enter and Test OK (Save)
@@ -142,10 +142,10 @@ void test_map_layers_navigation_and_toggles(void) {
     // Toggle cursor 0
     assert(config_app_get_map_layers_cursor() == 0);
     bool initial_landuse = config_app_get_draft_layer_landuse();
-    purrgo_config_controller_handle_button(APP_STATE_MENU_MAP_LAYERS, PURRGO_BTN_RIGHT, &next_state);
+    purrgo_config_controller_handle_button(APP_STATE_MENU_MAP_LAYERS, PURRGO_ACTION_RIGHT, &next_state);
     assert(config_app_get_draft_layer_landuse() == !initial_landuse);
 
-    purrgo_config_controller_handle_button(APP_STATE_MENU_MAP_LAYERS, PURRGO_BTN_OK, &next_state);
+    purrgo_config_controller_handle_button(APP_STATE_MENU_MAP_LAYERS, PURRGO_ACTION_OK, &next_state);
     assert(next_state == APP_STATE_MENU_CONFIG);
     assert(app_config.layer_landuse == !initial_landuse); // Should be saved
 }
