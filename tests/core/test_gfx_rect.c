@@ -4,28 +4,25 @@
 #include <string.h>
 #include <stdbool.h>
 
-#define WIDTH 64
-#define HEIGHT 64
-
-static uint8_t framebuffer[WIDTH * HEIGHT];
-static int pixels_drawn = 0;
-
-static void draw_pixel(void *user_data, int16_t x, int16_t y, gfx_color_t color) {
-    if (x >= 0 && x < WIDTH && y >= 0 && y < HEIGHT) {
-        if (framebuffer[y * WIDTH + x] == 0 && color != 0) {
-            pixels_drawn++;
-        }
 #define WIDTH 100
 #define HEIGHT 100
 
 static uint8_t framebuffer[WIDTH * HEIGHT];
+static int pixels_drawn = 0;
 static int draw_calls = 0;
 
 static void mock_draw_pixel(void *user_data, int16_t x, int16_t y, gfx_color_t color) {
     draw_calls++;
     if (x >= 0 && x < WIDTH && y >= 0 && y < HEIGHT) {
+        if (framebuffer[y * WIDTH + x] == 0 && color != 0) {
+            pixels_drawn++;
+        }
         framebuffer[y * WIDTH + x] = (uint8_t)color;
     }
+}
+
+static void draw_pixel(void *user_data, int16_t x, int16_t y, gfx_color_t color) {
+    mock_draw_pixel(user_data, x, y, color);
 }
 
 static gfx_color_t read_pixel(void *user_data, int16_t x, int16_t y) {
@@ -38,21 +35,30 @@ static gfx_color_t read_pixel(void *user_data, int16_t x, int16_t y) {
 static void reset_framebuffer(gfx_context_t *ctx) {
     memset(framebuffer, 0, sizeof(framebuffer));
     pixels_drawn = 0;
-    ctx->color_bg = 0;
-    ctx->color_fg = 1;
-static void reset_test_state(gfx_context_t *ctx) {
-    memset(framebuffer, 0, sizeof(framebuffer));
-    ctx->color_bg = 2; // Use a specific color for fill
-    ctx->color_fg = 1; // Use a specific color for draw
     draw_calls = 0;
-    gfx_set_clip(ctx, 10, 10, 80, 80); // Set a clipping region
+    if (ctx) {
+        ctx->color_bg = 0;
+        ctx->color_fg = 1;
+        gfx_reset_clip(ctx);
+    }
+}
+
+static void reset_test_state(gfx_context_t *ctx) {
+    reset_framebuffer(ctx);
+    if (ctx) {
+        ctx->color_bg = 2; // Use a specific color for fill
+        ctx->color_fg = 1; // Use a specific color for draw
+        gfx_set_clip(ctx, 10, 10, 80, 80); // Set a clipping region
+    }
 }
 
 static bool check_pixel(int16_t x, int16_t y, uint8_t expected) {
-    if (x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT) {
+    if (x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT) return false;
+    if (framebuffer[y * WIDTH + x] != expected) {
+        printf("FAILED: Pixel at (%d, %d) is %d, expected %d\n", x, y, framebuffer[y * WIDTH + x], expected);
         return false;
     }
-    return framebuffer[y * WIDTH + x] == expected;
+    return true;
 }
 
 static bool test_draw_rect_basic() {
@@ -61,25 +67,29 @@ static bool test_draw_rect_basic() {
     gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, draw_pixel, read_pixel);
     reset_framebuffer(&ctx);
 
-    gfx_draw_rect(&ctx, 10, 10, 20, 15);
+    gfx_draw_rect(&ctx, 10, 10, 10, 5);
 
     bool passed = true;
 
     // Check corners
     if (!check_pixel(10, 10, 1)) passed = false;
-    if (!check_pixel(29, 10, 1)) passed = false;
-    if (!check_pixel(10, 24, 1)) passed = false;
-    if (!check_pixel(29, 24, 1)) passed = false;
+    if (!check_pixel(19, 10, 1)) passed = false;
+    if (!check_pixel(10, 14, 1)) passed = false;
+    if (!check_pixel(19, 14, 1)) passed = false;
 
-    // Check inside (should be empty)
-    if (!check_pixel(15, 15, 0)) passed = false;
+    // Check edges
+    if (!check_pixel(15, 10, 1)) passed = false;
+    if (!check_pixel(10, 12, 1)) passed = false;
 
-    // Check outside (should be empty)
+    // Check inside
+    if (!check_pixel(15, 12, 0)) passed = false;
+
+    // Check outside
     if (!check_pixel(9, 10, 0)) passed = false;
 
-    // Width 20, Height 15 => 20*2 + 13*2 = 40 + 26 = 66 pixels.
-    if (pixels_drawn != 66) {
-        printf("FAILED test_draw_rect_basic: Expected 66 pixels, got %d\n", pixels_drawn);
+    // 10 + 10 + 3 + 3 = 26
+    if (pixels_drawn != 26) {
+        printf("FAILED test_draw_rect_basic: Expected 26 pixels, got %d\n", pixels_drawn);
         passed = false;
     }
 
@@ -207,11 +217,6 @@ static bool test_fill_rect_invalid() {
         printf("PASSED test_fill_rect_invalid\n");
     }
     return passed;
-    if (framebuffer[y * WIDTH + x] != expected) {
-        printf("FAILED: Pixel at (%d, %d) is %d, expected %d\n", x, y, framebuffer[y * WIDTH + x], expected);
-        return false;
-    }
-    return true;
 }
 
 static bool test_gfx_fill_rect_null_context() {
