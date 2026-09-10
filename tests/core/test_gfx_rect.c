@@ -10,6 +10,7 @@
 static uint8_t framebuffer[WIDTH * HEIGHT];
 static int pixels_drawn = 0;
 static int draw_calls = 0;
+static int pixels_drawn = 0;
 
 static void mock_draw_pixel(void *user_data, int16_t x, int16_t y, gfx_color_t color) {
     draw_calls++;
@@ -32,6 +33,13 @@ static gfx_color_t read_pixel(void *user_data, int16_t x, int16_t y) {
     return 0;
 }
 
+static void reset_test_state(gfx_context_t *ctx) {
+    memset(framebuffer, 0, sizeof(framebuffer));
+    pixels_drawn = 0;
+    draw_calls = 0;
+    ctx->color_bg = 2; // Use a specific color for fill
+    ctx->color_fg = 1; // Use a specific color for draw
+    gfx_set_clip(ctx, 10, 10, 80, 80); // Set a clipping region
 static void reset_framebuffer(gfx_context_t *ctx) {
     memset(framebuffer, 0, sizeof(framebuffer));
     pixels_drawn = 0;
@@ -58,14 +66,19 @@ static bool check_pixel(int16_t x, int16_t y, uint8_t expected) {
         printf("FAILED: Pixel at (%d, %d) is %d, expected %d\n", x, y, framebuffer[y * WIDTH + x], expected);
         return false;
     }
+    if (framebuffer[y * WIDTH + x] != expected) {
+        printf("FAILED: Pixel at (%d, %d) is %d, expected %d\n", x, y, framebuffer[y * WIDTH + x], expected);
+        return false;
+    }
     return true;
 }
 
 static bool test_draw_rect_basic() {
     printf("Running test_draw_rect_basic...\n");
     gfx_context_t ctx;
-    gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, draw_pixel, read_pixel);
-    reset_framebuffer(&ctx);
+    gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, mock_draw_pixel, read_pixel);
+    reset_test_state(&ctx);
+    gfx_set_clip(&ctx, 0, 0, WIDTH, HEIGHT); // Full clip region
 
     gfx_draw_rect(&ctx, 10, 10, 10, 5);
 
@@ -87,6 +100,13 @@ static bool test_draw_rect_basic() {
     // Check outside
     if (!check_pixel(9, 10, 0)) passed = false;
 
+    // Width 20, Height 15 => 20*2 + 13*2 = 40 + 26 = 66 pixels.
+    if (draw_calls != 66) {
+        printf("FAILED test_draw_rect_basic: Expected 66 draw calls, got %d\n", draw_calls);
+        passed = false;
+    }
+    if (pixels_drawn != 66) {
+        printf("FAILED test_draw_rect_basic: Expected 66 pixels drawn, got %d\n", pixels_drawn);
     // 10 + 10 + 3 + 3 = 26
     if (pixels_drawn != 26) {
         printf("FAILED test_draw_rect_basic: Expected 26 pixels, got %d\n", pixels_drawn);
@@ -101,31 +121,93 @@ static bool test_draw_rect_basic() {
     return passed;
 }
 
+static bool test_draw_rect_clipping() {
+    printf("Running test_draw_rect_clipping...\n");
+    gfx_context_t ctx;
+    gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, mock_draw_pixel, read_pixel);
+    reset_test_state(&ctx);
+
+    // reset_test_state sets clip to 10, 10, 80, 80 (x in [10, 89], y in [10, 89])
+
+    gfx_draw_rect(&ctx, 5, 5, 20, 20); // [5, 24] x [5, 24]
+
+    bool passed = true;
+
+    // Total pixels expected: 15 (bottom edge) + 14 (right edge) = 29 pixels.
+    if (draw_calls != 29) {
+        printf("FAILED test_draw_rect_clipping: Expected 29 draw calls, got %d\n", draw_calls);
+        passed = false;
+    }
+
+    // Inside clip
+    if (!check_pixel(15, 24, 1)) passed = false; // bottom edge
+    if (!check_pixel(24, 15, 1)) passed = false; // right edge
+
+    // Outside clip
+    if (!check_pixel(5, 5, 0)) passed = false;
+    if (!check_pixel(15, 5, 0)) passed = false; // top edge
+    if (!check_pixel(5, 15, 0)) passed = false; // left edge
+
+    if (!passed) {
+        printf("FAILED test_draw_rect_clipping\n");
+    } else {
+        printf("PASSED test_draw_rect_clipping\n");
+    }
+    return passed;
+}
+
 static bool test_draw_rect_invalid() {
     printf("Running test_draw_rect_invalid...\n");
     gfx_context_t ctx;
-    gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, draw_pixel, read_pixel);
-    reset_framebuffer(&ctx);
+    gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, mock_draw_pixel, read_pixel);
+    reset_test_state(&ctx);
 
     gfx_draw_rect(NULL, 10, 10, 20, 20);
     gfx_draw_rect(&ctx, 10, 10, 0, 20);
     gfx_draw_rect(&ctx, 10, 10, 20, -5);
 
-    bool passed = (pixels_drawn == 0);
+    bool passed = (draw_calls == 0);
 
     if (!passed) {
-        printf("FAILED test_draw_rect_invalid: Expected 0 pixels, got %d\n", pixels_drawn);
+        printf("FAILED test_draw_rect_invalid: Expected 0 draw calls, got %d\n", draw_calls);
     } else {
         printf("PASSED test_draw_rect_invalid\n");
     }
     return passed;
 }
 
+static bool test_draw_rect_out_of_bounds() {
+    printf("Running test_draw_rect_out_of_bounds...\n");
+    gfx_context_t ctx;
+    gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, mock_draw_pixel, read_pixel);
+    reset_test_state(&ctx); // clip to 10,10 -> 89,89
+
+    // Completely left
+    gfx_draw_rect(&ctx, -20, 20, 10, 10);
+    if (draw_calls != 0) return false;
+
+    // Completely right
+    gfx_draw_rect(&ctx, 95, 20, 10, 10);
+    if (draw_calls != 0) return false;
+
+    // Completely above
+    gfx_draw_rect(&ctx, 20, -10, 10, 10);
+    if (draw_calls != 0) return false;
+
+    // Completely below
+    gfx_draw_rect(&ctx, 20, 95, 10, 10);
+    if (draw_calls != 0) return false;
+
+    printf("PASSED test_draw_rect_out_of_bounds\n");
+    return true;
+}
+
 static bool test_fill_rect_basic() {
     printf("Running test_fill_rect_basic...\n");
     gfx_context_t ctx;
-    gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, draw_pixel, read_pixel);
-    reset_framebuffer(&ctx);
+    gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, mock_draw_pixel, read_pixel);
+    reset_test_state(&ctx);
+    gfx_set_clip(&ctx, 0, 0, WIDTH, HEIGHT);
 
     // Fill rect uses color_bg!
     ctx.color_bg = 2;
@@ -146,8 +228,8 @@ static bool test_fill_rect_basic() {
     if (!check_pixel(20, 10, 0)) passed = false;
     if (!check_pixel(10, 15, 0)) passed = false;
 
-    if (pixels_drawn != 50) {
-        printf("FAILED test_fill_rect_basic: Expected 50 pixels, got %d\n", pixels_drawn);
+    if (draw_calls != 50) {
+        printf("FAILED test_fill_rect_basic: Expected 50 draw calls, got %d\n", draw_calls);
         passed = false;
     }
 
@@ -162,8 +244,8 @@ static bool test_fill_rect_basic() {
 static bool test_fill_rect_clipping() {
     printf("Running test_fill_rect_clipping...\n");
     gfx_context_t ctx;
-    gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, draw_pixel, read_pixel);
-    reset_framebuffer(&ctx);
+    gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, mock_draw_pixel, read_pixel);
+    reset_test_state(&ctx);
     ctx.color_bg = 3;
 
     gfx_set_clip(&ctx, 5, 5, 10, 10); // Clip region: x [5, 14], y [5, 14]
@@ -183,8 +265,8 @@ static bool test_fill_rect_clipping() {
     if (!check_pixel(14, 15, 0)) passed = false;
 
     // Expected drawn pixels: 10 * 10 = 100
-    if (pixels_drawn != 100) {
-        printf("FAILED test_fill_rect_clipping: Expected 100 pixels, got %d\n", pixels_drawn);
+    if (draw_calls != 100) {
+        printf("FAILED test_fill_rect_clipping: Expected 100 draw calls, got %d\n", draw_calls);
         passed = false;
     }
 
@@ -199,8 +281,8 @@ static bool test_fill_rect_clipping() {
 static bool test_fill_rect_invalid() {
     printf("Running test_fill_rect_invalid...\n");
     gfx_context_t ctx;
-    gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, draw_pixel, read_pixel);
-    reset_framebuffer(&ctx);
+    gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, mock_draw_pixel, read_pixel);
+    reset_test_state(&ctx);
 
     gfx_fill_rect(NULL, 10, 10, 20, 20);
     gfx_fill_rect(&ctx, 10, 10, 0, 20);
@@ -209,10 +291,10 @@ static bool test_fill_rect_invalid() {
     ctx.draw_pixel = NULL;
     gfx_fill_rect(&ctx, 10, 10, 20, 20);
 
-    bool passed = (pixels_drawn == 0);
+    bool passed = (draw_calls == 0);
 
     if (!passed) {
-        printf("FAILED test_fill_rect_invalid: Expected 0 pixels, got %d\n", pixels_drawn);
+        printf("FAILED test_fill_rect_invalid: Expected 0 draw calls, got %d\n", draw_calls);
     } else {
         printf("PASSED test_fill_rect_invalid\n");
     }
@@ -356,6 +438,7 @@ static bool test_gfx_draw_rect_bounds() {
     gfx_context_t ctx;
     gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, mock_draw_pixel, read_pixel);
     reset_test_state(&ctx);
+    gfx_set_clip(&ctx, 0, 0, WIDTH, HEIGHT);
 
     gfx_draw_rect(&ctx, 20, 20, 10, 10);
 
@@ -384,7 +467,9 @@ int main() {
     bool success = true;
 
     if (!test_draw_rect_basic()) success = false;
+    if (!test_draw_rect_clipping()) success = false;
     if (!test_draw_rect_invalid()) success = false;
+    if (!test_draw_rect_out_of_bounds()) success = false;
     if (!test_fill_rect_basic()) success = false;
     if (!test_fill_rect_clipping()) success = false;
     if (!test_fill_rect_invalid()) success = false;
