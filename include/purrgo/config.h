@@ -81,6 +81,19 @@ typedef struct {
      */
     bool track_display_enabled;
 
+    /*
+     * Видимость слоев карты.
+     */
+    bool layer_landuse;
+    bool layer_water;
+    bool layer_landuse_labels;
+    bool layer_water_labels;
+    bool layer_roads;
+    bool layer_poi;
+    bool layer_poi_labels;
+    bool layer_route;
+    bool layer_track;
+
 } purrgo_config_t;
 
 

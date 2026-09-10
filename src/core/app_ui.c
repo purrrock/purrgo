@@ -4,6 +4,7 @@
 #include "ui/ui_trip.h"
 #include "ui/ui_config.h"
 #include "ui/ui_dir_select.h"
+#include "ui/ui_map_layers.h"
 
 int dbg_map_render_calls = 0;
 
@@ -30,6 +31,9 @@ void purrgo_app_ui_render(
             break;
         case APP_STATE_MENU_DIR_SELECT:
             ui_render_menu_dir_select(gfx);
+            break;
+        case APP_STATE_MENU_MAP_LAYERS:
+            ui_render_menu_map_layers(gfx);
             break;
         default:
             break;
