@@ -38,7 +38,7 @@
 #include <purrgo/sun.h>
 #include "purrgo/gnss_io.h"
 #include "purrgo/gnss_mock.h"
-#include "purrgo_logger.h"
+#include "purrgo/logger.h"
 #include "buttons.h"
 #include "display_stm32.h"
 #include "display_st7789.h"
