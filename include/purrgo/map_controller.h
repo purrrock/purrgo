@@ -8,7 +8,7 @@
 
 void purrgo_map_controller_init(void);
 void purrgo_map_controller_update(const purrgo_gnss_solution_t* current_fix);
-bool purrgo_map_controller_handle_button(purrgo_btn_t button);
+bool purrgo_map_controller_handle_button(purrgo_action_t button);
 
 // map_dirty = full map redraw required
 // track_dirty = only the newest track segment needs to be rendered
