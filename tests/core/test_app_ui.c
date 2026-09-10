@@ -16,6 +16,7 @@ int call_ui_trip_render_grid = 0;
 int call_ui_trip_render_values = 0;
 int call_ui_render_map = 0;
 int call_ui_render_menu_dir_select = 0;
+int call_ui_render_menu_map_layers = 0;
 
 void reset_call_counters() {
     call_ui_render_menu_config = 0;
@@ -23,6 +24,7 @@ void reset_call_counters() {
     call_ui_trip_render_values = 0;
     call_ui_render_map = 0;
     call_ui_render_menu_dir_select = 0;
+    call_ui_render_menu_map_layers = 0;
 }
 
 void ui_render_menu_config(gfx_context_t* gfx) {
@@ -43,6 +45,10 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
 
 void ui_render_menu_dir_select(gfx_context_t* gfx) {
     call_ui_render_menu_dir_select++;
+}
+
+void ui_render_menu_map_layers(gfx_context_t* gfx) {
+    call_ui_render_menu_map_layers++;
 }
 
 void test_app_ui_render_map() {
@@ -125,6 +131,26 @@ void test_app_ui_render_menu_dir_select() {
     assert(call_ui_trip_render_grid == 0);
     assert(call_ui_trip_render_values == 0);
     assert(call_ui_render_menu_config == 0);
+    assert(call_ui_render_menu_map_layers == 0);
+}
+
+void test_app_ui_render_menu_map_layers() {
+    gfx_context_t gfx = {0};
+    purrgo_gnss_solution_t gnss = {0};
+    purrgo_sun_info_t sun = {0};
+
+    reset_call_counters();
+
+    // Test that APP_STATE_MENU_MAP_LAYERS calls ui_render_menu_map_layers
+    mock_state = APP_STATE_MENU_MAP_LAYERS;
+    purrgo_app_ui_render(&gfx, &gnss, &sun);
+
+    assert(call_ui_render_menu_map_layers == 1);
+    assert(call_ui_render_menu_dir_select == 0);
+    assert(call_ui_render_map == 0);
+    assert(call_ui_trip_render_grid == 0);
+    assert(call_ui_trip_render_values == 0);
+    assert(call_ui_render_menu_config == 0);
 }
 
 void test_app_ui_render_unknown_state() {
@@ -152,6 +178,7 @@ int main() {
     test_app_ui_render_trip_computer(); // This transitions from MAP to TRIP_COMPUTER, testing the `prev_state != APP_STATE_TRIP_COMPUTER` logic
     test_app_ui_render_menu_config();
     test_app_ui_render_menu_dir_select();
+    test_app_ui_render_menu_map_layers();
     test_app_ui_render_unknown_state();
 
     printf("App UI tests passed!\n");

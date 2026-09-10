@@ -105,6 +105,19 @@ void purrgo_config_init(void)
     app_config.track_display_enabled = true;
 
     /*
+     * Видимость слоев карты.
+     */
+    app_config.layer_landuse = true;
+    app_config.layer_water = true;
+    app_config.layer_landuse_labels = true;
+    app_config.layer_water_labels = true;
+    app_config.layer_roads = true;
+    app_config.layer_poi = true;
+    app_config.layer_poi_labels = true;
+    app_config.layer_route = true;
+    app_config.layer_track = true;
+
+    /*
      * Базовый путь к картам для PC-эмулятора.
      */
     snprintf(
@@ -354,6 +367,37 @@ bool purrgo_config_load(void)
                     app_config.track_display_enabled = true;
                 }
             }
+
+            /*
+             * Видимость слоев карты.
+             */
+            else if (strcmp(key, "LAYER_LANDUSE") == 0) {
+                app_config.layer_landuse = (parse_int32(val) != 0);
+            }
+            else if (strcmp(key, "LAYER_WATER") == 0) {
+                app_config.layer_water = (parse_int32(val) != 0);
+            }
+            else if (strcmp(key, "LAYER_LANDUSE_LABELS") == 0) {
+                app_config.layer_landuse_labels = (parse_int32(val) != 0);
+            }
+            else if (strcmp(key, "LAYER_WATER_LABELS") == 0) {
+                app_config.layer_water_labels = (parse_int32(val) != 0);
+            }
+            else if (strcmp(key, "LAYER_ROADS") == 0) {
+                app_config.layer_roads = (parse_int32(val) != 0);
+            }
+            else if (strcmp(key, "LAYER_POI") == 0) {
+                app_config.layer_poi = (parse_int32(val) != 0);
+            }
+            else if (strcmp(key, "LAYER_POI_LABELS") == 0) {
+                app_config.layer_poi_labels = (parse_int32(val) != 0);
+            }
+            else if (strcmp(key, "LAYER_ROUTE") == 0) {
+                app_config.layer_route = (parse_int32(val) != 0);
+            }
+            else if (strcmp(key, "LAYER_TRACK") == 0) {
+                app_config.layer_track = (parse_int32(val) != 0);
+            }
         }
 
         if (is_eof) {
@@ -418,7 +462,16 @@ bool purrgo_config_save(void)
         "POI_MODE=%d\n"
         "POI_LABELS=%d\n"
         "LOG_MODE=%d\n"
-        "TRACK_DISPLAY_ENABLED=%d\n",
+        "TRACK_DISPLAY_ENABLED=%d\n"
+        "LAYER_LANDUSE=%d\n"
+        "LAYER_WATER=%d\n"
+        "LAYER_LANDUSE_LABELS=%d\n"
+        "LAYER_WATER_LABELS=%d\n"
+        "LAYER_ROADS=%d\n"
+        "LAYER_POI=%d\n"
+        "LAYER_POI_LABELS=%d\n"
+        "LAYER_ROUTE=%d\n"
+        "LAYER_TRACK=%d\n",
 
         (int)app_config.tz_offset_minutes,
 
@@ -435,7 +488,17 @@ bool purrgo_config_save(void)
 
         (int)app_config.log_mode,
 
-        app_config.track_display_enabled ? 1 : 0
+        app_config.track_display_enabled ? 1 : 0,
+
+        app_config.layer_landuse ? 1 : 0,
+        app_config.layer_water ? 1 : 0,
+        app_config.layer_landuse_labels ? 1 : 0,
+        app_config.layer_water_labels ? 1 : 0,
+        app_config.layer_roads ? 1 : 0,
+        app_config.layer_poi ? 1 : 0,
+        app_config.layer_poi_labels ? 1 : 0,
+        app_config.layer_route ? 1 : 0,
+        app_config.layer_track ? 1 : 0
     );
 
     /*
