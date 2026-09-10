@@ -80,14 +80,64 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
     bool handled = false;
     purrgo_state_t next_state = current_state;
 
+    // Map new keys to legacy actions/buttons based on state
+    purrgo_btn_t mapped_button = button;
+
+    if (current_state == APP_STATE_MAP) {
+        switch (button) {
+            case PURRGO_BTN_KEY1_SHORT: mapped_button = PURRGO_BTN_LEFT; break;
+            case PURRGO_BTN_KEY2_SHORT: mapped_button = PURRGO_BTN_RIGHT; break;
+            case PURRGO_BTN_KEY3_SHORT: mapped_button = PURRGO_BTN_UP; break;
+            case PURRGO_BTN_KEY4_SHORT: mapped_button = PURRGO_BTN_DOWN; break;
+            case PURRGO_BTN_KEY1_LONG:  mapped_button = PURRGO_BTN_MINUS; break;
+            case PURRGO_BTN_KEY2_LONG:  mapped_button = PURRGO_BTN_PLUS; break;
+            case PURRGO_BTN_KEY3_LONG:  mapped_button = PURRGO_BTN_OK; break;
+            case PURRGO_BTN_KEY4_LONG:  mapped_button = PURRGO_BTN_MENU; break;
+            default: break;
+        }
+    } else if (current_state == APP_STATE_TRIP_COMPUTER) {
+        switch (button) {
+            case PURRGO_BTN_KEY4_SHORT:
+            case PURRGO_BTN_KEY4_LONG:
+                mapped_button = PURRGO_BTN_MENU;
+                break;
+            default: break;
+        }
+    } else if (current_state == APP_STATE_MENU_CONFIG || current_state == APP_STATE_MENU_DIR_SELECT || current_state == APP_STATE_MENU_MAP_LAYERS) {
+        switch (button) {
+            case PURRGO_BTN_KEY1_SHORT:
+            case PURRGO_BTN_KEY1_LONG:
+                mapped_button = PURRGO_BTN_UP;
+                break;
+            case PURRGO_BTN_KEY2_SHORT:
+            case PURRGO_BTN_KEY2_LONG:
+                mapped_button = PURRGO_BTN_DOWN;
+                break;
+            case PURRGO_BTN_KEY3_SHORT:
+            case PURRGO_BTN_KEY3_LONG:
+                mapped_button = PURRGO_BTN_OK;
+                break;
+            case PURRGO_BTN_KEY4_SHORT:
+            case PURRGO_BTN_KEY4_LONG:
+                mapped_button = PURRGO_BTN_MENU;
+                break;
+            default: break;
+        }
+    }
+
+    // Ignore unhandled new keys to avoid side effects (they shouldn't do anything if not explicitly mapped above or handled inherently)
+    if (button >= PURRGO_BTN_KEY1_SHORT && button <= PURRGO_BTN_KEY4_LONG && mapped_button == button) {
+        return;
+    }
+
     // 1 & 2. Dispatch to module based on state
     if (current_state == APP_STATE_MENU_CONFIG || current_state == APP_STATE_MENU_DIR_SELECT || current_state == APP_STATE_MENU_MAP_LAYERS) {
-        handled = purrgo_config_controller_handle_button(current_state, button, &next_state);
+        handled = purrgo_config_controller_handle_button(current_state, mapped_button, &next_state);
         current_state = next_state;
     } else if (current_state == APP_STATE_MAP) {
-        handled = purrgo_map_controller_handle_button(button);
+        handled = purrgo_map_controller_handle_button(mapped_button);
     } else if (current_state == APP_STATE_TRIP_COMPUTER) {
-        handled = purrgo_trip_computer_handle_button(button);
+        handled = purrgo_trip_computer_handle_button(mapped_button);
     }
 
     if (handled) {
@@ -95,7 +145,7 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
     }
 
     // 3. Циклическое переключение основных экранов (Garmin eTrex Page Loop)
-    if (button == PURRGO_BTN_MENU) {
+    if (mapped_button == PURRGO_BTN_MENU) {
         switch (current_state) {
             case APP_STATE_MAP:
                 current_state = APP_STATE_TRIP_COMPUTER;
@@ -290,6 +340,7 @@ extern int16_t config_app_get_draft_tz_offset(void);
 extern int config_app_get_config_cursor(void);
 extern int config_app_get_dir_list(purrgo_fs_dirent_t** list_out);
 extern int config_app_get_dir_cursor(void);
+extern int config_app_get_map_layers_cursor(void);
 
 int16_t purrgo_app_get_draft_tz_offset(void) {
     return config_app_get_draft_tz_offset();
@@ -302,6 +353,9 @@ int purrgo_app_get_dir_list(purrgo_fs_dirent_t** list_out) {
 }
 int purrgo_app_get_dir_cursor(void) {
     return config_app_get_dir_cursor();
+}
+int purrgo_app_get_map_layers_cursor(void) {
+    return config_app_get_map_layers_cursor();
 }
 
 // From map_controller
