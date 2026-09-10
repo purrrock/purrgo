@@ -8,17 +8,22 @@ typedef struct {
     SDL_Rect rect;
     const char* label;
     purrgo_btn_t btn_val;
+    bool is_active;
 } ButtonState;
 
 ButtonState buttons[] = {
-    {{50, DISPLAY_HEIGHT * PIXEL_SCALE + 5, 40, 30}, "UP", PURRGO_BTN_UP},
-    {{50, DISPLAY_HEIGHT * PIXEL_SCALE + 65, 40, 30}, "DOWN", PURRGO_BTN_DOWN},
-    {{5, DISPLAY_HEIGHT * PIXEL_SCALE + 35, 40, 30}, "LEFT", PURRGO_BTN_LEFT},
-    {{95, DISPLAY_HEIGHT * PIXEL_SCALE + 35, 40, 30}, "RIGHT", PURRGO_BTN_RIGHT},
-    {{160, DISPLAY_HEIGHT * PIXEL_SCALE + 15, 40, 30}, "PLUS", PURRGO_BTN_PLUS},
-    {{160, DISPLAY_HEIGHT * PIXEL_SCALE + 55, 40, 30}, "MINUS", PURRGO_BTN_MINUS},
-    {{210, DISPLAY_HEIGHT * PIXEL_SCALE + 15, 40, 30}, "MENU", PURRGO_BTN_MENU},
-    {{210, DISPLAY_HEIGHT * PIXEL_SCALE + 55, 40, 30}, "OK", PURRGO_BTN_OK}
+    {{50, DISPLAY_HEIGHT * PIXEL_SCALE + 5, 40, 30}, "UP", PURRGO_BTN_UP, true},
+    {{50, DISPLAY_HEIGHT * PIXEL_SCALE + 65, 40, 30}, "DOWN", PURRGO_BTN_DOWN, true},
+    {{5, DISPLAY_HEIGHT * PIXEL_SCALE + 35, 40, 30}, "LEFT", PURRGO_BTN_LEFT, true},
+    {{95, DISPLAY_HEIGHT * PIXEL_SCALE + 35, 40, 30}, "RIGHT", PURRGO_BTN_RIGHT, true},
+    {{160, DISPLAY_HEIGHT * PIXEL_SCALE + 15, 40, 30}, "PLUS", PURRGO_BTN_PLUS, true},
+    {{160, DISPLAY_HEIGHT * PIXEL_SCALE + 55, 40, 30}, "MINUS", PURRGO_BTN_MINUS, true},
+    {{210, DISPLAY_HEIGHT * PIXEL_SCALE + 15, 40, 30}, "MENU", PURRGO_BTN_MENU, true},
+    {{210, DISPLAY_HEIGHT * PIXEL_SCALE + 55, 40, 30}, "OK", PURRGO_BTN_OK, true},
+    {{10, DISPLAY_HEIGHT * PIXEL_SCALE + 105, 50, 30}, "KEY1", PURRGO_BTN_UP, false},
+    {{70, DISPLAY_HEIGHT * PIXEL_SCALE + 105, 50, 30}, "KEY2", PURRGO_BTN_UP, false},
+    {{130, DISPLAY_HEIGHT * PIXEL_SCALE + 105, 50, 30}, "KEY3", PURRGO_BTN_UP, false},
+    {{190, DISPLAY_HEIGHT * PIXEL_SCALE + 105, 50, 30}, "KEY4", PURRGO_BTN_UP, false}
 };
 
 #define NUM_BUTTONS (sizeof(buttons) / sizeof(buttons[0]))
@@ -181,7 +186,9 @@ void emu_window_process_events(bool* quit) {
                     y >= buttons[i].rect.y &&
                     y <= buttons[i].rect.y + buttons[i].rect.h
                 ) {
-                    handle_button_press(buttons[i].btn_val);
+                    if (buttons[i].is_active) {
+                        handle_button_press(buttons[i].btn_val);
+                    }
                     break;
                 }
             }
