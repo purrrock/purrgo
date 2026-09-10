@@ -1,6 +1,6 @@
 #include "display_stm32.h"
 #include "purrgo/display_hal.h"
-#include "purrgo_logger.h"
+#include "purrgo/logger.h"
 #include <stddef.h>
 #include <string.h>
 #include "display_st7789.h"

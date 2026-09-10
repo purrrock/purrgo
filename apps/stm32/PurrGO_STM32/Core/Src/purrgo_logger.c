@@ -9,7 +9,7 @@
  * в платформенной части STM32.
  */
 
-#include "purrgo_logger.h"
+#include "purrgo/logger.h"
 
 #include "usart.h"
 #include "stm32f4xx_hal.h"
