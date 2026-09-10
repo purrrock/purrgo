@@ -93,6 +93,12 @@ void test_map_layers_load_save() {
     purrgo_config_init();
     app_config.layer_landuse = false;
     app_config.layer_water = true;
+    app_config.layer_landuse_labels = false;
+    app_config.layer_water_labels = true;
+    app_config.layer_roads = false;
+    app_config.layer_poi = true;
+    app_config.layer_poi_labels = false;
+    app_config.layer_route = true;
     app_config.layer_track = false;
 
     // Save to mock file
@@ -101,6 +107,12 @@ void test_map_layers_load_save() {
     // Verify it was saved correctly (spot check)
     EXPECT_TRUE(strstr(mock_file_content, "LAYER_LANDUSE=0") != NULL);
     EXPECT_TRUE(strstr(mock_file_content, "LAYER_WATER=1") != NULL);
+    EXPECT_TRUE(strstr(mock_file_content, "LAYER_LANDUSE_LABELS=0") != NULL);
+    EXPECT_TRUE(strstr(mock_file_content, "LAYER_WATER_LABELS=1") != NULL);
+    EXPECT_TRUE(strstr(mock_file_content, "LAYER_ROADS=0") != NULL);
+    EXPECT_TRUE(strstr(mock_file_content, "LAYER_POI=1") != NULL);
+    EXPECT_TRUE(strstr(mock_file_content, "LAYER_POI_LABELS=0") != NULL);
+    EXPECT_TRUE(strstr(mock_file_content, "LAYER_ROUTE=1") != NULL);
     EXPECT_TRUE(strstr(mock_file_content, "LAYER_TRACK=0") != NULL);
 
     // Clear struct
@@ -112,6 +124,12 @@ void test_map_layers_load_save() {
     // Verify properties
     EXPECT_FALSE(app_config.layer_landuse);
     EXPECT_TRUE(app_config.layer_water);
+    EXPECT_FALSE(app_config.layer_landuse_labels);
+    EXPECT_TRUE(app_config.layer_water_labels);
+    EXPECT_FALSE(app_config.layer_roads);
+    EXPECT_TRUE(app_config.layer_poi);
+    EXPECT_FALSE(app_config.layer_poi_labels);
+    EXPECT_TRUE(app_config.layer_route);
     EXPECT_FALSE(app_config.layer_track);
 }
 

@@ -456,7 +456,7 @@ bool purrgo_config_controller_handle_button(
                      */
                     if (
                         draft_poi_mode == PURRGO_POI_MODE_NO &&
-                        config_cursor_idx > CONFIG_CURSOR_POI
+                        config_cursor_idx == CONFIG_CURSOR_POI_LABELS
                     ) {
                         config_cursor_idx = CONFIG_CURSOR_POI;
                     }
@@ -522,7 +522,7 @@ bool purrgo_config_controller_handle_button(
                      */
                     if (
                         draft_poi_mode == PURRGO_POI_MODE_NO &&
-                        config_cursor_idx > CONFIG_CURSOR_POI
+                        config_cursor_idx == CONFIG_CURSOR_POI_LABELS
                     ) {
                         config_cursor_idx = CONFIG_CURSOR_POI;
                     }
@@ -619,7 +619,7 @@ bool purrgo_config_controller_handle_button(
 
                     if (
                         draft_poi_mode == PURRGO_POI_MODE_NO &&
-                        config_cursor_idx > CONFIG_CURSOR_POI
+                        config_cursor_idx == CONFIG_CURSOR_POI_LABELS
                     ) {
                         config_cursor_idx = CONFIG_CURSOR_POI;
                     }

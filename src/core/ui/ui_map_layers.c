@@ -12,12 +12,12 @@ static void draw_layer_item(gfx_context_t* gfx, int y, int index, int cursor, bo
     }
 
     char buf[64];
-    // The prompt specified "✓ Landuse" so I will attempt to use the UTF-8 representation of the checkmark
-    // The unicode character is U+2713: E2 9C 93.
-    // If it doesn't render, we can replace it with "v". I'll use "v" for safety if it uses custom limited font. Let's look at text font in purrgo.
-    // The prompt explicitly showed `✓ Landuse`. I'll assume standard terminal checkmark semantics. Let's use "[x]" because usually these embedded systems only have ASCII.
-    // I'll use "v" as an ASCII checkmark approximation as it matches the size and shape closely.
-    snprintf(buf, sizeof(buf), "%s %s", enabled ? "v" : " ", label);
+
+    /*
+     * Используем символ 'x' как фактически поддерживаемый
+     * текущим embedded-шрифтом (вместо юникодной галочки ✓).
+     */
+    snprintf(buf, sizeof(buf), "%s %s", enabled ? "x" : " ", label);
 
     gfx_draw_string(gfx, 10, y, buf);
 }
