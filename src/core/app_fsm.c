@@ -340,6 +340,7 @@ extern int16_t config_app_get_draft_tz_offset(void);
 extern int config_app_get_config_cursor(void);
 extern int config_app_get_dir_list(purrgo_fs_dirent_t** list_out);
 extern int config_app_get_dir_cursor(void);
+extern int config_app_get_map_layers_cursor(void);
 
 int16_t purrgo_app_get_draft_tz_offset(void) {
     return config_app_get_draft_tz_offset();
@@ -352,6 +353,9 @@ int purrgo_app_get_dir_list(purrgo_fs_dirent_t** list_out) {
 }
 int purrgo_app_get_dir_cursor(void) {
     return config_app_get_dir_cursor();
+}
+int purrgo_app_get_map_layers_cursor(void) {
+    return config_app_get_map_layers_cursor();
 }
 
 // From map_controller
