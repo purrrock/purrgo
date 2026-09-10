@@ -137,7 +137,15 @@ static void process_buttons(void)
         PURRGO_BTN_PLUS,
         PURRGO_BTN_MINUS,
         PURRGO_BTN_MENU,
-        PURRGO_BTN_OK
+        PURRGO_BTN_OK,
+        PURRGO_BTN_KEY1_SHORT,
+        PURRGO_BTN_KEY2_SHORT,
+        PURRGO_BTN_KEY3_SHORT,
+        PURRGO_BTN_KEY4_SHORT,
+        PURRGO_BTN_KEY1_LONG,
+        PURRGO_BTN_KEY2_LONG,
+        PURRGO_BTN_KEY3_LONG,
+        PURRGO_BTN_KEY4_LONG
     };
 
     const size_t button_count =
