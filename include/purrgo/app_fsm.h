@@ -40,6 +40,8 @@ typedef enum {
     PURRGO_BTN_KEY4_LONG
 } purrgo_btn_t;
 
+#define PURRGO_BTN_LONG_PRESS_MS 500
+
 // Инициализация конечного автомата
 void purrgo_app_init(void);
 
@@ -78,6 +80,7 @@ int purrgo_app_get_config_cursor(void);
 #include "purrgo/fs_hal.h"
 int purrgo_app_get_dir_list(purrgo_fs_dirent_t** list_out);
 int purrgo_app_get_dir_cursor(void);
+int purrgo_app_get_map_layers_cursor(void);
 
 typedef enum {
     PURRGO_MAP_SCALE_10M,
