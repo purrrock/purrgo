@@ -406,16 +406,73 @@ void test_mapped_keys() {
     assert(purrgo_app_get_state() == APP_STATE_MENU_CONFIG);
 
     // Check MENU_CONFIG keys
-    purrgo_app_handle_button(PURRGO_BTN_KEY1_SHORT); // UP
-    purrgo_app_handle_button(PURRGO_BTN_KEY2_SHORT); // DOWN
-    purrgo_app_handle_button(PURRGO_BTN_KEY3_SHORT); // OK
-    purrgo_app_handle_button(PURRGO_BTN_KEY4_SHORT); // BACK (MENU)
 
-    // Also test long presses for menu
+    // Verify that UP and DOWN change the selected index in menu config
+    int cursor = purrgo_app_get_config_cursor();
+    purrgo_app_handle_button(PURRGO_BTN_KEY2_SHORT); // DOWN
+    assert(purrgo_app_get_config_cursor() > cursor);
+
     purrgo_app_handle_button(PURRGO_BTN_KEY1_LONG); // UP
+    assert(purrgo_app_get_config_cursor() == cursor);
+
+    // Test selecting a submenu using OK
+    // Select the map directory menu
+    while (purrgo_app_get_config_cursor() != 1) { // 1 is map dir selection
+         purrgo_app_handle_button(PURRGO_BTN_KEY2_SHORT); // DOWN
+    }
+    purrgo_app_handle_button(PURRGO_BTN_KEY3_SHORT); // OK (SELECT)
+    assert(purrgo_app_get_state() == APP_STATE_MENU_DIR_SELECT);
+
+    // Test DIR_SELECT menu keys
+    int dir_cursor = purrgo_app_get_dir_cursor();
+    purrgo_app_handle_button(PURRGO_BTN_KEY2_SHORT); // DOWN
+    if (purrgo_app_get_dir_cursor() != dir_cursor) { // In case there is no dir available, it won't move
+        assert(purrgo_app_get_dir_cursor() > dir_cursor);
+        purrgo_app_handle_button(PURRGO_BTN_KEY1_LONG); // UP
+        assert(purrgo_app_get_dir_cursor() == dir_cursor);
+    }
+
+    purrgo_app_handle_button(PURRGO_BTN_KEY4_SHORT); // BACK (MENU)
+    assert(purrgo_app_get_state() == APP_STATE_MENU_CONFIG);
+
+    // Select the map layers submenu
+    // Due to variable config cursor max sizes, get to the end
+    extern int purrgo_app_get_config_cursor(void);
+    int prev_c = -1;
+    while (purrgo_app_get_config_cursor() != prev_c) {
+         prev_c = purrgo_app_get_config_cursor();
+         purrgo_app_handle_button(PURRGO_BTN_KEY2_SHORT); // DOWN
+    }
+
+    purrgo_app_handle_button(PURRGO_BTN_KEY3_LONG); // OK (SELECT)
+    assert(purrgo_app_get_state() == APP_STATE_MENU_MAP_LAYERS);
+
+    // Test MAP_LAYERS menu keys
+    int layers_cursor = purrgo_app_get_map_layers_cursor();
     purrgo_app_handle_button(PURRGO_BTN_KEY2_LONG); // DOWN
-    purrgo_app_handle_button(PURRGO_BTN_KEY3_LONG); // OK
+    assert(purrgo_app_get_map_layers_cursor() > layers_cursor);
+
+    purrgo_app_handle_button(PURRGO_BTN_KEY1_SHORT); // UP
+    assert(purrgo_app_get_map_layers_cursor() == layers_cursor);
+
+    // Also test changing a boolean config inside MAP_LAYERS
+    // In MAP_LAYERS, layers are toggled by LEFT or RIGHT keys, but these aren't mapped via the four button interface
+    // So we can check the regular ones here or just skip that test portion for the four buttons because the assignment specifically requested mapping KEY1-KEY4 to UP/DOWN/OK/BACK for MENU.
+
     purrgo_app_handle_button(PURRGO_BTN_KEY4_LONG); // BACK (MENU)
+    assert(purrgo_app_get_state() == APP_STATE_MENU_CONFIG);
+
+    // Back out of configuration
+    purrgo_app_handle_button(PURRGO_BTN_KEY4_SHORT); // BACK (MENU)
+    assert(purrgo_app_get_state() == APP_STATE_MAP);
+
+    // Check old buttons work as they used to
+    start_lon = purrgo_app_get_map_center_lon();
+    purrgo_app_handle_button(PURRGO_BTN_LEFT);
+    assert(purrgo_app_get_map_center_lon() < start_lon);
+
+    purrgo_app_handle_button(PURRGO_BTN_RIGHT);
+    assert(purrgo_app_get_map_center_lon() == start_lon);
 }
 
 // Mock for purrgo_system_time_ms to be used in the test

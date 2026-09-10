@@ -80,6 +80,7 @@ int purrgo_app_get_config_cursor(void);
 #include "purrgo/fs_hal.h"
 int purrgo_app_get_dir_list(purrgo_fs_dirent_t** list_out);
 int purrgo_app_get_dir_cursor(void);
+int purrgo_app_get_map_layers_cursor(void);
 
 typedef enum {
     PURRGO_MAP_SCALE_10M,
