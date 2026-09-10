@@ -116,7 +116,7 @@ static int get_config_last_cursor(void)
  */
 static const char* get_maps_base_path(void)
 {
-    return "../../../tests/data/maps";
+    return purrgo_fs_get_maps_path();
 }
 
 
@@ -864,7 +864,8 @@ bool purrgo_config_controller_handle_button(
                     snprintf(
                         app_config.map_dir,
                         sizeof(app_config.map_dir),
-                        "../../../tests/data/maps/%s",
+                        "%s/%s",
+                        purrgo_fs_get_maps_path(),
                         dir_page[
                             dir_page_cursor
                         ].name
