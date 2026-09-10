@@ -40,6 +40,8 @@ typedef enum {
     PURRGO_BTN_KEY4_LONG
 } purrgo_btn_t;
 
+#define PURRGO_BTN_LONG_PRESS_MS 500
+
 // Инициализация конечного автомата
 void purrgo_app_init(void);
 
