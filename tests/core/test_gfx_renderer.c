@@ -38,6 +38,69 @@ static bool check_pixel(int16_t x, int16_t y, uint8_t expected) {
     return true;
 }
 
+static bool test_set_clip() {
+    printf("Running test_set_clip...\n");
+    gfx_context_t ctx;
+    gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, draw_pixel, read_pixel);
+
+    bool passed = true;
+
+    // Test 1: Normal clipping
+    gfx_set_clip(&ctx, 10, 20, 50, 60);
+    if (ctx.clip_x != 10 || ctx.clip_y != 20 || ctx.clip_w != 50 || ctx.clip_h != 60) {
+        printf("FAILED: test_set_clip normal clipping\n");
+        passed = false;
+    }
+
+    // Test 2: Negative width and height
+    gfx_set_clip(&ctx, 10, 20, -5, -10);
+    if (ctx.clip_x != 10 || ctx.clip_y != 20 || ctx.clip_w != 0 || ctx.clip_h != 0) {
+        printf("FAILED: test_set_clip negative width/height\n");
+        passed = false;
+    }
+
+    // Test 3: Negative x/y
+    gfx_set_clip(&ctx, -10, -20, 50, 60);
+    if (ctx.clip_x != 0 || ctx.clip_y != 0 || ctx.clip_w != 40 || ctx.clip_h != 40) {
+        printf("FAILED: test_set_clip negative x/y\n");
+        passed = false;
+    }
+
+    // Test 4: Extremely negative x/y leading to negative dimensions
+    gfx_set_clip(&ctx, -60, -70, 50, 60);
+    if (ctx.clip_x != 0 || ctx.clip_y != 0 || ctx.clip_w != 0 || ctx.clip_h != 0) {
+        printf("FAILED: test_set_clip extremely negative x/y\n");
+        passed = false;
+    }
+
+    // Test 5: Out of bounds positive x/y
+    gfx_set_clip(&ctx, WIDTH + 10, HEIGHT + 20, 50, 60);
+    if (ctx.clip_x != WIDTH || ctx.clip_y != HEIGHT || ctx.clip_w != 0 || ctx.clip_h != 0) {
+        printf("FAILED: test_set_clip out of bounds positive x/y\n");
+        passed = false;
+    }
+
+    // Test 6: Dimensions exceeding boundaries
+    gfx_set_clip(&ctx, WIDTH - 10, HEIGHT - 20, 50, 60);
+    if (ctx.clip_x != WIDTH - 10 || ctx.clip_y != HEIGHT - 20 || ctx.clip_w != 10 || ctx.clip_h != 20) {
+        printf("FAILED: test_set_clip dimensions exceeding boundaries\n");
+        passed = false;
+    }
+
+    // Test 7: Null context
+    gfx_set_clip(NULL, 10, 20, 50, 60); // Should not crash
+
+    // Test 8: Context Reset Clip
+    gfx_reset_clip(&ctx);
+    if (ctx.clip_x != 0 || ctx.clip_y != 0 || ctx.clip_w != WIDTH || ctx.clip_h != HEIGHT) {
+        printf("FAILED: test_set_clip reset_clip failed\n");
+        passed = false;
+    }
+
+    if (passed) printf("PASSED test_set_clip\n");
+    return passed;
+}
+
 static bool test_draw_hline() {
     printf("Running test_draw_hline...\n");
     gfx_context_t ctx;
@@ -94,6 +157,7 @@ static bool test_draw_hline() {
 int main() {
     bool success = true;
 
+    if (!test_set_clip()) success = false;
     if (!test_draw_hline()) success = false;
 
     if (success) {
