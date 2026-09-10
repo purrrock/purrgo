@@ -355,20 +355,67 @@ void test_auto_follow_opposite_side() {
 
 #include "purrgo/system_time.h"
 
-void test_unmapped_keys() {
+void test_mapped_keys() {
     purrgo_app_init();
-    purrgo_state_t state_before = purrgo_app_get_state();
+    // Default state is APP_STATE_MAP
 
+    // Check map panning keys
+    int32_t start_lat = purrgo_app_get_map_center_lat();
+    int32_t start_lon = purrgo_app_get_map_center_lon();
+
+    purrgo_app_handle_button(PURRGO_BTN_KEY1_SHORT); // LEFT
+    assert(purrgo_app_get_map_center_lon() < start_lon);
+
+    purrgo_app_handle_button(PURRGO_BTN_KEY2_SHORT); // RIGHT
+    assert(purrgo_app_get_map_center_lon() == start_lon);
+
+    purrgo_app_handle_button(PURRGO_BTN_KEY3_SHORT); // UP
+    assert(purrgo_app_get_map_center_lat() > start_lat);
+
+    purrgo_app_handle_button(PURRGO_BTN_KEY4_SHORT); // DOWN
+    assert(purrgo_app_get_map_center_lat() == start_lat);
+
+    // Check map zoom keys
+    purrgo_map_scale_t start_zoom = purrgo_app_get_map_zoom_level();
+
+    purrgo_app_handle_button(PURRGO_BTN_KEY1_LONG); // ZOOM OUT (MINUS)
+    assert(purrgo_app_get_map_zoom_level() > start_zoom);
+
+    purrgo_app_handle_button(PURRGO_BTN_KEY2_LONG); // ZOOM IN (PLUS)
+    assert(purrgo_app_get_map_zoom_level() == start_zoom);
+
+    // Center map
+    purrgo_app_handle_button(PURRGO_BTN_KEY3_LONG); // OK (CENTER)
+    assert(purrgo_app_is_manual_pan_active() == false);
+
+    // Change to next screen
+    assert(purrgo_app_get_state() == APP_STATE_MAP);
+    purrgo_app_handle_button(PURRGO_BTN_KEY4_LONG); // MENU (NEXT SCREEN)
+    assert(purrgo_app_get_state() == APP_STATE_TRIP_COMPUTER);
+
+    // Check TRIP_COMPUTER keys
     purrgo_app_handle_button(PURRGO_BTN_KEY1_SHORT);
     purrgo_app_handle_button(PURRGO_BTN_KEY2_SHORT);
     purrgo_app_handle_button(PURRGO_BTN_KEY3_SHORT);
-    purrgo_app_handle_button(PURRGO_BTN_KEY4_SHORT);
     purrgo_app_handle_button(PURRGO_BTN_KEY1_LONG);
     purrgo_app_handle_button(PURRGO_BTN_KEY2_LONG);
     purrgo_app_handle_button(PURRGO_BTN_KEY3_LONG);
-    purrgo_app_handle_button(PURRGO_BTN_KEY4_LONG);
+    assert(purrgo_app_get_state() == APP_STATE_TRIP_COMPUTER); // Should not change
 
-    assert(purrgo_app_get_state() == state_before);
+    purrgo_app_handle_button(PURRGO_BTN_KEY4_SHORT); // MENU (NEXT SCREEN)
+    assert(purrgo_app_get_state() == APP_STATE_MENU_CONFIG);
+
+    // Check MENU_CONFIG keys
+    purrgo_app_handle_button(PURRGO_BTN_KEY1_SHORT); // UP
+    purrgo_app_handle_button(PURRGO_BTN_KEY2_SHORT); // DOWN
+    purrgo_app_handle_button(PURRGO_BTN_KEY3_SHORT); // OK
+    purrgo_app_handle_button(PURRGO_BTN_KEY4_SHORT); // BACK (MENU)
+
+    // Also test long presses for menu
+    purrgo_app_handle_button(PURRGO_BTN_KEY1_LONG); // UP
+    purrgo_app_handle_button(PURRGO_BTN_KEY2_LONG); // DOWN
+    purrgo_app_handle_button(PURRGO_BTN_KEY3_LONG); // OK
+    purrgo_app_handle_button(PURRGO_BTN_KEY4_LONG); // BACK (MENU)
 }
 
 // Mock for purrgo_system_time_ms to be used in the test
@@ -537,7 +584,7 @@ int main() {
     test_map_dirty_state();
     test_map_clean_refresh_skips_render();
     test_auto_follow_opposite_side();
-    test_unmapped_keys();
+    test_mapped_keys();
 
     printf("App FSM tests passed!\n");
     return 0;

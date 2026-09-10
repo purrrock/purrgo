@@ -20,10 +20,10 @@ ButtonState buttons[] = {
     {{160, DISPLAY_HEIGHT * PIXEL_SCALE + 55, 40, 30}, "MINUS", PURRGO_BTN_MINUS, true},
     {{210, DISPLAY_HEIGHT * PIXEL_SCALE + 15, 40, 30}, "MENU", PURRGO_BTN_MENU, true},
     {{210, DISPLAY_HEIGHT * PIXEL_SCALE + 55, 40, 30}, "OK", PURRGO_BTN_OK, true},
-    {{10, DISPLAY_HEIGHT * PIXEL_SCALE + 105, 50, 30}, "KEY1", PURRGO_BTN_KEY1_SHORT, false},
-    {{70, DISPLAY_HEIGHT * PIXEL_SCALE + 105, 50, 30}, "KEY2", PURRGO_BTN_KEY2_SHORT, false},
-    {{130, DISPLAY_HEIGHT * PIXEL_SCALE + 105, 50, 30}, "KEY3", PURRGO_BTN_KEY3_SHORT, false},
-    {{190, DISPLAY_HEIGHT * PIXEL_SCALE + 105, 50, 30}, "KEY4", PURRGO_BTN_KEY4_SHORT, false}
+    {{10, DISPLAY_HEIGHT * PIXEL_SCALE + 105, 50, 30}, "KEY1", PURRGO_BTN_KEY1_SHORT, true},
+    {{70, DISPLAY_HEIGHT * PIXEL_SCALE + 105, 50, 30}, "KEY2", PURRGO_BTN_KEY2_SHORT, true},
+    {{130, DISPLAY_HEIGHT * PIXEL_SCALE + 105, 50, 30}, "KEY3", PURRGO_BTN_KEY3_SHORT, true},
+    {{190, DISPLAY_HEIGHT * PIXEL_SCALE + 105, 50, 30}, "KEY4", PURRGO_BTN_KEY4_SHORT, true}
 };
 
 #define NUM_BUTTONS (sizeof(buttons) / sizeof(buttons[0]))
@@ -139,12 +139,16 @@ bool emu_window_init(SDL_Window** win, SDL_Renderer** ren, SDL_Texture** tex) {
     return true;
 }
 
+static uint32_t key_press_times[4] = {0};
+static int active_mouse_button = -1;
+static uint32_t mouse_press_time = 0;
+
 void emu_window_process_events(bool* quit) {
     SDL_Event e;
     while (SDL_PollEvent(&e) != 0) {
         if (e.type == SDL_QUIT) {
             *quit = true;
-        } else if (e.type == SDL_KEYDOWN) {
+        } else if (e.type == SDL_KEYDOWN && e.key.repeat == 0) {
             switch (e.key.keysym.sym) {
                 case SDLK_UP:
                     handle_button_press(PURRGO_BTN_UP);
@@ -174,7 +178,62 @@ void emu_window_process_events(bool* quit) {
                 case SDLK_KP_ENTER:
                     handle_button_press(PURRGO_BTN_OK);
                     break;
+                case SDLK_1:
+                    key_press_times[0] = SDL_GetTicks();
+                    break;
+                case SDLK_2:
+                    key_press_times[1] = SDL_GetTicks();
+                    break;
+                case SDLK_3:
+                    key_press_times[2] = SDL_GetTicks();
+                    break;
+                case SDLK_4:
+                    key_press_times[3] = SDL_GetTicks();
+                    break;
             }
+        } else if (e.type == SDL_KEYUP) {
+             switch (e.key.keysym.sym) {
+                case SDLK_1:
+                    if (key_press_times[0] > 0) {
+                        if (SDL_GetTicks() - key_press_times[0] >= PURRGO_BTN_LONG_PRESS_MS) {
+                            handle_button_press(PURRGO_BTN_KEY1_LONG);
+                        } else {
+                            handle_button_press(PURRGO_BTN_KEY1_SHORT);
+                        }
+                        key_press_times[0] = 0;
+                    }
+                    break;
+                case SDLK_2:
+                    if (key_press_times[1] > 0) {
+                        if (SDL_GetTicks() - key_press_times[1] >= PURRGO_BTN_LONG_PRESS_MS) {
+                            handle_button_press(PURRGO_BTN_KEY2_LONG);
+                        } else {
+                            handle_button_press(PURRGO_BTN_KEY2_SHORT);
+                        }
+                        key_press_times[1] = 0;
+                    }
+                    break;
+                case SDLK_3:
+                    if (key_press_times[2] > 0) {
+                        if (SDL_GetTicks() - key_press_times[2] >= PURRGO_BTN_LONG_PRESS_MS) {
+                            handle_button_press(PURRGO_BTN_KEY3_LONG);
+                        } else {
+                            handle_button_press(PURRGO_BTN_KEY3_SHORT);
+                        }
+                        key_press_times[2] = 0;
+                    }
+                    break;
+                case SDLK_4:
+                    if (key_press_times[3] > 0) {
+                        if (SDL_GetTicks() - key_press_times[3] >= PURRGO_BTN_LONG_PRESS_MS) {
+                            handle_button_press(PURRGO_BTN_KEY4_LONG);
+                        } else {
+                            handle_button_press(PURRGO_BTN_KEY4_SHORT);
+                        }
+                        key_press_times[3] = 0;
+                    }
+                    break;
+             }
         } else if (e.type == SDL_MOUSEBUTTONDOWN) {
             int x = e.button.x;
             int y = e.button.y;
@@ -187,10 +246,30 @@ void emu_window_process_events(bool* quit) {
                     y <= buttons[i].rect.y + buttons[i].rect.h
                 ) {
                     if (buttons[i].is_active) {
-                        handle_button_press(buttons[i].btn_val);
+                        if (buttons[i].btn_val >= PURRGO_BTN_KEY1_SHORT && buttons[i].btn_val <= PURRGO_BTN_KEY4_SHORT) {
+                            active_mouse_button = i;
+                            mouse_press_time = SDL_GetTicks();
+                        } else {
+                            handle_button_press(buttons[i].btn_val);
+                        }
                     }
                     break;
                 }
+            }
+        } else if (e.type == SDL_MOUSEBUTTONUP) {
+            if (active_mouse_button >= 0) {
+                uint32_t duration = SDL_GetTicks() - mouse_press_time;
+                purrgo_btn_t base_btn = buttons[active_mouse_button].btn_val;
+
+                if (duration >= PURRGO_BTN_LONG_PRESS_MS) {
+                    // Offset to long press enum
+                    handle_button_press(base_btn + (PURRGO_BTN_KEY1_LONG - PURRGO_BTN_KEY1_SHORT));
+                } else {
+                    handle_button_press(base_btn);
+                }
+
+                active_mouse_button = -1;
+                mouse_press_time = 0;
             }
         }
     }
