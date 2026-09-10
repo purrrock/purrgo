@@ -1,27 +1,247 @@
 /*
- * STM32 button driver stub for PurrGO.
+ * STM32 button driver for PurrGO.
  *
- * This is a temporary STM32 hardware stub. Physical buttons are not connected yet.
- * The driver intentionally always reports "no button pressed".
- * It is intended to be replaced by the real STM32 button driver later.
+ * Four temporary physical buttons are connected to:
+ *   KEY1 -> PB3
+ *   KEY2 -> PB4
+ *   KEY3 -> PB5
+ *   KEY4 -> PB6
+ *
+ * Buttons are connected between GPIO pin and GND.
+ * GPIO inputs must therefore use the internal pull-up:
+ *
+ *   released = GPIO_PIN_SET
+ *   pressed  = GPIO_PIN_RESET
+ *
+ * The driver implements a simple time-based debounce.
+ * A new GPIO state must remain unchanged for
+ * PURRGO_BUTTON_DEBOUNCE_MS before it becomes the
+ * reported stable state.
  */
 
 #include "buttons.h"
-#include <stddef.h>
+#include "main.h"
+#include <stdbool.h>
+#include <stdint.h>
+
+/*
+ * Debounce interval.
+ *
+ * Mechanical buttons usually produce several rapid transitions
+ * when their contacts open or close. We ignore such transitions
+ * until the input has remained unchanged for this amount of time.
+ */
+#define PURRGO_BUTTON_DEBOUNCE_MS 20U
+
+/*
+ * Description of one physical button.
+ *
+ * gpio_port / gpio_pin identify the STM32 GPIO input.
+ *
+ * raw_state is the most recently sampled electrical state.
+ * stable_state is the debounced state returned to the application.
+ *
+ * last_change_time stores the time when raw_state last changed.
+ */
+typedef struct
+{
+    GPIO_TypeDef *gpio_port;
+    uint16_t gpio_pin;
+
+    GPIO_PinState raw_state;
+    GPIO_PinState stable_state;
+
+    uint32_t last_change_time;
+} purrgo_button_hw_t;
+
+/*
+ * Physical button mapping.
+ *
+ * The order here corresponds to:
+ *
+ *   PURRGO_BTN_KEY1_SHORT -> PB3
+ *   PURRGO_BTN_KEY2_SHORT -> PB4
+ *   PURRGO_BTN_KEY3_SHORT -> PB5
+ *   PURRGO_BTN_KEY4_SHORT -> PB6
+ *
+ * The SHORT/LONG enum values are handled below by mapping
+ * both variants to the same physical input.
+ */
+static purrgo_button_hw_t buttons[] =
+{
+    {
+        .gpio_port = GPIOB,
+        .gpio_pin = GPIO_PIN_3,
+        .raw_state = GPIO_PIN_SET,
+        .stable_state = GPIO_PIN_SET,
+        .last_change_time = 0U
+    },
+    {
+        .gpio_port = GPIOB,
+        .gpio_pin = GPIO_PIN_4,
+        .raw_state = GPIO_PIN_SET,
+        .stable_state = GPIO_PIN_SET,
+        .last_change_time = 0U
+    },
+    {
+        .gpio_port = GPIOB,
+        .gpio_pin = GPIO_PIN_5,
+        .raw_state = GPIO_PIN_SET,
+        .stable_state = GPIO_PIN_SET,
+        .last_change_time = 0U
+    },
+    {
+        .gpio_port = GPIOB,
+        .gpio_pin = GPIO_PIN_6,
+        .raw_state = GPIO_PIN_SET,
+        .stable_state = GPIO_PIN_SET,
+        .last_change_time = 0U
+    }
+};
+
+/*
+ * Convert the PurrGO button identifier to an index
+ * in the physical button table.
+ *
+ * Both SHORT and LONG identifiers refer to the same
+ * physical KEY input. This function only selects the
+ * physical input; it does not implement long-press detection.
+ */
+static int button_to_index(purrgo_btn_t button)
+{
+    switch (button)
+    {
+        case PURRGO_BTN_KEY1_SHORT:
+        case PURRGO_BTN_KEY1_LONG:
+            return 0;
+
+        case PURRGO_BTN_KEY2_SHORT:
+        case PURRGO_BTN_KEY2_LONG:
+            return 1;
+
+        case PURRGO_BTN_KEY3_SHORT:
+        case PURRGO_BTN_KEY3_LONG:
+            return 2;
+
+        case PURRGO_BTN_KEY4_SHORT:
+        case PURRGO_BTN_KEY4_LONG:
+            return 3;
+
+        default:
+            return -1;
+    }
+}
+
+/*
+ * Update debounce state for one physical button.
+ *
+ * The function samples the GPIO and compares it with the
+ * previously sampled raw state.
+ *
+ * If the raw state changes, the debounce timer is restarted.
+ *
+ * If the raw state remains unchanged for the complete
+ * debounce interval, it becomes the new stable state.
+ */
+static void button_update(purrgo_button_hw_t *button)
+{
+    GPIO_PinState current_state;
+    uint32_t now;
+
+    current_state = HAL_GPIO_ReadPin(
+        button->gpio_port,
+        button->gpio_pin
+    );
+
+    now = HAL_GetTick();
+
+    /*
+     * Electrical input changed.
+     *
+     * Do not immediately report the new state. Start the
+     * debounce timer instead.
+     */
+    if (current_state != button->raw_state)
+    {
+        button->raw_state = current_state;
+        button->last_change_time = now;
+        return;
+    }
+
+    /*
+     * Raw input has remained unchanged.
+     *
+     * Check whether it has been stable long enough.
+     */
+    if (button->stable_state != button->raw_state)
+    {
+        if ((uint32_t)(now - button->last_change_time) >=
+            PURRGO_BUTTON_DEBOUNCE_MS)
+        {
+            button->stable_state = button->raw_state;
+        }
+    }
+}
 
 void purrgo_stm32_buttons_init(void)
 {
+    uint32_t now;
+    size_t i;
+
+    now = HAL_GetTick();
+
     /*
-     * Stub: No GPIO initialization is performed since physical buttons
-     * are not connected yet.
+     * GPIO configuration itself is generated by CubeMX in
+     * MX_GPIO_Init().
+     *
+     * Here we only initialize the software debounce state
+     * from the actual electrical state of the inputs.
      */
+    for (i = 0U; i < sizeof(buttons) / sizeof(buttons[0]); ++i)
+    {
+        GPIO_PinState state;
+
+        state = HAL_GPIO_ReadPin(
+            buttons[i].gpio_port,
+            buttons[i].gpio_pin
+        );
+
+        buttons[i].raw_state = state;
+        buttons[i].stable_state = state;
+        buttons[i].last_change_time = now;
+    }
 }
 
 bool purrgo_stm32_button_is_pressed(purrgo_btn_t button)
 {
-    (void)button;
+    int index;
+
+    index = button_to_index(button);
+
     /*
-     * Stub: Always report that no button is pressed.
+     * The STM32 driver currently implements only KEY1..KEY4.
+     *
+     * Other PurrGO buttons (UP/DOWN/LEFT/RIGHT/PLUS/MINUS/MENU/OK)
+     * have no physical input assigned yet.
      */
-    return false;
+    if (index < 0)
+    {
+        return false;
+    }
+
+    /*
+     * Update all debounce logic for the requested physical input.
+     *
+     * This function is expected to be called periodically from
+     * the application polling loop.
+     */
+    button_update(&buttons[index]);
+
+    /*
+     * Buttons use active-low logic:
+     *
+     *   GPIO_PIN_RESET -> pressed
+     *   GPIO_PIN_SET   -> released
+     */
+    return (buttons[index].stable_state == GPIO_PIN_RESET);
 }
