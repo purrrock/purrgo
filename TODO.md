@@ -16,8 +16,6 @@
 - [ ] Рассчитывать bearing/азимут на Waypoint.
 - [ ] Выводить distance на data panel.
 - [ ] Выводить bearing на data panel.
-- [ ] Использовать integer/fixed-point arithmetic.
-- [ ] Не использовать floating point.
 
 ---
 
@@ -55,6 +53,7 @@ Release-дисплей выбран:
 - [ ] Реализовать STM32 SPI driver.
 - [ ] Реализовать файловую систему.
 - [ ] Реализовать структуру `/PURRGO/`.
+- [ ] Перейти от SPI к SDIO.
 - [ ] Реализовать управление питанием SD.
 - [ ] Проверить power-up/power-down.
 - [ ] Измерить ток потребления.
@@ -92,7 +91,7 @@ Release-дисплей выбран:
 
 ## Перенос core
 
-- [ ] Собрать portable core без PC-specific dependencies.
+- [X] Собрать portable core без PC-specific dependencies.
 - [ ] Проверить map parser на STM32.
 - [ ] Проверить map renderer на STM32.
 - [ ] Проверить GNSS processing.
