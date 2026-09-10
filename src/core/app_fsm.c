@@ -42,7 +42,6 @@ void purrgo_app_init(void) {
     logger_start_failures = 0;
     /*
      * First try to load the persistent configuration.
-     *
      * purrgo_config_load() initializes default values and creates
      * PURRGO.CFG when the file does not exist.
      *

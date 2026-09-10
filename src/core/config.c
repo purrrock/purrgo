@@ -108,13 +108,13 @@ void purrgo_config_init(void)
      * Видимость слоев карты.
      */
     app_config.layer_landuse = true;
-    app_config.layer_water = true;
+    app_config.layer_water = false;
     app_config.layer_landuse_labels = true;
-    app_config.layer_water_labels = true;
+    app_config.layer_water_labels = false;
     app_config.layer_roads = true;
     app_config.layer_poi = true;
     app_config.layer_poi_labels = true;
-    app_config.layer_route = true;
+    app_config.layer_route = false;
     app_config.layer_track = true;
 
     /*
