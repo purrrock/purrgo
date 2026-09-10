@@ -80,25 +80,25 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
     purrgo_state_t next_state = current_state;
 
     // Map new keys to legacy actions/buttons based on state
-    purrgo_btn_t mapped_button = button;
+    purrgo_action_t mapped_button = PURRGO_ACTION_NONE;
 
     if (current_state == APP_STATE_MAP) {
         switch (button) {
-            case PURRGO_BTN_KEY1_SHORT: mapped_button = PURRGO_BTN_LEFT; break;
-            case PURRGO_BTN_KEY2_SHORT: mapped_button = PURRGO_BTN_RIGHT; break;
-            case PURRGO_BTN_KEY3_SHORT: mapped_button = PURRGO_BTN_UP; break;
-            case PURRGO_BTN_KEY4_SHORT: mapped_button = PURRGO_BTN_DOWN; break;
-            case PURRGO_BTN_KEY1_LONG:  mapped_button = PURRGO_BTN_MINUS; break;
-            case PURRGO_BTN_KEY2_LONG:  mapped_button = PURRGO_BTN_PLUS; break;
-            case PURRGO_BTN_KEY3_LONG:  mapped_button = PURRGO_BTN_OK; break;
-            case PURRGO_BTN_KEY4_LONG:  mapped_button = PURRGO_BTN_MENU; break;
+            case PURRGO_BTN_KEY1_SHORT: mapped_button = PURRGO_ACTION_LEFT; break;
+            case PURRGO_BTN_KEY2_SHORT: mapped_button = PURRGO_ACTION_RIGHT; break;
+            case PURRGO_BTN_KEY3_SHORT: mapped_button = PURRGO_ACTION_UP; break;
+            case PURRGO_BTN_KEY4_SHORT: mapped_button = PURRGO_ACTION_DOWN; break;
+            case PURRGO_BTN_KEY1_LONG:  mapped_button = PURRGO_ACTION_MINUS; break;
+            case PURRGO_BTN_KEY2_LONG:  mapped_button = PURRGO_ACTION_PLUS; break;
+            case PURRGO_BTN_KEY3_LONG:  mapped_button = PURRGO_ACTION_OK; break;
+            case PURRGO_BTN_KEY4_LONG:  mapped_button = PURRGO_ACTION_MENU; break;
             default: break;
         }
     } else if (current_state == APP_STATE_TRIP_COMPUTER) {
         switch (button) {
             case PURRGO_BTN_KEY4_SHORT:
             case PURRGO_BTN_KEY4_LONG:
-                mapped_button = PURRGO_BTN_MENU;
+                mapped_button = PURRGO_ACTION_MENU;
                 break;
             default: break;
         }
@@ -106,26 +106,26 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
         switch (button) {
             case PURRGO_BTN_KEY1_SHORT:
             case PURRGO_BTN_KEY1_LONG:
-                mapped_button = PURRGO_BTN_UP;
+                mapped_button = PURRGO_ACTION_UP;
                 break;
             case PURRGO_BTN_KEY2_SHORT:
             case PURRGO_BTN_KEY2_LONG:
-                mapped_button = PURRGO_BTN_DOWN;
+                mapped_button = PURRGO_ACTION_DOWN;
                 break;
             case PURRGO_BTN_KEY3_SHORT:
             case PURRGO_BTN_KEY3_LONG:
-                mapped_button = PURRGO_BTN_OK;
+                mapped_button = PURRGO_ACTION_OK;
                 break;
             case PURRGO_BTN_KEY4_SHORT:
             case PURRGO_BTN_KEY4_LONG:
-                mapped_button = PURRGO_BTN_MENU;
+                mapped_button = PURRGO_ACTION_MENU;
                 break;
             default: break;
         }
     }
 
     // Ignore unhandled new keys to avoid side effects (they shouldn't do anything if not explicitly mapped above or handled inherently)
-    if (button >= PURRGO_BTN_KEY1_SHORT && button <= PURRGO_BTN_KEY4_LONG && mapped_button == button) {
+    if (mapped_button == PURRGO_ACTION_NONE) {
         return;
     }
 
@@ -144,7 +144,7 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
     }
 
     // 3. Циклическое переключение основных экранов (Garmin eTrex Page Loop)
-    if (mapped_button == PURRGO_BTN_MENU) {
+    if (mapped_button == PURRGO_ACTION_MENU) {
         switch (current_state) {
             case APP_STATE_MAP:
                 current_state = APP_STATE_TRIP_COMPUTER;

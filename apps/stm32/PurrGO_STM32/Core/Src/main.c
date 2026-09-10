@@ -130,14 +130,6 @@ static void process_buttons(void)
      */
     static const purrgo_btn_t buttons[] =
     {
-        PURRGO_BTN_UP,
-        PURRGO_BTN_DOWN,
-        PURRGO_BTN_LEFT,
-        PURRGO_BTN_RIGHT,
-        PURRGO_BTN_PLUS,
-        PURRGO_BTN_MINUS,
-        PURRGO_BTN_MENU,
-        PURRGO_BTN_OK,
         PURRGO_BTN_KEY1_SHORT,
         PURRGO_BTN_KEY2_SHORT,
         PURRGO_BTN_KEY3_SHORT,

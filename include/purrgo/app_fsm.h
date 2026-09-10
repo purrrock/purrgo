@@ -22,14 +22,18 @@ typedef enum {
 
 // Аппаратные кнопки устройства
 typedef enum {
-    PURRGO_BTN_UP,            // Навигация по меню / Панорамирование карты (Y-)
-    PURRGO_BTN_DOWN,          // Навигация по меню / Панорамирование карты (Y+)
-    PURRGO_BTN_LEFT,          // Изменение значений / Панорамирование карты (X-)
-    PURRGO_BTN_RIGHT,         // Изменение значений / Панорамирование карты (X+)
-    PURRGO_BTN_PLUS,          // Zoom In карты
-    PURRGO_BTN_MINUS,         // Zoom Out карты
-    PURRGO_BTN_MENU,          // Циклическая смена основных страниц (Page/Menu) / Отмена (Назад) в подменю
-    PURRGO_BTN_OK,            // Подтверждение выбора (Enter)
+    PURRGO_ACTION_UP,
+    PURRGO_ACTION_DOWN,
+    PURRGO_ACTION_LEFT,
+    PURRGO_ACTION_RIGHT,
+    PURRGO_ACTION_PLUS,
+    PURRGO_ACTION_MINUS,
+    PURRGO_ACTION_MENU,
+    PURRGO_ACTION_OK,
+    PURRGO_ACTION_NONE
+} purrgo_action_t;
+
+typedef enum {
     PURRGO_BTN_KEY1_SHORT,
     PURRGO_BTN_KEY2_SHORT,
     PURRGO_BTN_KEY3_SHORT,
