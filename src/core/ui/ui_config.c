@@ -283,7 +283,7 @@ void ui_render_menu_config(gfx_context_t* gfx)
         gfx,
         10,
         poi_enabled ? 115 : 100,
-        "Map layers"
+        "MAP LAYERS"
     );
 
 

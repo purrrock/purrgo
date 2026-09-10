@@ -19,7 +19,7 @@ static void ui_draw_key_hints(gfx_context_t* gfx, purrgo_state_t state) {
     gfx_set_color(gfx, 0, 3);
     gfx_fill_rect(gfx, 0, y, PURRGO_HW_DISPLAY_WIDTH_PX, 8);
 
-    gfx_set_color(gfx, 3, 0);
+    gfx_set_color(gfx, BLACK, WHITE);
 
     const char* k1 = "";
     const char* k2 = "";
@@ -28,24 +28,24 @@ static void ui_draw_key_hints(gfx_context_t* gfx, purrgo_state_t state) {
 
     switch (state) {
         case APP_STATE_MAP:
-            k1 = "1:LFT/-";
-            k2 = "2:RGT/+";
-            k3 = "3:UP/C";
-            k4 = "4:DN/NXT";
+            k1 = "LEFT/-";
+            k2 = "RIGHT/+";
+            k3 = "UP/CENTR";
+            k4 = "DOWN/NEXT";
             break;
         case APP_STATE_TRIP_COMPUTER:
             k1 = "";
             k2 = "";
             k3 = "";
-            k4 = "4:NXT";
+            k4 = "NEXT";
             break;
         case APP_STATE_MENU_CONFIG:
         case APP_STATE_MENU_DIR_SELECT:
         case APP_STATE_MENU_MAP_LAYERS:
-            k1 = "1:UP";
-            k2 = "2:DN";
-            k3 = "3:SEL";
-            k4 = "4:BCK";
+            k1 = "UP";
+            k2 = "DOWN";
+            k3 = "SEL";
+            k4 = "BACK";
             break;
         default:
             break;
