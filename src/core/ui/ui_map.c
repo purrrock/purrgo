@@ -509,6 +509,10 @@ static void ui_update_status_bar(gfx_context_t* gfx, const purrgo_gnss_solution_
     else if (new_state.rec_state == LOGGER_STATE_ERROR) rec_str = "ERR-REC";
     gfx_draw_string(gfx, next_x, 1, rec_str);
 
+    const char* scale_label = purrgo_app_get_map_scale_label();
+    int16_t scale_x = PURRGO_HW_DISPLAY_WIDTH_PX - (strlen(scale_label) * 6) - 2;
+    gfx_draw_string(gfx, scale_x, 1, scale_label);
+
 
     if (prev_status_state.valid && !purrgo_app_map_is_dirty()) {
         display_refresh_region(0, 0, PURRGO_HW_DISPLAY_WIDTH_PX, status_h);
@@ -670,18 +674,6 @@ static void ui_map_render_overlays(gfx_context_t* gfx, const purrgo_gnss_solutio
     // Clear bottom status area
     gfx_set_color(gfx, 0, 3);
     gfx_fill_rect(gfx, 0, map_vp->offset_y + map_vp->height, PURRGO_HW_DISPLAY_WIDTH_PX, PURRGO_HW_DISPLAY_HEIGHT_PX - (map_vp->offset_y + map_vp->height));
-
-    gfx_set_color(gfx, 0, 3);
-
-    const char* scale_label = purrgo_app_get_map_scale_label();
-    int label_len = 0;
-    while(scale_label[label_len] != '\0') label_len++;
-    int text_width = label_len * 6;
-
-    int16_t scale_x = map_vp->offset_x + map_vp->width - text_width - 5;
-    int16_t scale_y = map_vp->offset_y + map_vp->height + 1;
-
-    gfx_draw_string(gfx, scale_x, scale_y, scale_label);
 }
 
 void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const purrgo_sun_info_t* sun) {
