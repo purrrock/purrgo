@@ -27,11 +27,11 @@ void setup_test_state(int32_t lat, int32_t lon, purrgo_map_scale_t scale) {
     // adjust scale
     purrgo_map_scale_t curr_scale = purrgo_app_get_map_zoom_level();
     while (curr_scale > scale) {
-        purrgo_app_handle_button(PURRGO_BTN_PLUS);
+        purrgo_app_handle_button(PURRGO_BTN_KEY2_LONG);
         curr_scale = purrgo_app_get_map_zoom_level();
     }
     while (curr_scale < scale) {
-        purrgo_app_handle_button(PURRGO_BTN_MINUS);
+        purrgo_app_handle_button(PURRGO_BTN_KEY1_LONG);
         curr_scale = purrgo_app_get_map_zoom_level();
     }
 }
@@ -41,8 +41,8 @@ void test_pan_small_scale() {
     int32_t initial_lat = purrgo_app_get_map_center_lat();
     int32_t initial_lon = purrgo_app_get_map_center_lon();
 
-    purrgo_app_handle_button(PURRGO_BTN_UP);
-    purrgo_app_handle_button(PURRGO_BTN_RIGHT);
+    purrgo_app_handle_button(PURRGO_BTN_KEY3_SHORT);
+    purrgo_app_handle_button(PURRGO_BTN_KEY2_SHORT);
 
     int32_t new_lat = purrgo_app_get_map_center_lat();
     int32_t new_lon = purrgo_app_get_map_center_lon();
@@ -65,8 +65,8 @@ void test_pan_large_scale_high_latitude() {
     int32_t initial_lon = purrgo_app_get_map_center_lon();
 
     // Move slightly right and up to test step arithmetic bounds.
-    purrgo_app_handle_button(PURRGO_BTN_UP);
-    purrgo_app_handle_button(PURRGO_BTN_RIGHT);
+    purrgo_app_handle_button(PURRGO_BTN_KEY3_SHORT);
+    purrgo_app_handle_button(PURRGO_BTN_KEY2_SHORT);
 
     int32_t new_lat = purrgo_app_get_map_center_lat();
     int32_t new_lon = purrgo_app_get_map_center_lon();
@@ -90,8 +90,8 @@ void test_pan_coordinate_bounds_clamping() {
     setup_test_state(900000000, 1800000000, PURRGO_MAP_SCALE_10000KM);
 
     for (int i=0; i<6; i++) {
-        purrgo_app_handle_button(PURRGO_BTN_UP);
-        purrgo_app_handle_button(PURRGO_BTN_RIGHT);
+        purrgo_app_handle_button(PURRGO_BTN_KEY3_SHORT);
+        purrgo_app_handle_button(PURRGO_BTN_KEY2_SHORT);
     }
     int32_t new_lat = purrgo_app_get_map_center_lat();
     assert(new_lat == 2147483647);
@@ -103,8 +103,8 @@ void test_pan_coordinate_bounds_clamping() {
     setup_test_state(-900000000, -1800000000, PURRGO_MAP_SCALE_10000KM);
 
     for (int i=0; i<6; i++) {
-        purrgo_app_handle_button(PURRGO_BTN_DOWN);
-        purrgo_app_handle_button(PURRGO_BTN_LEFT);
+        purrgo_app_handle_button(PURRGO_BTN_KEY4_SHORT);
+        purrgo_app_handle_button(PURRGO_BTN_KEY1_SHORT);
     }
 
     int32_t current_lat = purrgo_app_get_map_center_lat();
@@ -131,12 +131,12 @@ void test_map_dirty_state() {
     assert(purrgo_app_map_is_dirty() == false);
 
     // Panning sets dirty
-    purrgo_app_handle_button(PURRGO_BTN_UP);
+    purrgo_app_handle_button(PURRGO_BTN_KEY3_SHORT);
     //assert(purrgo_app_map_is_dirty() == true);
     purrgo_app_map_clear_dirty();
 
     // Zooming sets dirty
-    purrgo_app_handle_button(PURRGO_BTN_PLUS);
+    purrgo_app_handle_button(PURRGO_BTN_KEY2_LONG);
     //assert(purrgo_app_map_is_dirty() == true);
     purrgo_app_map_clear_dirty();
 
@@ -207,7 +207,7 @@ void test_map_dirty_state() {
     assert(purrgo_app_map_is_dirty() == false); // Does not trigger redraw again
 
     // GNSS change with manual pan DOES NOT set dirty, even if far away
-    purrgo_app_handle_button(PURRGO_BTN_UP); // enter manual pan mode
+    purrgo_app_handle_button(PURRGO_BTN_KEY3_SHORT); // enter manual pan mode
     assert(purrgo_app_is_manual_pan_active() == true);
     purrgo_app_map_clear_dirty(); // clear the pan dirty flag
 
@@ -216,7 +216,7 @@ void test_map_dirty_state() {
     assert(purrgo_app_map_is_dirty() == false);
 
     // Cancel pan when GNSS is far away -> sets dirty and centers
-    purrgo_app_handle_button(PURRGO_BTN_OK); // reset manual pan
+    purrgo_app_handle_button(PURRGO_BTN_KEY3_LONG); // reset manual pan
     assert(purrgo_app_is_manual_pan_active() == false);
     //assert(purrgo_app_map_is_dirty() == true);
     // Again, it calculates an opposite-side center instead of snapping directly to the marker.
@@ -224,7 +224,7 @@ void test_map_dirty_state() {
     purrgo_app_map_clear_dirty();
 
     // Cancel pan when GNSS is inside FOLLOW_START -> does not set dirty
-    purrgo_app_handle_button(PURRGO_BTN_UP); // enter manual pan mode
+    purrgo_app_handle_button(PURRGO_BTN_KEY3_SHORT); // enter manual pan mode
     assert(purrgo_app_is_manual_pan_active() == true);
     purrgo_app_map_clear_dirty(); // clear the pan dirty flag
 
@@ -234,16 +234,16 @@ void test_map_dirty_state() {
     fix.lon_1e7 = purrgo_app_get_map_center_lon();
     purrgo_app_update(&fix); // no auto-follow because pan active
 
-    purrgo_app_handle_button(PURRGO_BTN_OK); // cancel pan
+    purrgo_app_handle_button(PURRGO_BTN_KEY3_LONG); // cancel pan
     assert(purrgo_app_is_manual_pan_active() == false);
 
     // Since fix is exactly at center, dx=0, dy=0 which is <= FOLLOW_STOP.
     assert(purrgo_app_map_is_dirty() == false);
 
     // State transition sets dirty
-    purrgo_app_handle_button(PURRGO_BTN_MENU); // goto trip computer
-    purrgo_app_handle_button(PURRGO_BTN_MENU); // goto menu config
-    purrgo_app_handle_button(PURRGO_BTN_MENU); // goto map
+    purrgo_app_handle_button(PURRGO_BTN_KEY4_LONG); // goto trip computer
+    purrgo_app_handle_button(PURRGO_BTN_KEY4_LONG); // goto menu config
+    purrgo_app_handle_button(PURRGO_BTN_KEY4_LONG); // goto map
     //assert(purrgo_app_map_is_dirty() == true);
 }
 
@@ -468,10 +468,10 @@ void test_mapped_keys() {
 
     // Check old buttons work as they used to
     start_lon = purrgo_app_get_map_center_lon();
-    purrgo_app_handle_button(PURRGO_BTN_LEFT);
+    purrgo_app_handle_button(PURRGO_BTN_KEY1_SHORT);
     assert(purrgo_app_get_map_center_lon() < start_lon);
 
-    purrgo_app_handle_button(PURRGO_BTN_RIGHT);
+    purrgo_app_handle_button(PURRGO_BTN_KEY2_SHORT);
     assert(purrgo_app_get_map_center_lon() == start_lon);
 }
 

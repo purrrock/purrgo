@@ -440,7 +440,7 @@ bool purrgo_config_controller_handle_button(
              * UP
              * --------------------------------------------------------
              */
-            case PURRGO_BTN_UP:
+            case PURRGO_ACTION_UP:
 
                 if (config_cursor_idx > 0) {
 
@@ -470,7 +470,7 @@ bool purrgo_config_controller_handle_button(
              * DOWN
              * --------------------------------------------------------
              */
-            case PURRGO_BTN_DOWN:
+            case PURRGO_ACTION_DOWN:
 
                 if (
                     config_cursor_idx <
@@ -487,8 +487,8 @@ bool purrgo_config_controller_handle_button(
              * PLUS / RIGHT
              * --------------------------------------------------------
              */
-            case PURRGO_BTN_PLUS:
-            case PURRGO_BTN_RIGHT:
+            case PURRGO_ACTION_PLUS:
+            case PURRGO_ACTION_RIGHT:
 
                 /*
                  * Часовой пояс.
@@ -590,8 +590,8 @@ bool purrgo_config_controller_handle_button(
              * MINUS / LEFT
              * --------------------------------------------------------
              */
-            case PURRGO_BTN_MINUS:
-            case PURRGO_BTN_LEFT:
+            case PURRGO_ACTION_MINUS:
+            case PURRGO_ACTION_LEFT:
 
                 /*
                  * Часовой пояс.
@@ -687,7 +687,7 @@ bool purrgo_config_controller_handle_button(
              * OK
              * --------------------------------------------------------
              */
-            case PURRGO_BTN_OK:
+            case PURRGO_ACTION_OK:
 
                 /*
                  * TZ.
@@ -791,7 +791,7 @@ bool purrgo_config_controller_handle_button(
              * MENU / BACK
              * --------------------------------------------------------
              */
-            case PURRGO_BTN_MENU:
+            case PURRGO_ACTION_MENU:
 
                 /*
                  * Черновые изменения не применяем.
@@ -818,7 +818,7 @@ bool purrgo_config_controller_handle_button(
     if (current_state == APP_STATE_MENU_MAP_LAYERS) {
 
         switch (button) {
-            case PURRGO_BTN_UP:
+            case PURRGO_ACTION_UP:
                 if (map_layers_cursor_idx > 0) {
                     map_layers_cursor_idx--;
                 }
@@ -827,7 +827,7 @@ bool purrgo_config_controller_handle_button(
                 }
                 return true;
 
-            case PURRGO_BTN_DOWN:
+            case PURRGO_ACTION_DOWN:
                 if (map_layers_cursor_idx < MAP_LAYERS_COUNT - 1) {
                     map_layers_cursor_idx++;
                 }
@@ -836,8 +836,8 @@ bool purrgo_config_controller_handle_button(
                 }
                 return true;
 
-            case PURRGO_BTN_LEFT:
-            case PURRGO_BTN_RIGHT:
+            case PURRGO_ACTION_LEFT:
+            case PURRGO_ACTION_RIGHT:
                 if (map_layers_cursor_idx == 0) draft_layer_landuse = !draft_layer_landuse;
                 else if (map_layers_cursor_idx == 1) draft_layer_water = !draft_layer_water;
                 else if (map_layers_cursor_idx == 2) draft_layer_landuse_labels = !draft_layer_landuse_labels;
@@ -849,7 +849,7 @@ bool purrgo_config_controller_handle_button(
                 else if (map_layers_cursor_idx == 8) draft_layer_track = !draft_layer_track;
                 return true;
 
-            case PURRGO_BTN_OK:
+            case PURRGO_ACTION_OK:
                 app_config.layer_landuse = draft_layer_landuse;
                 app_config.layer_water = draft_layer_water;
                 app_config.layer_landuse_labels = draft_layer_landuse_labels;
@@ -864,7 +864,7 @@ bool purrgo_config_controller_handle_button(
                 *next_state_out = APP_STATE_MENU_CONFIG;
                 return true;
 
-            case PURRGO_BTN_MENU:
+            case PURRGO_ACTION_MENU:
                 *next_state_out = APP_STATE_MENU_CONFIG;
                 return true;
 
@@ -888,7 +888,7 @@ bool purrgo_config_controller_handle_button(
              * UP
              * --------------------------------------------------------
              */
-            case PURRGO_BTN_UP:
+            case PURRGO_ACTION_UP:
 
                 if (dir_page_cursor > 0) {
 
@@ -930,7 +930,7 @@ bool purrgo_config_controller_handle_button(
              * DOWN
              * --------------------------------------------------------
              */
-            case PURRGO_BTN_DOWN:
+            case PURRGO_ACTION_DOWN:
 
                 if (
                     dir_page_cursor <
@@ -960,7 +960,7 @@ bool purrgo_config_controller_handle_button(
              * OK
              * --------------------------------------------------------
              */
-            case PURRGO_BTN_OK:
+            case PURRGO_ACTION_OK:
 
                 if (
                     dir_page_count > 0 &&
@@ -994,7 +994,7 @@ bool purrgo_config_controller_handle_button(
              * MENU / BACK
              * --------------------------------------------------------
              */
-            case PURRGO_BTN_MENU:
+            case PURRGO_ACTION_MENU:
 
                 leave_directory_browser();
 

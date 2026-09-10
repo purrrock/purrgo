@@ -12,18 +12,10 @@ typedef struct {
 } ButtonState;
 
 ButtonState buttons[] = {
-    {{50, DISPLAY_HEIGHT * PIXEL_SCALE + 5, 40, 30}, "UP", PURRGO_BTN_UP, true},
-    {{50, DISPLAY_HEIGHT * PIXEL_SCALE + 65, 40, 30}, "DOWN", PURRGO_BTN_DOWN, true},
-    {{5, DISPLAY_HEIGHT * PIXEL_SCALE + 35, 40, 30}, "LEFT", PURRGO_BTN_LEFT, true},
-    {{95, DISPLAY_HEIGHT * PIXEL_SCALE + 35, 40, 30}, "RIGHT", PURRGO_BTN_RIGHT, true},
-    {{160, DISPLAY_HEIGHT * PIXEL_SCALE + 15, 40, 30}, "PLUS", PURRGO_BTN_PLUS, true},
-    {{160, DISPLAY_HEIGHT * PIXEL_SCALE + 55, 40, 30}, "MINUS", PURRGO_BTN_MINUS, true},
-    {{210, DISPLAY_HEIGHT * PIXEL_SCALE + 15, 40, 30}, "MENU", PURRGO_BTN_MENU, true},
-    {{210, DISPLAY_HEIGHT * PIXEL_SCALE + 55, 40, 30}, "OK", PURRGO_BTN_OK, true},
-    {{10, DISPLAY_HEIGHT * PIXEL_SCALE + 105, 50, 30}, "KEY1", PURRGO_BTN_KEY1_SHORT, true},
-    {{70, DISPLAY_HEIGHT * PIXEL_SCALE + 105, 50, 30}, "KEY2", PURRGO_BTN_KEY2_SHORT, true},
-    {{130, DISPLAY_HEIGHT * PIXEL_SCALE + 105, 50, 30}, "KEY3", PURRGO_BTN_KEY3_SHORT, true},
-    {{190, DISPLAY_HEIGHT * PIXEL_SCALE + 105, 50, 30}, "KEY4", PURRGO_BTN_KEY4_SHORT, true}
+    {{10, DISPLAY_HEIGHT * PIXEL_SCALE + 10, 50, 30}, "KEY1", PURRGO_BTN_KEY1_SHORT, true},
+    {{70, DISPLAY_HEIGHT * PIXEL_SCALE + 10, 50, 30}, "KEY2", PURRGO_BTN_KEY2_SHORT, true},
+    {{130, DISPLAY_HEIGHT * PIXEL_SCALE + 10, 50, 30}, "KEY3", PURRGO_BTN_KEY3_SHORT, true},
+    {{190, DISPLAY_HEIGHT * PIXEL_SCALE + 10, 50, 30}, "KEY4", PURRGO_BTN_KEY4_SHORT, true}
 };
 
 #define NUM_BUTTONS (sizeof(buttons) / sizeof(buttons[0]))
@@ -150,34 +142,6 @@ void emu_window_process_events(bool* quit) {
             *quit = true;
         } else if (e.type == SDL_KEYDOWN && e.key.repeat == 0) {
             switch (e.key.keysym.sym) {
-                case SDLK_UP:
-                    handle_button_press(PURRGO_BTN_UP);
-                    break;
-                case SDLK_DOWN:
-                    handle_button_press(PURRGO_BTN_DOWN);
-                    break;
-                case SDLK_LEFT:
-                    handle_button_press(PURRGO_BTN_LEFT);
-                    break;
-                case SDLK_RIGHT:
-                    handle_button_press(PURRGO_BTN_RIGHT);
-                    break;
-                case SDLK_KP_PLUS:
-                case SDLK_PLUS:
-                    handle_button_press(PURRGO_BTN_PLUS);
-                    break;
-                case SDLK_KP_MINUS:
-                case SDLK_MINUS:
-                    handle_button_press(PURRGO_BTN_MINUS);
-                    break;
-                case SDLK_m:
-                    handle_button_press(PURRGO_BTN_MENU);
-                    break;
-                case SDLK_RETURN:
-                case SDLK_RETURN2:
-                case SDLK_KP_ENTER:
-                    handle_button_press(PURRGO_BTN_OK);
-                    break;
                 case SDLK_1:
                     key_press_times[0] = SDL_GetTicks();
                     break;
