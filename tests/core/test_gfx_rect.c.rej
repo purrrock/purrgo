@@ -1,0 +1,17 @@
+--- tests/core/test_gfx_rect.c
++++ tests/core/test_gfx_rect.c
+@@ -32,14 +31,6 @@
+     return 0;
+ }
+
+-static void reset_test_state(gfx_context_t *ctx) {
+-    memset(framebuffer, 0, sizeof(framebuffer));
+-    pixels_drawn = 0;
+-    draw_calls = 0;
+-    ctx->color_bg = 2; // Use a specific color for fill
+-    ctx->color_fg = 1; // Use a specific color for draw
+-    gfx_set_clip(ctx, 10, 10, 80, 80); // Set a clipping region
+-
+ static void reset_framebuffer(gfx_context_t *ctx) {
+     memset(framebuffer, 0, sizeof(framebuffer));
+     pixels_drawn = 0;
