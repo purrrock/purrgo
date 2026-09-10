@@ -117,10 +117,18 @@ bool purrgo_logger_start(const purrgo_gnss_solution_t* first_fix) {
     current_track_day = local_fix.day;
 
     // Имя файла формируется по локальному времени пользователя
-    char filename[32];
-    snprintf(filename, sizeof(filename), "%02d%02d%02d-%02d%02d%02d.gpx", 
-             local_fix.year, local_fix.month, local_fix.day,
-             local_fix.hours, local_fix.minutes, local_fix.seconds);
+    char filename[64];
+    const char* prefix = purrgo_fs_get_tracks_path();
+    if (prefix[0] != '\0') {
+        snprintf(filename, sizeof(filename), "%s/%02d%02d%02d-%02d%02d%02d.gpx",
+                 prefix,
+                 local_fix.year, local_fix.month, local_fix.day,
+                 local_fix.hours, local_fix.minutes, local_fix.seconds);
+    } else {
+        snprintf(filename, sizeof(filename), "%02d%02d%02d-%02d%02d%02d.gpx",
+                 local_fix.year, local_fix.month, local_fix.day,
+                 local_fix.hours, local_fix.minutes, local_fix.seconds);
+    }
 
     active_file = purrgo_fs_open(filename, FS_WRITE_CREATE);
     if (!active_file) {

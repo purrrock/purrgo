@@ -18,7 +18,7 @@ static char mock_file_content[1024];
 static size_t mock_file_len = 0;
 static size_t mock_file_pos = 0;
 
-purrgo_file_t* purrgo_fs_open(const char* path, uint32_t mode) {
+purrgo_file_t* purrgo_fs_open(const char* path, fs_mode_t mode) {
     if (mode == FS_READ) {
         if (mock_file_exists) {
             mock_file_pos = 0;

@@ -1,67 +1,130 @@
 #include "purrgo/fs_hal.h"
+#include "fatfs.h"
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
 
-/*
- * STM32 Stub Implementation of the filesystem HAL.
- *
- * This implementation acts as a placeholder when no physical
- * SD card or filesystem backend is available on the hardware.
- * It simulates an empty/unavailable filesystem.
- */
+struct purrgo_file_s {
+    FIL fil;
+};
+
+struct purrgo_dir_s {
+    DIR dir;
+};
+
+const char* purrgo_fs_get_config_path(void) {
+    return "0:/PURRGO/PURRGO.CFG";
+}
+
+const char* purrgo_fs_get_maps_path(void) {
+    return "0:/PURRGO/MAPS";
+}
+
+const char* purrgo_fs_get_tracks_path(void) {
+    return "0:/PURRGO/TRACKS";
+}
 
 purrgo_file_t* purrgo_fs_open(const char* filepath, fs_mode_t mode) {
-    /* No storage available to open files */
-    (void)filepath;
-    (void)mode;
-    return NULL;
+    if (!filepath) return NULL;
+
+    BYTE ff_mode = 0;
+    switch (mode) {
+        case FS_READ:
+            ff_mode = FA_READ | FA_OPEN_EXISTING;
+            break;
+        case FS_WRITE_CREATE:
+            ff_mode = FA_WRITE | FA_CREATE_ALWAYS;
+            break;
+        case FS_WRITE_APPEND:
+            ff_mode = FA_WRITE | FA_OPEN_ALWAYS | FA_OPEN_APPEND;
+            break;
+        default:
+            return NULL;
+    }
+
+    purrgo_file_t* file = (purrgo_file_t*)malloc(sizeof(purrgo_file_t));
+    if (!file) return NULL;
+
+    FRESULT res = f_open(&file->fil, filepath, ff_mode);
+    if (res != FR_OK) {
+        free(file);
+        return NULL;
+    }
+
+    return file;
 }
 
 uint32_t purrgo_fs_write(purrgo_file_t* file, const uint8_t* data, uint32_t size) {
-    /* Write fails, 0 bytes written */
-    (void)file;
-    (void)data;
-    (void)size;
-    return 0;
+    if (!file || !data || size == 0) return 0;
+
+    UINT bw = 0;
+    FRESULT res = f_write(&file->fil, data, (UINT)size, &bw);
+    if (res != FR_OK) {
+        return 0;
+    }
+    return (uint32_t)bw;
 }
 
 uint32_t purrgo_fs_read(purrgo_file_t* file, uint8_t* buffer, uint32_t size) {
-    /* Read fails, 0 bytes read */
-    (void)file;
-    (void)buffer;
-    (void)size;
-    return 0;
+    if (!file || !buffer || size == 0) return 0;
+
+    UINT br = 0;
+    FRESULT res = f_read(&file->fil, buffer, (UINT)size, &br);
+    if (res != FR_OK) {
+        return 0;
+    }
+    return (uint32_t)br;
 }
 
 bool purrgo_fs_seek(purrgo_file_t* file, uint32_t offset) {
-    /* Cannot seek an invalid file */
-    (void)file;
-    (void)offset;
-    return false;
+    if (!file) return false;
+    FRESULT res = f_lseek(&file->fil, (FSIZE_t)offset);
+    return (res == FR_OK);
 }
 
 void purrgo_fs_sync(purrgo_file_t* file) {
-    /* No-op for stub */
-    (void)file;
+    if (!file) return;
+    f_sync(&file->fil);
 }
 
 void purrgo_fs_close(purrgo_file_t* file) {
-    /* No-op for stub */
-    (void)file;
+    if (!file) return;
+    f_close(&file->fil);
+    free(file);
 }
 
 purrgo_dir_t* purrgo_fs_opendir(const char* path) {
-    /* No directories exist in the stub */
-    (void)path;
-    return NULL;
+    if (!path) return NULL;
+
+    purrgo_dir_t* dir = (purrgo_dir_t*)malloc(sizeof(purrgo_dir_t));
+    if (!dir) return NULL;
+
+    FRESULT res = f_opendir(&dir->dir, path);
+    if (res != FR_OK) {
+        free(dir);
+        return NULL;
+    }
+    return dir;
 }
 
 bool purrgo_fs_readdir(purrgo_dir_t* dir, purrgo_fs_dirent_t* dirent) {
-    /* No entries to read */
-    (void)dir;
-    (void)dirent;
-    return false;
+    if (!dir || !dirent) return false;
+
+    FILINFO fno;
+    FRESULT res = f_readdir(&dir->dir, &fno);
+
+    if (res != FR_OK || fno.fname[0] == 0) {
+        return false;
+    }
+
+    snprintf(dirent->name, PURRGO_FS_MAX_PATH, "%s", fno.fname);
+    dirent->is_directory = (fno.fattrib & AM_DIR) ? true : false;
+
+    return true;
 }
 
 void purrgo_fs_closedir(purrgo_dir_t* dir) {
-    /* No-op for stub */
-    (void)dir;
+    if (!dir) return;
+    f_closedir(&dir->dir);
+    free(dir);
 }
