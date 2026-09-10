@@ -33,4 +33,9 @@ purrgo_dir_t* purrgo_fs_opendir(const char* path);
 bool purrgo_fs_readdir(purrgo_dir_t* dir, purrgo_fs_dirent_t* dirent);
 void purrgo_fs_closedir(purrgo_dir_t* dir);
 
+
+const char* purrgo_fs_get_config_path(void);
+const char* purrgo_fs_get_maps_path(void);
+const char* purrgo_fs_get_tracks_path(void);
+
 #endif // PURRGO_FS_HAL_H

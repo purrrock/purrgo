@@ -24,8 +24,8 @@ FATFS USERFatFS;    /* File system object for USER logical drive */
 FIL USERFile;       /* File object for USER */
 
 /* USER CODE BEGIN Variables */
+#include "purrgo/app_fsm.h"
 #include "purrgo/gnss_types.h"
-extern purrgo_gnss_solution_t gnss_solution;
 /* USER CODE END Variables */
 
 void MX_FATFS_Init(void)
@@ -46,35 +46,30 @@ void MX_FATFS_Init(void)
 DWORD get_fattime(void)
 {
   /* USER CODE BEGIN get_fattime */
-  // Use a fallback date of 1 Jan 2026 00:00:00 if GNSS is invalid or year is 0
-  // This ensures a valid FAT timestamp is generated even without a satellite fix.
-  if (!gnss_solution.valid || gnss_solution.year == 0) {
-      uint32_t year = 2026;
-      uint32_t month = 1;
-      uint32_t day = 1;
-      uint32_t hour = 0;
-      uint32_t minute = 0;
-      uint32_t second = 0;
+  const purrgo_gnss_solution_t* gnss = purrgo_app_get_gnss_solution();
+  uint32_t year, month, day, hour, minute, second;
 
-      return ((DWORD)(year - 1980) << 25)
-           | ((DWORD)month << 21)
-           | ((DWORD)day << 16)
-           | ((DWORD)hour << 11)
-           | ((DWORD)minute << 5)
-           | ((DWORD)(second / 2));
+  if (gnss != NULL && gnss->valid && gnss->year > 0)
+  {
+    year = 2000 + gnss->year;
+    month = gnss->month;
+    day = gnss->day;
+    hour = gnss->hours;
+    minute = gnss->minutes;
+    second = gnss->seconds;
+  }
+  else
+  {
+    // Use a fallback date of 1 Jan 2026 00:00:00
+    // This ensures a valid FAT timestamp is generated even without a satellite fix.
+    year = 2026;
+    month = 1;
+    day = 1;
+    hour = 0;
+    minute = 0;
+    second = 0;
   }
 
-  // GNSS year is a two-digit year (e.g. 26 for 2026). Convert to full year
-  // using a 32-bit integer to prevent 8-bit overflow during addition.
-  uint32_t year = 2000 + gnss_solution.year;
-  uint32_t month = gnss_solution.month;
-  uint32_t day = gnss_solution.day;
-  uint32_t hour = gnss_solution.hours;
-  uint32_t minute = gnss_solution.minutes;
-  uint32_t second = gnss_solution.seconds;
-
-  // FAT stores seconds with 2-second resolution, so we must divide the
-  // GNSS seconds by 2 (truncating odd seconds).
   return ((DWORD)(year - 1980) << 25)
        | ((DWORD)month << 21)
        | ((DWORD)day << 16)
