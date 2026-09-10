@@ -6,7 +6,57 @@
 #include "ui/ui_dir_select.h"
 #include "ui/ui_map_layers.h"
 
+#include "purrgo/gfx_text.h"
+#include "purrgo/gfx_rect.h"
+#include "purrgo/hardware_config.h"
+
 int dbg_map_render_calls = 0;
+
+static void ui_draw_key_hints(gfx_context_t* gfx, purrgo_state_t state) {
+    int y = PURRGO_HW_DISPLAY_HEIGHT_PX - 8;
+
+    // Clear the bottom area
+    gfx_set_color(gfx, 0, 3);
+    gfx_fill_rect(gfx, 0, y, PURRGO_HW_DISPLAY_WIDTH_PX, 8);
+
+    gfx_set_color(gfx, 3, 0);
+
+    const char* k1 = "";
+    const char* k2 = "";
+    const char* k3 = "";
+    const char* k4 = "";
+
+    switch (state) {
+        case APP_STATE_MAP:
+            k1 = "1:LFT/-";
+            k2 = "2:RGT/+";
+            k3 = "3:UP/C";
+            k4 = "4:DN/NXT";
+            break;
+        case APP_STATE_TRIP_COMPUTER:
+            k1 = "";
+            k2 = "";
+            k3 = "";
+            k4 = "4:NXT";
+            break;
+        case APP_STATE_MENU_CONFIG:
+        case APP_STATE_MENU_DIR_SELECT:
+        case APP_STATE_MENU_MAP_LAYERS:
+            k1 = "1:UP";
+            k2 = "2:DN";
+            k3 = "3:SEL";
+            k4 = "4:BCK";
+            break;
+        default:
+            break;
+    }
+
+    int step = PURRGO_HW_DISPLAY_WIDTH_PX / 4;
+    if (k1[0]) gfx_draw_string(gfx, 2, y + 1, k1);
+    if (k2[0]) gfx_draw_string(gfx, 2 + step, y + 1, k2);
+    if (k3[0]) gfx_draw_string(gfx, 2 + step * 2, y + 1, k3);
+    if (k4[0]) gfx_draw_string(gfx, 2 + step * 3, y + 1, k4);
+}
 
 void purrgo_app_ui_render(
     gfx_context_t* gfx,
@@ -38,6 +88,8 @@ void purrgo_app_ui_render(
         default:
             break;
     }
+
+    ui_draw_key_hints(gfx, current_state);
 
     prev_state = current_state;
 }
