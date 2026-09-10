@@ -53,5 +53,19 @@ track_logger_mode_t config_app_get_draft_log_mode(void);
 
 bool config_app_get_draft_track_display_enabled(void);
 
+/*
+ * Состояние редактирования слоев карты.
+ */
+int config_app_get_map_layers_cursor(void);
+bool config_app_get_draft_layer_landuse(void);
+bool config_app_get_draft_layer_water(void);
+bool config_app_get_draft_layer_landuse_labels(void);
+bool config_app_get_draft_layer_water_labels(void);
+bool config_app_get_draft_layer_roads(void);
+bool config_app_get_draft_layer_poi(void);
+bool config_app_get_draft_layer_poi_labels(void);
+bool config_app_get_draft_layer_route(void);
+bool config_app_get_draft_layer_track(void);
+
 
 #endif /* PURRGO_CONFIG_CONTROLLER_H */

@@ -267,6 +267,28 @@ void ui_render_menu_config(gfx_context_t* gfx)
 
     /*
      * ---------------------------------------------------------------
+     * MAP LAYERS
+     * ---------------------------------------------------------------
+     */
+    int map_layers_idx = poi_enabled ? 6 : 5;
+
+    if (cursor == map_layers_idx) {
+        gfx_set_color(gfx, 3, 0);
+    }
+    else {
+        gfx_set_color(gfx, 0, 3);
+    }
+
+    gfx_draw_string(
+        gfx,
+        10,
+        poi_enabled ? 115 : 100,
+        "Map layers"
+    );
+
+
+    /*
+     * ---------------------------------------------------------------
      * HELP
      * ---------------------------------------------------------------
      */
@@ -275,28 +297,28 @@ void ui_render_menu_config(gfx_context_t* gfx)
     gfx_draw_string(
         gfx,
         10,
-        poi_enabled ? 120 : 105,
+        poi_enabled ? 135 : 120,
         "UP/DN : Select"
     );
 
     gfx_draw_string(
         gfx,
         10,
-        poi_enabled ? 135 : 120,
+        poi_enabled ? 150 : 135,
         "+/- : Change"
     );
 
     gfx_draw_string(
         gfx,
         10,
-        poi_enabled ? 150 : 135,
+        poi_enabled ? 165 : 150,
         "OK  : Apply/Open"
     );
 
     gfx_draw_string(
         gfx,
         10,
-        poi_enabled ? 165 : 150,
+        poi_enabled ? 180 : 165,
         "MENU: Cancel"
     );
 }
