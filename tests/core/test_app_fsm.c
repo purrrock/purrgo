@@ -355,6 +355,22 @@ void test_auto_follow_opposite_side() {
 
 #include "purrgo/system_time.h"
 
+void test_unmapped_keys() {
+    purrgo_app_init();
+    purrgo_state_t state_before = purrgo_app_get_state();
+
+    purrgo_app_handle_button(PURRGO_BTN_KEY1_SHORT);
+    purrgo_app_handle_button(PURRGO_BTN_KEY2_SHORT);
+    purrgo_app_handle_button(PURRGO_BTN_KEY3_SHORT);
+    purrgo_app_handle_button(PURRGO_BTN_KEY4_SHORT);
+    purrgo_app_handle_button(PURRGO_BTN_KEY1_LONG);
+    purrgo_app_handle_button(PURRGO_BTN_KEY2_LONG);
+    purrgo_app_handle_button(PURRGO_BTN_KEY3_LONG);
+    purrgo_app_handle_button(PURRGO_BTN_KEY4_LONG);
+
+    assert(purrgo_app_get_state() == state_before);
+}
+
 // Mock for purrgo_system_time_ms to be used in the test
 static uint32_t mock_system_time_ms = 0;
 uint32_t purrgo_system_time_ms(void) {
@@ -521,6 +537,7 @@ int main() {
     test_map_dirty_state();
     test_map_clean_refresh_skips_render();
     test_auto_follow_opposite_side();
+    test_unmapped_keys();
 
     printf("App FSM tests passed!\n");
     return 0;
