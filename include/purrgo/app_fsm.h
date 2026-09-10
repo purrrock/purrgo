@@ -29,7 +29,15 @@ typedef enum {
     PURRGO_BTN_PLUS,          // Zoom In карты
     PURRGO_BTN_MINUS,         // Zoom Out карты
     PURRGO_BTN_MENU,          // Циклическая смена основных страниц (Page/Menu) / Отмена (Назад) в подменю
-    PURRGO_BTN_OK             // Подтверждение выбора (Enter)
+    PURRGO_BTN_OK,            // Подтверждение выбора (Enter)
+    PURRGO_BTN_KEY1_SHORT,
+    PURRGO_BTN_KEY2_SHORT,
+    PURRGO_BTN_KEY3_SHORT,
+    PURRGO_BTN_KEY4_SHORT,
+    PURRGO_BTN_KEY1_LONG,
+    PURRGO_BTN_KEY2_LONG,
+    PURRGO_BTN_KEY3_LONG,
+    PURRGO_BTN_KEY4_LONG
 } purrgo_btn_t;
 
 // Инициализация конечного автомата
