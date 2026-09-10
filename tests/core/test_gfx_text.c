@@ -165,12 +165,37 @@ static bool test_single_char() {
     return true;
 }
 
+static bool test_out_of_bounds() {
+    printf("Running test_out_of_bounds...\n");
 static bool test_single_char_string() {
     printf("Running test_single_char_string...\n");
     gfx_context_t ctx;
     gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, draw_pixel, read_pixel);
     reset_test_state(&ctx);
 
+    // Completely outside the frame buffer
+    gfx_draw_string(&ctx, -100, -100, "Invisible");
+
+    if (pixels_drawn != 0) {
+        printf("FAILED test_out_of_bounds: Expected 0 pixels, got %d\n", pixels_drawn);
+        return false;
+    }
+
+    // Partially outside
+    reset_test_state(&ctx);
+    gfx_draw_string(&ctx, WIDTH - 3, HEIGHT - 3, "Part");
+
+    if (pixels_drawn == 0 || pixels_drawn >= 4 * 48) {
+        printf("FAILED test_out_of_bounds: Expected partial draw, got %d pixels\n", pixels_drawn);
+        return false;
+    }
+
+    printf("PASSED test_out_of_bounds\n");
+    return true;
+}
+
+static bool test_extended_ascii() {
+    printf("Running test_extended_ascii...\n");
     gfx_draw_string(&ctx, 10, 10, "A");
 
     if (pixels_drawn != 48) {
@@ -188,6 +213,38 @@ static bool test_multiple_newlines() {
     gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, draw_pixel, read_pixel);
     reset_test_state(&ctx);
 
+    // Draw chars >= 128
+    gfx_draw_string(&ctx, 10, 10, "\x80\xFF");
+
+    if (pixels_drawn != 96) {
+        printf("FAILED test_extended_ascii: Expected 96 pixels, got %d\n", pixels_drawn);
+        return false;
+    }
+
+    printf("PASSED test_extended_ascii\n");
+    return true;
+}
+
+static bool test_multiple_newlines() {
+    printf("Running test_multiple_newlines...\n");
+    gfx_context_t ctx;
+    gfx_init(&ctx, WIDTH, HEIGHT, framebuffer, draw_pixel, read_pixel);
+    reset_test_state(&ctx);
+
+    // A at 10,10, \n\n moves to 10,26, B at 10,26
+    gfx_draw_string(&ctx, 10, 10, "A\n\nB");
+
+    if (pixels_drawn != 96) {
+        printf("FAILED test_multiple_newlines: Expected 96 pixels, got %d\n", pixels_drawn);
+        return false;
+    }
+
+    if (last_pixel_y < 26 || last_pixel_y > 33) {
+         printf("FAILED test_multiple_newlines: last_pixel_y %d is out of expected bounds [26, 33]\n", last_pixel_y);
+         return false;
+    }
+
+    printf("PASSED test_multiple_newlines\n");
     gfx_draw_string(&ctx, 10, 10, "\n\n\n");
 
     if (pixels_drawn != 0) {
@@ -269,6 +326,9 @@ int main() {
     if (!test_newline_handling()) success = false;
     if (!test_string_halo()) success = false;
     if (!test_single_char()) success = false;
+    if (!test_out_of_bounds()) success = false;
+    if (!test_extended_ascii()) success = false;
+    if (!test_multiple_newlines()) success = false;
     if (!test_single_char_string()) success = false;
     if (!test_multiple_newlines()) success = false;
     if (!test_out_of_bounds_text()) success = false;
