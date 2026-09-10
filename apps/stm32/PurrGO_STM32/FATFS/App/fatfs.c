@@ -24,6 +24,8 @@ FATFS USERFatFS;    /* File system object for USER logical drive */
 FIL USERFile;       /* File object for USER */
 
 /* USER CODE BEGIN Variables */
+#include "purrgo/app_fsm.h"
+#include "purrgo/gnss_types.h"
 /* USER CODE END Variables */
 
 void MX_FATFS_Init(void)
@@ -44,14 +46,29 @@ void MX_FATFS_Init(void)
 DWORD get_fattime(void)
 {
   /* USER CODE BEGIN get_fattime */
-  // Use a fallback date of 1 Jan 2026 00:00:00
-  // This ensures a valid FAT timestamp is generated even without a satellite fix.
-  uint32_t year = 2026;
-  uint32_t month = 1;
-  uint32_t day = 1;
-  uint32_t hour = 0;
-  uint32_t minute = 0;
-  uint32_t second = 0;
+  const purrgo_gnss_solution_t* gnss = purrgo_app_get_gnss_solution();
+  uint32_t year, month, day, hour, minute, second;
+
+  if (gnss != NULL && gnss->valid && gnss->year > 0)
+  {
+    year = 2000 + gnss->year;
+    month = gnss->month;
+    day = gnss->day;
+    hour = gnss->hours;
+    minute = gnss->minutes;
+    second = gnss->seconds;
+  }
+  else
+  {
+    // Use a fallback date of 1 Jan 2026 00:00:00
+    // This ensures a valid FAT timestamp is generated even without a satellite fix.
+    year = 2026;
+    month = 1;
+    day = 1;
+    hour = 0;
+    minute = 0;
+    second = 0;
+  }
 
   return ((DWORD)(year - 1980) << 25)
        | ((DWORD)month << 21)
