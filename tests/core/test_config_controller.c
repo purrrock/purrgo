@@ -43,16 +43,20 @@ void test_config_controller_menu_navigation(void) {
     purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_BTN_DOWN, &next_state);
     assert(config_app_get_config_cursor() == 5); // CONFIG_CURSOR_TRACK_DISPLAY
 
-    // Test bounds (Should not go past 5)
     purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_BTN_DOWN, &next_state);
-    assert(config_app_get_config_cursor() == 5);
+    assert(config_app_get_config_cursor() == 6); // CONFIG_CURSOR_MAP_LAYERS
+
+    // Test bounds (Should not go past 6)
+    purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_BTN_DOWN, &next_state);
+    assert(config_app_get_config_cursor() == 6);
 
     // Test UP
     purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_BTN_UP, &next_state);
-    assert(config_app_get_config_cursor() == 4);
+    assert(config_app_get_config_cursor() == 5);
 
     // Now disable POI (it will collapse the menu)
     // First let's go to POI setting
+    purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_BTN_UP, &next_state);
     purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_BTN_UP, &next_state);
     purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_BTN_UP, &next_state);
     assert(config_app_get_config_cursor() == 2);
@@ -71,7 +75,10 @@ void test_config_controller_menu_navigation(void) {
     assert(config_app_get_config_cursor() == 4); // CONFIG_CURSOR_TRACK_DISPLAY is now at index 4
 
     purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_BTN_DOWN, &next_state);
-    assert(config_app_get_config_cursor() == 4); // Bounds check
+    assert(config_app_get_config_cursor() == 5); // CONFIG_CURSOR_MAP_LAYERS is now at index 5
+
+    purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_BTN_DOWN, &next_state);
+    assert(config_app_get_config_cursor() == 5); // Bounds check
 }
 
 void test_config_controller_tz_editing(void) {
