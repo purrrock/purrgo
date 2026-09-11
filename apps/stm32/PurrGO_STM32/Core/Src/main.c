@@ -42,6 +42,7 @@
 #include "buttons.h"
 #include "display_stm32.h"
 #include "display_st7789.h"
+#include "debug_buttons.h"
 
 
 /* USER CODE END Includes */
@@ -190,6 +191,7 @@ int main(void)
   MX_FATFS_Init();
   /* USER CODE BEGIN 2 */
 
+  purrgo_debug_buttons_init();
 
   /*
    * -------------------------------------------------------------------------
@@ -354,6 +356,8 @@ int main(void)
 
       process_buttons();
     }
+
+    purrgo_debug_buttons_process();
 
     /*
      * -----------------------------------------------------------------------
