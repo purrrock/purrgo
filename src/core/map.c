@@ -253,16 +253,16 @@ bool purrgo_map_render_viewport(
         map_dir
     );
 
-    purrgo_file_t* landuse_idx_file =
-        purrgo_fs_open(landuse_idx_path, FS_READ);
+    purrgo_file_t* landuse_idx_file = app_config.layer_landuse ?
+        purrgo_fs_open(landuse_idx_path, FS_READ) : NULL;
 
-    purrgo_file_t* landuse_mlp_file =
-        purrgo_fs_open(landuse_mlp_path, FS_READ);
+    purrgo_file_t* landuse_mlp_file = app_config.layer_landuse ?
+        purrgo_fs_open(landuse_mlp_path, FS_READ) : NULL;
 
-    purrgo_file_t* landuse_db_file =
-        purrgo_fs_open(landuse_db_path, FS_READ);
+    purrgo_file_t* landuse_db_file = (app_config.layer_landuse && app_config.layer_landuse_labels) ?
+        purrgo_fs_open(landuse_db_path, FS_READ) : NULL;
 
-    bool landuse_success = false;
+    bool landuse_success = !app_config.layer_landuse;
 
     if (landuse_idx_file && landuse_mlp_file) {
 
@@ -327,13 +327,13 @@ bool purrgo_map_render_viewport(
         map_dir
     );
 
-    purrgo_file_t* idx_file =
-        purrgo_fs_open(idx_path, FS_READ);
+    purrgo_file_t* idx_file = app_config.layer_roads ?
+        purrgo_fs_open(idx_path, FS_READ) : NULL;
 
-    purrgo_file_t* mlp_file =
-        purrgo_fs_open(mlp_path, FS_READ);
+    purrgo_file_t* mlp_file = app_config.layer_roads ?
+        purrgo_fs_open(mlp_path, FS_READ) : NULL;
 
-    bool roads_success = false;
+    bool roads_success = !app_config.layer_roads;
 
     if (idx_file && mlp_file) {
 
@@ -411,11 +411,11 @@ bool purrgo_map_render_viewport(
         map_dir
     );
 
-    purrgo_file_t* poi_idx_file =
-        purrgo_fs_open(poi_idx_path, FS_READ);
+    purrgo_file_t* poi_idx_file = app_config.layer_poi ?
+        purrgo_fs_open(poi_idx_path, FS_READ) : NULL;
 
-    purrgo_file_t* poi_db_file =
-        purrgo_fs_open(poi_db_path, FS_READ);
+    purrgo_file_t* poi_db_file = (app_config.layer_poi && app_config.layer_poi_labels) ?
+        purrgo_fs_open(poi_db_path, FS_READ) : NULL;
 
     bool poi_success = true;
 
