@@ -26,6 +26,27 @@ static bool core_fs_seek_wrapper(void* handle, uint32_t offset)
     return purrgo_fs_seek((purrgo_file_t*)handle, offset);
 }
 
+static int get_target_lod(purrgo_map_scale_t scale, purrgo_map_details_t details)
+{
+    if (details == PURRGO_MAP_DETAILS_LOW) {
+        if (scale <= PURRGO_MAP_SCALE_100M) {
+            return 0;
+        } else if (scale <= PURRGO_MAP_SCALE_2KM) {
+            return 1;
+        } else {
+            return 2;
+        }
+    } else {
+        if (scale <= PURRGO_MAP_SCALE_500M) {
+            return 0;
+        } else if (scale <= PURRGO_MAP_SCALE_5KM) {
+            return 1;
+        } else {
+            return 2;
+        }
+    }
+}
+
 static bool map_parse_pgo_header(purrgo_fs_t *fs, pgo_header_info_t *info)
 {
     uint8_t pgo_header[32];
@@ -129,15 +150,7 @@ void purrgo_map_render_layer(
     }
 
     purrgo_map_scale_t current_scale = purrgo_app_get_map_zoom_level();
-    int target_lod = 0;
-
-    if (current_scale <= PURRGO_MAP_SCALE_500M) {
-        target_lod = 0;
-    } else if (current_scale <= PURRGO_MAP_SCALE_5KM) {
-        target_lod = 1;
-    } else {
-        target_lod = 2;
-    }
+    int target_lod = get_target_lod(current_scale, app_config.map_details);
 
     uint32_t target_lod_offset = idx_header.lod_offset[target_lod];
     uint32_t lod_end = 0;
