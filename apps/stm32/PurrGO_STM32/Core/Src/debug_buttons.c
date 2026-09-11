@@ -11,6 +11,7 @@
  * The FSM is not modified and treats these events exactly as if they
  * came from a physical button.
  */
+#define DEBUG_BUTTONS_MAX_BYTES_PER_LOOP 16U
 
 #include "debug_buttons.h"
 #include "purrgo/app_fsm.h"
@@ -18,6 +19,7 @@
 #include "usart.h"
 #include "stm32f4xx_hal.h"
 #include <stdint.h>
+
 
 void purrgo_debug_buttons_init(void)
 {
@@ -36,14 +38,19 @@ void purrgo_debug_buttons_process(void)
      * We can check the RXNE (Read Data Register Not Empty) flag directly
      * to avoid blocking calls like HAL_UART_Receive.
      */
-    while (__HAL_UART_GET_FLAG(&huart2, UART_FLAG_RXNE) == SET)
+    uint16_t bytes_processed = 0U;
+
+    while (
+    bytes_processed < DEBUG_BUTTONS_MAX_BYTES_PER_LOOP &&
+    __HAL_UART_GET_FLAG(&huart2, UART_FLAG_RXNE) == SET
+    )
     {
         /*
          * Read the received data.
          * The UART data register (DR) read clears the RXNE flag.
          */
         rx_char = (uint8_t)(huart2.Instance->DR & (uint8_t)0x00FF);
-
+        bytes_processed++;
         purrgo_btn_t btn;
         const char *log_msg = NULL;
 
@@ -87,7 +94,7 @@ void purrgo_debug_buttons_process(void)
         }
 
         /* Log recognized button event */
-        purrgo_logger_write(log_msg);
+        // purrgo_logger_write(log_msg);
 
         /* Inject the event into the FSM */
         purrgo_app_handle_button(btn);
