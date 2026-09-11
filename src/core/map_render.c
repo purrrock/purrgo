@@ -463,7 +463,7 @@ void map_render_feature(
         if (part_count == 0) {
 
             PURRGO_LOG(
-                "MAP: polygon geometry has no parts points=%ld\n",
+                "MAP: polygon geometry has no parts points=%ld\n\r",
                 (long)iter.num_points
             );
 
@@ -480,7 +480,7 @@ void map_render_feature(
 
             PURRGO_LOG(
                 "MAP: polygon geometry exceeds uint16_t limit "
-                "points=%ld parts=%ld\n",
+                "points=%ld parts=%ld\n\r",
                 (long)iter.num_points,
                 (long)part_count
             );
