@@ -73,6 +73,9 @@ target_sources(PurrGO_STM32 PRIVATE
 
     # Temporary TFT display driver for debug
     Core/Src/display_st7789.c
+
+    # Debug button emulator via UART
+    Core/Src/debug_buttons.c
 )
 
 # Add include paths
