@@ -5,7 +5,7 @@
 #include "purrgo/config.h"
 #include "purrgo/config_controller.h"
 #include "purrgo/fs_hal.h"
-#include <stdio.h>
+#include "purrgo/purrgo_format.h"
 
 
 void ui_render_menu_config(gfx_context_t* gfx)
@@ -55,7 +55,7 @@ void ui_render_menu_config(gfx_context_t* gfx)
     int hours = abs_tz / 60;
     int mins = abs_tz % 60;
 
-    snprintf(
+    purrgo_snprintf(
         buf,
         sizeof(buf),
         "TZ: UTC%c%02d:%02d",
@@ -91,7 +91,7 @@ void ui_render_menu_config(gfx_context_t* gfx)
         gfx_set_color(gfx, 0, 3);
     }
 
-    snprintf(
+    purrgo_snprintf(
         buf,
         sizeof(buf),
         "DIR: %s",
@@ -127,7 +127,7 @@ void ui_render_menu_config(gfx_context_t* gfx)
         poi_mode_str = "NO";
     }
 
-    snprintf(
+    purrgo_snprintf(
         buf,
         sizeof(buf),
         "POI: %s",
@@ -168,7 +168,7 @@ void ui_render_menu_config(gfx_context_t* gfx)
             break;
     }
 
-    snprintf(
+    purrgo_snprintf(
         buf,
         sizeof(buf),
         "LOG: %s",
@@ -201,7 +201,7 @@ void ui_render_menu_config(gfx_context_t* gfx)
         map_details_str = "LOW";
     }
 
-    snprintf(
+    purrgo_snprintf(
         buf,
         sizeof(buf),
         "MAP DETAILS: %s",

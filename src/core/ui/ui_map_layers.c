@@ -2,7 +2,7 @@
 #include "purrgo/app_fsm.h"
 #include "purrgo/gfx_text.h"
 #include "purrgo/config_controller.h"
-#include <stdio.h>
+#include "purrgo/purrgo_format.h"
 
 static void draw_layer_item(gfx_context_t* gfx, int y, int index, int cursor, bool enabled, const char* label) {
     if (cursor == index) {
@@ -17,7 +17,7 @@ static void draw_layer_item(gfx_context_t* gfx, int y, int index, int cursor, bo
      * Используем символ 'x' как фактически поддерживаемый
      * текущим embedded-шрифтом (вместо юникодной галочки ✓).
      */
-    snprintf(buf, sizeof(buf), "%s %s", enabled ? "x" : " ", label);
+    purrgo_snprintf(buf, sizeof(buf), "%s %s", enabled ? "x" : " ", label);
 
     gfx_draw_string(gfx, 10, y, buf);
 }

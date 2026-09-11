@@ -3,7 +3,8 @@
 #include "purrgo/geo.h"
 #include "map_projection.h"
 #include "purrgo/hardware_config.h"
-#include <stdio.h>
+#include "purrgo/logger.h"
+#include "purrgo/purrgo_format.h"
 
 #define AUTO_FOLLOW_EDGE_MARGIN_PX 16
 #define AUTO_FOLLOW_STOP_MARGIN_DIV 16
@@ -213,7 +214,7 @@ static void apply_auto_follow(const purrgo_gnss_solution_t* fix) {
 
 
         if (new_dx <= follow_start_x && new_dy <= follow_start_y) {
-            printf("AUTO-FOLLOW: marker=(%d,%d) target=(%d,%d) result=(%d,%d)\n", sx, sy, (int)target_x, (int)target_y, new_sx, new_sy);
+            PURRGO_LOG("AUTO-FOLLOW: marker=(%d,%d) target=(%d,%d) result=(%d,%d)\n", sx, sy, (int)target_x, (int)target_y, new_sx, new_sy);
 
             if (map_center_lat_1e7 != (int32_t)candidate_lat || map_center_lon_1e7 != (int32_t)candidate_lon) {
                 map_center_lat_1e7 = (int32_t)candidate_lat;
