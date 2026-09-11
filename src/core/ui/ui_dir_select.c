@@ -3,7 +3,7 @@
 #include "purrgo/gfx_text.h"
 #include "purrgo/gfx_rect.h"
 #include "purrgo/fs_hal.h"
-#include <stdio.h>
+#include "purrgo/purrgo_format.h"
 
 
 void ui_render_menu_dir_select(gfx_context_t* gfx)
@@ -51,7 +51,7 @@ void ui_render_menu_dir_select(gfx_context_t* gfx)
             gfx_set_color(gfx, 0, 3);
         }
 
-        snprintf(
+        purrgo_snprintf(
             buf,
             sizeof(buf),
             "[%s]",

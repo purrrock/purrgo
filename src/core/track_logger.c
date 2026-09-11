@@ -1,4 +1,4 @@
-#include <stdio.h>
+#include "purrgo/purrgo_format.h"
 
 #include "purrgo/track_logger.h"
 #include "purrgo/geo.h"
@@ -122,12 +122,12 @@ bool purrgo_logger_start(const purrgo_gnss_solution_t* first_fix) {
     char filename[64];
     const char* prefix = purrgo_fs_get_tracks_path();
     if (prefix[0] != '\0') {
-        snprintf(filename, sizeof(filename), "%s/%02d%02d%02d-%02d%02d%02d.gpx",
+        purrgo_snprintf(filename, sizeof(filename), "%s/%02d%02d%02d-%02d%02d%02d.gpx",
                  prefix,
                  local_fix.year, local_fix.month, local_fix.day,
                  local_fix.hours, local_fix.minutes, local_fix.seconds);
     } else {
-        snprintf(filename, sizeof(filename), "%02d%02d%02d-%02d%02d%02d.gpx",
+        purrgo_snprintf(filename, sizeof(filename), "%02d%02d%02d-%02d%02d%02d.gpx",
                  local_fix.year, local_fix.month, local_fix.day,
                  local_fix.hours, local_fix.minutes, local_fix.seconds);
     }
@@ -138,7 +138,7 @@ bool purrgo_logger_start(const purrgo_gnss_solution_t* first_fix) {
         return false;
     }
 
-    snprintf(s_active_filename, sizeof(s_active_filename), "%.*s", (int)(sizeof(s_active_filename) - 1), filename);
+    purrgo_snprintf(s_active_filename, sizeof(s_active_filename), "%.*s", (int)(sizeof(s_active_filename) - 1), filename);
 
     buffer_pos = 0;
     is_first_point = true;
@@ -206,7 +206,7 @@ bool purrgo_logger_add_point(const purrgo_gnss_solution_t* fix) {
     int32_t lon_abs = fix->lon_1e7 < 0 ? -fix->lon_1e7 : fix->lon_1e7;
 
     char point_str[128];
-    snprintf(point_str, sizeof(point_str), 
+    purrgo_snprintf(point_str, sizeof(point_str),
              "<trkpt lat=\"%s%d.%07d\" lon=\"%s%d.%07d\">\n"
              "  <ele>%d</ele>\n"
              "  <time>20%02d-%02d-%02dT%02d:%02d:%02dZ</time>\n"

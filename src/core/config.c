@@ -1,7 +1,7 @@
 #include "purrgo/config.h"
 #include "purrgo/fs_hal.h"
 #include "purrgo/logger.h"
-#include <stdio.h>
+#include "purrgo/purrgo_format.h"
 #include <string.h>
 
 
@@ -120,7 +120,7 @@ void purrgo_config_init(void)
     /*
      * Базовый путь к картам для PC-эмулятора.
      */
-    snprintf(
+    purrgo_snprintf(
         app_config.map_dir,
         sizeof(app_config.map_dir),
         "%s",
@@ -236,7 +236,7 @@ bool purrgo_config_load(void)
              * Каталог карт.
              */
             else if (strcmp(key, "MAP_DIR") == 0) {
-                snprintf(
+                purrgo_snprintf(
                     app_config.map_dir,
                     sizeof(app_config.map_dir),
                     "%.*s",
@@ -418,7 +418,7 @@ bool purrgo_config_save(void)
     /*
      * Формируем текстовую конфигурацию.
      */
-    int len = snprintf(
+    int len = purrgo_snprintf(
         buf,
         sizeof(buf),
 
@@ -469,7 +469,7 @@ bool purrgo_config_save(void)
     );
 
     /*
-     * snprintf() возвращает количество символов,
+     * purrgo_snprintf() возвращает количество символов,
      * которое потребовалось бы записать без учёта '\0'.
      * Если len >= sizeof(buf), конфигурация была бы обрезана.
      */
