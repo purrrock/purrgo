@@ -61,18 +61,18 @@ static struct {
 
 static void log_marker_diagnostic(const char* reason, const marker_state_t* m) {
     if (m->rendered) {
-        PURRGO_LOG(
-            "%s | valid: %d | pos: %ld,%ld | course_valid: %d | course: %d | bbox: %d,%d -> %d,%d\n\r",
-            reason, m->gnss_valid, (long)m->lat_1e7, (long)m->lon_1e7,
-            m->course_valid, m->course_valid ? m->course_deg : 0,
-            m->min_x, m->min_y, m->max_x, m->max_y
-        );
+      //  PURRGO_LOG(
+      //      "%s | valid: %d | pos: %ld,%ld | course_valid: %d | course: %d | bbox: %d,%d -> %d,%d\n\r",
+      //      reason, m->gnss_valid, (long)m->lat_1e7, (long)m->lon_1e7,
+      //      m->course_valid, m->course_valid ? m->course_deg : 0,
+      //      m->min_x, m->min_y, m->max_x, m->max_y
+      //  );
     } else {
-        PURRGO_LOG(
-            "%s | valid: %d | pos: %ld,%ld | course_valid: %d | course: %d | NOT RENDERED\n\r",
-            reason, m->gnss_valid, (long)m->lat_1e7, (long)m->lon_1e7,
-            m->course_valid, m->course_valid ? m->course_deg : 0
-        );
+      //  PURRGO_LOG(
+      //      "%s | valid: %d | pos: %ld,%ld | course_valid: %d | course: %d | NOT RENDERED\n\r",
+      //      reason, m->gnss_valid, (long)m->lat_1e7, (long)m->lon_1e7,
+      //      m->course_valid, m->course_valid ? m->course_deg : 0
+      //  );
     }
 }
 
@@ -420,7 +420,7 @@ static void ui_save_marker_bg(gfx_context_t* gfx, const marker_state_t* state) {
 
     gfx_set_clip(gfx, old_clip_x, old_clip_y, old_clip_w, old_clip_h);
 
-    PURRGO_LOG("MARKER BG SAVE x=%d y=%d w=%d h=%d\n", x, y, w, h);
+    // PURRGO_LOG("MARKER BG SAVE x=%d y=%d w=%d h=%d\n", x, y, w, h);
 }
 
 static void ui_restore_marker_bg(gfx_context_t* gfx) {
@@ -445,7 +445,7 @@ static void ui_restore_marker_bg(gfx_context_t* gfx) {
     gfx_set_clip(gfx, old_clip_x, old_clip_y, old_clip_w, old_clip_h);
 
     gfx->color_fg = old_fg;
-    PURRGO_LOG("MARKER BG RESTORE x=%d y=%d w=%d h=%d\n", marker_bg_cache.x, marker_bg_cache.y, marker_bg_cache.w, marker_bg_cache.h);
+    // PURRGO_LOG("MARKER BG RESTORE x=%d y=%d w=%d h=%d\n", marker_bg_cache.x, marker_bg_cache.y, marker_bg_cache.w, marker_bg_cache.h);
 }
 
 static void ui_draw_marker(gfx_context_t* gfx, const marker_state_t* state) {
@@ -681,7 +681,7 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
 
     static bool map_screen_logged = false;
     if (!map_screen_logged) {
-        PURRGO_LOG("EMU: APP_STATE_MAP rendering started\n\r");
+        // PURRGO_LOG("EMU: APP_STATE_MAP rendering started\n\r");
         map_screen_logged = true;
     }
 
