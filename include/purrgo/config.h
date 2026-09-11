@@ -17,27 +17,12 @@ typedef enum {
 
 
 /*
- * Режим отображения подписей POI.
- *
- * PURRGO_POI_LABELS_ALL:
- *     показывать подписи всех именованных POI.
- *
- * PURRGO_POI_LABELS_IMPORTANT:
- *     показывать только подписи важных POI.
- *
- * PURRGO_POI_LABELS_OFF:
- *     подписи POI отключены.
- *
- * На текущем этапе сам механизм отрисовки текста POI ещё не
- * реализуется. Значение настройки уже хранится в конфигурации,
- * чтобы позднее добавить рендеринг подписей без изменения
- * интерфейса настроек.
+ * Детализация карты.
  */
 typedef enum {
-    PURRGO_POI_LABELS_ALL = 0,
-    PURRGO_POI_LABELS_IMPORTANT,
-    PURRGO_POI_LABELS_OFF
-} purrgo_poi_label_mode_t;
+    PURRGO_MAP_DETAILS_LOW = 0,
+    PURRGO_MAP_DETAILS_HIGH
+} purrgo_map_details_t;
 
 
 /*
@@ -69,17 +54,9 @@ typedef struct {
     purrgo_poi_mode_t poi_mode;
 
     /*
-     * Режим отображения подписей POI.
-     *
-     * На текущем этапе используется только настройками.
-     * Сам текстовый renderer POI будет подключён отдельно.
+     * Уровень детализации карты.
      */
-    purrgo_poi_label_mode_t poi_label_mode;
-
-    /*
-     * Включение отображения текущего трека на карте.
-     */
-    bool track_display_enabled;
+    purrgo_map_details_t map_details;
 
     /*
      * Видимость слоев карты.

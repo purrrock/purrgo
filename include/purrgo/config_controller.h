@@ -42,16 +42,12 @@ int config_app_get_dir_cursor(void);
  */
 purrgo_poi_mode_t config_app_get_draft_poi_mode(void);
 
-purrgo_poi_label_mode_t
-config_app_get_draft_poi_label_mode(void);
-
-
 /*
  * Состояние редактирования настроек трека в меню.
  */
 track_logger_mode_t config_app_get_draft_log_mode(void);
 
-bool config_app_get_draft_track_display_enabled(void);
+purrgo_map_details_t config_app_get_draft_map_details(void);
 
 /*
  * Состояние редактирования слоев карты.
