@@ -3,7 +3,7 @@
 #include "purrgo/gfx_text.h"
 #include "purrgo/gfx_rect.h"
 #include "purrgo/config.h"
-#include <stdio.h>
+#include "purrgo/purrgo_format.h"
 
 void ui_trip_render_grid(gfx_context_t* gfx) {
     gfx_set_color(gfx, 0, 3);
@@ -40,7 +40,7 @@ void ui_trip_render_values(gfx_context_t* gfx, const purrgo_gnss_solution_t* gns
     int lat_lon_x = 40; // standard x offset for LAT/LON
 
     // UTC
-    snprintf(buf, sizeof(buf), "%02d:%02d", gnss->hours, gnss->minutes);
+    purrgo_snprintf(buf, sizeof(buf), "%02d:%02d", gnss->hours, gnss->minutes);
     gfx_draw_string(gfx, val_x, y_pos, buf);
     y_pos += 12;
 
@@ -50,40 +50,40 @@ void ui_trip_render_values(gfx_context_t* gfx, const purrgo_gnss_solution_t* gns
     while (total_mins >= 1440) total_mins -= 1440;
     uint8_t loc_hours = (uint8_t)(total_mins / 60);
     uint8_t loc_minutes = (uint8_t)(total_mins % 60);
-    snprintf(buf, sizeof(buf), "%02d:%02d", loc_hours, loc_minutes);
+    purrgo_snprintf(buf, sizeof(buf), "%02d:%02d", loc_hours, loc_minutes);
     gfx_draw_string(gfx, val_x, y_pos, buf);
     y_pos += 12;
 
     // FIX & SAT
-    snprintf(buf, sizeof(buf), "%-3s", gnss->valid ? "3D" : "NO");
+    purrgo_snprintf(buf, sizeof(buf), "%-3s", gnss->valid ? "3D" : "NO");
     gfx_draw_string(gfx, val_x, y_pos, buf);
 
-    snprintf(buf, sizeof(buf), "%-2d", gnss->satellites_tracked);
+    purrgo_snprintf(buf, sizeof(buf), "%-2d", gnss->satellites_tracked);
     gfx_draw_string(gfx, 100, y_pos, buf); // "SAT: " is at 70, len 4 is 24px -> 94 + 6px space = 100
     y_pos += 12;
 
     // LAT
     int lat_deg = gnss->lat_1e7 / 10000000;
     int lat_frac = (gnss->lat_1e7 > 0 ? gnss->lat_1e7 : -gnss->lat_1e7) % 10000000;
-    snprintf(buf, sizeof(buf), "%d.%07d   ", lat_deg, lat_frac);
+    purrgo_snprintf(buf, sizeof(buf), "%d.%07d   ", lat_deg, lat_frac);
     gfx_draw_string(gfx, lat_lon_x, y_pos, buf);
     y_pos += 12;
 
     // LON
     int lon_deg = gnss->lon_1e7 / 10000000;
     int lon_frac = (gnss->lon_1e7 > 0 ? gnss->lon_1e7 : -gnss->lon_1e7) % 10000000;
-    snprintf(buf, sizeof(buf), "%d.%07d   ", lon_deg, lon_frac);
+    purrgo_snprintf(buf, sizeof(buf), "%d.%07d   ", lon_deg, lon_frac);
     gfx_draw_string(gfx, lat_lon_x, y_pos, buf);
     y_pos += 12;
 
     // ALT
-    snprintf(buf, sizeof(buf), "%d m        ", (int)gnss->alt_m);
+    purrgo_snprintf(buf, sizeof(buf), "%d m        ", (int)gnss->alt_m);
     gfx_draw_string(gfx, val_x, y_pos, buf);
     y_pos += 12;
 
     // SPD
     int speed_kmh = (gnss->speed_knots * 1852) / 100000;
-    snprintf(buf, sizeof(buf), "%d km/h     ", speed_kmh);
+    purrgo_snprintf(buf, sizeof(buf), "%d km/h     ", speed_kmh);
     gfx_draw_string(gfx, val_x, y_pos, buf);
     y_pos += 12;
 
@@ -91,9 +91,9 @@ void ui_trip_render_values(gfx_context_t* gfx, const purrgo_gnss_solution_t* gns
     if (gnss->course_valid) {
         int course_deg = gnss->course_deg_100 / 100;
         int course_frac = (gnss->course_deg_100 > 0 ? gnss->course_deg_100 : -gnss->course_deg_100) % 100;
-        snprintf(buf, sizeof(buf), "%d.%02d     ", course_deg, course_frac);
+        purrgo_snprintf(buf, sizeof(buf), "%d.%02d     ", course_deg, course_frac);
     } else {
-        snprintf(buf, sizeof(buf), "N/A         ");
+        purrgo_snprintf(buf, sizeof(buf), "N/A         ");
     }
     gfx_draw_string(gfx, val_x, y_pos, buf);
     y_pos += 12;
@@ -108,7 +108,7 @@ void ui_trip_render_values(gfx_context_t* gfx, const purrgo_gnss_solution_t* gns
         }
 
         if (sun->status == SUN_STATUS_NORMAL) {
-            snprintf(buf, sizeof(buf), "SUN %02d:%02d-%02d:%02d",
+            purrgo_snprintf(buf, sizeof(buf), "SUN %02d:%02d-%02d:%02d",
                 sun->sunrise_hour, sun->sunrise_minute,
                 sun->sunset_hour, sun->sunset_minute);
             gfx_draw_string(gfx, 10, y_pos, buf);
@@ -117,9 +117,9 @@ void ui_trip_render_values(gfx_context_t* gfx, const purrgo_gnss_solution_t* gns
             int remain_h = sun->time_to_event_min / 60;
             int remain_m = sun->time_to_event_min % 60;
             if (sun->is_daytime) {
-                snprintf(buf, sizeof(buf), "TO SUNSET: %02dh %02dm", remain_h, remain_m);
+                purrgo_snprintf(buf, sizeof(buf), "TO SUNSET: %02dh %02dm", remain_h, remain_m);
             } else {
-                snprintf(buf, sizeof(buf), "TO SUNRISE: %02dh %02dm", remain_h, remain_m);
+                purrgo_snprintf(buf, sizeof(buf), "TO SUNRISE: %02dh %02dm", remain_h, remain_m);
             }
             gfx_draw_string(gfx, 10, y_pos, buf);
             y_pos += 12;
@@ -129,7 +129,7 @@ void ui_trip_render_values(gfx_context_t* gfx, const purrgo_gnss_solution_t* gns
             int total_day_min = end_min - start_min;
             if (total_day_min < 0) total_day_min += 1440;
 
-            snprintf(buf, sizeof(buf), "DAY: %02dh %02dm", total_day_min / 60, total_day_min % 60);
+            purrgo_snprintf(buf, sizeof(buf), "DAY: %02dh %02dm", total_day_min / 60, total_day_min % 60);
             gfx_draw_string(gfx, 10, y_pos, buf);
             y_pos += 12;
 

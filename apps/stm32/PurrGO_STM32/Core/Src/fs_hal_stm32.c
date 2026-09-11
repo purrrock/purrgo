@@ -2,6 +2,7 @@
 #include "fatfs.h"
 #include <stdlib.h>
 #include <string.h>
+#include "purrgo/purrgo_format.h"
 #include <stdio.h>
 #include "purrgo/logger.h"
 
@@ -119,7 +120,7 @@ bool purrgo_fs_readdir(purrgo_dir_t* dir, purrgo_fs_dirent_t* dirent) {
         return false;
     }
 
-    snprintf(dirent->name, PURRGO_FS_MAX_PATH, "%s", fno.fname);
+    purrgo_snprintf(dirent->name, PURRGO_FS_MAX_PATH, "%s", fno.fname);
     dirent->is_directory = (fno.fattrib & AM_DIR) ? true : false;
 
     return true;

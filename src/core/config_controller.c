@@ -1,6 +1,6 @@
 #include "purrgo/config_controller.h"
 #include "purrgo/config.h"
-#include <stdio.h>
+#include "purrgo/purrgo_format.h"
 
 
 /*
@@ -747,7 +747,7 @@ bool purrgo_config_controller_handle_button(
                     dir_page_cursor < dir_page_count
                 ) {
 
-                    snprintf(
+                    purrgo_snprintf(
                         app_config.map_dir,
                         sizeof(app_config.map_dir),
                         "%s/%s",

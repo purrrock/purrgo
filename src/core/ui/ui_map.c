@@ -79,7 +79,7 @@ static void log_marker_diagnostic(const char* reason, const marker_state_t* m) {
 #include "purrgo/gfx_polygon.h"
 #include "purrgo/sun_tables.h"
 #include "../map_projection.h"
-#include <stdio.h>
+#include "purrgo/purrgo_format.h"
 #include <string.h>
 
 #define PURRGO_MAP_POS_MARK_SIZE_PX 10
@@ -496,7 +496,7 @@ static void ui_update_status_bar(gfx_context_t* gfx, const purrgo_gnss_solution_
     int16_t next_x = 2;
 
     char time_str[8];
-    snprintf(time_str, sizeof(time_str), "%02d:%02d", new_state.hours, new_state.minutes);
+    purrgo_snprintf(time_str, sizeof(time_str), "%02d:%02d", new_state.hours, new_state.minutes);
     gfx_draw_string(gfx, next_x, 1, time_str);
     next_x += get_string_width(time_str) + 6;
 

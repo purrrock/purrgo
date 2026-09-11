@@ -1,5 +1,5 @@
 #include "purrgo/gpx_parser.h"
-#include <stdio.h>
+#include "purrgo/purrgo_format.h"
 #include <string.h>
 
 // Парсинг строки с плавающей точкой в формат 1e7 без использования float
@@ -86,7 +86,7 @@ static void process_tag(purrgo_gpx_parser_t *p) {
         p->in_name = false;
         if (p->in_wpt) {
             // Копируем имя, защищаясь от переполнения
-            snprintf(p->temp_wp.name,
+            purrgo_snprintf(p->temp_wp.name,
                      sizeof(p->temp_wp.name),
                      "%.*s",
                      (int)(sizeof(p->temp_wp.name) - 1),
