@@ -214,8 +214,7 @@ static void apply_auto_follow(const purrgo_gnss_solution_t* fix) {
 
 
         if (new_dx <= follow_start_x && new_dy <= follow_start_y) {
-            PURRGO_LOG("AUTO-FOLLOW: marker=(%d,%d) target=(%d,%d) result=(%d,%d)\n", sx, sy, (int)target_x, (int)target_y, new_sx, new_sy);
-
+        //    PURRGO_LOG("AUTO-FOLLOW: marker=(%d,%d) target=(%d,%d) result=(%d,%d)\n", sx, sy, (int)target_x, (int)target_y, new_sx, new_sy);
             if (map_center_lat_1e7 != (int32_t)candidate_lat || map_center_lon_1e7 != (int32_t)candidate_lon) {
                 map_center_lat_1e7 = (int32_t)candidate_lat;
                 map_center_lon_1e7 = (int32_t)candidate_lon;
