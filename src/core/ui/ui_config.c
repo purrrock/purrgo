@@ -24,16 +24,13 @@ void ui_render_menu_config(gfx_context_t* gfx)
 
     purrgo_poi_mode_t poi_mode =
         config_app_get_draft_poi_mode();
-    bool poi_enabled = (poi_mode != PURRGO_POI_MODE_NO);
 
-    purrgo_poi_label_mode_t poi_label_mode =
-        config_app_get_draft_poi_label_mode();
 
     track_logger_mode_t log_mode =
         config_app_get_draft_log_mode();
 
-    bool track_display_enabled =
-        config_app_get_draft_track_display_enabled();
+    purrgo_map_details_t map_details =
+        config_app_get_draft_map_details();
 
 
     gfx_draw_string(
@@ -147,62 +144,10 @@ void ui_render_menu_config(gfx_context_t* gfx)
 
     /*
      * ---------------------------------------------------------------
-     * POI LABELS
-     * ---------------------------------------------------------------
-     *
-     * Этот пункт существует только если POI включены.
-     */
-    if (poi_enabled) {
-
-        const char* label_text;
-
-        switch (poi_label_mode) {
-
-            case PURRGO_POI_LABELS_ALL:
-                label_text = "ALL";
-                break;
-
-            case PURRGO_POI_LABELS_IMPORTANT:
-                label_text = "IMPORTANT";
-                break;
-
-            case PURRGO_POI_LABELS_OFF:
-            default:
-                label_text = "OFF";
-                break;
-        }
-
-        if (cursor == 3) {
-            gfx_set_color(gfx, 3, 0);
-        }
-        else {
-            gfx_set_color(gfx, 0, 3);
-        }
-
-        snprintf(
-            buf,
-            sizeof(buf),
-            "POI LABELS: %s",
-            label_text
-        );
-
-        gfx_draw_string(
-            gfx,
-            10,
-            70,
-            buf
-        );
-    }
-
-
-    /*
-     * ---------------------------------------------------------------
      * LOG MODE
      * ---------------------------------------------------------------
      */
-    int log_mode_idx = poi_enabled ? 4 : 3;
-
-    if (cursor == log_mode_idx) {
+    if (cursor == 3) {
         gfx_set_color(gfx, 3, 0);
     }
     else {
@@ -233,35 +178,40 @@ void ui_render_menu_config(gfx_context_t* gfx)
     gfx_draw_string(
         gfx,
         10,
-        poi_enabled ? 85 : 70,
+        70,
         buf
     );
 
     /*
      * ---------------------------------------------------------------
-     * TRACK DISPLAY
+     * MAP DETAILS
      * ---------------------------------------------------------------
      */
-    int track_display_idx = poi_enabled ? 5 : 4;
-
-    if (cursor == track_display_idx) {
+    if (cursor == 4) {
         gfx_set_color(gfx, 3, 0);
     }
     else {
         gfx_set_color(gfx, 0, 3);
     }
 
+    const char* map_details_str;
+    if (map_details == PURRGO_MAP_DETAILS_HIGH) {
+        map_details_str = "HIGH";
+    } else {
+        map_details_str = "LOW";
+    }
+
     snprintf(
         buf,
         sizeof(buf),
-        "SHOW TRACK: %s",
-        track_display_enabled ? "ON" : "OFF"
+        "MAP DETAILS: %s",
+        map_details_str
     );
 
     gfx_draw_string(
         gfx,
         10,
-        poi_enabled ? 100 : 85,
+        85,
         buf
     );
 
@@ -270,9 +220,7 @@ void ui_render_menu_config(gfx_context_t* gfx)
      * MAP LAYERS
      * ---------------------------------------------------------------
      */
-    int map_layers_idx = poi_enabled ? 6 : 5;
-
-    if (cursor == map_layers_idx) {
+    if (cursor == 5) {
         gfx_set_color(gfx, 3, 0);
     }
     else {
@@ -282,7 +230,7 @@ void ui_render_menu_config(gfx_context_t* gfx)
     gfx_draw_string(
         gfx,
         10,
-        poi_enabled ? 115 : 100,
+        100,
         "MAP LAYERS"
     );
 
@@ -297,28 +245,28 @@ void ui_render_menu_config(gfx_context_t* gfx)
     gfx_draw_string(
         gfx,
         10,
-        poi_enabled ? 135 : 120,
+        120,
         "UP/DN : Select"
     );
 
     gfx_draw_string(
         gfx,
         10,
-        poi_enabled ? 150 : 135,
+        135,
         "+/- : Change"
     );
 
     gfx_draw_string(
         gfx,
         10,
-        poi_enabled ? 165 : 150,
+        150,
         "OK  : Apply/Open"
     );
 
     gfx_draw_string(
         gfx,
         10,
-        poi_enabled ? 180 : 165,
+        165,
         "MENU: Cancel"
     );
 }

@@ -54,9 +54,6 @@ static purrgo_poi_mode_t draft_poi_mode;
 /*
  * Черновик режима подписей POI.
  */
-static purrgo_poi_label_mode_t draft_poi_label_mode;
-
-
 /*
  * Черновик режима записи трека.
  */
@@ -66,7 +63,7 @@ static track_logger_mode_t draft_log_mode;
 /*
  * Черновик отображения трека.
  */
-static bool draft_track_display_enabled;
+static purrgo_map_details_t draft_map_details;
 
 
 /*
@@ -84,10 +81,9 @@ static bool draft_track_display_enabled;
 #define CONFIG_CURSOR_TZ            0
 #define CONFIG_CURSOR_DIR           1
 #define CONFIG_CURSOR_POI           2
-#define CONFIG_CURSOR_POI_LABELS    3
-#define CONFIG_CURSOR_LOG_MODE      4
-#define CONFIG_CURSOR_TRACK_DISPLAY 5
-#define CONFIG_CURSOR_MAP_LAYERS    6
+#define CONFIG_CURSOR_LOG_MODE      3
+#define CONFIG_CURSOR_MAP_DETAILS   4
+#define CONFIG_CURSOR_MAP_LAYERS    5
 
 #define MAP_LAYERS_COUNT 9
 
@@ -119,11 +115,7 @@ static bool draft_layer_track;
  */
 static int get_config_last_cursor(void)
 {
-    if (draft_poi_mode != PURRGO_POI_MODE_NO) {
-        return CONFIG_CURSOR_MAP_LAYERS;
-    }
-
-    return CONFIG_CURSOR_MAP_LAYERS - 1;
+    return CONFIG_CURSOR_MAP_LAYERS;
 }
 
 
@@ -351,9 +343,6 @@ void purrgo_config_controller_init(void)
     draft_poi_mode =
         app_config.poi_mode;
 
-    draft_poi_label_mode =
-        app_config.poi_label_mode;
-
     config_cursor_idx = CONFIG_CURSOR_TZ;
 }
 
@@ -373,14 +362,11 @@ void purrgo_config_controller_on_enter(
         draft_poi_mode =
             app_config.poi_mode;
 
-        draft_poi_label_mode =
-            app_config.poi_label_mode;
-
         draft_log_mode =
             app_config.log_mode;
 
-        draft_track_display_enabled =
-            app_config.track_display_enabled;
+        draft_map_details =
+            app_config.map_details;
 
         config_cursor_idx = CONFIG_CURSOR_TZ;
     }
@@ -454,12 +440,7 @@ bool purrgo_config_controller_handle_button(
                      *
                      * Поэтому дополнительно страхуем состояние.
                      */
-                    if (
-                        draft_poi_mode == PURRGO_POI_MODE_NO &&
-                        config_cursor_idx == CONFIG_CURSOR_POI_LABELS
-                    ) {
-                        config_cursor_idx = CONFIG_CURSOR_POI;
-                    }
+
                 }
 
                 return true;
@@ -514,42 +495,10 @@ bool purrgo_config_controller_handle_button(
                         draft_poi_mode++;
                     }
 
-                    /*
-                     * Если POI выключены, пункт подписей
-                     * становится недоступным.
-                     *
-                     * Оставляем курсор на самом POI.
-                     */
-                    if (
-                        draft_poi_mode == PURRGO_POI_MODE_NO &&
-                        config_cursor_idx == CONFIG_CURSOR_POI_LABELS
-                    ) {
-                        config_cursor_idx = CONFIG_CURSOR_POI;
-                    }
+
                 }
 
-                /*
-                 * Подписи POI.
-                 *
-                 * Цикл:
-                 *
-                 *     Все -> Важные -> Выкл -> Все
-                 */
-                else if (
-                    config_cursor_idx == CONFIG_CURSOR_POI_LABELS &&
-                    draft_poi_mode != PURRGO_POI_MODE_NO
-                ) {
-                    if (
-                        draft_poi_label_mode ==
-                        PURRGO_POI_LABELS_OFF
-                    ) {
-                        draft_poi_label_mode =
-                            PURRGO_POI_LABELS_ALL;
-                    }
-                    else {
-                        draft_poi_label_mode++;
-                    }
-                }
+
 
                 /*
                  * Режим записи трека.
@@ -559,7 +508,7 @@ bool purrgo_config_controller_handle_button(
                  *     Выкл -> Стандарт -> Экспедиция -> Выкл
                  */
                 else if (
-                    config_cursor_idx == (draft_poi_mode != PURRGO_POI_MODE_NO ? CONFIG_CURSOR_LOG_MODE : CONFIG_CURSOR_POI_LABELS)
+                    config_cursor_idx == CONFIG_CURSOR_LOG_MODE
                 ) {
                     if (draft_log_mode == LOGGER_MODE_OFF) {
                         draft_log_mode = LOGGER_MODE_STANDARD;
@@ -573,13 +522,17 @@ bool purrgo_config_controller_handle_button(
                 }
 
                 /*
-                 * Отображение трека.
+                 * Детализация карты.
                  */
                 else if (
-                    config_cursor_idx == (draft_poi_mode != PURRGO_POI_MODE_NO ? CONFIG_CURSOR_TRACK_DISPLAY : CONFIG_CURSOR_LOG_MODE)
+                    config_cursor_idx == CONFIG_CURSOR_MAP_DETAILS
                 ) {
-                    draft_track_display_enabled =
-                        !draft_track_display_enabled;
+                    if (draft_map_details == PURRGO_MAP_DETAILS_HIGH) {
+                        draft_map_details = PURRGO_MAP_DETAILS_LOW;
+                    }
+                    else {
+                        draft_map_details = PURRGO_MAP_DETAILS_HIGH;
+                    }
                 }
 
                 return true;
@@ -617,36 +570,10 @@ bool purrgo_config_controller_handle_button(
                         draft_poi_mode--;
                     }
 
-                    if (
-                        draft_poi_mode == PURRGO_POI_MODE_NO &&
-                        config_cursor_idx == CONFIG_CURSOR_POI_LABELS
-                    ) {
-                        config_cursor_idx = CONFIG_CURSOR_POI;
-                    }
+
                 }
 
-                /*
-                 * Подписи POI.
-                 *
-                 * Обратный цикл:
-                 *
-                 *     Все <- Важные <- Выкл <- Все
-                 */
-                else if (
-                    config_cursor_idx == CONFIG_CURSOR_POI_LABELS &&
-                    draft_poi_mode != PURRGO_POI_MODE_NO
-                ) {
-                    if (
-                        draft_poi_label_mode ==
-                        PURRGO_POI_LABELS_ALL
-                    ) {
-                        draft_poi_label_mode =
-                            PURRGO_POI_LABELS_OFF;
-                    }
-                    else {
-                        draft_poi_label_mode--;
-                    }
-                }
+
 
                 /*
                  * Режим записи трека.
@@ -656,7 +583,7 @@ bool purrgo_config_controller_handle_button(
                  *     Выкл <- Стандарт <- Экспедиция <- Выкл
                  */
                 else if (
-                    config_cursor_idx == (draft_poi_mode != PURRGO_POI_MODE_NO ? CONFIG_CURSOR_LOG_MODE : CONFIG_CURSOR_POI_LABELS)
+                    config_cursor_idx == CONFIG_CURSOR_LOG_MODE
                 ) {
                     if (draft_log_mode == LOGGER_MODE_OFF) {
                         draft_log_mode = LOGGER_MODE_EXPEDITION;
@@ -670,13 +597,17 @@ bool purrgo_config_controller_handle_button(
                 }
 
                 /*
-                 * Отображение трека.
+                 * Детализация карты.
                  */
                 else if (
-                    config_cursor_idx == (draft_poi_mode != PURRGO_POI_MODE_NO ? CONFIG_CURSOR_TRACK_DISPLAY : CONFIG_CURSOR_LOG_MODE)
+                    config_cursor_idx == CONFIG_CURSOR_MAP_DETAILS
                 ) {
-                    draft_track_display_enabled =
-                        !draft_track_display_enabled;
+                    if (draft_map_details == PURRGO_MAP_DETAILS_HIGH) {
+                        draft_map_details = PURRGO_MAP_DETAILS_LOW;
+                    }
+                    else {
+                        draft_map_details = PURRGO_MAP_DETAILS_HIGH;
+                    }
                 }
 
                 return true;
@@ -719,20 +650,14 @@ bool purrgo_config_controller_handle_button(
                 }
 
                 /*
-                 * POI.
-                 *
-                 * Настройки POI сохраняются вместе.
+                 * POI
                  */
                 else if (
-                    config_cursor_idx == CONFIG_CURSOR_POI ||
-                    config_cursor_idx == CONFIG_CURSOR_POI_LABELS
+                    config_cursor_idx == CONFIG_CURSOR_POI
                 ) {
 
                     app_config.poi_mode =
                         draft_poi_mode;
-
-                    app_config.poi_label_mode =
-                        draft_poi_label_mode;
 
                     purrgo_config_save();
 
@@ -743,11 +668,11 @@ bool purrgo_config_controller_handle_button(
                 }
 
                 /*
-                 * TRACK SETTINGS
+                 * LOG_MODE & MAP DETAILS
                  */
                 else if (
-                    config_cursor_idx == (draft_poi_mode != PURRGO_POI_MODE_NO ? CONFIG_CURSOR_LOG_MODE : CONFIG_CURSOR_POI_LABELS) ||
-                    config_cursor_idx == (draft_poi_mode != PURRGO_POI_MODE_NO ? CONFIG_CURSOR_TRACK_DISPLAY : CONFIG_CURSOR_LOG_MODE)
+                    config_cursor_idx == CONFIG_CURSOR_LOG_MODE ||
+                    config_cursor_idx == CONFIG_CURSOR_MAP_DETAILS
                 ) {
 
                     app_config.log_mode =
@@ -757,8 +682,8 @@ bool purrgo_config_controller_handle_button(
                         app_config.log_mode
                     );
 
-                    app_config.track_display_enabled =
-                        draft_track_display_enabled;
+                    app_config.map_details =
+                        draft_map_details;
 
                     purrgo_config_save();
 
@@ -772,7 +697,7 @@ bool purrgo_config_controller_handle_button(
                  * MAP LAYERS
                  */
                 else if (
-                    config_cursor_idx == (draft_poi_mode != PURRGO_POI_MODE_NO ? CONFIG_CURSOR_MAP_LAYERS : CONFIG_CURSOR_TRACK_DISPLAY)
+                    config_cursor_idx == CONFIG_CURSOR_MAP_LAYERS
                 ) {
 
                     *next_state_out =
@@ -1048,13 +973,6 @@ purrgo_poi_mode_t config_app_get_draft_poi_mode(void)
 }
 
 
-purrgo_poi_label_mode_t
-config_app_get_draft_poi_label_mode(void)
-{
-    return draft_poi_label_mode;
-}
-
-
 track_logger_mode_t
 config_app_get_draft_log_mode(void)
 {
@@ -1062,10 +980,10 @@ config_app_get_draft_log_mode(void)
 }
 
 
-bool
-config_app_get_draft_track_display_enabled(void)
+purrgo_map_details_t
+config_app_get_draft_map_details(void)
 {
-    return draft_track_display_enabled;
+    return draft_map_details;
 }
 
 int config_app_get_map_layers_cursor(void)

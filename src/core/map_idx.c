@@ -155,7 +155,7 @@ bool map_idx_parse_node(
              * Подписи POI отключены в режиме PURRGO_POI_LABELS_OFF.
              * Сам маркер POI при этом продолжает отображаться.
              */
-            if (app_config.poi_label_mode != PURRGO_POI_LABELS_OFF &&
+            if (app_config.layer_poi_labels &&
                 v2 > 0 &&
                 db_fs != NULL) {
                 char name[64];
@@ -226,7 +226,7 @@ if (style == PURRGO_STYLE_NONE) {
              * продолжает отрисовываться.
              */
             if (is_polygon &&
-                app_config.poi_label_mode != PURRGO_POI_LABELS_OFF &&
+                app_config.layer_poi_labels &&
                 v2 >= 2 &&
                 db_fs != NULL) {
                 char name[64];

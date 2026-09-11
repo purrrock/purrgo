@@ -547,7 +547,7 @@ static bool ui_map_render_base_layers(gfx_context_t* gfx, const purrgo_viewport_
 
 static void ui_map_render_dynamic_data(gfx_context_t* gfx, const purrgo_viewport_t* map_vp, const purrgo_bbox_t* dynamic_cam) {
     const char* active_track_filename = purrgo_logger_get_active_filename();
-    if (active_track_filename != NULL && app_config.track_display_enabled) {
+    if (active_track_filename != NULL && app_config.layer_track) {
         purrgo_track_render(gfx, dynamic_cam, map_vp, active_track_filename);
     }
 }
