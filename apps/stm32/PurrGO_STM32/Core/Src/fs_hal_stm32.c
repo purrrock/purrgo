@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "purrgo/purrgo_format.h"
+#include <stdio.h>
 #include "purrgo/logger.h"
 
 struct purrgo_file_s {
