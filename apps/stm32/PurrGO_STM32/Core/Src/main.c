@@ -193,18 +193,18 @@ int main(void)
    */
   purrgo_logger_init();
 
-  purrgo_logger_write("PurrGO STM32 boot\r\n");
-  purrgo_logger_write("UART2 logger OK\r\n");
+  PURRGO_LOG("PurrGO STM32 boot\r\n");
+  PURRGO_LOG("UART2 logger OK\r\n");
   
   purrgo_debug_buttons_init();
-  purrgo_logger_write("UART2 Buttons OK\r\n");
+  PURRGO_LOG("UART2 Buttons OK\r\n");
   /*
    * -------------------------------------------------------------------------
    * GNSS MOCK Initialization.
    * -------------------------------------------------------------------------
    */
   purrgo_gnss_mock_init();
-  purrgo_logger_write("GNSS MOCK OK\r\n");
+  PURRGO_LOG("GNSS MOCK OK\r\n");
 
   /*
    * -------------------------------------------------------------------------
@@ -212,9 +212,9 @@ int main(void)
    * -------------------------------------------------------------------------
    */
   display_init();
-  purrgo_logger_write("ST7789 display init...\r\n");
+  PURRGO_LOG("ST7789 display init...\r\n");
   ST7789_Init();
-  purrgo_logger_write("Display OK\r\n");
+  PURRGO_LOG("Display OK\r\n");
 
   /*
    * -------------------------------------------------------------------------
@@ -222,7 +222,7 @@ int main(void)
    * -------------------------------------------------------------------------
    */
   purrgo_stm32_buttons_init();
-  purrgo_logger_write("Buttons OK\r\n");
+  PURRGO_LOG("Buttons OK\r\n");
 
   /*
    * -------------------------------------------------------------------------
@@ -230,7 +230,7 @@ int main(void)
    * -------------------------------------------------------------------------
    */
   purrgo_app_init();
-  purrgo_logger_write("App FSM OK\r\n");
+  PURRGO_LOG("App FSM OK\r\n");
 
   /*
    * -------------------------------------------------------------------------
@@ -257,12 +257,12 @@ int main(void)
        * gfx_init() возвращает false только при некорректных
        * аргументах/нулевых указателях согласно его API.
        */
-      purrgo_logger_write("GFX INIT ERROR\r\n");
+      PURRGO_LOG("GFX INIT ERROR\r\n");
       Error_Handler();
   }
-  purrgo_logger_write("GFX OK\r\n");
+  PURRGO_LOG("GFX OK\r\n");
 
-  purrgo_logger_write("Splash Screen\r\n");
+  PURRGO_LOG("Splash Screen\r\n");
   /* Splash: Purr... */
   gfx_set_color(&global_gfx_ctx, COLOR_WHITE, COLOR_BLACK);
   gfx_clear(&global_gfx_ctx);
@@ -453,7 +453,7 @@ void assert_failed(uint8_t *file, uint32_t line)
   /* User can add his own implementation to report the file name and line number,
      ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
 
-	purrgo_logger_write("Wrong parameters value: file %s on line %d\r\n", file, line);
+	PURRGO_LOG("Wrong parameters value: file %s on line %d\r\n", file, line);
  
   /* USER CODE END 6 */
 }
