@@ -89,4 +89,6 @@ add_purrgo_test(test_gfx_line tests/core/test_gfx_line.c)
 add_purrgo_test(test_gnss_mock tests/core/test_gnss_mock.c)
 add_purrgo_test(test_fatfs_time tests/core/test_fatfs_time.c)
 
+add_purrgo_test(test_purrgo_format tests/core/test_purrgo_format.c)
+
 add_purrgo_test(test_map_render_flags tests/core/test_map_render_flags.c)

@@ -10,7 +10,6 @@ static void write_char(char** buf, size_t* size, size_t* count, char c) {
     (*count)++;
 }
 
-// Helper to write a string to the buffer
 
 // Helper to write an integer to the buffer
 static void write_int(char** buf, size_t* size, size_t* count, long long val, int base, int width, char pad_char, int uppercase, int is_signed, int left_justify) {
@@ -130,7 +129,7 @@ int purrgo_vsnprintf(char* buf, size_t size, const char* format, va_list args) {
 
         // Support %.*s
         if (*format == 's') {
-            char* s = va_arg(args, char*);
+            const char* s = va_arg(args, const char*);
             if (!s) s = "(null)";
 
             int len = 0;
