@@ -115,19 +115,12 @@ static void process_buttons(void);
 /**
  * @brief Опрос аппаратных кнопок.
  *
- * На текущем этапе драйвер buttons.c является заглушкой:
- * purrgo_stm32_button_is_pressed() всегда возвращает false.
- *
- * Поэтому этот код уже подключён к FSM, но физические кнопки
- * пока не будут вызывать переходы состояний.
  */
 static void process_buttons(void)
 {
     /*
      * Обрабатываем все кнопки, определённые в app_fsm.h.
-     *
      * Драйвер кнопок возвращает true только для реально нажатой
-     * кнопки. Сейчас реализация-заглушка всегда возвращает false.
      */
     static const purrgo_btn_t buttons[] =
     {
@@ -191,21 +184,20 @@ int main(void)
   MX_FATFS_Init();
   /* USER CODE BEGIN 2 */
 
-  purrgo_debug_buttons_init();
-
   /*
    * -------------------------------------------------------------------------
    * Диагностический UART.
    * -------------------------------------------------------------------------
-     * purrgo_logger использует платформенную реализацию logger,
+   * purrgo_logger использует платформенную реализацию logger,
    * которая уже привязана к USART2.
    */
   purrgo_logger_init();
 
   purrgo_logger_write("PurrGO STM32 boot\r\n");
   purrgo_logger_write("UART2 logger OK\r\n");
-
-
+  
+  purrgo_debug_buttons_init();
+  purrgo_logger_write("UART2 Buttons OK\r\n");
   /*
    * -------------------------------------------------------------------------
    * GNSS MOCK Initialization.
@@ -352,7 +344,7 @@ int main(void)
 
       process_buttons();
     }
-
+    // прием эмуляции кнопок через UART 
     purrgo_debug_buttons_process();
 
     /*
