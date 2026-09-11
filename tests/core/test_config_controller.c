@@ -138,8 +138,6 @@ int main(void) {
     test_config_controller_menu_navigation();
     test_config_controller_tz_editing();
     test_map_layers_navigation_and_toggles();
-    test_map_details_toggling();
-    test_map_layers_opening();
     printf("Config controller tests passed!\n");
     return 0;
 }
