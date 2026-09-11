@@ -118,19 +118,31 @@ bool purrgo_logger_start(const purrgo_gnss_solution_t* first_fix) {
     // Запоминаем ЛОКАЛЬНЫЙ день старта для проверки смены суток
     current_track_day = local_fix.day;
 
-    // Имя файла формируется по локальному времени пользователя
-    char filename[64];
-    const char* prefix = purrgo_fs_get_tracks_path();
-    if (prefix[0] != '\0') {
-        purrgo_snprintf(filename, sizeof(filename), "%s/%02d%02d%02d-%02d%02d%02d.gpx",
-                 prefix,
-                 local_fix.year, local_fix.month, local_fix.day,
-                 local_fix.hours, local_fix.minutes, local_fix.seconds);
-    } else {
-        purrgo_snprintf(filename, sizeof(filename), "%02d%02d%02d-%02d%02d%02d.gpx",
-                 local_fix.year, local_fix.month, local_fix.day,
-                 local_fix.hours, local_fix.minutes, local_fix.seconds);
-    }
+// формируем имя файла трека
+// Имя: секунды от 01.01.2026, в HEX.
+// 8 символов + .gpx — формат FAT 8.3.
+// Фиксированная ширина обеспечивает сортировку по имени.
+uint32_t epoch = 0;
+purrgo_time_datetime_to_epoch(local_fix.year, local_fix.month, local_fix.day,
+                              local_fix.hours, local_fix.minutes, local_fix.seconds,
+                              &epoch);
+
+// Epoch purrgo_time начинается с 01.01.2000.
+// 01.01.2026 = 820454400 секунд.
+const uint32_t epoch_2026 = 820454400UL;
+uint32_t track_id = epoch - epoch_2026;
+
+char filename[64];
+const char* prefix = purrgo_fs_get_tracks_path();
+
+if (prefix[0] != '\0') {
+    purrgo_snprintf(filename, sizeof(filename), "%s/%08X.gpx",
+                    prefix, (unsigned int)track_id);
+} else {
+    purrgo_snprintf(filename, sizeof(filename), "%08X.gpx",
+                    (unsigned int)track_id);
+}
+// закончили формирование имя файла трека
 
     active_file = purrgo_fs_open(filename, FS_WRITE_CREATE);
     if (!active_file) {
