@@ -154,6 +154,7 @@ int main(void) {
     test_missing_keys_retain_defaults();
     test_overflow_protection();
     test_map_layers_load_save();
+    test_map_details_load_save();
 
     if (num_failures > 0) {
         printf("FAILED %d tests.\n", num_failures);
@@ -161,4 +162,29 @@ int main(void) {
     }
     printf("All config tests passed.\n");
     return 0;
+}
+
+void test_map_details_load_save() {
+    printf("test_map_details_load_save\n");
+
+    // Initialize with some config
+    purrgo_config_init();
+    EXPECT_EQ(PURRGO_MAP_DETAILS_HIGH, app_config.map_details); // Default is HIGH
+
+    app_config.map_details = PURRGO_MAP_DETAILS_LOW;
+
+    // Save to mock file
+    purrgo_config_save();
+
+    // Verify it was saved correctly
+    EXPECT_TRUE(strstr(mock_file_content, "MAP_DETAILS=0") != NULL);
+
+    // Clear struct
+    purrgo_config_init();
+
+    // Load from mock file
+    purrgo_config_load();
+
+    // Verify properties
+    EXPECT_EQ(PURRGO_MAP_DETAILS_LOW, app_config.map_details);
 }
