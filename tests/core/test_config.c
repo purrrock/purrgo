@@ -150,6 +150,8 @@ void test_overflow_protection() {
     EXPECT_EQ(180, app_config.tz_offset_minutes);
 }
 
+void test_map_details_load_save(void);
+
 int main(void) {
     test_missing_keys_retain_defaults();
     test_overflow_protection();
