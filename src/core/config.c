@@ -217,7 +217,7 @@ bool purrgo_config_load(void)
             /*
              * Часовой пояс в минутах.
              */
-            else if (strcmp(key, "TZ_MIN") == 0) {
+            if (strcmp(key, "TZ_MIN") == 0) {
                 int32_t tz_min = parse_int32(val);
 
                 if (

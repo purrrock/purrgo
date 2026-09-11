@@ -78,8 +78,7 @@ void sdl_draw_text(
 
 static void handle_button_press(purrgo_btn_t btn_val) {
     fprintf(
-        stderr,
-        "EMU: button=%d state_before=%d\n",
+        stderr,"EMU: button=%d state_before=%d\n",
         (int)btn_val,
         (int)purrgo_app_get_state()
     );
