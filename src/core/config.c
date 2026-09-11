@@ -97,12 +97,12 @@ void purrgo_config_init(void)
      *
      * На текущем этапе механизм отрисовки подписей ещё не реализован.
      */
-    app_config.poi_label_mode = PURRGO_POI_LABELS_OFF;
+    app_config.map_details = PURRGO_MAP_DETAILS_HIGH;
 
     /*
      * Отображение текущего трека по умолчанию включено.
      */
-    app_config.track_display_enabled = true;
+
 
     /*
      * Видимость слоев карты.
@@ -319,23 +319,16 @@ bool purrgo_config_load(void)
             }
 
             /*
-             * Режим подписей POI.
-             *
-             * Значения соответствуют enum:
-             *
-             *     0 = Все
-             *     1 = Важные
-             *     2 = Выкл
+             * Детализация карты.
              */
-            else if (strcmp(key, "POI_LABELS") == 0) {
+            else if (strcmp(key, "MAP_DETAILS") == 0) {
                 int32_t mode = parse_int32(val);
 
                 if (
-                    mode >= PURRGO_POI_LABELS_ALL &&
-                    mode <= PURRGO_POI_LABELS_OFF
+                    mode == PURRGO_MAP_DETAILS_LOW ||
+                    mode == PURRGO_MAP_DETAILS_HIGH
                 ) {
-                    app_config.poi_label_mode =
-                        (purrgo_poi_label_mode_t)mode;
+                    app_config.map_details = (purrgo_map_details_t)mode;
                 }
             }
 
@@ -354,19 +347,7 @@ bool purrgo_config_load(void)
                 }
             }
 
-            /*
-             * Включение отображения трека.
-             */
-            else if (strcmp(key, "TRACK_DISPLAY_ENABLED") == 0) {
-                int32_t enabled = parse_int32(val);
 
-                if (enabled == 0) {
-                    app_config.track_display_enabled = false;
-                }
-                else if (enabled == 1) {
-                    app_config.track_display_enabled = true;
-                }
-            }
 
             /*
              * Видимость слоев карты.
@@ -460,9 +441,9 @@ bool purrgo_config_save(void)
         "LAST_LAT_1E7=%d\n"
         "LAST_LON_1E7=%d\n"
         "POI_MODE=%d\n"
-        "POI_LABELS=%d\n"
+
         "LOG_MODE=%d\n"
-        "TRACK_DISPLAY_ENABLED=%d\n"
+        "MAP_DETAILS=%d\n"
         "LAYER_LANDUSE=%d\n"
         "LAYER_WATER=%d\n"
         "LAYER_LANDUSE_LABELS=%d\n"
@@ -484,11 +465,11 @@ bool purrgo_config_save(void)
 
         (int)app_config.poi_mode,
 
-        (int)app_config.poi_label_mode,
+
 
         (int)app_config.log_mode,
 
-        app_config.track_display_enabled ? 1 : 0,
+        (int)app_config.map_details,
 
         app_config.layer_landuse ? 1 : 0,
         app_config.layer_water ? 1 : 0,
