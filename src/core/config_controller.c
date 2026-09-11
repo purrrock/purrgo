@@ -457,156 +457,6 @@ bool purrgo_config_controller_handle_button(
 
             /*
              * --------------------------------------------------------
-             * PLUS / RIGHT
-             * --------------------------------------------------------
-             */
-            case PURRGO_ACTION_PLUS:
-            case PURRGO_ACTION_RIGHT:
-
-                /*
-                 * Часовой пояс.
-                 */
-                if (config_cursor_idx == CONFIG_CURSOR_TZ) {
-
-                    if (
-                        draft_tz_offset_minutes + CONFIG_TZ_STEP_MINS <= CONFIG_TZ_MAX_MINS
-                    ) {
-                        draft_tz_offset_minutes += CONFIG_TZ_STEP_MINS;
-                    }
-                }
-
-                /*
-                 * POI: Да / Нет.
-                 */
-                else if (config_cursor_idx == CONFIG_CURSOR_POI) {
-
-                    if (draft_poi_mode == PURRGO_POI_MODE_ICONS) {
-                        draft_poi_mode = PURRGO_POI_MODE_NO;
-                    }
-                    else {
-                        draft_poi_mode++;
-                    }
-
-
-                }
-
-
-
-                /*
-                 * Режим записи трека.
-                 *
-                 * Цикл:
-                 *
-                 *     Выкл -> Стандарт -> Экспедиция -> Выкл
-                 */
-                else if (
-                    config_cursor_idx == CONFIG_CURSOR_LOG_MODE
-                ) {
-                    if (draft_log_mode == LOGGER_MODE_OFF) {
-                        draft_log_mode = LOGGER_MODE_STANDARD;
-                    }
-                    else if (draft_log_mode == LOGGER_MODE_STANDARD) {
-                        draft_log_mode = LOGGER_MODE_EXPEDITION;
-                    }
-                    else {
-                        draft_log_mode = LOGGER_MODE_OFF;
-                    }
-                }
-
-                /*
-                 * Детализация карты.
-                 */
-                else if (
-                    config_cursor_idx == CONFIG_CURSOR_MAP_DETAILS
-                ) {
-                    if (draft_map_details == PURRGO_MAP_DETAILS_HIGH) {
-                        draft_map_details = PURRGO_MAP_DETAILS_LOW;
-                    }
-                    else {
-                        draft_map_details = PURRGO_MAP_DETAILS_HIGH;
-                    }
-                }
-
-                return true;
-
-
-            /*
-             * --------------------------------------------------------
-             * MINUS / LEFT
-             * --------------------------------------------------------
-             */
-            case PURRGO_ACTION_MINUS:
-            case PURRGO_ACTION_LEFT:
-
-                /*
-                 * Часовой пояс.
-                 */
-                if (config_cursor_idx == CONFIG_CURSOR_TZ) {
-
-                    if (
-                        draft_tz_offset_minutes - CONFIG_TZ_STEP_MINS >= CONFIG_TZ_MIN_MINS
-                    ) {
-                        draft_tz_offset_minutes -= CONFIG_TZ_STEP_MINS;
-                    }
-                }
-
-                /*
-                 * POI: Да / Нет.
-                 */
-                else if (config_cursor_idx == CONFIG_CURSOR_POI) {
-
-                    if (draft_poi_mode == PURRGO_POI_MODE_NO) {
-                        draft_poi_mode = PURRGO_POI_MODE_ICONS;
-                    }
-                    else {
-                        draft_poi_mode--;
-                    }
-
-
-                }
-
-
-
-                /*
-                 * Режим записи трека.
-                 *
-                 * Обратный цикл:
-                 *
-                 *     Выкл <- Стандарт <- Экспедиция <- Выкл
-                 */
-                else if (
-                    config_cursor_idx == CONFIG_CURSOR_LOG_MODE
-                ) {
-                    if (draft_log_mode == LOGGER_MODE_OFF) {
-                        draft_log_mode = LOGGER_MODE_EXPEDITION;
-                    }
-                    else if (draft_log_mode == LOGGER_MODE_EXPEDITION) {
-                        draft_log_mode = LOGGER_MODE_STANDARD;
-                    }
-                    else {
-                        draft_log_mode = LOGGER_MODE_OFF;
-                    }
-                }
-
-                /*
-                 * Детализация карты.
-                 */
-                else if (
-                    config_cursor_idx == CONFIG_CURSOR_MAP_DETAILS
-                ) {
-                    if (draft_map_details == PURRGO_MAP_DETAILS_HIGH) {
-                        draft_map_details = PURRGO_MAP_DETAILS_LOW;
-                    }
-                    else {
-                        draft_map_details = PURRGO_MAP_DETAILS_HIGH;
-                    }
-                }
-
-                return true;
-
-
-            /*
-             * --------------------------------------------------------
              * OK
              * --------------------------------------------------------
              */
@@ -616,16 +466,14 @@ bool purrgo_config_controller_handle_button(
                  * TZ.
                  */
                 if (config_cursor_idx == CONFIG_CURSOR_TZ) {
-
-                    app_config.tz_offset_minutes =
-                        draft_tz_offset_minutes;
-
-                    purrgo_config_save();
-
-                    *next_state_out =
-                        APP_STATE_MAP;
-
-                    purrgo_app_map_mark_dirty();
+                    if (
+                        draft_tz_offset_minutes + CONFIG_TZ_STEP_MINS <= CONFIG_TZ_MAX_MINS
+                    ) {
+                        draft_tz_offset_minutes += CONFIG_TZ_STEP_MINS;
+                    }
+                    else {
+                        draft_tz_offset_minutes = CONFIG_TZ_MIN_MINS;
+                    }
                 }
 
                 /*
@@ -647,42 +495,43 @@ bool purrgo_config_controller_handle_button(
                 else if (
                     config_cursor_idx == CONFIG_CURSOR_POI
                 ) {
-
-                    app_config.poi_mode =
-                        draft_poi_mode;
-
-                    purrgo_config_save();
-
-                    *next_state_out =
-                        APP_STATE_MAP;
-
-                    purrgo_app_map_mark_dirty();
+                    if (draft_poi_mode == PURRGO_POI_MODE_ICONS) {
+                        draft_poi_mode = PURRGO_POI_MODE_NO;
+                    }
+                    else {
+                        draft_poi_mode++;
+                    }
                 }
 
                 /*
-                 * LOG_MODE & MAP DETAILS
+                 * LOG_MODE
                  */
                 else if (
-                    config_cursor_idx == CONFIG_CURSOR_LOG_MODE ||
+                    config_cursor_idx == CONFIG_CURSOR_LOG_MODE
+                ) {
+                    if (draft_log_mode == LOGGER_MODE_OFF) {
+                        draft_log_mode = LOGGER_MODE_STANDARD;
+                    }
+                    else if (draft_log_mode == LOGGER_MODE_STANDARD) {
+                        draft_log_mode = LOGGER_MODE_EXPEDITION;
+                    }
+                    else {
+                        draft_log_mode = LOGGER_MODE_OFF;
+                    }
+                }
+
+                /*
+                 * MAP DETAILS
+                 */
+                else if (
                     config_cursor_idx == CONFIG_CURSOR_MAP_DETAILS
                 ) {
-
-                    app_config.log_mode =
-                        draft_log_mode;
-
-                    purrgo_logger_set_mode(
-                        app_config.log_mode
-                    );
-
-                    app_config.map_details =
-                        draft_map_details;
-
-                    purrgo_config_save();
-
-                    *next_state_out =
-                        APP_STATE_MAP;
-
-                    purrgo_app_map_mark_dirty();
+                    if (draft_map_details == PURRGO_MAP_DETAILS_HIGH) {
+                        draft_map_details = PURRGO_MAP_DETAILS_LOW;
+                    }
+                    else {
+                        draft_map_details = PURRGO_MAP_DETAILS_HIGH;
+                    }
                 }
 
                 /*
@@ -711,8 +560,26 @@ bool purrgo_config_controller_handle_button(
             case PURRGO_ACTION_MENU:
 
                 /*
-                 * Черновые изменения не применяем.
+                 * Применяем все изменения.
                  */
+                app_config.tz_offset_minutes =
+                    draft_tz_offset_minutes;
+
+                app_config.poi_mode =
+                    draft_poi_mode;
+
+                app_config.log_mode =
+                    draft_log_mode;
+
+                purrgo_logger_set_mode(
+                    app_config.log_mode
+                );
+
+                app_config.map_details =
+                    draft_map_details;
+
+                purrgo_config_save();
+
                 *next_state_out =
                     APP_STATE_MAP;
 
@@ -753,8 +620,7 @@ bool purrgo_config_controller_handle_button(
                 }
                 return true;
 
-            case PURRGO_ACTION_LEFT:
-            case PURRGO_ACTION_RIGHT:
+            case PURRGO_ACTION_OK:
                 if (map_layers_cursor_idx == 0) draft_layer_landuse = !draft_layer_landuse;
                 else if (map_layers_cursor_idx == 1) draft_layer_water = !draft_layer_water;
                 else if (map_layers_cursor_idx == 2) draft_layer_landuse_labels = !draft_layer_landuse_labels;
@@ -766,7 +632,7 @@ bool purrgo_config_controller_handle_button(
                 else if (map_layers_cursor_idx == 8) draft_layer_track = !draft_layer_track;
                 return true;
 
-            case PURRGO_ACTION_OK:
+            case PURRGO_ACTION_MENU:
                 app_config.layer_landuse = draft_layer_landuse;
                 app_config.layer_water = draft_layer_water;
                 app_config.layer_landuse_labels = draft_layer_landuse_labels;
@@ -778,10 +644,6 @@ bool purrgo_config_controller_handle_button(
                 app_config.layer_track = draft_layer_track;
 
                 purrgo_config_save();
-                *next_state_out = APP_STATE_MENU_CONFIG;
-                return true;
-
-            case PURRGO_ACTION_MENU:
                 *next_state_out = APP_STATE_MENU_CONFIG;
                 return true;
 
@@ -917,6 +779,8 @@ bool purrgo_config_controller_handle_button(
 
                 *next_state_out =
                     APP_STATE_MENU_CONFIG;
+
+                purrgo_app_map_mark_dirty();
 
                 return true;
 
