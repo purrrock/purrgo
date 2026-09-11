@@ -1,6 +1,5 @@
 #include "purrgo/purrgo_format.h"
 
-// Helper to write a character to the buffer
 static void write_char(char** buf, size_t* size, size_t* count, char c) {
     if (*size > 1) {
         **buf = c;
@@ -10,8 +9,6 @@ static void write_char(char** buf, size_t* size, size_t* count, char c) {
     (*count)++;
 }
 
-
-// Helper to write an integer to the buffer
 static void write_int(char** buf, size_t* size, size_t* count, long long val, int base, int width, char pad_char, int uppercase, int is_signed, int left_justify) {
     char num_buf[32];
     int pos = 0;
@@ -75,7 +72,7 @@ static void write_int(char** buf, size_t* size, size_t* count, long long val, in
 int purrgo_vsnprintf(char* buf, size_t size, const char* format, va_list args) {
     size_t count = 0;
 
-    if (size == 0) buf = NULL; // Just count if size is 0
+    if (size == 0) buf = NULL;
 
     while (*format) {
         if (*format != '%') {
@@ -84,7 +81,7 @@ int purrgo_vsnprintf(char* buf, size_t size, const char* format, va_list args) {
             continue;
         }
 
-        format++; // Skip '%'
+        format++;
         if (*format == '\0') break;
 
         if (*format == '%') {
@@ -127,7 +124,6 @@ int purrgo_vsnprintf(char* buf, size_t size, const char* format, va_list args) {
             }
         }
 
-        // Support %.*s
         if (*format == 's') {
             const char* s = va_arg(args, const char*);
             if (!s) s = "(null)";
@@ -179,7 +175,6 @@ int purrgo_vsnprintf(char* buf, size_t size, const char* format, va_list args) {
             write_int(&buf, &size, &count, val, 16, width, pad_char, 1, 0, left_justify);
             format++;
         } else {
-            // Unknown format specifier, just print it
             write_char(&buf, &size, &count, '%');
             write_char(&buf, &size, &count, *format);
             format++;
