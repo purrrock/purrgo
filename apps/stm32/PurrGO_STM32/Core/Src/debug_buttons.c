@@ -50,6 +50,11 @@ void purrgo_debug_buttons_process(void)
          * The UART data register (DR) read clears the RXNE flag.
          */
         rx_char = (uint8_t)(huart2.Instance->DR & (uint8_t)0x00FF);
+
+        PURRGO_LOG("DEBUG RX: 0x%02X '%c'\r\n",
+           rx_char,
+           (rx_char >= 32U && rx_char <= 126U) ? rx_char : '.');
+
         bytes_processed++;
         purrgo_btn_t btn;
         const char *log_msg = NULL;
