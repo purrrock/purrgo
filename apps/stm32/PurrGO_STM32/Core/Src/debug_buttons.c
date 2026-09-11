@@ -94,7 +94,7 @@ void purrgo_debug_buttons_process(void)
         }
 
         /* Log recognized button event */
-        purrgo_logger_write(log_msg);
+        PURRGO_LOG("%s", log_msg);
 
         /* Inject the event into the FSM */
         purrgo_app_handle_button(btn);
