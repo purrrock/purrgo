@@ -143,8 +143,10 @@ bool purrgo_config_load(void)
      * Поэтому отсутствие нового ключа в старом PURRGO.CFG
      * не приводит к использованию неинициализированного значения.
      */
+    purrgo_logger_write("DEFAULT CONFIG VALUES SET\r\n");
     purrgo_config_init();
 
+    purrgo_logger_write("LOADING CONFIG FROM FILE:", purrgo_fs_get_config_path(),"\r\n");
     purrgo_file_t* file = purrgo_fs_open(
         purrgo_fs_get_config_path(),
         FS_READ
@@ -155,6 +157,7 @@ bool purrgo_config_load(void)
          * Если файла нет, создаём его с дефолтными значениями.
          */
         purrgo_logger_set_mode(app_config.log_mode);
+        purrgo_logger_write("FILE READ ERROR, SAVING DEFAULTS TO FILE:", purrgo_fs_get_config_path(),"\r\n");
         purrgo_config_save();
         return false;
     }
