@@ -28,24 +28,24 @@ static void ui_draw_key_hints(gfx_context_t* gfx, purrgo_state_t state) {
 
     switch (state) {
         case APP_STATE_MAP:
-            k1 = "LEFT/-";
-            k2 = "RIGHT/+";
-            k3 = "UP/CENTR";
-            k4 = "DOWN/NEXT";
+            k1 = "\x1B" "/-"; // стрелка влево
+            k2 = "\x1A" "/+"; // стрелка вправо
+            k3 = "\x18" "/CNT"; // стрелка вниз
+            k4 = "\x19" "/NXT"; // стрелка вверх
             break;
         case APP_STATE_TRIP_COMPUTER:
             k1 = "";
             k2 = "";
             k3 = "";
-            k4 = "NEXT";
+            k4 = "NXT";
             break;
         case APP_STATE_MENU_CONFIG:
         case APP_STATE_MENU_DIR_SELECT:
         case APP_STATE_MENU_MAP_LAYERS:
-            k1 = "UP";
-            k2 = "DOWN";
+            k1 = "\x18"; // стрелка вниз
+            k2 = "\x19"; // стрелка вверх
             k3 = "SEL";
-            k4 = "BACK";
+            k4 = "BCK";
             break;
         default:
             break;
