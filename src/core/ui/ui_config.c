@@ -246,27 +246,20 @@ void ui_render_menu_config(gfx_context_t* gfx)
         gfx,
         10,
         120,
-        "UP/DN : Select"
+        "UP/DN: Select"
     );
 
     gfx_draw_string(
         gfx,
         10,
         135,
-        "+/- : Change"
+        "SEL  : Change"
     );
 
     gfx_draw_string(
         gfx,
         10,
         150,
-        "OK  : Apply/Open"
-    );
-
-    gfx_draw_string(
-        gfx,
-        10,
-        165,
-        "MENU: Cancel"
+        "BACK : Save"
     );
 }
