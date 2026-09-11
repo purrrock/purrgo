@@ -159,7 +159,7 @@ static void do_refresh_region(int16_t x, int16_t y, int16_t w, int16_t h) {
 }
 
 void display_refresh(void) {
-    PURRGO_LOG("FULL REFRESH\r\n");
+//    PURRGO_LOG("FULL REFRESH\r\n");
     partial_refresh_count = 0;
     do_refresh_region(0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT);
 }
@@ -169,7 +169,7 @@ void display_refresh_region(int16_t x, int16_t y, int16_t w, int16_t h) {
         display_refresh();
         return;
     }
-    PURRGO_LOG("PARTIAL REFRESH x=%d y=%d w=%d h=%d\r\n", x, y, w, h);
+ //   PURRGO_LOG("PARTIAL REFRESH x=%d y=%d w=%d h=%d\r\n", x, y, w, h);
     partial_refresh_count++;
     do_refresh_region(x, y, w, h);
 }
