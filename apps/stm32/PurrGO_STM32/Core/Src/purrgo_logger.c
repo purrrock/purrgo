@@ -15,7 +15,7 @@
 #include "stm32f4xx_hal.h"
 
 #include <stdarg.h>
-#include <stdio.h>
+#include "purrgo/purrgo_format.h"
 
 /*
  * Максимальный размер одного сформированного сообщения.
@@ -62,10 +62,10 @@ void purrgo_logger_write(const char *format, ...)
     /*
      * Формируем строку аналогично printf().
      *
-     * vsnprintf() гарантирует, что в buffer не будет записано
+     * purrgo_vsnprintf() гарантирует, что в buffer не будет записано
      * больше sizeof(buffer) байт с учётом завершающего '\0'.
      */
-    int length = vsnprintf(
+    int length = purrgo_vsnprintf(
         buffer,
         sizeof(buffer),
         format,
@@ -89,7 +89,7 @@ void purrgo_logger_write(const char *format, ...)
 
     /*
      * Если сформированная строка не помещается в буфер,
-     * vsnprintf() возвращает требуемую длину, не включая '\0'.
+     * purrgo_vsnprintf() возвращает требуемую длину, не включая '\0'.
      *
      * Мы передадим только реально записанную часть буфера.
      */

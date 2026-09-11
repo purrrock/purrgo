@@ -9,7 +9,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
-#include <stdio.h>
+#include "purrgo/purrgo_format.h"
 #include <string.h>
 
 static uint32_t core_fs_read_wrapper(void* handle, void* buffer, uint32_t size)
@@ -245,21 +245,21 @@ bool purrgo_map_render_viewport(
 
     /* ------------------- LANDUSE ------------------- */
 
-    snprintf(
+    purrgo_snprintf(
         landuse_idx_path,
         sizeof(landuse_idx_path),
         "%s/landuse.idx",
         map_dir
     );
 
-    snprintf(
+    purrgo_snprintf(
         landuse_mlp_path,
         sizeof(landuse_mlp_path),
         "%s/landuse.mlp",
         map_dir
     );
 
-    snprintf(
+    purrgo_snprintf(
         landuse_db_path,
         sizeof(landuse_db_path),
         "%s/landuse.db",
@@ -326,14 +326,14 @@ bool purrgo_map_render_viewport(
 
     /* ------------------- ROADS ------------------- */
 
-    snprintf(
+    purrgo_snprintf(
         idx_path,
         sizeof(idx_path),
         "%s/roads.idx",
         map_dir
     );
 
-    snprintf(
+    purrgo_snprintf(
         mlp_path,
         sizeof(mlp_path),
         "%s/roads.mlp",
@@ -410,14 +410,14 @@ bool purrgo_map_render_viewport(
 
     /* ------------------- POIS ------------------- */
 
-    snprintf(
+    purrgo_snprintf(
         poi_idx_path,
         sizeof(poi_idx_path),
         "%s/pois.idx",
         map_dir
     );
 
-    snprintf(
+    purrgo_snprintf(
         poi_db_path,
         sizeof(poi_db_path),
         "%s/pois.db",
