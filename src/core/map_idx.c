@@ -307,12 +307,12 @@ if (style == PURRGO_STYLE_NONE) {
             uint32_t jump_amount = v3_jump;
 
             if (UINT32_MAX - *current_idx_offset < jump_amount) {
-                PURRGO_LOG("MAP: ERROR v3_jump overflow\n");
+                PURRGO_LOG("MAP: ERROR v3_jump overflow\n\r");
                 return false;
             }
 
             if (*current_idx_offset + jump_amount > lod_end) {
-                PURRGO_LOG("MAP: ERROR v3_jump exceeds LOD boundary\n");
+                PURRGO_LOG("MAP: ERROR v3_jump exceeds LOD boundary\n\r");
                 return false;
             }
 

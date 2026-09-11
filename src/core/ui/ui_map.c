@@ -62,14 +62,14 @@ static struct {
 static void log_marker_diagnostic(const char* reason, const marker_state_t* m) {
     if (m->rendered) {
         PURRGO_LOG(
-            "%s | valid: %d | pos: %ld,%ld | course_valid: %d | course: %d | bbox: %d,%d -> %d,%d\n",
+            "%s | valid: %d | pos: %ld,%ld | course_valid: %d | course: %d | bbox: %d,%d -> %d,%d\n\r",
             reason, m->gnss_valid, (long)m->lat_1e7, (long)m->lon_1e7,
             m->course_valid, m->course_valid ? m->course_deg : 0,
             m->min_x, m->min_y, m->max_x, m->max_y
         );
     } else {
         PURRGO_LOG(
-            "%s | valid: %d | pos: %ld,%ld | course_valid: %d | course: %d | NOT RENDERED\n",
+            "%s | valid: %d | pos: %ld,%ld | course_valid: %d | course: %d | NOT RENDERED\n\r",
             reason, m->gnss_valid, (long)m->lat_1e7, (long)m->lon_1e7,
             m->course_valid, m->course_valid ? m->course_deg : 0
         );
@@ -564,7 +564,7 @@ static void ui_map_render_gnss_marker(
 
     if (full_redraw) {
         if (!prev_marker_state_valid) {
-            log_marker_diagnostic("MARKER: initial", &new_marker_state);
+            // log_marker_diagnostic("MARKER: initial", &new_marker_state);
             prev_marker_state_valid = true;
         } else {
             bool changed = (new_marker_state.rendered != prev_marker_state.rendered) ||
@@ -585,7 +585,7 @@ static void ui_map_render_gnss_marker(
                 } else if (new_marker_state.rendered != prev_marker_state.rendered) {
                     reason = "MARKER: visibility changed";
                 }
-                log_marker_diagnostic(reason, &new_marker_state);
+                // log_marker_diagnostic(reason, &new_marker_state);
             }
         }
 
@@ -615,7 +615,7 @@ static void ui_map_render_gnss_marker(
             } else if (new_marker_state.rendered != prev_marker_state.rendered) {
                 reason = "MARKER: visibility changed";
             }
-            log_marker_diagnostic(reason, &new_marker_state);
+            // log_marker_diagnostic(reason, &new_marker_state);
 
             // Restore the old background
             ui_restore_marker_bg(gfx);
@@ -681,7 +681,7 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
 
     static bool map_screen_logged = false;
     if (!map_screen_logged) {
-        PURRGO_LOG("EMU: APP_STATE_MAP rendering started\n");
+        PURRGO_LOG("EMU: APP_STATE_MAP rendering started\n\r");
         map_screen_logged = true;
     }
 

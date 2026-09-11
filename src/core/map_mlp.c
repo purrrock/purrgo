@@ -60,7 +60,7 @@ bool map_mlp_iter_init(
         num_points <= 0 || num_points > PURRGO_MAP_MAX_POINTS) {
         PURRGO_LOG(
             "MAP: invalid MLP geometry "
-            "parts=%ld points=%ld\n",
+            "parts=%ld points=%ld\n\r",
             (long)num_parts,
             (long)num_points
         );
@@ -90,7 +90,7 @@ bool map_mlp_iter_init(
     if (!validate_parts(iter->parts, iter->num_parts, iter->num_points)) {
         PURRGO_LOG(
             "MAP: invalid MLP parts "
-            "parts=%ld points=%ld\n",
+            "parts=%ld points=%ld\n\r",
             (long)num_parts,
             (long)num_points
         );

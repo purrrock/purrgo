@@ -279,7 +279,7 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
             uint32_t now = purrgo_system_time_ms();
             if (logger_start_failures == 0 || (uint32_t)(now - next_logger_retry_ms) < 0x80000000) {
                 if (purrgo_logger_start(current_fix)) {
-                    PURRGO_LOG("Auto-started track logging\n");
+                    PURRGO_LOG("Auto-started track logging\n\r");
                     logger_start_failures = 0;
                     next_logger_retry_ms = 0;
                     logger_state = purrgo_logger_get_state();

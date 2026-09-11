@@ -215,23 +215,6 @@ bool purrgo_config_load(void)
             char* val = delim + 1;
 
             /*
-             * Часовой пояс — старый формат.
-             *
-             * Сохраняем обратную совместимость.
-             */
-            if (strcmp(key, "TZ") == 0) {
-                int32_t tz_hours = parse_int32(val);
-
-                if (
-                    tz_hours >= -12 &&
-                    tz_hours <= 14
-                ) {
-                    app_config.tz_offset_minutes =
-                        (int16_t)(tz_hours * 60);
-                }
-            }
-
-            /*
              * Часовой пояс в минутах.
              */
             else if (strcmp(key, "TZ_MIN") == 0) {
@@ -410,7 +393,7 @@ bool purrgo_config_load(void)
 bool purrgo_config_save(void)
 {
     PURRGO_LOG(
-        "Saving configuration to: %s\n",
+        "Saving configuration to: %s\n\r",
         purrgo_fs_get_config_path()
     );
 
@@ -421,7 +404,7 @@ bool purrgo_config_save(void)
 
     if (!file) {
         PURRGO_LOG(
-            "purrgo_config_save: failed to open file\n"
+            "purrgo_config_save: failed to open file\n\r"
         );
 
         return false;
@@ -485,7 +468,6 @@ bool purrgo_config_save(void)
     /*
      * snprintf() возвращает количество символов,
      * которое потребовалось бы записать без учёта '\0'.
-     *
      * Если len >= sizeof(buf), конфигурация была бы обрезана.
      */
     if (
