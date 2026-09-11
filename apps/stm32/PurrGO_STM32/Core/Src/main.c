@@ -44,6 +44,8 @@
 #include "display_st7789.h"
 #include "debug_buttons.h"
 
+#include "fatfs.h"
+#include "fatfs_sd.h"
 
 /* USER CODE END Includes */
 
@@ -92,6 +94,8 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
+
+static FATFS purrgo_fs;
 
 /*
  * Доступ к framebuffer осуществляется через callbacks,
@@ -196,6 +200,21 @@ int main(void)
   PURRGO_LOG("PurrGO STM32 boot\r\n");
   PURRGO_LOG("UART2 logger OK\r\n");
   
+/*
+ * -------------------------------------------------------------------------
+ * FatFs: монтирование файловой системы SD-карты.
+ * -------------------------------------------------------------------------
+ */
+FRESULT fs_result = f_mount(&purrgo_fs, "0:", 1);
+if (fs_result != FR_OK)
+{
+    PURRGO_LOG("FatFs mount ERROR: %d\r\n", fs_result);
+}
+else
+{
+    PURRGO_LOG("FatFs mount OK\r\n");
+}
+
   purrgo_debug_buttons_init();
   PURRGO_LOG("UART2 Buttons OK\r\n");
   /*
