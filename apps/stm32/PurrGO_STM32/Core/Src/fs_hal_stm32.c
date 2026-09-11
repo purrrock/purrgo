@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include "purrgo/purrgo_format.h"
+#include <stdio.h>
+#include "purrgo/logger.h"
 
 struct purrgo_file_s {
     FIL fil;
@@ -26,7 +28,7 @@ const char* purrgo_fs_get_tracks_path(void) {
 
 purrgo_file_t* purrgo_fs_open(const char* filepath, fs_mode_t mode) {
     if (!filepath) return NULL;
-
+    purrgo_logger_write ("purrgo_fs_open: ",filepath, "mode:", mode, "/n/r");
     BYTE ff_mode = 0;
     switch (mode) {
         case FS_READ:
@@ -47,10 +49,11 @@ purrgo_file_t* purrgo_fs_open(const char* filepath, fs_mode_t mode) {
 
     FRESULT res = f_open(&file->fil, filepath, ff_mode);
     if (res != FR_OK) {
+        purrgo_logger_write ("purrgo_fs_open: ",filepath, "open error:", res, "/n/r");
         free(file);
         return NULL;
     }
-
+    purrgo_logger_write ("purrgo_fs_open: ",filepath, "opened OK/n/r");
     return file;
 }
 
