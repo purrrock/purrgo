@@ -115,6 +115,6 @@ void purrgo_logger_write(const char *format, ...)
         &huart2,
         (uint8_t *)buffer,
         (uint16_t)length,
-        HAL_MAX_DELAY
+        100U
     );
 }
