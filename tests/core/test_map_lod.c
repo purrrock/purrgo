@@ -1,6 +1,7 @@
 #include "purrgo/map.h"
 #include "purrgo/map.h"
 #include "purrgo/app_fsm.h"
+#include "purrgo/config.h"
 #include "..//../src/core/map_idx.h"
 #include <stdio.h>
 #include <string.h>
@@ -198,8 +199,9 @@ void setup_test_map_malformed_nav() {
     append_u32(1);               // child count
 }
 
-void test_lod_0() {
+void test_lod_high_500m() {
     setup_test_map();
+    app_config.map_details = PURRGO_MAP_DETAILS_HIGH;
     mock_zoom_level = PURRGO_MAP_SCALE_500M;
     mock_mlp_pos = 0;
 
@@ -219,8 +221,9 @@ purrgo_map_render_layer(&idx, &mlp, NULL, &gfx, &cam, &vp, MAP_LAYER_LINES);
     assert(mock_mlp_pos == 32);
 }
 
-void test_lod_1_1km() {
+void test_lod_high_1km() {
     setup_test_map();
+    app_config.map_details = PURRGO_MAP_DETAILS_HIGH;
     mock_zoom_level = PURRGO_MAP_SCALE_1KM;
     mock_mlp_pos = 0;
 
@@ -239,8 +242,9 @@ purrgo_map_render_layer(&idx, &mlp, NULL, &gfx, &cam, &vp, MAP_LAYER_POLYGONS);
     assert(mock_mlp_pos == 32);
 }
 
-void test_lod_1_5km() {
+void test_lod_high_5km() {
     setup_test_map();
+    app_config.map_details = PURRGO_MAP_DETAILS_HIGH;
     mock_zoom_level = PURRGO_MAP_SCALE_5KM;
     mock_mlp_pos = 0;
 
@@ -255,8 +259,9 @@ purrgo_map_render_layer(&idx, &mlp, NULL, &gfx, &cam, &vp, MAP_LAYER_LINES);
     assert(mock_mlp_pos == 32);
 }
 
-void test_lod_2_10km() {
+void test_lod_high_10km() {
     setup_test_map();
+    app_config.map_details = PURRGO_MAP_DETAILS_HIGH;
     mock_zoom_level = PURRGO_MAP_SCALE_10KM;
     mock_mlp_pos = 0;
 
@@ -272,8 +277,90 @@ purrgo_map_render_layer(&idx, &mlp, NULL, &gfx, &cam, &vp, MAP_LAYER_LINES);
     assert(mock_mlp_pos == 32);
 }
 
+void test_lod_low_100m() {
+    setup_test_map();
+    app_config.map_details = PURRGO_MAP_DETAILS_LOW;
+    mock_zoom_level = PURRGO_MAP_SCALE_100M;
+    mock_mlp_pos = 0;
+
+    purrgo_fs_t idx = { .handle = NULL, .read = mock_read, .seek = mock_seek };
+    purrgo_fs_t mlp = { .handle = NULL, .read = mock_mlp_read, .seek = mock_mlp_seek };
+
+    gfx_context_t gfx;
+    purrgo_bbox_t cam = { -200, -200, 200, 200 };
+    purrgo_viewport_t vp = { 0, 0, 100, 100 };
+
+    purrgo_map_render_layer(&idx, &mlp, NULL, &gfx, &cam, &vp, MAP_LAYER_LINES);
+
+    // Should be LOD0
+    assert(mock_idx_pos == 73);
+    assert(mock_mlp_pos == 32);
+}
+
+void test_lod_low_200m() {
+    setup_test_map();
+    app_config.map_details = PURRGO_MAP_DETAILS_LOW;
+    mock_zoom_level = PURRGO_MAP_SCALE_200M;
+    mock_mlp_pos = 0;
+
+    purrgo_fs_t idx = { .handle = NULL, .read = mock_read, .seek = mock_seek };
+    purrgo_fs_t mlp = { .handle = NULL, .read = mock_mlp_read, .seek = mock_mlp_seek };
+
+    gfx_context_t gfx;
+    purrgo_bbox_t cam = { -200, -200, 200, 200 };
+    purrgo_viewport_t vp = { 0, 0, 100, 100 };
+
+    purrgo_map_render_layer(&idx, &mlp, NULL, &gfx, &cam, &vp, MAP_LAYER_LINES);
+
+    // Should be LOD1
+    assert(mock_idx_pos == 145);
+    assert(mock_mlp_pos == 32);
+}
+
+void test_lod_low_2km() {
+    setup_test_map();
+    app_config.map_details = PURRGO_MAP_DETAILS_LOW;
+    mock_zoom_level = PURRGO_MAP_SCALE_2KM;
+    mock_mlp_pos = 0;
+
+    purrgo_fs_t idx = { .handle = NULL, .read = mock_read, .seek = mock_seek };
+    purrgo_fs_t mlp = { .handle = NULL, .read = mock_mlp_read, .seek = mock_mlp_seek };
+
+    gfx_context_t gfx;
+    purrgo_bbox_t cam = { -200, -200, 200, 200 };
+    purrgo_viewport_t vp = { 0, 0, 100, 100 };
+
+    purrgo_map_render_layer(&idx, &mlp, NULL, &gfx, &cam, &vp, MAP_LAYER_LINES);
+
+    // Should be LOD1
+    assert(mock_idx_pos == 145);
+    assert(mock_mlp_pos == 32);
+}
+
+void test_lod_low_5km() {
+    setup_test_map();
+    app_config.map_details = PURRGO_MAP_DETAILS_LOW;
+    mock_zoom_level = PURRGO_MAP_SCALE_5KM;
+    mock_mlp_pos = 0;
+
+    purrgo_fs_t idx = { .handle = NULL, .read = mock_read, .seek = mock_seek };
+    purrgo_fs_t mlp = { .handle = NULL, .read = mock_mlp_read, .seek = mock_mlp_seek };
+
+    gfx_context_t gfx;
+    purrgo_bbox_t cam = { -200, -200, 200, 200 };
+    purrgo_viewport_t vp = { 0, 0, 100, 100 };
+
+    purrgo_map_render_layer(&idx, &mlp, NULL, &gfx, &cam, &vp, MAP_LAYER_LINES);
+
+    // Should be LOD2
+    assert(mock_idx_pos == 186);
+    assert(mock_mlp_pos == 32);
+}
+
+
 void test_malformed_v3_jump() {
     setup_test_map_malformed_nav();
+    app_config.map_details = PURRGO_MAP_DETAILS_HIGH;
     mock_zoom_level = PURRGO_MAP_SCALE_500M; // Target LOD0 where the malformed Nav node is
     mock_mlp_pos = 0;
 
@@ -293,6 +380,7 @@ void test_malformed_v3_jump() {
 
 void test_regression_v3_jump_is_exact() {
     setup_test_map();
+    app_config.map_details = PURRGO_MAP_DETAILS_HIGH;
     mock_zoom_level = PURRGO_MAP_SCALE_10KM;
 
     // We want to test that a culled Nav Node skips EXACTLY v3_jump bytes.
@@ -409,10 +497,15 @@ void test_pgo_header_mlp_invalid_file_type() {
 }
 
 int main() {
-    test_lod_0();
-    test_lod_1_1km();
-    test_lod_1_5km();
-    test_lod_2_10km();
+    test_lod_high_500m();
+    test_lod_high_1km();
+    test_lod_high_5km();
+    test_lod_high_10km();
+
+    test_lod_low_100m();
+    test_lod_low_200m();
+    test_lod_low_2km();
+    test_lod_low_5km();
     test_malformed_v3_jump();
     test_regression_v3_jump_is_exact();
 
