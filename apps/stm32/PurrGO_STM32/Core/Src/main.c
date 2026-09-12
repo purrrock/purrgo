@@ -380,7 +380,7 @@ else {    PURRGO_LOG("FatFs mount OK\r\n");}
      * Она не определяет периоды GNSS/FSM/button processing:
      * эти периоды контролируются через system_time_ms().
      */
-    HAL_Delay(1);
+    __WFI();
 	  }
   /* USER CODE END 3 */
 }
