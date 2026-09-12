@@ -4,6 +4,7 @@
 #include <stdlib.h>
 
 void test_geo_overflow(void);
+void test_geo_wrap_lon(void);
 
 int main(void) {
     // Тестовая точка A (0.0000000 N, 0.0000000 E)
@@ -98,6 +99,7 @@ int main(void) {
     assert(purrgo_geo_azimuth_deg(0, large_lon2, 0, large_lon1) == 270U);
 
     test_geo_overflow();
+    test_geo_wrap_lon();
     return 0;
 }
 
@@ -113,6 +115,26 @@ void test_geo_overflow(void) {
         printf("Overflow test failed: %d, %d\n", bbox.min_x, bbox.max_x);
         exit(1);
     }
+}
+
+void test_geo_wrap_lon(void) {
+    // 1. +180° crossing to the eastern side.
+    assert(purrgo_geo_wrap_lon(1800000001LL) == -1799999999);
+
+    // 2. -180° crossing to the western side.
+    assert(purrgo_geo_wrap_lon(-1800000001LL) == 1799999999);
+
+    // 3. A normal longitude that does not require wrapping.
+    assert(purrgo_geo_wrap_lon(1500000000LL) == 1500000000);
+    assert(purrgo_geo_wrap_lon(-1500000000LL) == -1500000000);
+    assert(purrgo_geo_wrap_lon(1800000000LL) == 1800000000);
+    assert(purrgo_geo_wrap_lon(-1800000000LL) == -1800000000);
+    assert(purrgo_geo_wrap_lon(0) == 0);
+
+    // 4. Values crossing the boundary by more than one unit.
+    assert(purrgo_geo_wrap_lon(2000000000LL) == -1600000000);
+    assert(purrgo_geo_wrap_lon(-2000000000LL) == 1600000000);
+    assert(purrgo_geo_wrap_lon(5400000000LL) == -1800000000);
 }
 
 // ensure test_geo_overflow is called in main

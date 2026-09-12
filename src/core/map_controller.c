@@ -182,15 +182,13 @@ static void apply_auto_follow(const purrgo_gnss_solution_t* fix) {
         int64_t x_term = (int64_t)target_x - map_vp.offset_x;
         int64_t candidate_lon = (int64_t)fix->lon_1e7 - (x_term * geo_width + map_vp.width / 2) / map_vp.width + rad_x;
 
-        // Wrap candidate_lon cleanly within WGS84 +/- 180 (1.8e9) if needed, or simply clamp
-        // Consistent with manual panning clamping:
-        if (candidate_lon > INT32_MAX) candidate_lon = INT32_MAX;
-        if (candidate_lon < INT32_MIN) candidate_lon = INT32_MIN;
+        // Wrap candidate_lon cleanly within WGS84 +/- 180 (1.8e9) if needed
+        int32_t wrapped_lon = purrgo_geo_wrap_lon(candidate_lon);
 
         purrgo_bbox_t candidate_cam;
         purrgo_geo_bbox_from_center(
             (int32_t)candidate_lat,
-            (int32_t)candidate_lon,
+            wrapped_lon,
             map_app_get_map_scale_width_m(),
             &map_vp,
             &candidate_cam
@@ -215,9 +213,9 @@ static void apply_auto_follow(const purrgo_gnss_solution_t* fix) {
 
         if (new_dx <= follow_start_x && new_dy <= follow_start_y) {
         //    PURRGO_LOG("AUTO-FOLLOW: marker=(%d,%d) target=(%d,%d) result=(%d,%d)\n", sx, sy, (int)target_x, (int)target_y, new_sx, new_sy);
-            if (map_center_lat_1e7 != (int32_t)candidate_lat || map_center_lon_1e7 != (int32_t)candidate_lon) {
+            if (map_center_lat_1e7 != (int32_t)candidate_lat || map_center_lon_1e7 != wrapped_lon) {
                 map_center_lat_1e7 = (int32_t)candidate_lat;
-                map_center_lon_1e7 = (int32_t)candidate_lon;
+                map_center_lon_1e7 = wrapped_lon;
                 map_dirty = true;
             }
         }
