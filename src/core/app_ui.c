@@ -9,13 +9,15 @@
 #include "purrgo/gfx_text.h"
 #include "purrgo/gfx_rect.h"
 #include "purrgo/hardware_config.h"
+#include "purrgo/display_hal.h"
 
 int dbg_map_render_calls = 0;
 
-static void ui_draw_key_hints(gfx_context_t* gfx, purrgo_state_t state) {
+static void ui_draw_key_hints(gfx_context_t* gfx, purrgo_state_t state)
+{
     int y = PURRGO_HW_DISPLAY_HEIGHT_PX - 8;
 
-    // Clear the bottom area
+    /* Clear the bottom area */
     gfx_set_color(gfx, BLACK, WHITE);
     gfx_fill_rect(gfx, 0, y, PURRGO_HW_DISPLAY_WIDTH_PX, 8);
 
@@ -28,34 +30,43 @@ static void ui_draw_key_hints(gfx_context_t* gfx, purrgo_state_t state) {
 
     switch (state) {
         case APP_STATE_MAP:
-            k1 = "\x1B" "/-"; // стрелка влево
-            k2 = "\x1A" "/+"; // стрелка вправо
-            k3 = "\x18" "/CNT"; // стрелка вниз
-            k4 = "\x19" "/NXT"; // стрелка вверх
+            k1 = "\x1B" "/-";
+            k2 = "\x1A" "/+";
+            k3 = "\x18" "/CNT";
+            k4 = "\x19" "/NXT";
             break;
+
         case APP_STATE_TRIP_COMPUTER:
-            k1 = "";
-            k2 = "";
-            k3 = "";
             k4 = "NXT";
             break;
+
         case APP_STATE_MENU_CONFIG:
         case APP_STATE_MENU_DIR_SELECT:
         case APP_STATE_MENU_MAP_LAYERS:
-            k1 = "\x18"; // стрелка вниз
-            k2 = "\x19"; // стрелка вверх
+            k1 = "\x18";
+            k2 = "\x19";
             k3 = "SEL";
             k4 = "BCK";
             break;
+
         default:
             break;
     }
 
     int step = PURRGO_HW_DISPLAY_WIDTH_PX / 4;
+
     if (k1[0]) gfx_draw_string(gfx, 2, y + 1, k1);
     if (k2[0]) gfx_draw_string(gfx, 2 + step, y + 1, k2);
     if (k3[0]) gfx_draw_string(gfx, 2 + step * 2, y + 1, k3);
     if (k4[0]) gfx_draw_string(gfx, 2 + step * 3, y + 1, k4);
+
+    /* Refresh only the area occupied by the key hints. */
+    display_refresh_region(
+        0,
+        y,
+        PURRGO_HW_DISPLAY_WIDTH_PX,
+        8
+    );
 }
 
 void purrgo_app_ui_render(
@@ -90,5 +101,6 @@ void purrgo_app_ui_render(
             break;
     }
 
-      prev_state = current_state;
+    ui_draw_key_hints(gfx, current_state);
+    prev_state = current_state;
 }
