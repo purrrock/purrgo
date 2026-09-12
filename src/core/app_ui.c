@@ -88,7 +88,6 @@ void purrgo_app_ui_render(
             ui_trip_render_values(gfx, gnss, sun);
             break;
         case APP_STATE_MAP:
-            ui_draw_key_hints(gfx, current_state);
             ui_render_map(gfx, gnss, sun);
             break;
         case APP_STATE_MENU_DIR_SELECT:
