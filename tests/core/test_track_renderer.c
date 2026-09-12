@@ -7,12 +7,11 @@
 #include "purrgo/track_logger.h"
 #include "purrgo/map.h"
 
-// Since we are linking against purrgo_core, purrgo_logger_get_track_points is already provided.
-// To satisfy "Requires mocking purrgo_logger_get_track_points to return 0", we can either rely on its default state
+// Since we are linking against purrgo_core, track_logger functions are already provided.
+// To satisfy tests requiring track counts to be 0, we can either rely on its default state
 // (which returns 0 if we haven't added points), OR we can use the preprocessor trick in CMake,
 // OR since it's testing purrgo_track_render we can just make sure the track logger has 0 points.
 // Actually, let's just make sure track_logger has 0 points initially. The track logger RAM buffer starts empty (BSS).
-// So `purrgo_logger_get_track_points` will naturally return 0.
 // Let's create a custom `gfx_draw_pixel` and `gfx_read_pixel` and check if `gfx_set_color` modifies the color.
 
 static int draw_pixel_calls = 0;
