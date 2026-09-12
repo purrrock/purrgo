@@ -34,10 +34,17 @@ void purrgo_logger_stop(void);
 const char* purrgo_logger_get_active_filename(void);
 track_logger_state_t purrgo_logger_get_state(void);
 
-size_t purrgo_logger_get_track_points(
-    track_point_t* out_points,
-    size_t max_points
-);
+size_t purrgo_logger_get_track_point_count(void);
+
+/**
+ * Reads one track point by chronological index.
+ * index == 0 means the oldest currently retained point.
+ * Increasing index returns progressively newer points.
+ * The valid range is 0 .. ram_track_count - 1.
+ * Return true and copy the point into out_point when valid.
+ * Return false for a NULL output pointer or an index outside the currently retained range.
+ */
+bool purrgo_logger_get_track_point(size_t index, track_point_t *out_point);
 
 bool purrgo_logger_get_last_two_points(
     track_point_t *previous,
