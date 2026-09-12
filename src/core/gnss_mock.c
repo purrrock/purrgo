@@ -105,7 +105,7 @@ void purrgo_gnss_mock_init(void) {
     state.seconds = 56;
     state.day = 1;
     state.month = 1;
-    state.year = 24;
+    state.year = 26;
 
     generate_nmea();
 }

@@ -23,7 +23,7 @@ static void test_gnss_mock_init(void) {
     assert(state.seconds == 56);
     assert(state.day == 1);
     assert(state.month == 1);
-    assert(state.year == 24);
+    assert(state.year == 26);
 
     // Read full NMEA stream from mock
     char buffer[512] = {0};
@@ -64,7 +64,7 @@ static void test_gnss_mock_init(void) {
     assert(sol.seconds == 56);
     assert(sol.day == 1);
     assert(sol.month == 1);
-    assert(sol.year == 24);
+    assert(sol.year == 26);
 }
 
 static void test_gnss_mock_update(void) {
