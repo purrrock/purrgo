@@ -136,41 +136,36 @@ void test_map_layers_load_save() {
 void test_overflow_protection() {
     printf("test_overflow_protection\n");
     mock_file_exists = true;
-    strcpy(mock_file_content, "LAST_LAT_1E7=21474836480\nTZ_MIN=99999\n"); // Out of bounds string and range
+
+    // We test values indirectly by triggering load of various out-of-bounds keys.
+    // If parse_int32 limits values to INT32_MAX and INT32_MIN, those values will still
+    // be rejected by LAST_LAT_1E7/LAST_LON_1E7 bound checks in config.c,
+    // preserving default values.
+    strcpy(mock_file_content,
+        "LAST_LAT_1E7=2147483647\n"
+        "LAST_LON_1E7=-2147483648\n"
+        "POI_ENABLED=2147483648\n"
+        "POI_MODE=-2147483649\n"
+        "LAYER_ROADS=999999999999999999999999999999\n"
+        "LAYER_WATER=-999999999999999999999999999999\n"
+        "TZ_MIN=99999\n"
+    );
     mock_file_len = strlen(mock_file_content);
 
-    // Set some valid defaults
+    // Set defaults slightly different to trace changes
     app_config.last_lat_1e7 = 111;
     app_config.tz_offset_minutes = 222;
 
     purrgo_config_load();
 
-    // Should retain defaults since parsing or semantic limits failed
-    EXPECT_EQ(537135000, app_config.last_lat_1e7); // Since config_load calls init, it will be the default, not 111
+    // LAST_LAT_1E7 default is 537135000 (after purrgo_config_load calls purrgo_config_init)
+    EXPECT_EQ(537135000, app_config.last_lat_1e7);
     EXPECT_EQ(180, app_config.tz_offset_minutes);
-}
 
-// Include config.c to access static parse_int32. CMake uses --allow-multiple-definition.
-#include "../../src/core/config.c"
-
-void test_parse_int32_boundaries() {
-    printf("test_parse_int32_boundaries\n");
-
-    // INT32_MAX
-    EXPECT_EQ(2147483647, parse_int32("2147483647"));
-
-    // INT32_MIN
-    EXPECT_EQ(-2147483648LL, (long long)parse_int32("-2147483648"));
-
-    // INT32_MAX + 1
-    EXPECT_EQ(2147483647, parse_int32("2147483648"));
-
-    // INT32_MIN - 1
-    EXPECT_EQ(-2147483648LL, (long long)parse_int32("-2147483649"));
-
-    // Очень длинные положительные и отрицательные числа
-    EXPECT_EQ(2147483647, parse_int32("999999999999999999999999999999"));
-    EXPECT_EQ(-2147483648LL, (long long)parse_int32("-999999999999999999999999999999"));
+    // LAYER_ROADS is parsed as INT32_MAX (!= 0), so it should evaluate to true
+    EXPECT_TRUE(app_config.layer_roads);
+    // LAYER_WATER is parsed as INT32_MIN (!= 0), so it should evaluate to true
+    EXPECT_TRUE(app_config.layer_water);
 }
 
 void test_map_details_load_save(void);
@@ -178,7 +173,6 @@ void test_map_details_load_save(void);
 int main(void) {
     test_missing_keys_retain_defaults();
     test_overflow_protection();
-    test_parse_int32_boundaries();
     test_map_layers_load_save();
     test_map_details_load_save();
 

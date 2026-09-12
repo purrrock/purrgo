@@ -46,14 +46,11 @@ static int32_t parse_int32(const char* str)
     while (*str >= '0' && *str <= '9') {
         int32_t digit = *str - '0';
 
-        res = res * 10 + digit;
-
-        if (sign == 1 && res > INT32_MAX) {
-            return INT32_MAX;
-        } else if (sign == -1 && res > (int64_t)INT32_MAX + 1) {
-            return INT32_MIN;
+        if (res > INT32_MAX / 10 || (res == INT32_MAX / 10 && digit > (sign == 1 ? 7 : 8))) {
+            return sign == 1 ? INT32_MAX : INT32_MIN;
         }
 
+        res = res * 10 + digit;
         str++;
     }
 
