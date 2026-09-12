@@ -376,10 +376,8 @@ else {    PURRGO_LOG("FatFs mount OK\r\n");}
       purrgo_app_ui_clear_dirty();
     }
     /*
-     * Небольшая задержка разгружает CPU.
-     * Она не определяет периоды GNSS/FSM/button processing:
-     * эти периоды контролируются через system_time_ms().
-     */
+     * Ждём событий
+    */
     __WFI();
 	  }
   /* USER CODE END 3 */
