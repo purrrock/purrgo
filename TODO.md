@@ -84,18 +84,18 @@ Release-дисплей выбран:
 
 Для разработки используются:
 
-- NUCLEO-F446RE;
 - STM32F411CEU6.
+- NUCLEO-F446RE;
 
 Используется та плата, которая доступна первой.
 
 ## Перенос core
 
 - [X] Собрать portable core без PC-specific dependencies.
-- [ ] Проверить map parser на STM32.
-- [ ] Проверить map renderer на STM32.
+- [X] Проверить map parser на STM32.
+- [X] Проверить map renderer на STM32.
 - [ ] Проверить GNSS processing.
-- [ ] Проверить track processing.
+- [X] Проверить track processing.
 - [ ] Проверить Waypoint navigation.
 
 ## RAM
