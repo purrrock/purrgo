@@ -117,38 +117,30 @@ static void process_buttons(void);
 /* USER CODE BEGIN 0 */
 
 /**
- * @brief Опрос аппаратных кнопок.
+ * @brief Обновление драйвера кнопок и передача событий в FSM.
  *
+ * Драйвер самостоятельно определяет SHORT/LONG.
+ * Здесь физические кнопки уже не перебираются:
+ * приложение получает готовые события.
  */
 static void process_buttons(void)
 {
+    purrgo_btn_t event;
+
     /*
-     * Обрабатываем все кнопки, определённые в app_fsm.h.
-     * Драйвер кнопок возвращает true только для реально нажатой
+     * Обновить debounce и определить новые SHORT/LONG события.
      */
-    static const purrgo_btn_t buttons[] =
-    {
-        PURRGO_BTN_KEY1_SHORT,
-        PURRGO_BTN_KEY2_SHORT,
-        PURRGO_BTN_KEY3_SHORT,
-        PURRGO_BTN_KEY4_SHORT,
-        PURRGO_BTN_KEY1_LONG,
-        PURRGO_BTN_KEY2_LONG,
-        PURRGO_BTN_KEY3_LONG,
-        PURRGO_BTN_KEY4_LONG
-    };
+    purrgo_stm32_buttons_update();
 
-    const size_t button_count =
-        sizeof(buttons) / sizeof(buttons[0]);
-
-    for (size_t i = 0U; i < button_count; ++i)
+    /*
+     * Передать FSM все события, накопившиеся за этот цикл.
+     */
+    while (purrgo_stm32_buttons_get_event(&event))
     {
-        if (purrgo_stm32_button_is_pressed(buttons[i]))
-        {
-            purrgo_app_handle_button(buttons[i]);
-        }
+        purrgo_app_handle_button(event);
     }
 }
+
 
 /* USER CODE END 0 */
 
