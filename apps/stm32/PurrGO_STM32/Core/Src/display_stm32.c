@@ -32,9 +32,8 @@ void display_init(void) {
 void display_clear(uint8_t color) {
     color &= 0x03;
     uint8_t byte_val = (color << 6) | (color << 4) | (color << 2) | color;
-    for (int i = 0; i < DISPLAY_FB_SIZE; ++i) {
-        framebuffer[i] = byte_val;
-    }
+    // Use memset for efficient framebuffer initialization
+    memset(framebuffer, byte_val, DISPLAY_FB_SIZE);
 }
 
 void display_set_pixel(int16_t x, int16_t y, uint8_t color) {
