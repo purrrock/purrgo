@@ -20,6 +20,13 @@
 #define PURRGO_POI_SMALL_RADIUS 3
 
 /*
+ * Shared buffer for reading names during recursive SQT traversal.
+ * Map rendering is strictly single-threaded, so this avoids allocating
+ * 64 bytes on the stack for every recursive call to map_idx_parse_node().
+ */
+static char name_buf[64];
+
+/*
  * Чтение имени из DBF файла напрямую с накопителя.
  * Функция учитывает различие между слоями: в обычных слоях v2=1 это dummy-запись,
  * а в слое POI dummy-записи нет.
@@ -158,9 +165,8 @@ bool map_idx_parse_node(
             if (app_config.layer_poi_labels &&
                 v2 > 0 &&
                 db_fs != NULL) {
-                char name[64];
-                if (map_db_read_name(db_fs, v2, true, name, sizeof(name))) {
-                    int len = strlen(name);
+                if (map_db_read_name(db_fs, v2, true, name_buf, sizeof(name_buf))) {
+                    int len = strlen(name_buf);
                     
                     int16_t text_w = len * 6; // Ширина: 5px символ + 1px промежуток
                     int16_t text_h = 8;       // Высота: 8px
@@ -171,7 +177,7 @@ bool map_idx_parse_node(
                         int16_t text_y = sy + radius + 2;
 
                         if (map_render_try_place_label(text_x, text_y, text_w, text_h)) {
-                            gfx_draw_string_halo(gfx, text_x, text_y, name);
+                            gfx_draw_string_halo(gfx, text_x, text_y, name_buf);
                         }
                     } else {
                         // Для POI_SMALL: Основной вариант размещения справа
@@ -179,12 +185,12 @@ bool map_idx_parse_node(
                         int16_t text_y = sy - (text_h / 2);
 
                         if (map_render_try_place_label(text_x, text_y, text_w, text_h)) {
-                            gfx_draw_string_halo(gfx, text_x, text_y, name);
+                            gfx_draw_string_halo(gfx, text_x, text_y, name_buf);
                         } else {
                             // Коллизия справа: Запасной вариант "правее-ниже"
                             text_y = sy + radius + 2;
                             if (map_render_try_place_label(text_x, text_y, text_w, text_h)) {
-                                gfx_draw_string_halo(gfx, text_x, text_y, name);
+                                gfx_draw_string_halo(gfx, text_x, text_y, name_buf);
                             }
                         }
                     }
@@ -229,9 +235,8 @@ if (style == PURRGO_STYLE_NONE) {
                 app_config.layer_poi_labels &&
                 v2 >= 2 &&
                 db_fs != NULL) {
-                char name[64];
 
-                if (map_db_read_name(db_fs, v2, false, name, sizeof(name))) {
+                if (map_db_read_name(db_fs, v2, false, name_buf, sizeof(name_buf))) {
                     /*
                      * Вычисляем центр BBox, разделяя слагаемые
                      * для защиты от int32 overflow.
@@ -242,7 +247,7 @@ if (style == PURRGO_STYLE_NONE) {
                     int16_t sx, sy;
                     project_to_screen(center_x, center_y, cam, vp, &sx, &sy);
 
-                    int len = strlen(name);
+                    int len = strlen(name_buf);
 
                     int16_t text_w = len * 6;
                     int16_t text_h = 8;
@@ -266,7 +271,7 @@ if (style == PURRGO_STYLE_NONE) {
                         text_y,
                         text_w,
                         text_h,
-                        name
+                        name_buf
                     );
                 }
             }
