@@ -211,3 +211,14 @@ int32_t purrgo_geo_cos_10k(int32_t lat_1e7) {
 
     return cos_lat;
 }
+
+int32_t purrgo_geo_wrap_lon(int64_t lon_1e7) {
+    if (lon_1e7 >= -1800000000LL && lon_1e7 <= 1800000000LL) {
+        return (int32_t)lon_1e7;
+    }
+    int64_t wrapped = (lon_1e7 + 1800000000LL) % 3600000000LL;
+    if (wrapped < 0) {
+        wrapped += 3600000000LL;
+    }
+    return (int32_t)(wrapped - 1800000000LL);
+}
