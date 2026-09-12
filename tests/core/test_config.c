@@ -136,18 +136,36 @@ void test_map_layers_load_save() {
 void test_overflow_protection() {
     printf("test_overflow_protection\n");
     mock_file_exists = true;
-    strcpy(mock_file_content, "LAST_LAT_1E7=21474836480\nTZ_MIN=99999\n"); // Out of bounds string and range
+
+    // We test values indirectly by triggering load of various out-of-bounds keys.
+    // If parse_int32 limits values to INT32_MAX and INT32_MIN, those values will still
+    // be rejected by LAST_LAT_1E7/LAST_LON_1E7 bound checks in config.c,
+    // preserving default values.
+    strcpy(mock_file_content,
+        "LAST_LAT_1E7=2147483647\n"
+        "LAST_LON_1E7=-2147483648\n"
+        "POI_ENABLED=2147483648\n"
+        "POI_MODE=-2147483649\n"
+        "LAYER_ROADS=999999999999999999999999999999\n"
+        "LAYER_WATER=-999999999999999999999999999999\n"
+        "TZ_MIN=99999\n"
+    );
     mock_file_len = strlen(mock_file_content);
 
-    // Set some valid defaults
+    // Set defaults slightly different to trace changes
     app_config.last_lat_1e7 = 111;
     app_config.tz_offset_minutes = 222;
 
     purrgo_config_load();
 
-    // Should retain defaults since parsing or semantic limits failed
-    EXPECT_EQ(537135000, app_config.last_lat_1e7); // Since config_load calls init, it will be the default, not 111
+    // LAST_LAT_1E7 default is 537135000 (after purrgo_config_load calls purrgo_config_init)
+    EXPECT_EQ(537135000, app_config.last_lat_1e7);
     EXPECT_EQ(180, app_config.tz_offset_minutes);
+
+    // LAYER_ROADS is parsed as INT32_MAX (!= 0), so it should evaluate to true
+    EXPECT_TRUE(app_config.layer_roads);
+    // LAYER_WATER is parsed as INT32_MIN (!= 0), so it should evaluate to true
+    EXPECT_TRUE(app_config.layer_water);
 }
 
 void test_map_details_load_save(void);
