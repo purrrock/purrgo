@@ -65,6 +65,14 @@ void Error_Handler(void);
 #define TFT_RST_GPIO_Port GPIOB
 #define TFT_DC_Pin GPIO_PIN_1
 #define TFT_DC_GPIO_Port GPIOB
+#define KEY1_Pin GPIO_PIN_3
+#define KEY1_GPIO_Port GPIOB
+#define KEY2_Pin GPIO_PIN_4
+#define KEY2_GPIO_Port GPIOB
+#define KEY3_Pin GPIO_PIN_5
+#define KEY3_GPIO_Port GPIOB
+#define KEY4_Pin GPIO_PIN_6
+#define KEY4_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 
