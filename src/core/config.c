@@ -50,7 +50,7 @@ static int32_t parse_int32(const char* str)
 
         if (sign == 1 && res > INT32_MAX) {
             return INT32_MAX;
-        } else if (sign == -1 && -res < INT32_MIN) {
+        } else if (sign == -1 && res > (int64_t)INT32_MAX + 1) {
             return INT32_MIN;
         }
 
