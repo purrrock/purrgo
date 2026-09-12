@@ -20,4 +20,10 @@ void display_refresh(void);
  */
 void display_refresh_region(int16_t x, int16_t y, int16_t w, int16_t h);
 
+/*
+ * Flushes accumulated partial refresh regions.
+ * Should be called once at the end of a logical UI update.
+ */
+void display_flush(void);
+
 #endif /* PURRGO_DISPLAY_HAL_H */
