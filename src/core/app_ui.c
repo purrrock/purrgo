@@ -16,7 +16,7 @@ static void ui_draw_key_hints(gfx_context_t* gfx, purrgo_state_t state) {
     int y = PURRGO_HW_DISPLAY_HEIGHT_PX - 8;
 
     // Clear the bottom area
-    gfx_set_color(gfx, 0, 3);
+    gfx_set_color(gfx, BLACK, WHITE);
     gfx_fill_rect(gfx, 0, y, PURRGO_HW_DISPLAY_WIDTH_PX, 8);
 
     gfx_set_color(gfx, BLACK, WHITE);
