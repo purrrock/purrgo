@@ -270,47 +270,32 @@ track_logger_state_t purrgo_logger_get_state(void) {
     return current_state;
 }
 
-size_t purrgo_logger_get_track_points(
-    track_point_t* out_points,
-    size_t max_points
-) {
-    if (out_points == NULL || max_points == 0) {
-        return 0;
+size_t purrgo_logger_get_track_point_count(void) {
+    return ram_track_count;
+}
+
+bool purrgo_logger_get_track_point(size_t index, track_point_t *out_point) {
+    if (out_point == NULL) {
+        return false;
     }
 
-    size_t points_to_copy = ram_track_count;
-    if (points_to_copy > max_points) {
-        points_to_copy = max_points;
+    if (index >= ram_track_count) {
+        return false;
     }
 
-    if (points_to_copy == 0) {
-        return 0;
-    }
-
-    // To copy the most recent points in chronological order:
-    // The newest point is at (ram_track_head - 1) % TRACK_RAM_MAX_POINTS
-    // The oldest point to copy is at (ram_track_head - points_to_copy) % TRACK_RAM_MAX_POINTS
+    // The oldest point is at (ram_track_head - ram_track_count) % TRACK_RAM_MAX_POINTS
+    // The requested point is at oldest_point + index
     size_t start_index;
-    if (ram_track_head >= points_to_copy) {
-        start_index = ram_track_head - points_to_copy;
+    if (ram_track_head >= ram_track_count) {
+        start_index = ram_track_head - ram_track_count;
     } else {
-        start_index = TRACK_RAM_MAX_POINTS - (points_to_copy - ram_track_head);
+        start_index = TRACK_RAM_MAX_POINTS - (ram_track_count - ram_track_head);
     }
 
-    // Now copy from start_index to out_points
-    // We may need to wrap around the end of the circular buffer
-    size_t points_copied = 0;
-    size_t current_index = start_index;
-    while (points_copied < points_to_copy) {
-        out_points[points_copied] = ram_track_buffer[current_index];
-        points_copied++;
-        current_index++;
-        if (current_index >= TRACK_RAM_MAX_POINTS) {
-            current_index = 0;
-        }
-    }
+    size_t target_index = (start_index + index) % TRACK_RAM_MAX_POINTS;
+    *out_point = ram_track_buffer[target_index];
 
-    return points_copied;
+    return true;
 }
 
 bool purrgo_logger_get_last_two_points(

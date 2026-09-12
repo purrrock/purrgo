@@ -11,8 +11,7 @@ void purrgo_track_render(
 {
     if (!gfx || !camera || !vp || !gpx_filepath) return;
 
-    static track_point_t track_points[TRACK_RAM_MAX_POINTS];
-    size_t num_points = purrgo_logger_get_track_points(track_points, TRACK_RAM_MAX_POINTS);
+    size_t num_points = purrgo_logger_get_track_point_count();
 
     if (num_points == 0) {
         return;
@@ -25,15 +24,18 @@ void purrgo_track_render(
     int16_t prev_sx = 0, prev_sy = 0;
 
     for (size_t i = 0; i < num_points; i++) {
-        int16_t sx, sy;
-        project_to_screen(track_points[i].lon_1e7, track_points[i].lat_1e7, camera, vp, &sx, &sy);
+        track_point_t point;
+        if (purrgo_logger_get_track_point(i, &point)) {
+            int16_t sx, sy;
+            project_to_screen(point.lon_1e7, point.lat_1e7, camera, vp, &sx, &sy);
 
-        if (has_prev) {
-            gfx_draw_line(gfx, prev_sx, prev_sy, sx, sy);
+            if (has_prev) {
+                gfx_draw_line(gfx, prev_sx, prev_sy, sx, sy);
+            }
+            prev_sx = sx;
+            prev_sy = sy;
+            has_prev = true;
         }
-        prev_sx = sx;
-        prev_sy = sy;
-        has_prev = true;
     }
 }
 
