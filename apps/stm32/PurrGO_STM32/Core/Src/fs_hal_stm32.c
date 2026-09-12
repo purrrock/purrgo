@@ -9,10 +9,10 @@
  * Use fixed storage pools instead of heap allocation on STM32 to avoid
  * memory fragmentation and out-of-memory crashes during map rendering
  * or file operations.
- * Map rendering opens up to 3 files concurrently, plus config/track logger.
- * A pool of 8 files and 2 directories is safely enough for the current usage.
+ * Map rendering opens up to 4*3 files concurrently, plus config/track logger.
+ * A pool of 14 files and 2 directories is safely enough for the current usage.
  */
-#define STM32_MAX_FILES 8
+#define STM32_MAX_FILES 14
 #define STM32_MAX_DIRS 2
 
 struct purrgo_file_s {
