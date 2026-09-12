@@ -2,6 +2,7 @@
 #include "purrgo/display_hal.h"
 #include "purrgo/logger.h"
 #include <stddef.h>
+#include <stdint.h>
 #include <string.h>
 #include "display_st7789.h"
 
@@ -127,7 +128,7 @@ static void do_refresh_region(int16_t x, int16_t y, int16_t w, int16_t h) {
 
     for (int row = y; row < y + h; row++) {
         for (int col = x; col < x + w; col++) {
-            int pixel_idx = row * DISPLAY_WIDTH + col;
+            uint32_t pixel_idx = row * DISPLAY_WIDTH + col;
             int byte_idx = pixel_idx / 4;
             int bit_shift = (3 - (pixel_idx % 4)) * 2;
             uint8_t color2bpp = (framebuffer[byte_idx] >> bit_shift) & 0x03;
