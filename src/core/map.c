@@ -233,47 +233,31 @@ bool purrgo_map_render_viewport(
      */
     map_render_clear_labels();
 
-    char landuse_idx_path[PURRGO_FS_MAX_PATH];
-    char landuse_mlp_path[PURRGO_FS_MAX_PATH];
-    char landuse_db_path[PURRGO_FS_MAX_PATH];
-
-    char idx_path[PURRGO_FS_MAX_PATH];
-    char mlp_path[PURRGO_FS_MAX_PATH];
-
-    char poi_idx_path[PURRGO_FS_MAX_PATH];
-    char poi_db_path[PURRGO_FS_MAX_PATH];
+    /*
+     * Reusing a single buffer to format file paths sequentially.
+     * This saves 6 * 256 = 1536 bytes of stack space on embedded platforms,
+     * which is critical since PURRGO_FS_MAX_PATH is 256. The path is only needed
+     * momentarily to open the file via purrgo_fs_open().
+     */
+    char path_buf[PURRGO_FS_MAX_PATH];
 
     /* ------------------- LANDUSE ------------------- */
+    purrgo_file_t* landuse_idx_file = NULL;
+    purrgo_file_t* landuse_mlp_file = NULL;
+    purrgo_file_t* landuse_db_file = NULL;
 
-    purrgo_snprintf(
-        landuse_idx_path,
-        sizeof(landuse_idx_path),
-        "%s/landuse.idx",
-        map_dir
-    );
+    if (app_config.layer_landuse) {
+        purrgo_snprintf(path_buf, sizeof(path_buf), "%s/landuse.idx", map_dir);
+        landuse_idx_file = purrgo_fs_open(path_buf, FS_READ);
 
-    purrgo_snprintf(
-        landuse_mlp_path,
-        sizeof(landuse_mlp_path),
-        "%s/landuse.mlp",
-        map_dir
-    );
+        purrgo_snprintf(path_buf, sizeof(path_buf), "%s/landuse.mlp", map_dir);
+        landuse_mlp_file = purrgo_fs_open(path_buf, FS_READ);
 
-    purrgo_snprintf(
-        landuse_db_path,
-        sizeof(landuse_db_path),
-        "%s/landuse.db",
-        map_dir
-    );
-
-    purrgo_file_t* landuse_idx_file = app_config.layer_landuse ?
-        purrgo_fs_open(landuse_idx_path, FS_READ) : NULL;
-
-    purrgo_file_t* landuse_mlp_file = app_config.layer_landuse ?
-        purrgo_fs_open(landuse_mlp_path, FS_READ) : NULL;
-
-    purrgo_file_t* landuse_db_file = (app_config.layer_landuse && app_config.layer_landuse_labels) ?
-        purrgo_fs_open(landuse_db_path, FS_READ) : NULL;
+        if (app_config.layer_landuse_labels) {
+            purrgo_snprintf(path_buf, sizeof(path_buf), "%s/landuse.db", map_dir);
+            landuse_db_file = purrgo_fs_open(path_buf, FS_READ);
+        }
+    }
 
     bool landuse_success = !app_config.layer_landuse;
 
@@ -326,25 +310,16 @@ bool purrgo_map_render_viewport(
 
     /* ------------------- ROADS ------------------- */
 
-    purrgo_snprintf(
-        idx_path,
-        sizeof(idx_path),
-        "%s/roads.idx",
-        map_dir
-    );
+    purrgo_file_t* idx_file = NULL;
+    purrgo_file_t* mlp_file = NULL;
 
-    purrgo_snprintf(
-        mlp_path,
-        sizeof(mlp_path),
-        "%s/roads.mlp",
-        map_dir
-    );
+    if (app_config.layer_roads) {
+        purrgo_snprintf(path_buf, sizeof(path_buf), "%s/roads.idx", map_dir);
+        idx_file = purrgo_fs_open(path_buf, FS_READ);
 
-    purrgo_file_t* idx_file = app_config.layer_roads ?
-        purrgo_fs_open(idx_path, FS_READ) : NULL;
-
-    purrgo_file_t* mlp_file = app_config.layer_roads ?
-        purrgo_fs_open(mlp_path, FS_READ) : NULL;
+        purrgo_snprintf(path_buf, sizeof(path_buf), "%s/roads.mlp", map_dir);
+        mlp_file = purrgo_fs_open(path_buf, FS_READ);
+    }
 
     bool roads_success = !app_config.layer_roads;
 
@@ -410,25 +385,18 @@ bool purrgo_map_render_viewport(
 
     /* ------------------- POIS ------------------- */
 
-    purrgo_snprintf(
-        poi_idx_path,
-        sizeof(poi_idx_path),
-        "%s/pois.idx",
-        map_dir
-    );
+    purrgo_file_t* poi_idx_file = NULL;
+    purrgo_file_t* poi_db_file = NULL;
 
-    purrgo_snprintf(
-        poi_db_path,
-        sizeof(poi_db_path),
-        "%s/pois.db",
-        map_dir
-    );
+    if (app_config.layer_poi) {
+        purrgo_snprintf(path_buf, sizeof(path_buf), "%s/pois.idx", map_dir);
+        poi_idx_file = purrgo_fs_open(path_buf, FS_READ);
 
-    purrgo_file_t* poi_idx_file = app_config.layer_poi ?
-        purrgo_fs_open(poi_idx_path, FS_READ) : NULL;
-
-    purrgo_file_t* poi_db_file = (app_config.layer_poi && app_config.layer_poi_labels) ?
-        purrgo_fs_open(poi_db_path, FS_READ) : NULL;
+        if (app_config.layer_poi_labels) {
+            purrgo_snprintf(path_buf, sizeof(path_buf), "%s/pois.db", map_dir);
+            poi_db_file = purrgo_fs_open(path_buf, FS_READ);
+        }
+    }
 
     bool poi_success = true;
 
