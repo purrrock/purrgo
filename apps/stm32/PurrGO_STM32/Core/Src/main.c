@@ -234,8 +234,8 @@ else {    PURRGO_LOG("FatFs mount OK\r\n");}
    * Buttons.
    * -------------------------------------------------------------------------
    */
-  // purrgo_stm32_buttons_init();
-  // PURRGO_LOG("Buttons OK\r\n");
+   purrgo_stm32_buttons_init();
+   PURRGO_LOG("Buttons OK\r\n");
 
   /*
    * -------------------------------------------------------------------------
@@ -354,8 +354,8 @@ else {    PURRGO_LOG("FatFs mount OK\r\n");}
     )
     {
       last_button_poll_ms = current_time_ms;
-
-    //  process_buttons();
+      //обработка кнопок
+      process_buttons();
     }
     // прием эмуляции кнопок через UART 
     purrgo_debug_buttons_process();
