@@ -19,7 +19,7 @@ purrgo_config_t app_config;
  */
 static int32_t parse_int32(const char* str)
 {
-    int32_t res = 0;
+    int64_t res = 0;
     int32_t sign = 1;
 
     /*
@@ -41,37 +41,24 @@ static int32_t parse_int32(const char* str)
     }
 
     /*
-     * Чтение числовой части с накоплением в отрицательном виде.
-     *
-     * Это позволяет корректно представить INT32_MIN,
-     * абсолютное значение которого на единицу больше INT32_MAX.
+     * Чтение числовой части с накоплением в int64_t.
      */
     while (*str >= '0' && *str <= '9') {
         int32_t digit = *str - '0';
 
-        /*
-         * Проверка переполнения.
-         */
-        if (res < (INT32_MIN + digit) / 10) {
+        if (res > INT32_MAX / 10 || (res == INT32_MAX / 10 && digit > (sign == 1 ? 7 : 8))) {
             return sign == 1 ? INT32_MAX : INT32_MIN;
         }
 
-        res = res * 10 - digit;
+        res = res * 10 + digit;
         str++;
     }
 
-    /*
-     * Если число положительное, меняем знак.
-     */
-    if (sign == 1) {
-        if (res == INT32_MIN) {
-            return INT32_MAX;
-        }
-
-        return -res;
+    if (sign == -1) {
+        res = -res;
     }
 
-    return res;
+    return (int32_t)res;
 }
 
 
