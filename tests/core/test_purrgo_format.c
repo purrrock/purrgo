@@ -77,6 +77,40 @@ void test_hex() {
     EXPECT_STR_EQ("00FF", buf);
 }
 
+void test_long() {
+    char buf[64];
+
+    purrgo_snprintf(buf, sizeof(buf), "%ld", 42L);
+    EXPECT_STR_EQ("42", buf);
+
+    purrgo_snprintf(buf, sizeof(buf), "%ld", -42L);
+    EXPECT_STR_EQ("-42", buf);
+
+    purrgo_snprintf(buf, sizeof(buf), "%04ld", 42L);
+    EXPECT_STR_EQ("0042", buf);
+
+    purrgo_snprintf(buf, sizeof(buf), "%04ld", -42L);
+    EXPECT_STR_EQ("-042", buf);
+
+    purrgo_snprintf(buf, sizeof(buf), "%ld", 0L);
+    EXPECT_STR_EQ("0", buf);
+
+    purrgo_snprintf(buf, sizeof(buf), "%4ld", 42L);
+    EXPECT_STR_EQ("  42", buf);
+
+    purrgo_snprintf(buf, sizeof(buf), "%-4ld", 42L);
+    EXPECT_STR_EQ("42  ", buf);
+
+    purrgo_snprintf(buf, sizeof(buf), "%lu", 42UL);
+    EXPECT_STR_EQ("42", buf);
+
+    purrgo_snprintf(buf, sizeof(buf), "%lx", 255UL);
+    EXPECT_STR_EQ("ff", buf);
+
+    purrgo_snprintf(buf, sizeof(buf), "%lX", 255UL);
+    EXPECT_STR_EQ("FF", buf);
+}
+
 void test_char() {
     char buf[64];
 
@@ -98,6 +132,7 @@ int main() {
     test_basic_strings();
     test_integers();
     test_hex();
+    test_long();
     test_char();
     test_truncation();
 
