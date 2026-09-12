@@ -1,5 +1,6 @@
 #include "purrgo/display_hal.h"
 #include "purrgo/logger.h"
+#include "purrgo/hardware_config.h"
 
 static int partial_refresh_count = 0;
 
@@ -16,6 +17,11 @@ void display_refresh(void) {
 }
 
 void display_refresh_region(int16_t x, int16_t y, int16_t w, int16_t h) {
+    if (x < 0) { w += x; x = 0; }
+    if (y < 0) { h += y; y = 0; }
+    if (x + w > PURRGO_HW_DISPLAY_WIDTH_PX) { w = PURRGO_HW_DISPLAY_WIDTH_PX - x; }
+    if (y + h > PURRGO_HW_DISPLAY_HEIGHT_PX) { h = PURRGO_HW_DISPLAY_HEIGHT_PX - y; }
+
     if (w <= 0 || h <= 0) {
         return;
     }
