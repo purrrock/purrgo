@@ -1,4 +1,5 @@
 #include "purrgo/gpx_parser.h"
+#include "purrgo/purrgo_parse.h"
 #include "purrgo/purrgo_format.h"
 #include <string.h>
 
@@ -37,15 +38,11 @@ static int32_t parse_coord_1e7(const char* str) {
 
 // Простой парсер целого числа (для высоты)
 static int16_t parse_int16(const char* str) {
-    int32_t result = 0;
-    int32_t sign = 1;
-    while (*str == ' ' || *str == '\n' || *str == '\r') str++;
-    if (*str == '-') { sign = -1; str++; }
-    while (*str >= '0' && *str <= '9') {
-        result = result * 10 + (*str - '0');
-        str++;
-    }
-    return (int16_t)(result * sign);
+    while (*str == '\n' || *str == '\r' || *str == ' ') str++;
+    int32_t val = purrgo_parse_int32(str);
+    if (val > 32767) val = 32767;
+    if (val < -32768) val = -32768;
+    return (int16_t)val;
 }
 
 void purrgo_gpx_parser_init(purrgo_gpx_parser_t *parser, purrgo_waypoint_t *waypoints, size_t max_waypoints) {

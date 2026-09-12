@@ -1,5 +1,6 @@
 #include "purrgo/config.h"
 #include "purrgo/fs_hal.h"
+#include "purrgo/purrgo_parse.h"
 #include "purrgo/logger.h"
 #include "purrgo/purrgo_format.h"
 #include <string.h>
@@ -10,56 +11,6 @@
 
 purrgo_config_t app_config;
 
-
-/*
- * Внутренний парсер целочисленных значений.
- *
- * Реализован вместо atoi(), чтобы контролировать тип результата
- * и обработку переполнения.
- */
-static int32_t parse_int32(const char* str)
-{
-    int64_t res = 0;
-    int32_t sign = 1;
-
-    /*
-     * Пропуск пробелов.
-     */
-    while (*str == ' ' || *str == '\t') {
-        str++;
-    }
-
-    /*
-     * Определение знака.
-     */
-    if (*str == '-') {
-        sign = -1;
-        str++;
-    }
-    else if (*str == '+') {
-        str++;
-    }
-
-    /*
-     * Чтение числовой части с накоплением в int64_t.
-     */
-    while (*str >= '0' && *str <= '9') {
-        int32_t digit = *str - '0';
-
-        if (res > INT32_MAX / 10 || (res == INT32_MAX / 10 && digit > (sign == 1 ? 7 : 8))) {
-            return sign == 1 ? INT32_MAX : INT32_MIN;
-        }
-
-        res = res * 10 + digit;
-        str++;
-    }
-
-    if (sign == -1) {
-        res = -res;
-    }
-
-    return (int32_t)res;
-}
 
 
 void purrgo_config_init(void)
@@ -208,7 +159,7 @@ bool purrgo_config_load(void)
              * Часовой пояс в минутах.
              */
             if (strcmp(key, "TZ_MIN") == 0) {
-                int32_t tz_min = parse_int32(val);
+                int32_t tz_min = purrgo_parse_int32(val);
 
                 if (
                     tz_min >= -720 &&
@@ -236,7 +187,7 @@ bool purrgo_config_load(void)
              * Последняя широта.
              */
             else if (strcmp(key, "LAST_LAT_1E7") == 0) {
-                int32_t lat = parse_int32(val);
+                int32_t lat = purrgo_parse_int32(val);
 
                 if (
                     lat >= -900000000 &&
@@ -250,7 +201,7 @@ bool purrgo_config_load(void)
              * Последняя долгота.
              */
             else if (strcmp(key, "LAST_LON_1E7") == 0) {
-                int32_t lon = parse_int32(val);
+                int32_t lon = purrgo_parse_int32(val);
 
                 if (
                     lon >= -1800000000 &&
@@ -266,7 +217,7 @@ bool purrgo_config_load(void)
              * Поддержка старого формата.
              */
             else if (strcmp(key, "POI_ENABLED") == 0) {
-                int32_t enabled = parse_int32(val);
+                int32_t enabled = purrgo_parse_int32(val);
 
                 if (enabled == 0) {
                     app_config.poi_mode = PURRGO_POI_MODE_NO;
@@ -280,7 +231,7 @@ bool purrgo_config_load(void)
              * Режим отображения POI.
              */
             else if (strcmp(key, "POI_MODE") == 0) {
-                int32_t mode = parse_int32(val);
+                int32_t mode = purrgo_parse_int32(val);
 
                 if (
                     mode == PURRGO_POI_MODE_NO ||
@@ -295,7 +246,7 @@ bool purrgo_config_load(void)
              * Детализация карты.
              */
             else if (strcmp(key, "MAP_DETAILS") == 0) {
-                int32_t mode = parse_int32(val);
+                int32_t mode = purrgo_parse_int32(val);
 
                 if (
                     mode == PURRGO_MAP_DETAILS_LOW ||
@@ -309,7 +260,7 @@ bool purrgo_config_load(void)
              * Режим записи трека.
              */
             else if (strcmp(key, "LOG_MODE") == 0) {
-                int32_t mode = parse_int32(val);
+                int32_t mode = purrgo_parse_int32(val);
 
                 if (
                     mode == LOGGER_MODE_OFF ||
@@ -326,31 +277,31 @@ bool purrgo_config_load(void)
              * Видимость слоев карты.
              */
             else if (strcmp(key, "LAYER_LANDUSE") == 0) {
-                app_config.layer_landuse = (parse_int32(val) != 0);
+                app_config.layer_landuse = (purrgo_parse_int32(val) != 0);
             }
             else if (strcmp(key, "LAYER_WATER") == 0) {
-                app_config.layer_water = (parse_int32(val) != 0);
+                app_config.layer_water = (purrgo_parse_int32(val) != 0);
             }
             else if (strcmp(key, "LAYER_LANDUSE_LABELS") == 0) {
-                app_config.layer_landuse_labels = (parse_int32(val) != 0);
+                app_config.layer_landuse_labels = (purrgo_parse_int32(val) != 0);
             }
             else if (strcmp(key, "LAYER_WATER_LABELS") == 0) {
-                app_config.layer_water_labels = (parse_int32(val) != 0);
+                app_config.layer_water_labels = (purrgo_parse_int32(val) != 0);
             }
             else if (strcmp(key, "LAYER_ROADS") == 0) {
-                app_config.layer_roads = (parse_int32(val) != 0);
+                app_config.layer_roads = (purrgo_parse_int32(val) != 0);
             }
             else if (strcmp(key, "LAYER_POI") == 0) {
-                app_config.layer_poi = (parse_int32(val) != 0);
+                app_config.layer_poi = (purrgo_parse_int32(val) != 0);
             }
             else if (strcmp(key, "LAYER_POI_LABELS") == 0) {
-                app_config.layer_poi_labels = (parse_int32(val) != 0);
+                app_config.layer_poi_labels = (purrgo_parse_int32(val) != 0);
             }
             else if (strcmp(key, "LAYER_ROUTE") == 0) {
-                app_config.layer_route = (parse_int32(val) != 0);
+                app_config.layer_route = (purrgo_parse_int32(val) != 0);
             }
             else if (strcmp(key, "LAYER_TRACK") == 0) {
-                app_config.layer_track = (parse_int32(val) != 0);
+                app_config.layer_track = (purrgo_parse_int32(val) != 0);
             }
         }
 
