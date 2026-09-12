@@ -206,14 +206,8 @@ int main(void)
  * -------------------------------------------------------------------------
  */
 FRESULT fs_result = f_mount(&purrgo_fs, "0:", 1);
-if (fs_result != FR_OK)
-{
-    PURRGO_LOG("FatFs mount ERROR: %d\r\n", fs_result);
-}
-else
-{
-    PURRGO_LOG("FatFs mount OK\r\n");
-}
+if (fs_result != FR_OK) {    PURRGO_LOG("FatFs mount ERROR: %d\r\n", fs_result);}
+else {    PURRGO_LOG("FatFs mount OK\r\n");}
 
   purrgo_debug_buttons_init();
   PURRGO_LOG("UART2 Buttons OK\r\n");
@@ -240,8 +234,8 @@ else
    * Buttons.
    * -------------------------------------------------------------------------
    */
-  purrgo_stm32_buttons_init();
-  PURRGO_LOG("Buttons OK\r\n");
+  // purrgo_stm32_buttons_init();
+  // PURRGO_LOG("Buttons OK\r\n");
 
   /*
    * -------------------------------------------------------------------------
@@ -361,7 +355,7 @@ else
     {
       last_button_poll_ms = current_time_ms;
 
-      process_buttons();
+    //  process_buttons();
     }
     // прием эмуляции кнопок через UART 
     purrgo_debug_buttons_process();

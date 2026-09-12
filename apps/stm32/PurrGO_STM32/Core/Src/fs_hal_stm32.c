@@ -28,7 +28,7 @@ const char* purrgo_fs_get_tracks_path(void) {
 
 purrgo_file_t* purrgo_fs_open(const char* filepath, fs_mode_t mode) {
     if (!filepath) return NULL;
-    PURRGO_LOG("purrgo_fs_open: %s mode: %d\n\r", filepath, mode);
+  //  PURRGO_LOG("purrgo_fs_open: %s mode: %d\n\r", filepath, mode);
     BYTE ff_mode = 0;
     switch (mode) {
         case FS_READ:
