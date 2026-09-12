@@ -110,6 +110,8 @@ int purrgo_vsnprintf(char* buf, size_t size, const char* format, va_list args) {
         }
 
         int precision = -1;
+        int is_long = 0;
+
         if (*format == '.') {
             format++;
             precision = 0;
@@ -122,6 +124,11 @@ int purrgo_vsnprintf(char* buf, size_t size, const char* format, va_list args) {
                     format++;
                 }
             }
+        }
+
+        if (*format == 'l') {
+            is_long = 1;
+            format++;
         }
 
         if (*format == 's') {
@@ -159,25 +166,30 @@ int purrgo_vsnprintf(char* buf, size_t size, const char* format, va_list args) {
             }
             format++;
         } else if (*format == 'd' || *format == 'i') {
-            int val = va_arg(args, int);
+            long val = is_long ? va_arg(args, long) : va_arg(args, int);
             write_int(&buf, &size, &count, val, 10, width, pad_char, 0, 1, left_justify);
             format++;
         } else if (*format == 'u') {
-            unsigned int val = va_arg(args, unsigned int);
+            unsigned long val = is_long ? va_arg(args, unsigned long) : va_arg(args, unsigned int);
             write_int(&buf, &size, &count, val, 10, width, pad_char, 0, 0, left_justify);
             format++;
         } else if (*format == 'x') {
-            unsigned int val = va_arg(args, unsigned int);
+            unsigned long val = is_long ? va_arg(args, unsigned long) : va_arg(args, unsigned int);
             write_int(&buf, &size, &count, val, 16, width, pad_char, 0, 0, left_justify);
             format++;
         } else if (*format == 'X') {
-            unsigned int val = va_arg(args, unsigned int);
+            unsigned long val = is_long ? va_arg(args, unsigned long) : va_arg(args, unsigned int);
             write_int(&buf, &size, &count, val, 16, width, pad_char, 1, 0, left_justify);
             format++;
         } else {
             write_char(&buf, &size, &count, '%');
-            write_char(&buf, &size, &count, *format);
-            format++;
+            if (is_long) {
+                write_char(&buf, &size, &count, 'l');
+            }
+            if (*format) {
+                write_char(&buf, &size, &count, *format);
+                format++;
+            }
         }
     }
 
