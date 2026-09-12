@@ -101,5 +101,6 @@ void purrgo_app_ui_render(
     }
 
     ui_draw_key_hints(gfx, current_state);
+    display_flush();
     prev_state = current_state;
 }
