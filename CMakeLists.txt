@@ -93,3 +93,4 @@ add_purrgo_test(test_purrgo_format tests/core/test_purrgo_format.c)
 
 add_purrgo_test(test_map_render_flags tests/core/test_map_render_flags.c)
 add_purrgo_test(test_display_hal tests/core/test_display_hal.c)
+add_purrgo_test(test_purrgo_parse tests/core/test_purrgo_parse.c)
