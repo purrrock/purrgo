@@ -182,3 +182,9 @@ void ST7789_WritePixels(uint8_t *data, uint16_t size) {
 void ST7789_EndPixels(void) {
     HAL_GPIO_WritePin(TFT_CS_GPIO_Port, TFT_CS_Pin, GPIO_PIN_SET);
 }
+
+void ST7789_SleepIn(void) {
+    /* Sleep In */
+    ST7789_WriteCommand(0x10);
+    HAL_Delay(120);
+}
