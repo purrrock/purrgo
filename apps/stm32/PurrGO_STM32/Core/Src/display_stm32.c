@@ -113,6 +113,13 @@ static int16_t pending_x2 = -1;
 static int16_t pending_y2 = -1;
 static int pending_has_region = 0;
 
+static const uint16_t color_lut[4] = {
+    ST7789_COLOR_BLACK,
+    0x52AA,
+    0xAD55,
+    ST7789_COLOR_WHITE
+};
+
 static void do_refresh_region(int16_t x, int16_t y, int16_t w, int16_t h) {
     if (x < 0) { w += x; x = 0; }
     if (y < 0) { h += y; y = 0; }
@@ -138,13 +145,7 @@ static void do_refresh_region(int16_t x, int16_t y, int16_t w, int16_t h) {
             int bit_shift = (3 - (pixel_idx % 4)) * 2;
             uint8_t color2bpp = (framebuffer[byte_idx] >> bit_shift) & 0x03;
 
-            uint16_t rgb565 = ST7789_COLOR_BLACK;
-            switch (color2bpp) {
-                case COLOR_BLACK: rgb565 = ST7789_COLOR_BLACK; break;
-                case COLOR_DARK_GRAY: rgb565 = 0x52AA; break;
-                case COLOR_LIGHT_GRAY: rgb565 = 0xAD55; break; /* Appropriate light-gray RGB565 */
-                case COLOR_WHITE: rgb565 = ST7789_COLOR_WHITE; break;
-            }
+            uint16_t rgb565 = color_lut[color2bpp];
 
             buf[buf_idx * 2] = rgb565 >> 8;
             buf[buf_idx * 2 + 1] = rgb565 & 0xFF;
