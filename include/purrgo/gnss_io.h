@@ -5,6 +5,11 @@
 #include <stdint.h>
 
 /**
+ * @brief Initialize GNSS input.
+ */
+void purrgo_gnss_init(void);
+
+/**
  * @brief Прочитать один байт из входного потока GNSS.
  *
  * Функция не занимается разбором NMEA или UBX.

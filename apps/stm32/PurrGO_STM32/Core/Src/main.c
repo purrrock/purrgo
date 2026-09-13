@@ -37,7 +37,7 @@
 #include <purrgo/system_time.h>
 #include <purrgo/sun.h>
 #include "purrgo/gnss_io.h"
-#include "purrgo/gnss_mock.h"
+// #include "purrgo/gnss_mock.h"
 #include "purrgo/logger.h"
 #include "buttons.h"
 #include "display_stm32.h"
@@ -203,13 +203,27 @@ else {    PURRGO_LOG("FatFs mount OK\r\n");}
 
   purrgo_debug_buttons_init();
   PURRGO_LOG("UART2 Buttons OK\r\n");
-  /*
-   * -------------------------------------------------------------------------
-   * GNSS MOCK Initialization.
-   * -------------------------------------------------------------------------
-   */
-  purrgo_gnss_mock_init();
-  PURRGO_LOG("GNSS MOCK OK\r\n");
+
+/*
+ * -------------------------------------------------------------------------
+ * GNSS.
+ * -------------------------------------------------------------------------
+ * AT6558R подключён к USART1.
+ */
+purrgo_gnss_init();
+PURRGO_LOG("GNSS USART1 OK\r\n");
+
+/*
+ * Для indoor-отладки MOCK можно вернуть:
+ *
+ * #include "purrgo/gnss_mock.h"
+ * purrgo_gnss_mock_init();
+ *
+ * и в основном цикле периодически вызывать:
+ *
+ * purrgo_gnss_mock_update();
+ */
+
 
   /*
    * -------------------------------------------------------------------------
@@ -299,13 +313,13 @@ else {    PURRGO_LOG("FatFs mount OK\r\n");}
 	
 	uint32_t current_time_ms = purrgo_system_time_ms();
 
-    static uint32_t last_mock_update_ms = 0;
-    if (current_time_ms - last_mock_update_ms >= GNSS_UPDATE_PERIOD_MS) {
-        last_mock_update_ms = current_time_ms;
-        purrgo_gnss_mock_update();
-        // мигаем светодиодом
-	      HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
-	  }
+//    static uint32_t last_mock_update_ms = 0;
+//    if (current_time_ms - last_mock_update_ms >= GNSS_UPDATE_PERIOD_MS) {
+//        last_mock_update_ms = current_time_ms;
+//        purrgo_gnss_mock_update();
+//        // мигаем светодиодом
+//	      HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+//	  }
 
     /*
      * -----------------------------------------------------------------------
