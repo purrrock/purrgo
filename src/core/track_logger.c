@@ -250,6 +250,7 @@ void purrgo_logger_stop(void) {
             purrgo_fs_close(active_file);
             active_file = NULL;
         }
+           PURRGO_LOG("Track logging stop\r\n");
     }
     s_active_filename[0] = '\0';
     current_state = LOGGER_STATE_IDLE;
