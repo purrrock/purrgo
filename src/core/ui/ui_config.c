@@ -237,6 +237,25 @@ void ui_render_menu_config(gfx_context_t* gfx)
 
     /*
      * ---------------------------------------------------------------
+     * POWER OFF
+     * ---------------------------------------------------------------
+     */
+    if (cursor == 6) {
+        gfx_set_color(gfx, 3, 0);
+    }
+    else {
+        gfx_set_color(gfx, 0, 3);
+    }
+
+    gfx_draw_string(
+        gfx,
+        10,
+        115,
+        "POWER OFF"
+    );
+
+    /*
+     * ---------------------------------------------------------------
      * HELP
      * ---------------------------------------------------------------
      */
@@ -245,21 +264,21 @@ void ui_render_menu_config(gfx_context_t* gfx)
     gfx_draw_string(
         gfx,
         10,
-        120,
+        135,
         "UP/DN: Select"
     );
 
     gfx_draw_string(
         gfx,
         10,
-        135,
+        150,
         "SEL  : Change"
     );
 
     gfx_draw_string(
         gfx,
         10,
-        150,
+        165,
         "BACK : Save"
     );
 }

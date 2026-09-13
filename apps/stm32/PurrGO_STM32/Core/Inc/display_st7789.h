@@ -45,3 +45,5 @@ void ST7789_WritePixels(uint8_t *data, uint16_t size);
 void ST7789_EndPixels(void);
 
 #endif /* DISPLAY_ST7789_H */
+
+void ST7789_SleepIn(void);

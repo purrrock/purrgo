@@ -1,6 +1,7 @@
 #include "purrgo/config_controller.h"
 #include "purrgo/config.h"
 #include "purrgo/purrgo_format.h"
+#include "purrgo/power.h"
 
 
 /*
@@ -84,6 +85,7 @@ static purrgo_map_details_t draft_map_details;
 #define CONFIG_CURSOR_LOG_MODE      3
 #define CONFIG_CURSOR_MAP_DETAILS   4
 #define CONFIG_CURSOR_MAP_LAYERS    5
+#define CONFIG_CURSOR_POWER_OFF     6
 
 #define MAP_LAYERS_COUNT 9
 
@@ -115,7 +117,7 @@ static bool draft_layer_track;
  */
 static int get_config_last_cursor(void)
 {
-    return CONFIG_CURSOR_MAP_LAYERS;
+    return CONFIG_CURSOR_POWER_OFF;
 }
 
 
@@ -547,6 +549,15 @@ bool purrgo_config_controller_handle_button(
                     purrgo_config_controller_on_enter(
                         APP_STATE_MENU_MAP_LAYERS
                     );
+                }
+
+                /*
+                 * POWER OFF
+                 */
+                else if (
+                    config_cursor_idx == CONFIG_CURSOR_POWER_OFF
+                ) {
+                    purrgo_system_power_off();
                 }
 
                 return true;
