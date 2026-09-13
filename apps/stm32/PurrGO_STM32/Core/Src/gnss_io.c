@@ -17,13 +17,13 @@
 static uint8_t gnss_rx_buffer[GNSS_RX_BUFFER_SIZE];
 
 /*
- * Монотонно возрастающие счетчики для корректного обнаружения
- * переполнения буфера без проблемы "head == tail" на полном обороте.
+ * tail изменяется только из потребителя (purrgo_gnss_read_byte).
+ * prev_dma_head и unread_bytes используются для обнаружения новых данных
+ * и переполнения.
  */
-static uint32_t total_written = 0U;
-static uint32_t total_read = 0U;
+static uint16_t gnss_rx_tail = 0U;
 static uint16_t prev_dma_head = 0U;
-static uint32_t dma_wrap_count = 0U;
+static uint32_t unread_bytes = 0U;
 
 /**
  * @brief Инициализировать приём GNSS через USART1.
@@ -33,10 +33,9 @@ static uint32_t dma_wrap_count = 0U;
  */
 void purrgo_gnss_init(void)
 {
-    total_written = 0U;
-    total_read = 0U;
+    gnss_rx_tail = 0U;
     prev_dma_head = 0U;
-    dma_wrap_count = 0U;
+    unread_bytes = 0U;
 
     /*
      * AT6558R:
@@ -93,52 +92,49 @@ bool purrgo_gnss_read_byte(uint8_t *byte)
         curr_dma_head = 0U;
     }
 
-    /* Проверяем флаг завершения передачи (TC), чтобы поймать возможный wrap,
-       даже если curr_dma_head >= prev_dma_head */
-    if (__HAL_DMA_GET_FLAG(huart1.hdmarx, DMA_FLAG_TCIF2_6))
+    /* Определяем, сколько байт было записано с прошлого вызова. */
+    if (curr_dma_head != prev_dma_head)
     {
-        __HAL_DMA_CLEAR_FLAG(huart1.hdmarx, DMA_FLAG_TCIF2_6);
-        dma_wrap_count++;
-    }
+        uint16_t added_bytes;
+        if (curr_dma_head > prev_dma_head)
+        {
+            added_bytes = curr_dma_head - prev_dma_head;
+        }
+        else
+        {
+            added_bytes = GNSS_RX_BUFFER_SIZE - prev_dma_head + curr_dma_head;
+        }
 
-    /* Считаем абсолютное количество записанных байт через обертывания */
-    uint32_t absolute_written = (dma_wrap_count * GNSS_RX_BUFFER_SIZE) + curr_dma_head;
-
-    /*
-     * Корректировка на случай, если мы прочитали curr_dma_head ПЕРЕД обнулением NDTR,
-     * а флаг TC выставился уже ПОСЛЕ.
-     */
-    if ((curr_dma_head > (GNSS_RX_BUFFER_SIZE / 2)) && (__HAL_DMA_GET_FLAG(huart1.hdmarx, DMA_FLAG_TCIF2_6) != RESET))
-    {
-         /* curr_dma_head относится к предыдущему циклу, absolute_written завышен */
-         absolute_written -= GNSS_RX_BUFFER_SIZE;
+        unread_bytes += added_bytes;
+        prev_dma_head = curr_dma_head;
     }
-
-    /* Обновляем максимальный счетчик */
-    if (absolute_written > total_written)
-    {
-        total_written = absolute_written;
-    }
-    prev_dma_head = curr_dma_head;
 
     /*
      * Механизм обнаружения переполнения:
-     * Если разница между total_written и total_read превышает размер буфера,
-     * значит старые данные были перезаписаны DMA.
-     * Сдвигаем total_read, чтобы отбросить затертые данные.
+     * Если unread_bytes превышает размер буфера, значит старые данные
+     * были перезаписаны DMA. Оставляем только свежие данные,
+     * перемещая указатель чтения (tail) к текущей позиции записи (head).
      */
-    if ((total_written - total_read) > GNSS_RX_BUFFER_SIZE)
+    if (unread_bytes > GNSS_RX_BUFFER_SIZE)
     {
-        total_read = total_written - GNSS_RX_BUFFER_SIZE;
+        unread_bytes = GNSS_RX_BUFFER_SIZE;
+        gnss_rx_tail = curr_dma_head;
     }
 
-    if (total_written == total_read)
+    if (unread_bytes == 0)
     {
         return false;
     }
 
-    *byte = gnss_rx_buffer[total_read % GNSS_RX_BUFFER_SIZE];
-    total_read++;
+    *byte = gnss_rx_buffer[gnss_rx_tail];
+
+    gnss_rx_tail++;
+    if (gnss_rx_tail >= GNSS_RX_BUFFER_SIZE)
+    {
+        gnss_rx_tail = 0U;
+    }
+
+    unread_bytes--;
 
     return true;
 }
@@ -162,10 +158,9 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
     HAL_UART_AbortReceive(huart);
 
     /* Сбрасываем счетчики при рестарте DMA, чтобы не было неконсистентности */
-    total_written = 0U;
-    total_read = 0U;
+    gnss_rx_tail = 0U;
     prev_dma_head = 0U;
-    dma_wrap_count = 0U;
+    unread_bytes = 0U;
 
     (void)HAL_UART_Receive_DMA(&huart1, gnss_rx_buffer, GNSS_RX_BUFFER_SIZE);
 }
