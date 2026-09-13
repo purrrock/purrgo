@@ -60,4 +60,6 @@ bool purrgo_map_render_viewport(
     const char *map_dir
 );
 
+void purrgo_map_shutdown(void);
+
 #endif /* PURRGO_MAP_H */
