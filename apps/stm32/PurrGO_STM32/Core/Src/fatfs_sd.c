@@ -156,8 +156,12 @@ static bool SD_RxDataBlock(BYTE *buff, UINT len)
     if(token != 0xFE) return FALSE;
 
     /* receive data */
-    while(len--) {
-        SPI_RxBytePtr(buff++);
+    if (len == 512) {
+        HAL_SPI_Receive(HSPI_SDCARD, buff, 512, SPI_TIMEOUT);
+    } else {
+        while(len--) {
+            SPI_RxBytePtr(buff++);
+        }
     }
 
     /* discard CRC */
