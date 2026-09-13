@@ -23,6 +23,7 @@ static uint8_t gnss_rx_buffer[GNSS_RX_BUFFER_SIZE];
 static uint32_t total_written = 0U;
 static uint32_t total_read = 0U;
 static uint16_t prev_dma_head = 0U;
+static uint32_t dma_wrap_count = 0U;
 
 /**
  * @brief Инициализировать приём GNSS через USART1.
@@ -35,6 +36,7 @@ void purrgo_gnss_init(void)
     total_written = 0U;
     total_read = 0U;
     prev_dma_head = 0U;
+    dma_wrap_count = 0U;
 
     /*
      * AT6558R:
@@ -91,18 +93,32 @@ bool purrgo_gnss_read_byte(uint8_t *byte)
         curr_dma_head = 0U;
     }
 
-    /* Определяем, сколько байт было записано с прошлого вызова. */
-    uint16_t added_bytes;
-    if (curr_dma_head >= prev_dma_head)
+    /* Проверяем флаг завершения передачи (TC), чтобы поймать возможный wrap,
+       даже если curr_dma_head >= prev_dma_head */
+    if (__HAL_DMA_GET_FLAG(huart1.hdmarx, DMA_FLAG_TCIF2_6))
     {
-        added_bytes = curr_dma_head - prev_dma_head;
-    }
-    else
-    {
-        added_bytes = GNSS_RX_BUFFER_SIZE - prev_dma_head + curr_dma_head;
+        __HAL_DMA_CLEAR_FLAG(huart1.hdmarx, DMA_FLAG_TCIF2_6);
+        dma_wrap_count++;
     }
 
-    total_written += added_bytes;
+    /* Считаем абсолютное количество записанных байт через обертывания */
+    uint32_t absolute_written = (dma_wrap_count * GNSS_RX_BUFFER_SIZE) + curr_dma_head;
+
+    /*
+     * Корректировка на случай, если мы прочитали curr_dma_head ПЕРЕД обнулением NDTR,
+     * а флаг TC выставился уже ПОСЛЕ.
+     */
+    if ((curr_dma_head > (GNSS_RX_BUFFER_SIZE / 2)) && (__HAL_DMA_GET_FLAG(huart1.hdmarx, DMA_FLAG_TCIF2_6) != RESET))
+    {
+         /* curr_dma_head относится к предыдущему циклу, absolute_written завышен */
+         absolute_written -= GNSS_RX_BUFFER_SIZE;
+    }
+
+    /* Обновляем максимальный счетчик */
+    if (absolute_written > total_written)
+    {
+        total_written = absolute_written;
+    }
     prev_dma_head = curr_dma_head;
 
     /*
@@ -149,6 +165,7 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
     total_written = 0U;
     total_read = 0U;
     prev_dma_head = 0U;
+    dma_wrap_count = 0U;
 
     (void)HAL_UART_Receive_DMA(&huart1, gnss_rx_buffer, GNSS_RX_BUFFER_SIZE);
 }
