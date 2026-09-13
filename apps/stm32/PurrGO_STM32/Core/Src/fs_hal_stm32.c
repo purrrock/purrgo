@@ -11,7 +11,6 @@
 struct purrgo_file_s {
     FIL fil;
     bool in_use;
-    bool is_db;
 };
 
 struct purrgo_dir_s {
@@ -200,16 +199,6 @@ purrgo_file_t* purrgo_fs_open(const char* filepath, fs_mode_t mode) {
         return NULL;
     }
 
-    file->is_db = false;
-    size_t len = strlen(filepath);
-    if (len >= 3) {
-        if (filepath[len-3] == '.' &&
-            (filepath[len-2] == 'd' || filepath[len-2] == 'D') &&
-            (filepath[len-1] == 'b' || filepath[len-1] == 'B')) {
-            file->is_db = true;
-        }
-    }
-
     invalidate_cache_for_file(file);
 
     PURRGO_LOG("purrgo_fs_open: %s opened OK\n\r", filepath);
@@ -218,6 +207,9 @@ purrgo_file_t* purrgo_fs_open(const char* filepath, fs_mode_t mode) {
 
 uint32_t purrgo_fs_write(purrgo_file_t* file, const uint8_t* data, uint32_t size) {
     if (!file || !data || size == 0) return 0;
+
+    // Invalidate cache for this file if written to
+    invalidate_cache_for_file(file);
 
     UINT bw = 0;
     FRESULT res = f_write(&file->fil, data, (UINT)size, &bw);
@@ -230,16 +222,7 @@ uint32_t purrgo_fs_write(purrgo_file_t* file, const uint8_t* data, uint32_t size
 uint32_t purrgo_fs_read(purrgo_file_t* file, uint8_t* buffer, uint32_t size) {
     if (!file || !buffer || size == 0) return 0;
 
-    if (file->is_db) {
-        return purrgo_fs_read_cached(file, buffer, size);
-    }
-
-    UINT br = 0;
-    FRESULT res = f_read(&file->fil, buffer, (UINT)size, &br);
-    if (res != FR_OK) {
-        return 0;
-    }
-    return (uint32_t)br;
+    return purrgo_fs_read_cached(file, buffer, size);
 }
 
 bool purrgo_fs_seek(purrgo_file_t* file, uint32_t offset) {
