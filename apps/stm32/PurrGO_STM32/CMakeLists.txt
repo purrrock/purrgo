@@ -55,6 +55,7 @@ target_sources(PurrGO_STM32 PRIVATE
 
     # SD/FatFs support.
     Core/Src/fatfs_sd.c
+    Core/Src/dma.c
 
     # STM32 implementation of the common GNSS byte-stream interface.
     Core/Src/gnss_io.c
