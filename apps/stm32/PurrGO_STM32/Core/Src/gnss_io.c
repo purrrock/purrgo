@@ -7,7 +7,7 @@
 #include "purrgo/logger.h"
 
 /*
- * Кольцевой буфер входного потока USART1.
+ * Кольцевой буфер входного потока USART1 (через DMA).
  *
  * 1024 байта достаточно для временного накопления NMEA-потока,
  * пока основной цикл занят другими задачами.
@@ -17,31 +17,25 @@
 static uint8_t gnss_rx_buffer[GNSS_RX_BUFFER_SIZE];
 
 /*
- * head изменяется только обработчиком UART.
- * tail изменяется только из основного контекста.
+ * tail изменяется только из потребителя (purrgo_gnss_read_byte).
+ * prev_dma_head и unread_bytes используются для обнаружения новых данных
+ * и переполнения.
  */
-static volatile uint16_t gnss_rx_head = 0U;
-static volatile uint16_t gnss_rx_tail = 0U;
-
-/*
- * Буфер одного байта для HAL_UART_Receive_IT().
- *
- * После получения байта HAL вызывает HAL_UART_RxCpltCallback(),
- * где байт помещается в кольцевой буфер и приём немедленно
- * запускается снова.
- */
-static uint8_t gnss_rx_byte;
+static uint16_t gnss_rx_tail = 0U;
+static uint16_t prev_dma_head = 0U;
+static uint32_t unread_bytes = 0U;
 
 /**
  * @brief Инициализировать приём GNSS через USART1.
  *
- * Приём выполняется в interrupt mode. Функция должна быть вызвана
- * после MX_USART1_UART_Init().
+ * Приём выполняется через Circular DMA. Функция должна быть вызвана
+ * после MX_USART1_UART_Init() и инициализации DMA.
  */
 void purrgo_gnss_init(void)
 {
-    gnss_rx_head = 0U;
     gnss_rx_tail = 0U;
+    prev_dma_head = 0U;
+    unread_bytes = 0U;
 
     /*
      * AT6558R:
@@ -51,21 +45,19 @@ void purrgo_gnss_init(void)
      * Формат команды:
      * $PCAS02,1000*2E\r\n
      */
- static const uint8_t gnss_update_rate_cmd[] = "$PCAS02,1000*2E\r\n";
+    static const uint8_t gnss_update_rate_cmd[] = "$PCAS02,1000*2E\r\n";
     // Для выдачи только GGA + GSA + RMC
-static const uint8_t gnss_nmea_cmd[] =  "$PCAS03,1,0,1,0,1,0,0,0,0,0,,,0,0,,,,0*3A\r\n";
+    static const uint8_t gnss_nmea_cmd[] = "$PCAS03,1,0,1,0,1,0,0,0,0,0,,,0,0,,,,0*3A\r\n";
 
- HAL_UART_Transmit(&huart1, (uint8_t *)gnss_update_rate_cmd, sizeof(gnss_update_rate_cmd) - 1U, 1000U);
- HAL_UART_Transmit(&huart1,(uint8_t *)gnss_nmea_cmd, sizeof(gnss_nmea_cmd) - 1U, 1000U);
+    HAL_UART_Transmit(&huart1, (uint8_t *)gnss_update_rate_cmd, sizeof(gnss_update_rate_cmd) - 1U, 1000U);
+    HAL_UART_Transmit(&huart1, (uint8_t *)gnss_nmea_cmd, sizeof(gnss_nmea_cmd) - 1U, 1000U);
 
     /*
-     * Запускаем приём одного байта.
-     * После получения HAL вызовет HAL_UART_RxCpltCallback().
+     * Запускаем непрерывный приём через DMA.
      */
-    if (HAL_UART_Receive_IT(&huart1, &gnss_rx_byte, 1U) != HAL_OK)
+    if (HAL_UART_Receive_DMA(&huart1, gnss_rx_buffer, GNSS_RX_BUFFER_SIZE) != HAL_OK)
     {
         PURRGO_LOG("GNSS INIT ERROR!\r\n");
-     //   Error_Handler();
     }
 }
 
@@ -86,7 +78,50 @@ bool purrgo_gnss_read_byte(uint8_t *byte)
         return false;
     }
 
-    if (gnss_rx_tail == gnss_rx_head)
+    /*
+     * Вычисляем текущую позицию записи DMA.
+     * __HAL_DMA_GET_COUNTER возвращает количество байт, которые
+     * ОСТАЛОСЬ передать до конца буфера DMA.
+     */
+    uint16_t ndtr = __HAL_DMA_GET_COUNTER(huart1.hdmarx);
+    uint16_t curr_dma_head = GNSS_RX_BUFFER_SIZE - ndtr;
+
+    /* Handle boundary case */
+    if (curr_dma_head >= GNSS_RX_BUFFER_SIZE)
+    {
+        curr_dma_head = 0U;
+    }
+
+    /* Определяем, сколько байт было записано с прошлого вызова. */
+    if (curr_dma_head != prev_dma_head)
+    {
+        uint16_t added_bytes;
+        if (curr_dma_head > prev_dma_head)
+        {
+            added_bytes = curr_dma_head - prev_dma_head;
+        }
+        else
+        {
+            added_bytes = GNSS_RX_BUFFER_SIZE - prev_dma_head + curr_dma_head;
+        }
+
+        unread_bytes += added_bytes;
+        prev_dma_head = curr_dma_head;
+    }
+
+    /*
+     * Механизм обнаружения переполнения:
+     * Если unread_bytes превышает размер буфера, значит старые данные
+     * были перезаписаны DMA. Оставляем только свежие данные,
+     * перемещая указатель чтения (tail) к текущей позиции записи (head).
+     */
+    if (unread_bytes > GNSS_RX_BUFFER_SIZE)
+    {
+        unread_bytes = GNSS_RX_BUFFER_SIZE;
+        gnss_rx_tail = curr_dma_head;
+    }
+
+    if (unread_bytes == 0)
     {
         return false;
     }
@@ -99,55 +134,15 @@ bool purrgo_gnss_read_byte(uint8_t *byte)
         gnss_rx_tail = 0U;
     }
 
+    unread_bytes--;
+
     return true;
-}
-
-/**
- * @brief Callback завершения приёма одного байта UART.
- *
- * Этот callback вызывается из HAL после получения очередного байта.
- * Здесь нельзя выполнять разбор NMEA или другую длительную работу.
- */
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
-{
-    if (huart->Instance != USART1)
-    {
-        return;
-    }
-
-    /*
-     * Следующая позиция записи.
-     */
-    uint16_t next_head = gnss_rx_head + 1U;
-
-    if (next_head >= GNSS_RX_BUFFER_SIZE)
-    {
-        next_head = 0U;
-    }
-
-    /*
-     * Если next_head совпал с tail, буфер заполнен.
-     *
-     * В этом случае новый байт отбрасываем.
-     * Старые данные сохраняем, чтобы не разрушать ещё не обработанную
-     * NMEA-строку.
-     */
-    if (next_head != gnss_rx_tail)
-    {
-        gnss_rx_buffer[gnss_rx_head] = gnss_rx_byte;
-        gnss_rx_head = next_head;
-    }
-
-    /*
-     * Немедленно снова включаем приём следующего байта.
-     */
-    (void)HAL_UART_Receive_IT(&huart1, &gnss_rx_byte, 1U);
 }
 
 /**
  * @brief Callback ошибки UART.
  *
- * После ошибки снова запускаем приём.
+ * После ошибки (например, ORE, FE) снова запускаем приём через DMA.
  */
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 {
@@ -156,37 +151,16 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
         return;
     }
 
-    (void)HAL_UART_Receive_IT(&huart1, &gnss_rx_byte, 1U);
+    /*
+     * Останавливаем текущий ошибочный приём, сбрасываем состояние
+     * и запускаем заново.
+     */
+    HAL_UART_AbortReceive(huart);
+
+    /* Сбрасываем счетчики при рестарте DMA, чтобы не было неконсистентности */
+    gnss_rx_tail = 0U;
+    prev_dma_head = 0U;
+    unread_bytes = 0U;
+
+    (void)HAL_UART_Receive_DMA(&huart1, gnss_rx_buffer, GNSS_RX_BUFFER_SIZE);
 }
-
-
-
-/**
- * @brief Прочитать один байт из STM32 GNSS-потока.
- *
- * Эта отладочная функция возвращает байты из тестового NMEA MOCK
- * через общий потоковый интерфейс.
- *
- * @param[out] byte
- *     Адрес переменной, куда будет записан очередной байт.
- *
- * @return true
- *     Если байт получен.
- *
- * @return false
- *     Если входной поток временно не содержит данных.
- */
-// bool purrgo_gnss_read_byte(uint8_t *byte)
-// {
-//    if (byte == NULL)
-//    {
-//        return false;
-//    }
-//
-//    /*
-//     * Читаем байт из потока Mock.
-//     * Реальный транспорт (UART/DMA) будет использовать похожую логику,
-//     * но читать из кольцевого буфера.
-//     */
-//    return purrgo_gnss_mock_read_byte(byte);
-// }
