@@ -77,6 +77,9 @@ target_sources(PurrGO_STM32 PRIVATE
 
     # Debug button emulator via UART
     Core/Src/debug_buttons.c
+
+    # STM32 Power logic
+    Core/Src/power_stm32.c
 )
 
 # Add include paths
