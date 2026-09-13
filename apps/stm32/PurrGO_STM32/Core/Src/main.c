@@ -211,7 +211,7 @@ else {    PURRGO_LOG("FatFs mount OK\r\n");}
  * AT6558R подключён к USART1.
  */
 purrgo_gnss_init();
-PURRGO_LOG("GNSS USART1 OK\r\n");
+PURRGO_LOG("GNSS USART1 INIT FINISHED\r\n");
 
 /*
  * Для indoor-отладки MOCK можно вернуть:
@@ -293,7 +293,7 @@ PURRGO_LOG("GNSS USART1 OK\r\n");
   gfx_clear(&global_gfx_ctx);
   gfx_draw_string(&global_gfx_ctx, DISPLAY_WIDTH / 2 - 10, DISPLAY_HEIGHT / 2, "GO!");
   display_refresh();
-  HAL_Delay(300);
+  //HAL_Delay(300);
 
   /* USER CODE END 2 */
 
