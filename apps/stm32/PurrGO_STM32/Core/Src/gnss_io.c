@@ -17,10 +17,12 @@
 static uint8_t gnss_rx_buffer[GNSS_RX_BUFFER_SIZE];
 
 /*
- * tail изменяется только из основного контекста (потребитель).
- * head (позиция записи) вычисляется на основе оставшихся байтов передачи DMA.
+ * Монотонно возрастающие счетчики для корректного обнаружения
+ * переполнения буфера без проблемы "head == tail" на полном обороте.
  */
-static uint16_t gnss_rx_tail = 0U;
+static uint32_t total_written = 0U;
+static uint32_t total_read = 0U;
+static uint16_t prev_dma_head = 0U;
 
 /**
  * @brief Инициализировать приём GNSS через USART1.
@@ -30,7 +32,9 @@ static uint16_t gnss_rx_tail = 0U;
  */
 void purrgo_gnss_init(void)
 {
-    gnss_rx_tail = 0U;
+    total_written = 0U;
+    total_read = 0U;
+    prev_dma_head = 0U;
 
     /*
      * AT6558R:
@@ -79,26 +83,46 @@ bool purrgo_gnss_read_byte(uint8_t *byte)
      * ОСТАЛОСЬ передать до конца буфера DMA.
      */
     uint16_t ndtr = __HAL_DMA_GET_COUNTER(huart1.hdmarx);
-    uint16_t gnss_rx_head = GNSS_RX_BUFFER_SIZE - ndtr;
+    uint16_t curr_dma_head = GNSS_RX_BUFFER_SIZE - ndtr;
 
-    /* Handle boundary case if ndtr == 0 */
-    if (gnss_rx_head >= GNSS_RX_BUFFER_SIZE)
+    /* Handle boundary case */
+    if (curr_dma_head >= GNSS_RX_BUFFER_SIZE)
     {
-        gnss_rx_head = 0;
+        curr_dma_head = 0U;
     }
 
-    if (gnss_rx_tail == gnss_rx_head)
+    /* Определяем, сколько байт было записано с прошлого вызова. */
+    uint16_t added_bytes;
+    if (curr_dma_head >= prev_dma_head)
+    {
+        added_bytes = curr_dma_head - prev_dma_head;
+    }
+    else
+    {
+        added_bytes = GNSS_RX_BUFFER_SIZE - prev_dma_head + curr_dma_head;
+    }
+
+    total_written += added_bytes;
+    prev_dma_head = curr_dma_head;
+
+    /*
+     * Механизм обнаружения переполнения:
+     * Если разница между total_written и total_read превышает размер буфера,
+     * значит старые данные были перезаписаны DMA.
+     * Сдвигаем total_read, чтобы отбросить затертые данные.
+     */
+    if ((total_written - total_read) > GNSS_RX_BUFFER_SIZE)
+    {
+        total_read = total_written - GNSS_RX_BUFFER_SIZE;
+    }
+
+    if (total_written == total_read)
     {
         return false;
     }
 
-    *byte = gnss_rx_buffer[gnss_rx_tail];
-
-    gnss_rx_tail++;
-    if (gnss_rx_tail >= GNSS_RX_BUFFER_SIZE)
-    {
-        gnss_rx_tail = 0U;
-    }
+    *byte = gnss_rx_buffer[total_read % GNSS_RX_BUFFER_SIZE];
+    total_read++;
 
     return true;
 }
@@ -117,13 +141,14 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 
     /*
      * Останавливаем текущий ошибочный приём, сбрасываем состояние
-     * и запускаем заново. Очистка буфера и сброс tail зависят от архитектуры,
-     * но здесь безопаснее просто перезапустить приём с текущей позиции или с начала.
+     * и запускаем заново.
      */
     HAL_UART_AbortReceive(huart);
 
-    gnss_rx_tail = 0U; // Сброс хвоста при рестарте DMA
+    /* Сбрасываем счетчики при рестарте DMA, чтобы не было неконсистентности */
+    total_written = 0U;
+    total_read = 0U;
+    prev_dma_head = 0U;
 
     (void)HAL_UART_Receive_DMA(&huart1, gnss_rx_buffer, GNSS_RX_BUFFER_SIZE);
 }
-
