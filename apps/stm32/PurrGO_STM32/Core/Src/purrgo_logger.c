@@ -117,4 +117,11 @@ void purrgo_logger_write(const char *format, ...)
         (uint16_t)length,
         100U
     );
+        /*
+     * Индикация активности.
+       * PC13 на Blue/Black Pill подключён к встроенному
+     * светодиоду. После каждого сообщения логгера
+     * состояние светодиода переключается.
+     */
+    HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
 }
