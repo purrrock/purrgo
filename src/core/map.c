@@ -12,6 +12,195 @@
 #include "purrgo/purrgo_format.h"
 #include <string.h>
 
+/*
+ * Persistent map file context
+ * We maintain these files open to preserve the LRU cache benefits across renders.
+ */
+typedef struct {
+    char current_map_dir[PURRGO_FS_MAX_PATH];
+
+    bool layer_landuse;
+    bool layer_landuse_labels;
+    bool layer_roads;
+    bool layer_poi;
+    bool layer_poi_labels;
+
+    purrgo_file_t* landuse_idx_file;
+    purrgo_file_t* landuse_mlp_file;
+    purrgo_file_t* landuse_db_file;
+
+    purrgo_file_t* roads_idx_file;
+    purrgo_file_t* roads_mlp_file;
+
+    purrgo_file_t* poi_idx_file;
+    purrgo_file_t* poi_db_file;
+} map_context_t;
+
+static map_context_t s_map_context = {0};
+
+static void map_close_all_files(void)
+{
+    if (s_map_context.landuse_idx_file) {
+        purrgo_fs_close(s_map_context.landuse_idx_file);
+        s_map_context.landuse_idx_file = NULL;
+    }
+    if (s_map_context.landuse_mlp_file) {
+        purrgo_fs_close(s_map_context.landuse_mlp_file);
+        s_map_context.landuse_mlp_file = NULL;
+    }
+    if (s_map_context.landuse_db_file) {
+        purrgo_fs_close(s_map_context.landuse_db_file);
+        s_map_context.landuse_db_file = NULL;
+    }
+
+    if (s_map_context.roads_idx_file) {
+        purrgo_fs_close(s_map_context.roads_idx_file);
+        s_map_context.roads_idx_file = NULL;
+    }
+    if (s_map_context.roads_mlp_file) {
+        purrgo_fs_close(s_map_context.roads_mlp_file);
+        s_map_context.roads_mlp_file = NULL;
+    }
+
+    if (s_map_context.poi_idx_file) {
+        purrgo_fs_close(s_map_context.poi_idx_file);
+        s_map_context.poi_idx_file = NULL;
+    }
+    if (s_map_context.poi_db_file) {
+        purrgo_fs_close(s_map_context.poi_db_file);
+        s_map_context.poi_db_file = NULL;
+    }
+
+    s_map_context.layer_landuse = false;
+    s_map_context.layer_landuse_labels = false;
+    s_map_context.layer_roads = false;
+    s_map_context.layer_poi = false;
+    s_map_context.layer_poi_labels = false;
+
+    s_map_context.current_map_dir[0] = '\0';
+}
+
+static void map_sync_files(const char* map_dir)
+{
+    bool dir_changed = (strncmp(s_map_context.current_map_dir, map_dir, sizeof(s_map_context.current_map_dir)) != 0);
+
+    if (dir_changed) {
+        map_close_all_files();
+        strncpy(s_map_context.current_map_dir, map_dir, sizeof(s_map_context.current_map_dir) - 1);
+        s_map_context.current_map_dir[sizeof(s_map_context.current_map_dir) - 1] = '\0';
+    }
+
+    char path_buf[PURRGO_FS_MAX_PATH];
+
+    /* Landuse */
+    if (app_config.layer_landuse != s_map_context.layer_landuse) {
+        if (!app_config.layer_landuse) {
+            if (s_map_context.landuse_idx_file) { purrgo_fs_close(s_map_context.landuse_idx_file); s_map_context.landuse_idx_file = NULL; }
+            if (s_map_context.landuse_mlp_file) { purrgo_fs_close(s_map_context.landuse_mlp_file); s_map_context.landuse_mlp_file = NULL; }
+            if (s_map_context.landuse_db_file) { purrgo_fs_close(s_map_context.landuse_db_file); s_map_context.landuse_db_file = NULL; }
+            s_map_context.layer_landuse = false;
+            s_map_context.layer_landuse_labels = false;
+        } else {
+            purrgo_snprintf(path_buf, sizeof(path_buf), "%s/landuse.idx", map_dir);
+            purrgo_file_t* idx = purrgo_fs_open(path_buf, FS_READ);
+
+            purrgo_snprintf(path_buf, sizeof(path_buf), "%s/landuse.mlp", map_dir);
+            purrgo_file_t* mlp = purrgo_fs_open(path_buf, FS_READ);
+
+            if (idx && mlp) {
+                s_map_context.landuse_idx_file = idx;
+                s_map_context.landuse_mlp_file = mlp;
+                s_map_context.layer_landuse = true;
+            } else {
+                if (idx) purrgo_fs_close(idx);
+                if (mlp) purrgo_fs_close(mlp);
+                s_map_context.layer_landuse = false;
+            }
+        }
+    }
+
+    if (s_map_context.layer_landuse && (app_config.layer_landuse_labels != s_map_context.layer_landuse_labels)) {
+        if (!app_config.layer_landuse_labels) {
+            if (s_map_context.landuse_db_file) { purrgo_fs_close(s_map_context.landuse_db_file); s_map_context.landuse_db_file = NULL; }
+            s_map_context.layer_landuse_labels = false;
+        } else {
+            purrgo_snprintf(path_buf, sizeof(path_buf), "%s/landuse.db", map_dir);
+            purrgo_file_t* db = purrgo_fs_open(path_buf, FS_READ);
+            if (db) {
+                s_map_context.landuse_db_file = db;
+                s_map_context.layer_landuse_labels = true;
+            } else {
+                s_map_context.layer_landuse_labels = false;
+            }
+        }
+    }
+
+    /* Roads */
+    if (app_config.layer_roads != s_map_context.layer_roads) {
+        if (!app_config.layer_roads) {
+            if (s_map_context.roads_idx_file) { purrgo_fs_close(s_map_context.roads_idx_file); s_map_context.roads_idx_file = NULL; }
+            if (s_map_context.roads_mlp_file) { purrgo_fs_close(s_map_context.roads_mlp_file); s_map_context.roads_mlp_file = NULL; }
+            s_map_context.layer_roads = false;
+        } else {
+            purrgo_snprintf(path_buf, sizeof(path_buf), "%s/roads.idx", map_dir);
+            purrgo_file_t* idx = purrgo_fs_open(path_buf, FS_READ);
+
+            purrgo_snprintf(path_buf, sizeof(path_buf), "%s/roads.mlp", map_dir);
+            purrgo_file_t* mlp = purrgo_fs_open(path_buf, FS_READ);
+
+            if (idx && mlp) {
+                s_map_context.roads_idx_file = idx;
+                s_map_context.roads_mlp_file = mlp;
+                s_map_context.layer_roads = true;
+            } else {
+                if (idx) purrgo_fs_close(idx);
+                if (mlp) purrgo_fs_close(mlp);
+                s_map_context.layer_roads = false;
+            }
+        }
+    }
+
+    /* POIs */
+    if (app_config.layer_poi != s_map_context.layer_poi) {
+        if (!app_config.layer_poi) {
+            if (s_map_context.poi_idx_file) { purrgo_fs_close(s_map_context.poi_idx_file); s_map_context.poi_idx_file = NULL; }
+            if (s_map_context.poi_db_file) { purrgo_fs_close(s_map_context.poi_db_file); s_map_context.poi_db_file = NULL; }
+            s_map_context.layer_poi = false;
+            s_map_context.layer_poi_labels = false;
+        } else {
+            purrgo_snprintf(path_buf, sizeof(path_buf), "%s/pois.idx", map_dir);
+            purrgo_file_t* idx = purrgo_fs_open(path_buf, FS_READ);
+            if (idx) {
+                s_map_context.poi_idx_file = idx;
+                s_map_context.layer_poi = true;
+            } else {
+                s_map_context.layer_poi = false;
+            }
+        }
+    }
+
+    if (s_map_context.layer_poi && (app_config.layer_poi_labels != s_map_context.layer_poi_labels)) {
+        if (!app_config.layer_poi_labels) {
+            if (s_map_context.poi_db_file) { purrgo_fs_close(s_map_context.poi_db_file); s_map_context.poi_db_file = NULL; }
+            s_map_context.layer_poi_labels = false;
+        } else {
+            purrgo_snprintf(path_buf, sizeof(path_buf), "%s/pois.db", map_dir);
+            purrgo_file_t* db = purrgo_fs_open(path_buf, FS_READ);
+            if (db) {
+                s_map_context.poi_db_file = db;
+                s_map_context.layer_poi_labels = true;
+            } else {
+                s_map_context.layer_poi_labels = false;
+            }
+        }
+    }
+}
+
+void purrgo_map_shutdown(void)
+{
+    map_close_all_files();
+}
+
 static uint32_t core_fs_read_wrapper(void* handle, void* buffer, uint32_t size)
 {
     return (uint32_t)purrgo_fs_read(
@@ -50,6 +239,15 @@ static int get_target_lod(purrgo_map_scale_t scale, purrgo_map_details_t details
 static bool map_parse_pgo_header(purrgo_fs_t *fs, pgo_header_info_t *info)
 {
     uint8_t pgo_header[32];
+
+    /*
+     * Because map file handles are now persistent across renders,
+     * we cannot assume they are at offset 0.
+     * We must explicitly seek to 0 before reading the header.
+     */
+    if (!fs->seek(fs->handle, 0)) {
+        return false;
+    }
 
     if (fs->read(fs->handle, pgo_header, sizeof(pgo_header)) != sizeof(pgo_header)) {
         return false;
@@ -234,49 +432,31 @@ bool purrgo_map_render_viewport(
     map_render_clear_labels();
 
     /*
-     * Reusing a single buffer to format file paths sequentially.
-     * This saves 6 * 256 = 1536 bytes of stack space on embedded platforms,
-     * which is critical since PURRGO_FS_MAX_PATH is 256. The path is only needed
-     * momentarily to open the file via purrgo_fs_open().
+     * Sync map files context with current map directory and layer states.
+     * This opens necessary files and closes unused ones.
      */
-    char path_buf[PURRGO_FS_MAX_PATH];
+    map_sync_files(map_dir);
 
     /* ------------------- LANDUSE ------------------- */
-    purrgo_file_t* landuse_idx_file = NULL;
-    purrgo_file_t* landuse_mlp_file = NULL;
-    purrgo_file_t* landuse_db_file = NULL;
-
-    if (app_config.layer_landuse) {
-        purrgo_snprintf(path_buf, sizeof(path_buf), "%s/landuse.idx", map_dir);
-        landuse_idx_file = purrgo_fs_open(path_buf, FS_READ);
-
-        purrgo_snprintf(path_buf, sizeof(path_buf), "%s/landuse.mlp", map_dir);
-        landuse_mlp_file = purrgo_fs_open(path_buf, FS_READ);
-
-        if (app_config.layer_landuse_labels) {
-            purrgo_snprintf(path_buf, sizeof(path_buf), "%s/landuse.db", map_dir);
-            landuse_db_file = purrgo_fs_open(path_buf, FS_READ);
-        }
-    }
 
     bool landuse_success = !app_config.layer_landuse;
 
-    if (landuse_idx_file && landuse_mlp_file) {
+    if (s_map_context.landuse_idx_file && s_map_context.landuse_mlp_file) {
 
         purrgo_fs_t landuse_idx_fs = {
-            .handle = landuse_idx_file,
+            .handle = s_map_context.landuse_idx_file,
             .read = core_fs_read_wrapper,
             .seek = core_fs_seek_wrapper
         };
 
         purrgo_fs_t landuse_mlp_fs = {
-            .handle = landuse_mlp_file,
+            .handle = s_map_context.landuse_mlp_file,
             .read = core_fs_read_wrapper,
             .seek = core_fs_seek_wrapper
         };
 
         purrgo_fs_t landuse_db_fs = {
-            .handle = landuse_db_file,
+            .handle = s_map_context.landuse_db_file,
             .read = core_fs_read_wrapper,
             .seek = core_fs_seek_wrapper
         };
@@ -286,7 +466,7 @@ bool purrgo_map_render_viewport(
         purrgo_map_render_layer(
             &landuse_idx_fs,
             &landuse_mlp_fs,
-            landuse_db_file ? &landuse_db_fs : NULL,
+            s_map_context.landuse_db_file ? &landuse_db_fs : NULL,
             gfx,
             camera,
             viewport,
@@ -296,43 +476,20 @@ bool purrgo_map_render_viewport(
         landuse_success = true;
     }
 
-    if (landuse_idx_file) {
-        purrgo_fs_close(landuse_idx_file);
-    }
-
-    if (landuse_mlp_file) {
-        purrgo_fs_close(landuse_mlp_file);
-    }
-
-    if (landuse_db_file) {
-        purrgo_fs_close(landuse_db_file);
-    }
-
     /* ------------------- ROADS ------------------- */
-
-    purrgo_file_t* idx_file = NULL;
-    purrgo_file_t* mlp_file = NULL;
-
-    if (app_config.layer_roads) {
-        purrgo_snprintf(path_buf, sizeof(path_buf), "%s/roads.idx", map_dir);
-        idx_file = purrgo_fs_open(path_buf, FS_READ);
-
-        purrgo_snprintf(path_buf, sizeof(path_buf), "%s/roads.mlp", map_dir);
-        mlp_file = purrgo_fs_open(path_buf, FS_READ);
-    }
 
     bool roads_success = !app_config.layer_roads;
 
-    if (idx_file && mlp_file) {
+    if (s_map_context.roads_idx_file && s_map_context.roads_mlp_file) {
 
         purrgo_fs_t idx_fs = {
-            .handle = idx_file,
+            .handle = s_map_context.roads_idx_file,
             .read = core_fs_read_wrapper,
             .seek = core_fs_seek_wrapper
         };
 
         purrgo_fs_t mlp_fs = {
-            .handle = mlp_file,
+            .handle = s_map_context.roads_mlp_file,
             .read = core_fs_read_wrapper,
             .seek = core_fs_seek_wrapper
         };
@@ -356,14 +513,6 @@ bool purrgo_map_render_viewport(
         roads_success = true;
     }
 
-    if (idx_file) {
-        purrgo_fs_close(idx_file);
-    }
-
-    if (mlp_file) {
-        purrgo_fs_close(mlp_file);
-    }
-
     /*
      * ------------------------------------------------
      * LANDUSE LABELS
@@ -385,31 +534,18 @@ bool purrgo_map_render_viewport(
 
     /* ------------------- POIS ------------------- */
 
-    purrgo_file_t* poi_idx_file = NULL;
-    purrgo_file_t* poi_db_file = NULL;
-
-    if (app_config.layer_poi) {
-        purrgo_snprintf(path_buf, sizeof(path_buf), "%s/pois.idx", map_dir);
-        poi_idx_file = purrgo_fs_open(path_buf, FS_READ);
-
-        if (app_config.layer_poi_labels) {
-            purrgo_snprintf(path_buf, sizeof(path_buf), "%s/pois.db", map_dir);
-            poi_db_file = purrgo_fs_open(path_buf, FS_READ);
-        }
-    }
-
     bool poi_success = true;
 
-    if (poi_idx_file) {
+    if (s_map_context.poi_idx_file) {
 
         purrgo_fs_t poi_idx_fs = {
-            .handle = poi_idx_file,
+            .handle = s_map_context.poi_idx_file,
             .read = core_fs_read_wrapper,
             .seek = core_fs_seek_wrapper
         };
 
         purrgo_fs_t poi_db_fs = {
-            .handle = poi_db_file,
+            .handle = s_map_context.poi_db_file,
             .read = core_fs_read_wrapper,
             .seek = core_fs_seek_wrapper
         };
@@ -417,20 +553,12 @@ bool purrgo_map_render_viewport(
         purrgo_map_render_layer(
             &poi_idx_fs,
             NULL,
-            poi_db_file ? &poi_db_fs : NULL,
+            s_map_context.poi_db_file ? &poi_db_fs : NULL,
             gfx,
             camera,
             viewport,
             MAP_LAYER_POIS
         );
-    }
-
-    if (poi_idx_file) {
-        purrgo_fs_close(poi_idx_file);
-    }
-
-    if (poi_db_file) {
-        purrgo_fs_close(poi_db_file);
     }
 
     return landuse_success && roads_success && poi_success;
