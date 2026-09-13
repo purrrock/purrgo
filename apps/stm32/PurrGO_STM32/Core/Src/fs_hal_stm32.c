@@ -22,7 +22,7 @@ static struct purrgo_file_s file_pool[STM32_MAX_FILES] = {0};
 static struct purrgo_dir_s dir_pool[STM32_MAX_DIRS] = {0};
 
 /*
- * LRU Cache for .db files.
+ * LRU Cache for files.
  * Cache memory footprint:
  * 32 entries * (512 + 16 bytes overhead) ≈ 16.5 KB
  */
