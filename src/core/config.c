@@ -12,7 +12,6 @@
 purrgo_config_t app_config;
 
 
-
 void purrgo_config_init(void)
 {
     /*
