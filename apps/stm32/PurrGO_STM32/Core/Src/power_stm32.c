@@ -34,21 +34,21 @@ void purrgo_system_power_off(void) {
      * and the SD card is in a safe state.
      */
     f_mount(NULL, "0:", 1);
-
+    PURRGO_LOG("FatFs dismount\r\n");
     /*
      * 5. Put display into low-power mode.
      */
     ST7789_SleepIn();
-
-    PURRGO_LOG("Entering STANDBY mode.\n\r");
-
-    /* Ensure Wakeup pin is enabled to allow turning back on (usually WKUP pin, PA0). */
+    PURRGO_LOG("Display off\r\n");
+    
+       /* Ensure Wakeup pin is enabled to allow turning back on (usually WKUP pin, PA0). */
     HAL_PWR_EnableWakeUpPin(PWR_WAKEUP_PIN1);
 
     /* Clear the Wakeup flag if already set. */
     __HAL_PWR_CLEAR_FLAG(PWR_FLAG_WU);
 
     /* Enter STANDBY mode. */
+    PURRGO_LOG("Entering STANDBY mode.\n\r");
     HAL_PWR_EnterSTANDBYMode();
 
     /* Device should reset upon wakeup. */

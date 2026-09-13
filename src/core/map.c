@@ -183,6 +183,7 @@ static void map_sync_files(const char* map_dir)
 void purrgo_map_shutdown(void)
 {
     map_close_all_files();
+    PURRGO_LOG("Map files closed\r\n");
 }
 
 static uint32_t core_fs_read_wrapper(void* handle, void* buffer, uint32_t size)
