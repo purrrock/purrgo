@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include "purrgo/logger.h"
 
 /*
  * Кольцевой буфер входного потока USART1.
@@ -43,16 +44,28 @@ void purrgo_gnss_init(void)
     gnss_rx_tail = 0U;
 
     /*
+     * AT6558R:
+     * установить период выдачи навигационных данных 1000 мс,
+     * то есть 1 Гц.
+     *
+     * Формат команды:
+     * $PCAS02,1000*2E\r\n
+     */
+ static const uint8_t gnss_update_rate_cmd[] = "$PCAS02,1000*2E\r\n";
+    // Для выдачи только GGA + GSA + RMC
+static const uint8_t gnss_nmea_cmd[] =  "$PCAS03,1,0,1,0,1,0,0,0,0,0,,,0,0,,,,0*3A\r\n";
+
+ HAL_UART_Transmit(&huart1, (uint8_t *)gnss_update_rate_cmd, sizeof(gnss_update_rate_cmd) - 1U, 1000U);
+ HAL_UART_Transmit(&huart1,(uint8_t *)gnss_nmea_cmd, sizeof(gnss_nmea_cmd) - 1U, 1000U);
+
+    /*
      * Запускаем приём одного байта.
      * После получения HAL вызовет HAL_UART_RxCpltCallback().
      */
     if (HAL_UART_Receive_IT(&huart1, &gnss_rx_byte, 1U) != HAL_OK)
     {
-        /*
-         * Ошибка запуска UART-приёма является аппаратной ошибкой
-         * конфигурации USART1.
-         */
-        Error_Handler();
+        PURRGO_LOG("GNSS INIT ERROR!\r\n");
+     //   Error_Handler();
     }
 }
 

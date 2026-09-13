@@ -65,8 +65,8 @@ UART1 предназначен для подключения GNSS-приёмни
 - Передача команд STM32 → GNSS: используется выход UART, если потребуется.
 
 STM32F411			GNSS
-PA9/USART1_TX		
-PA10/USART1_RX		
+PA9/USART1_TX		RX	
+PA10/USART1_RX		TX
 GND					GND
 
 
