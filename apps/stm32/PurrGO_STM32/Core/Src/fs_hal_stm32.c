@@ -5,13 +5,6 @@
 #include <stdio.h>
 #include "purrgo/logger.h"
 
-/*
- * Use fixed storage pools instead of heap allocation on STM32 to avoid
- * memory fragmentation and out-of-memory crashes during map rendering
- * or file operations.
- * Map rendering opens up to 4*3 files concurrently, plus config/track logger.
- * A pool of 14 files and 2 directories is safely enough for the current usage.
- */
 #define STM32_MAX_FILES 14
 #define STM32_MAX_DIRS 2
 
@@ -28,6 +21,134 @@ struct purrgo_dir_s {
 static struct purrgo_file_s file_pool[STM32_MAX_FILES] = {0};
 static struct purrgo_dir_s dir_pool[STM32_MAX_DIRS] = {0};
 
+/*
+ * LRU Cache for .db files.
+ * Cache memory footprint:
+ * 32 entries * (512 + 16 bytes overhead) ≈ 16.5 KB
+ */
+#define LRU_CACHE_ENTRIES 32
+#define LRU_SECTOR_SIZE 512
+
+typedef struct {
+    bool valid;
+    purrgo_file_t* file_id;
+    uint32_t sector_num;
+    uint32_t last_used;
+    uint8_t data[LRU_SECTOR_SIZE];
+} lru_cache_entry_t;
+
+static lru_cache_entry_t lru_cache[LRU_CACHE_ENTRIES];
+static uint32_t lru_counter = 0;
+
+static void invalidate_cache_for_file(purrgo_file_t* file) {
+    for (int i = 0; i < LRU_CACHE_ENTRIES; i++) {
+        if (lru_cache[i].valid && lru_cache[i].file_id == file) {
+            lru_cache[i].valid = false;
+        }
+    }
+}
+
+static uint32_t read_cached_sector(purrgo_file_t* file, uint32_t sector_num, uint8_t* out_data) {
+    int lru_index = -1;
+    uint32_t oldest_time = 0xFFFFFFFF;
+
+    // Search in cache
+    for (int i = 0; i < LRU_CACHE_ENTRIES; i++) {
+        if (lru_cache[i].valid && lru_cache[i].file_id == file && lru_cache[i].sector_num == sector_num) {
+            lru_cache[i].last_used = ++lru_counter;
+            memcpy(out_data, lru_cache[i].data, LRU_SECTOR_SIZE);
+            return LRU_SECTOR_SIZE;
+        }
+
+        if (!lru_cache[i].valid) {
+            lru_index = i;
+            oldest_time = 0; // Prefer empty slots
+        } else if (lru_index == -1 || lru_cache[i].last_used < oldest_time) {
+            lru_index = i;
+            oldest_time = lru_cache[i].last_used;
+        }
+    }
+
+    // Cache miss: Load from disk
+    FSIZE_t current_offset = f_tell(&file->fil);
+    FSIZE_t sector_offset = (FSIZE_t)sector_num * LRU_SECTOR_SIZE;
+
+    if (f_lseek(&file->fil, sector_offset) != FR_OK) {
+        f_lseek(&file->fil, current_offset);
+        return 0;
+    }
+
+    UINT br = 0;
+    FRESULT res = f_read(&file->fil, lru_cache[lru_index].data, LRU_SECTOR_SIZE, &br);
+    f_lseek(&file->fil, current_offset);
+
+    if (res != FR_OK || br == 0) {
+        return 0;
+    }
+
+    lru_cache[lru_index].valid = true;
+    lru_cache[lru_index].file_id = file;
+    lru_cache[lru_index].sector_num = sector_num;
+    lru_cache[lru_index].last_used = ++lru_counter;
+
+    if (br < LRU_SECTOR_SIZE) {
+        memset(lru_cache[lru_index].data + br, 0, LRU_SECTOR_SIZE - br);
+    }
+
+    memcpy(out_data, lru_cache[lru_index].data, LRU_SECTOR_SIZE);
+    return br;
+}
+
+static uint32_t purrgo_fs_read_cached(purrgo_file_t* file, uint8_t* buffer, uint32_t size) {
+    uint32_t current_offset = (uint32_t)f_tell(&file->fil);
+    uint32_t bytes_to_read = size;
+    uint32_t bytes_read_total = 0;
+    uint8_t* ptr = buffer;
+
+    FSIZE_t fsize = f_size(&file->fil);
+    if (current_offset >= fsize) {
+        return 0;
+    }
+    if (current_offset + bytes_to_read > fsize) {
+        bytes_to_read = fsize - current_offset;
+    }
+
+    uint8_t sector_buf[LRU_SECTOR_SIZE];
+
+    while (bytes_to_read > 0) {
+        uint32_t sector_num = current_offset / LRU_SECTOR_SIZE;
+        uint32_t offset_in_sector = current_offset % LRU_SECTOR_SIZE;
+        uint32_t chunk_size = LRU_SECTOR_SIZE - offset_in_sector;
+        if (chunk_size > bytes_to_read) {
+            chunk_size = bytes_to_read;
+        }
+
+        uint32_t sector_read = read_cached_sector(file, sector_num, sector_buf);
+        if (sector_read <= offset_in_sector) {
+            break;
+        }
+
+        uint32_t available_in_sector = sector_read - offset_in_sector;
+        if (chunk_size > available_in_sector) {
+            chunk_size = available_in_sector;
+        }
+
+        memcpy(ptr, sector_buf + offset_in_sector, chunk_size);
+
+        ptr += chunk_size;
+        current_offset += chunk_size;
+        bytes_read_total += chunk_size;
+        bytes_to_read -= chunk_size;
+
+        if (sector_read < LRU_SECTOR_SIZE) {
+            break;
+        }
+    }
+
+    f_lseek(&file->fil, current_offset);
+    return bytes_read_total;
+}
+
 const char* purrgo_fs_get_config_path(void) {
     return "0:/PURRGO/PURRGO.CFG";
 }
@@ -42,7 +163,6 @@ const char* purrgo_fs_get_tracks_path(void) {
 
 purrgo_file_t* purrgo_fs_open(const char* filepath, fs_mode_t mode) {
     if (!filepath) return NULL;
-  //  PURRGO_LOG("purrgo_fs_open: %s mode: %d\n\r", filepath, mode);
     BYTE ff_mode = 0;
     switch (mode) {
         case FS_READ:
@@ -78,12 +198,18 @@ purrgo_file_t* purrgo_fs_open(const char* filepath, fs_mode_t mode) {
         file->in_use = false;
         return NULL;
     }
+
+    invalidate_cache_for_file(file);
+
     PURRGO_LOG("purrgo_fs_open: %s opened OK\n\r", filepath);
     return file;
 }
 
 uint32_t purrgo_fs_write(purrgo_file_t* file, const uint8_t* data, uint32_t size) {
     if (!file || !data || size == 0) return 0;
+
+    // Invalidate cache for this file if written to
+    invalidate_cache_for_file(file);
 
     UINT bw = 0;
     FRESULT res = f_write(&file->fil, data, (UINT)size, &bw);
@@ -96,12 +222,7 @@ uint32_t purrgo_fs_write(purrgo_file_t* file, const uint8_t* data, uint32_t size
 uint32_t purrgo_fs_read(purrgo_file_t* file, uint8_t* buffer, uint32_t size) {
     if (!file || !buffer || size == 0) return 0;
 
-    UINT br = 0;
-    FRESULT res = f_read(&file->fil, buffer, (UINT)size, &br);
-    if (res != FR_OK) {
-        return 0;
-    }
-    return (uint32_t)br;
+    return purrgo_fs_read_cached(file, buffer, size);
 }
 
 bool purrgo_fs_seek(purrgo_file_t* file, uint32_t offset) {
@@ -117,6 +238,7 @@ void purrgo_fs_sync(purrgo_file_t* file) {
 
 void purrgo_fs_close(purrgo_file_t* file) {
     if (!file || !file->in_use) return;
+    invalidate_cache_for_file(file);
     f_close(&file->fil);
     file->in_use = false;
 }
