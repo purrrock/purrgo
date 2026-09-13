@@ -100,21 +100,13 @@ void purrgo_app_ui_render(
             break;
     }
 
-    /*
-     * При смене экранного состояния изменяется содержимое
-     * всей области дисплея. Помечаем весь экран для передачи
-     * в физический дисплей.
-     */
+    ui_draw_key_hints(gfx, current_state);
+
     if (current_state != prev_state) {
-        display_refresh_region(
-            0,
-            0,
-            PURRGO_HW_DISPLAY_WIDTH_PX,
-            PURRGO_HW_DISPLAY_HEIGHT_PX
-        );
+        display_refresh();
+    } else {
+        display_flush();
     }
 
-    ui_draw_key_hints(gfx, current_state);
-    display_flush();
     prev_state = current_state;
 }
