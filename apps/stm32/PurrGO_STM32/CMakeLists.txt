@@ -80,6 +80,9 @@ target_sources(PurrGO_STM32 PRIVATE
 
     # STM32 Power logic
     Core/Src/power_stm32.c
+
+    # Application wrapper
+    Core/Src/stm32_app.c
 )
 
 # Add include paths
