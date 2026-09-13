@@ -38,38 +38,22 @@ typedef struct {
 
 static map_context_t s_map_context = {0};
 
+static void map_close_file(purrgo_file_t **file)
+{
+    if (*file != NULL) { purrgo_fs_close(*file); *file = NULL; }
+}
+
 static void map_close_all_files(void)
 {
-    if (s_map_context.landuse_idx_file) {
-        purrgo_fs_close(s_map_context.landuse_idx_file);
-        s_map_context.landuse_idx_file = NULL;
-    }
-    if (s_map_context.landuse_mlp_file) {
-        purrgo_fs_close(s_map_context.landuse_mlp_file);
-        s_map_context.landuse_mlp_file = NULL;
-    }
-    if (s_map_context.landuse_db_file) {
-        purrgo_fs_close(s_map_context.landuse_db_file);
-        s_map_context.landuse_db_file = NULL;
-    }
+    map_close_file(&s_map_context.landuse_idx_file);
+    map_close_file(&s_map_context.landuse_mlp_file);
+    map_close_file(&s_map_context.landuse_db_file);
 
-    if (s_map_context.roads_idx_file) {
-        purrgo_fs_close(s_map_context.roads_idx_file);
-        s_map_context.roads_idx_file = NULL;
-    }
-    if (s_map_context.roads_mlp_file) {
-        purrgo_fs_close(s_map_context.roads_mlp_file);
-        s_map_context.roads_mlp_file = NULL;
-    }
+    map_close_file(&s_map_context.roads_idx_file);
+    map_close_file(&s_map_context.roads_mlp_file);
 
-    if (s_map_context.poi_idx_file) {
-        purrgo_fs_close(s_map_context.poi_idx_file);
-        s_map_context.poi_idx_file = NULL;
-    }
-    if (s_map_context.poi_db_file) {
-        purrgo_fs_close(s_map_context.poi_db_file);
-        s_map_context.poi_db_file = NULL;
-    }
+    map_close_file(&s_map_context.poi_idx_file);
+    map_close_file(&s_map_context.poi_db_file);
 
     s_map_context.layer_landuse = false;
     s_map_context.layer_landuse_labels = false;
