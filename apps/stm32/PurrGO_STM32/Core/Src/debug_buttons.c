@@ -40,58 +40,61 @@ void purrgo_debug_buttons_process(void)
      */
     uint16_t bytes_processed = 0U;
 
-if (HAL_UART_Receive(&huart2, &rx_char, 1, 0) == HAL_OK)
+    if (__HAL_UART_GET_FLAG(&huart2, UART_FLAG_RXNE))
     {
-        PURRGO_LOG("DEBUG RX: 0x%02X '%c'\r\n",
-           rx_char,
-           (rx_char >= 32U && rx_char <= 126U) ? rx_char : '.');
-
-        bytes_processed++;
-        purrgo_btn_t btn;
-        const char *log_msg = NULL;
-
-        switch (rx_char)
+        if (HAL_UART_Receive(&huart2, &rx_char, 1, 0) == HAL_OK)
         {
-            case '1':
-                btn = PURRGO_BTN_KEY1_SHORT;
-                log_msg = "DEBUG KEY1 SHORT\r\n";
-                break;
-            case '2':
-                btn = PURRGO_BTN_KEY2_SHORT;
-                log_msg = "DEBUG KEY2 SHORT\r\n";
-                break;
-            case '3':
-                btn = PURRGO_BTN_KEY3_SHORT;
-                log_msg = "DEBUG KEY3 SHORT\r\n";
-                break;
-            case '4':
-                btn = PURRGO_BTN_KEY4_SHORT;
-                log_msg = "DEBUG KEY4 SHORT\r\n";
-                break;
-            case '5':
-                btn = PURRGO_BTN_KEY1_LONG;
-                log_msg = "DEBUG KEY1 LONG\r\n";
-                break;
-            case '6':
-                btn = PURRGO_BTN_KEY2_LONG;
-                log_msg = "DEBUG KEY2 LONG\r\n";
-                break;
-            case '7':
-                btn = PURRGO_BTN_KEY3_LONG;
-                log_msg = "DEBUG KEY3 LONG\r\n";
-                break;
-            case '8':
-                btn = PURRGO_BTN_KEY4_LONG;
-                log_msg = "DEBUG KEY4 LONG\r\n";
-                break;
-            default:
-                /* Ignore CR/LF, spaces, and other unsupported characters */
+            PURRGO_LOG("DEBUG RX: 0x%02X '%c'\r\n",
+               rx_char,
+               (rx_char >= 32U && rx_char <= 126U) ? rx_char : '.');
+
+            bytes_processed++;
+            purrgo_btn_t btn;
+            const char *log_msg = NULL;
+
+            switch (rx_char)
+            {
+                case '1':
+                    btn = PURRGO_BTN_KEY1_SHORT;
+                    log_msg = "DEBUG KEY1 SHORT\r\n";
+                    break;
+                case '2':
+                    btn = PURRGO_BTN_KEY2_SHORT;
+                    log_msg = "DEBUG KEY2 SHORT\r\n";
+                    break;
+                case '3':
+                    btn = PURRGO_BTN_KEY3_SHORT;
+                    log_msg = "DEBUG KEY3 SHORT\r\n";
+                    break;
+                case '4':
+                    btn = PURRGO_BTN_KEY4_SHORT;
+                    log_msg = "DEBUG KEY4 SHORT\r\n";
+                    break;
+                case '5':
+                    btn = PURRGO_BTN_KEY1_LONG;
+                    log_msg = "DEBUG KEY1 LONG\r\n";
+                    break;
+                case '6':
+                    btn = PURRGO_BTN_KEY2_LONG;
+                    log_msg = "DEBUG KEY2 LONG\r\n";
+                    break;
+                case '7':
+                    btn = PURRGO_BTN_KEY3_LONG;
+                    log_msg = "DEBUG KEY3 LONG\r\n";
+                    break;
+                case '8':
+                    btn = PURRGO_BTN_KEY4_LONG;
+                    log_msg = "DEBUG KEY4 LONG\r\n";
+                    break;
+                default:
+                    /* Ignore CR/LF, spaces, and other unsupported characters */
+            }
+
+            /* Log recognized button event */
+            PURRGO_LOG("%s", log_msg);
+
+            /* Inject the event into the FSM */
+            purrgo_app_handle_button(btn);
         }
-
-        /* Log recognized button event */
-        PURRGO_LOG("%s", log_msg);
-
-        /* Inject the event into the FSM */
-        purrgo_app_handle_button(btn);
     }
 }
