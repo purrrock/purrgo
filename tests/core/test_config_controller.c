@@ -43,11 +43,16 @@ void test_config_controller_menu_navigation(void) {
     purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_ACTION_DOWN, &next_state);
     assert(config_app_get_config_cursor() == 5); // CONFIG_CURSOR_MAP_LAYERS
 
-    // Test bounds (Should not go past 5)
     purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_ACTION_DOWN, &next_state);
-    assert(config_app_get_config_cursor() == 5);
+    assert(config_app_get_config_cursor() == 6); // CONFIG_CURSOR_POWER_OFF
+
+    // Test bounds (Should not go past 6)
+    purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_ACTION_DOWN, &next_state);
+    assert(config_app_get_config_cursor() == 6);
 
     // Test UP
+    purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_ACTION_UP, &next_state);
+    assert(config_app_get_config_cursor() == 5);
     purrgo_config_controller_handle_button(APP_STATE_MENU_CONFIG, PURRGO_ACTION_UP, &next_state);
     assert(config_app_get_config_cursor() == 4);
 
