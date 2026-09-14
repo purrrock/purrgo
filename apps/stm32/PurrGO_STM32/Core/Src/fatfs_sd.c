@@ -243,6 +243,22 @@ static BYTE SD_SendCmd(BYTE cmd, uint32_t arg)
  * user_diskio.c functions
  **************************************/
 
+/*
+ * Switch SPI to higher speed after successful SD initialization.
+ * Prescaler 128 (~328 kbit/s) is used only for SD initialization.
+ * Prescaler 4 is used for normal operation after card exits idle state.
+ */
+static void SD_SPI_SpeedUp(void)
+{
+    /* Ensure SPI is not transmitting and CS is inactive */
+    while (__HAL_SPI_GET_FLAG(HSPI_SDCARD, SPI_FLAG_BSY)) {}
+    DESELECT();
+
+    HAL_SPI_DeInit(HSPI_SDCARD);
+    hspi2.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_4;
+    HAL_SPI_Init(HSPI_SDCARD);
+}
+
 /* initialize SD */
 DSTATUS SD_disk_initialize(BYTE drv) 
 {
@@ -343,6 +359,7 @@ DSTATUS SD_disk_initialize(BYTE drv)
     /* Clear STA_NOINIT */
     if (type)
     {
+        SD_SPI_SpeedUp();
         Stat &= ~STA_NOINIT;
     }
     else
