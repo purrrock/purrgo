@@ -6,6 +6,20 @@
 #include <string.h>
 #include "display_st7789.h"
 
+/*
+ * STM32 Display Stub Driver with Framebuffer
+ *
+ * This implementation provides the logical display interface required by the
+ * common PurrGO code, as well as the initialization interface for the STM32 application.
+ *
+ * It maintains an in-memory framebuffer and manipulates pixels just like the PC emulator,
+ * allowing UI rendering logic to execute completely.
+ *
+ * Hardware access (SPI, GPIO, DMA, E-Ink controller registers) is intentionally
+ * absent because the physical display is not connected yet during the current
+ * hardware bring-up stage.
+ */
+
 /* Size of the framebuffer in bytes: (Width * Height * BPP) / 8 */
 #define DISPLAY_FB_SIZE ((DISPLAY_WIDTH * DISPLAY_HEIGHT * DISPLAY_BPP) / 8)
 
@@ -18,6 +32,7 @@ void display_init(void) {
 void display_clear(uint8_t color) {
     color &= 0x03;
     uint8_t byte_val = (color << 6) | (color << 4) | (color << 2) | color;
+    // Use memset for efficient framebuffer initialization
     memset(framebuffer, byte_val, DISPLAY_FB_SIZE);
 }
 
@@ -28,13 +43,11 @@ void display_set_pixel(int16_t x, int16_t y, uint8_t color) {
 
     color &= 0x03;
     int pixel_idx = y * DISPLAY_WIDTH + x;
-    
-    // Битовая оптимизация: заменяем деление (/ 4) и остаток (% 4)
-    int byte_idx = pixel_idx >> 2; 
-    int bit_shift = (3 - (pixel_idx & 3)) << 1; 
+    int byte_idx = pixel_idx / 4;
+    int bit_shift = (3 - (pixel_idx % 4)) * 2; // MSB first for pixels
 
-    framebuffer[byte_idx] &= ~(0x03 << bit_shift); 
-    framebuffer[byte_idx] |= (color << bit_shift); 
+    framebuffer[byte_idx] &= ~(0x03 << bit_shift); // Clear existing
+    framebuffer[byte_idx] |= (color << bit_shift); // Set new
 }
 
 uint8_t display_get_pixel(int16_t x, int16_t y) {
@@ -43,8 +56,8 @@ uint8_t display_get_pixel(int16_t x, int16_t y) {
     }
 
     int pixel_idx = y * DISPLAY_WIDTH + x;
-    int byte_idx = pixel_idx >> 2;
-    int bit_shift = (3 - (pixel_idx & 3)) << 1;
+    int byte_idx = pixel_idx / 4;
+    int bit_shift = (3 - (pixel_idx % 4)) * 2;
 
     return (framebuffer[byte_idx] >> bit_shift) & 0x03;
 }
@@ -64,7 +77,13 @@ void stm32_draw_pixel_cb(
     gfx_color_t color
 )
 {
+    /*
+     * Текущий display_stm32 предоставляет собственный framebuffer
+     * и API display_set_pixel(). Поэтому fb здесь непосредственно
+     * не используется.
+     */
     (void)fb;
+
     display_set_pixel(x, y, color);
 }
 
@@ -74,7 +93,12 @@ gfx_color_t stm32_read_pixel_cb(
     int16_t y
 )
 {
+    /*
+     * Аналогично callback записи, framebuffer принадлежит
+     * display_stm32 и доступен через display_get_pixel().
+     */
     (void)fb;
+
     return display_get_pixel(x, y);
 }
 
@@ -113,46 +137,42 @@ static void do_refresh_region(int16_t x, int16_t y, int16_t w, int16_t h) {
     }
 
     ST7789_SetWindow(x, y, x + w - 1, y + h - 1);
+
     ST7789_StartPixels();
 
-    // Буфер на 2048 пикселей разгружает SPI, static спасает стек
-    #define TRANSFER_BUF_PIXELS 2048
-    static uint8_t buf[TRANSFER_BUF_PIXELS * 2];
+    #define TRANSFER_BUF_PIXELS 128
+    uint8_t buf[TRANSFER_BUF_PIXELS * 2];
     int buf_idx = 0;
 
     for (int row = y; row < y + h; row++) {
-        // Оптимизация: вычисляем линейный индекс в начале строки и просто инкрементируем
-        int pixel_idx = row * DISPLAY_WIDTH + x;
-        
         for (int col = x; col < x + w; col++) {
-            // Оптимизированный пересчет вместо деления и умножений внутри цикла
-            int byte_idx = pixel_idx >> 2;
-            int bit_shift = (3 - (pixel_idx & 3)) << 1;
+            uint32_t pixel_idx = row * DISPLAY_WIDTH + col;
+            int byte_idx = pixel_idx / 4;
+            int bit_shift = (3 - (pixel_idx % 4)) * 2;
             uint8_t color2bpp = (framebuffer[byte_idx] >> bit_shift) & 0x03;
 
             uint16_t rgb565 = color_lut[color2bpp];
 
-            buf[buf_idx << 1] = rgb565 >> 8;
-            buf[(buf_idx << 1) | 1] = rgb565 & 0xFF;
-            
+            buf[buf_idx * 2] = rgb565 >> 8;
+            buf[buf_idx * 2 + 1] = rgb565 & 0xFF;
             buf_idx++;
-            pixel_idx++;
 
             if (buf_idx >= TRANSFER_BUF_PIXELS) {
-                ST7789_WritePixels(buf, buf_idx << 1);
+                ST7789_WritePixels(buf, buf_idx * 2);
                 buf_idx = 0;
             }
         }
     }
 
     if (buf_idx > 0) {
-        ST7789_WritePixels(buf, buf_idx << 1);
+        ST7789_WritePixels(buf, buf_idx * 2);
     }
 
     ST7789_EndPixels();
 }
 
 void display_refresh(void) {
+//    PURRGO_LOG("FULL REFRESH\r\n");
     partial_refresh_count = 0;
     pending_has_region = 0;
     do_refresh_region(0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT);
