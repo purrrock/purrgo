@@ -17,8 +17,8 @@
  * ============================================================================
  */
 
-#define PURRGO_GNSS_MOCK             1
-#define PURRGO_HW_GNSS PURRGO_GNSS_MOCK
+// #define PURRGO_GNSS_MOCK             1
+// #define PURRGO_HW_GNSS PURRGO_GNSS_MOCK
 
 /*
  * ============================================================================
