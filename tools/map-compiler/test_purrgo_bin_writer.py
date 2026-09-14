@@ -64,6 +64,61 @@ class TestMapCompilerBinWriter(unittest.TestCase):
 
         os.remove(filepath)
 
+    def test_spatial_order_and_serialization(self):
+        from purrgo_models import MapFeature
+
+        # Create features out of spatial order
+        f1 = MapFeature(osm_id="1", code=1, name="One", points=struct.pack("<ii", 100, 100), lod=0)
+        f1.bbox = (100, 100, 100, 100)
+        f2 = MapFeature(osm_id="2", code=2, name="Two", points=struct.pack("<ii", 10, 10), lod=0)
+        f2.bbox = (10, 10, 10, 10)
+        f3 = MapFeature(osm_id="3", code=3, name="Three", points=struct.pack("<ii", 200, 200), lod=0)
+        f3.bbox = (200, 200, 200, 200)
+
+        features = [f1, f2, f3]
+
+        # Build spatial order in-place
+        MapCompiler.build_spatial_order(features)
+
+        # Since we use STR with CHUNK_SIZE=14, for 3 elements it should sort them globally
+        # Center lon/lat sorting will place them in order: f2, f1, f3
+        self.assertEqual(features[0].osm_id, "2")
+        self.assertEqual(features[1].osm_id, "1")
+        self.assertEqual(features[2].osm_id, "3")
+
+        # Compile to MLP and DB
+        mlp_path = "test_spatial.mlp"
+        db_path = "test_spatial.db"
+
+        MapCompiler.compile_mlp(features, mlp_path)
+        MapCompiler.compile_db(features, db_path)
+
+        # Check v1 and v2 assignments
+        self.assertEqual(features[0].v2, 2)  # v2 starts at 2 for non-poi
+        self.assertEqual(features[1].v2, 3)
+        self.assertEqual(features[2].v2, 4)
+
+        self.assertEqual(features[0].v1, 8)  # v1 starts at 8
+        self.assertTrue(features[1].v1 > features[0].v1)
+        self.assertTrue(features[2].v1 > features[1].v1)
+
+        # Check MLP binary size and locations roughly
+        with open(mlp_path, "rb") as f:
+            header = f.read(HWConfig.PGO_HEADER_SIZE)
+            self.assertEqual(header[3], 2)
+            payload = f.read()
+            self.assertTrue(len(payload) > 0)
+
+        # Check DB binary format
+        with open(db_path, "rb") as f:
+            header = f.read(HWConfig.PGO_HEADER_SIZE)
+            self.assertEqual(header[3], 3)
+            db_payload = f.read()
+            self.assertTrue(len(db_payload) > 0)
+
+        os.remove(mlp_path)
+        os.remove(db_path)
+
     def test_create_empty_layer(self):
         prefix = "test_empty"
         MapCompiler.create_empty_layer(prefix)
