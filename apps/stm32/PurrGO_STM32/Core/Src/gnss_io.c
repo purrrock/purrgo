@@ -8,46 +8,165 @@
 #include "purrgo/logger.h"
 
 /*
- * Кольцевой буфер входного потока USART1 через DMA.
+ * Размер кольцевого DMA-буфера GNSS.
  *
- * DMA постоянно записывает данные в этот буфер по кругу.
- * Размер буфера должен быть степенью двойки только для удобства,
- * но данная реализация этого не требует.
+ * DMA непрерывно записывает входные байты в этот массив.
+ * После достижения конца массива DMA начинает запись с начала.
  */
 #define GNSS_RX_BUFFER_SIZE 1024U
 
+/*
+ * Буфер приёма GNSS.
+ *
+ * DMA является владельцем записи в этот массив.
+ * Потребитель читает данные через purrgo_gnss_read_byte().
+ */
 static uint8_t gnss_rx_buffer[GNSS_RX_BUFFER_SIZE];
 
 /*
- * Позиция чтения потребителя.
+ * Абсолютная позиция следующего байта, который должен прочитать
+ * потребитель.
  *
- * DMA head отдельно не хранится: он вычисляется непосредственно
- * из текущего значения NDTR DMA.
+ * Это не индекс внутри буфера.
+ *
+ * Значение увеличивается без ограничения и естественным образом
+ * переполняется uint32_t. Для разности позиций это безопасно,
+ * пока разница между producer и consumer существенно меньше
+ * UINT32_MAX.
  */
-static uint16_t gnss_rx_tail = 0U;
+static uint32_t gnss_rx_tail;
+
+/*
+ * Количество полных оборотов DMA по кольцевому буферу.
+ *
+ * Увеличивается в HAL_UART_RxCpltCallback() после каждого
+ * transfer complete.
+ *
+ * Например:
+ *
+ *   оборот 0: байты 0..1023
+ *   оборот 1: байты 1024..2047
+ *   оборот 2: байты 2048..3071
+ *
+ * Абсолютная позиция DMA вычисляется как:
+ *
+ *   wrap_count * GNSS_RX_BUFFER_SIZE + position_inside_buffer
+ *
+ * Переменная volatile, поскольку изменяется из обработчика
+ * прерывания DMA/UART и читается из основного контекста.
+ */
+static volatile uint32_t gnss_rx_wrap_count;
+
+/**
+ * @brief Получить согласованное состояние DMA producer.
+ *
+ * DMA работает независимо от основного кода и одновременно
+ * с чтением NDTR может произойти Transfer Complete interrupt.
+ *
+ * Поэтому сначала читается счётчик оборотов, затем NDTR,
+ * затем счётчик оборотов читается повторно.
+ *
+ * Если за время чтения произошёл полный оборот DMA, значения
+ * не согласованы и чтение повторяется.
+ *
+ * @return Абсолютная позиция следующего байта, который будет
+ *         записан DMA.
+ */
+static uint32_t gnss_rx_get_producer_position(void)
+{
+    uint32_t wrap_before;
+    uint32_t wrap_after;
+    uint16_t ndtr;
+    uint16_t position;
+
+    do
+    {
+        /*
+         * Считаем количество завершённых полных оборотов DMA.
+         */
+        wrap_before = gnss_rx_wrap_count;
+
+        /*
+         * NDTR содержит количество элементов, которые DMA
+         * должен передать до окончания текущего оборота.
+         *
+         * Поэтому текущая позиция записи:
+         *
+         *     BUFFER_SIZE - NDTR
+         *
+         * При нормальной работе она находится в диапазоне
+         * 0..BUFFER_SIZE.
+         */
+        ndtr = __HAL_DMA_GET_COUNTER(huart1.hdmarx);
+
+        /*
+         * Считываем счётчик ещё раз.
+         */
+        wrap_after = gnss_rx_wrap_count;
+
+        /*
+         * Если DMA завершил оборот между двумя чтениями
+         * wrap_count, полученная пара wrap/NDTR несогласована.
+         *
+         * Повторяем чтение.
+         */
+    } while (wrap_before != wrap_after);
+
+    /*
+     * Защита от некорректного значения NDTR.
+     *
+     * В штатном режиме Circular DMA NDTR не должен превышать
+     * размер переданного буфера.
+     */
+    if (ndtr > GNSS_RX_BUFFER_SIZE)
+    {
+        ndtr = GNSS_RX_BUFFER_SIZE;
+    }
+
+    position = GNSS_RX_BUFFER_SIZE - ndtr;
+
+    /*
+     * Возвращаем абсолютную позицию producer.
+     *
+     * Если position == BUFFER_SIZE, это означает, что DMA
+     * находится непосредственно на границе полного оборота.
+     * Такая позиция корректно преобразуется в начало следующего
+     * логического диапазона.
+     */
+    return wrap_before * GNSS_RX_BUFFER_SIZE + position;
+}
 
 /**
  * @brief Инициализировать приём GNSS через USART1.
  *
- * Приём выполняется через Circular DMA. Функция должна быть вызвана
- * после MX_USART1_UART_Init() и инициализации DMA.
+ * Приём выполняется через Circular DMA.
+ * Функция должна быть вызвана после MX_USART1_UART_Init()
+ * и инициализации DMA.
  */
 void purrgo_gnss_init(void)
 {
+    /*
+     * Сначала сбрасываем состояние software producer/consumer.
+     */
     gnss_rx_tail = 0U;
+    gnss_rx_wrap_count = 0U;
 
     /*
      * AT6558R:
-     * установить период выдачи навигационных данных 1000 мс,
-     * Формат команды: $PCAS02,1000*2E\r\n
+     * установить период выдачи навигационных данных 1000 мс.
+     *
+     * Формат команды:
+     *
+     *     $PCAS02,1000*2E\r\n
      */
-    static const uint8_t gnss_update_rate_cmd[] = "$PCAS02,1000*2E\r\n";
+    static const uint8_t gnss_update_rate_cmd[] =
+        "$PCAS02,1000*2E\r\n";
 
     /*
      * Для выдачи только GGA + GSA + RMC.
      */
     static const uint8_t gnss_nmea_cmd[] =
-        "$PCAS03,1,0,1,0,1,0,0,0,0,0,,,0,0,,,,0*3A\r\n";
+        "$PCAS03,1,0,1,0,1,0,0,0,0,0,,,0*3A\r\n";
 
     HAL_UART_Transmit(
         &huart1,
@@ -63,6 +182,9 @@ void purrgo_gnss_init(void)
 
     /*
      * Запускаем непрерывный приём через Circular DMA.
+     *
+     * В режиме Circular DMA после достижения конца буфера
+     * DMA автоматически продолжает запись с его начала.
      */
     if (HAL_UART_Receive_DMA(
             &huart1,
@@ -76,20 +198,30 @@ void purrgo_gnss_init(void)
 /**
  * @brief Прочитать один байт из входного GNSS-потока.
  *
- * Функция не блокируется. Если новых данных нет, возвращает false.
+ * Функция не блокируется.
  *
- * DMA является единственным владельцем позиции head.
- * Позиция head вычисляется непосредственно из NDTR:
+ * Основной код является consumer, DMA является producer.
  *
- *     head = BUFFER_SIZE - NDTR
+ * Producer и consumer используют абсолютные позиции:
  *
- * tail — позиция следующего байта, который должен прочитать
- * потребитель.
+ *     producer = текущая позиция DMA
+ *     consumer = gnss_rx_tail
  *
- * Если DMA успел полностью обойти кольцевой буфер до того,
- * как потребитель прочитал данные, старые данные считаются
- * потерянными. В этом случае tail перемещается на head,
- * после чего чтение продолжается с текущего положения DMA.
+ * Количество доступных байтов:
+ *
+ *     available = producer - consumer
+ *
+ * Если available > GNSS_RX_BUFFER_SIZE, DMA уже сделал
+ * как минимум один полный оборот и перезаписал непрочитанные
+ * данные.
+ *
+ * В таком случае старые данные считаются потерянными, а consumer
+ * перемещается на самое старое ещё доступное место:
+ *
+ *     consumer = producer - BUFFER_SIZE
+ *
+ * Таким образом, состояние "пусто" больше не смешивается
+ * с состоянием "буфер полностью заполнен".
  *
  * @param[out] byte Адрес переменной для принятого байта.
  *
@@ -98,109 +230,116 @@ void purrgo_gnss_init(void)
  */
 bool purrgo_gnss_read_byte(uint8_t *byte)
 {
+    uint32_t producer;
+    uint32_t available;
+    uint32_t buffer_index;
+
     if (byte == NULL)
     {
         return false;
     }
 
     /*
-     * NDTR содержит количество байт, которые DMA ещё должен
-     * передать до конца текущего оборота буфера.
-     *
-     * Поэтому:
-     *
-     *     head = BUFFER_SIZE - NDTR
-     *
-     * head всегда находится в диапазоне [0, BUFFER_SIZE - 1].
+     * Если DMA ещё не был запущен, читать нечего.
      */
-    uint16_t ndtr = __HAL_DMA_GET_COUNTER(huart1.hdmarx);
-    uint16_t gnss_rx_head = GNSS_RX_BUFFER_SIZE - ndtr;
-
-    /*
-     * Защита от некорректного значения NDTR.
-     *
-     * При нормально работающем Circular DMA это условие
-     * выполняться не должно.
-     */
-    if (gnss_rx_head >= GNSS_RX_BUFFER_SIZE)
-    {
-        gnss_rx_head = 0U;
-    }
-
-    /*
-     * Вычисляем количество байт между tail и head.
-     *
-     * В кольцевом буфере:
-     *
-     *     head >= tail:
-     *         available = head - tail
-     *
-     *     head < tail:
-     *         available = BUFFER_SIZE - tail + head
-     *
-     * При обычной работе available находится в диапазоне
-     * 0 .. BUFFER_SIZE - 1.
-     *
-     * Если DMA сделал полный оборот, старые данные были
-     * перезаписаны. В этом случае расстояние само по себе
-     * уже не позволяет восстановить количество потерянных
-     * байтов, поэтому начинаем с текущего head.
-     */
-    uint16_t available;
-
-    if (gnss_rx_head >= gnss_rx_tail)
-    {
-        available = gnss_rx_head - gnss_rx_tail;
-    }
-    else
-    {
-        available = GNSS_RX_BUFFER_SIZE
-                  - gnss_rx_tail
-                  + gnss_rx_head;
-    }
-
-    /*
-     * head == tail означает отсутствие непрочитанных данных.
-     *
-     * Важное ограничение такой схемы: состояние "пусто" и
-     * состояние "полный буфер" имеют одинаковые head и tail.
-     * Поэтому переполнение определяется по факту того,
-     * что потребитель не успевал читать данные между двумя
-     * наблюдениями head.
-     *
-     * В данной реализации head читается непосредственно из DMA,
-     * а tail является единственным состоянием потребителя.
-     */
-    if (gnss_rx_head == gnss_rx_tail)
+    if (huart1.hdmarx == NULL)
     {
         return false;
     }
 
     /*
-     * Прочитать следующий байт.
+     * Получаем согласованную абсолютную позицию DMA producer.
      */
-    *byte = gnss_rx_buffer[gnss_rx_tail];
+    producer = gnss_rx_get_producer_position();
 
     /*
-     * Передвинуть tail.
+     * Благодаря unsigned arithmetic разность корректно работает
+     * и при естественном переполнении uint32_t.
+     *
+     * При нормальной работе producer >= tail в логическом смысле.
+     */
+    available = producer - gnss_rx_tail;
+
+    /*
+     * DMA успел записать больше данных, чем помещается
+     * в кольцевом буфере.
+     *
+     * Значит, часть непрочитанных байтов уже была перезаписана.
+     *
+     * Сохраняем только последние BUFFER_SIZE байт.
+     */
+    if (available > GNSS_RX_BUFFER_SIZE)
+    {
+        gnss_rx_tail = producer - GNSS_RX_BUFFER_SIZE;
+        available = GNSS_RX_BUFFER_SIZE;
+    }
+
+    /*
+     * Новых данных нет.
+     */
+    if (available == 0U)
+    {
+        return false;
+    }
+
+    /*
+     * Преобразуем абсолютную позицию consumer в индекс
+     * внутри физического кольцевого буфера.
+     *
+     * Размер буфера 1024, но намеренно не используем битовую
+     * маску: реализация не зависит от степени двойки.
+     */
+    buffer_index = gnss_rx_tail % GNSS_RX_BUFFER_SIZE;
+
+    /*
+     * Читаем байт.
+     *
+     * DMA может одновременно записывать в другой элемент
+     * буфера. Текущий элемент уже находится перед consumer,
+     * поэтому DMA его не должен перезаписывать до следующего
+     * полного оборота.
+     */
+    *byte = gnss_rx_buffer[buffer_index];
+
+    /*
+     * Переходим к следующему байту.
      */
     gnss_rx_tail++;
-
-    if (gnss_rx_tail >= GNSS_RX_BUFFER_SIZE)
-    {
-        gnss_rx_tail = 0U;
-    }
 
     return true;
 }
 
 /**
- * @brief Callback ошибки UART.
+ * @brief Callback половины DMA-передачи USART1 RX.
  *
- * После ошибки (например, ORE или FE) снова запускаем
- * приём через DMA.
+ * Circular DMA вызывает этот callback после заполнения первой
+ * половины буфера.
+ *
+ * Счётчик полных оборотов здесь НЕ увеличивается: полный оборот
+ * ещё не завершён.
+ *
+ * Callback намеренно пустой. Его наличие явно показывает, что
+ * Half Transfer event является штатным событием DMA и не должен
+ * интерпретироваться как полный оборот.
  */
-void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
+void HAL_UART_RxHalfCpltCallback(UART_HandleTypeDef *huart)
+{
+    if (huart->Instance != USART1)
+    {
+        return;
+    }
+}
+
+/**
+ * @brief Callback полного DMA-буфера USART1 RX.
+ *
+ * В режиме Circular DMA этот callback вызывается после каждого
+ * полного заполнения буфера.
+ *
+ * После callback DMA начинает следующий оборот с начала буфера,
+ * поэтому увеличиваем абсолютный счётчик оборотов.
+ */
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
     if (huart->Instance != USART1)
     {
@@ -208,20 +347,58 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
     }
 
     /*
-     * Останавливаем текущий ошибочный приём.
+     * DMA завершил очередной полный оборот буфера.
+     *
+     * После этого producer продолжает работу с начала
+     * физического массива, но логическая абсолютная позиция
+     * продолжает увеличиваться.
      */
-    HAL_UART_AbortReceive(huart);
+    gnss_rx_wrap_count++;
+}
+
+/**
+ * @brief Callback ошибки UART.
+ *
+ * После ошибки (например, ORE или FE) останавливаем текущий
+ * приём и запускаем Circular DMA заново.
+ */
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
+{
+    if (huart == NULL)
+    {
+        return;
+    }
+
+    if (huart->Instance != USART1)
+    {
+        return;
+    }
 
     /*
-     * После перезапуска DMA начинаем чтение с начала буфера.
+     * Останавливаем текущий ошибочный приём.
      *
-     * DMA также начинает новый оборот с начала переданного
-     * ему буфера.
+     * HAL_UART_AbortReceive() также останавливает связанный
+     * DMA RX.
+     */
+    (void)HAL_UART_AbortReceive(huart);
+
+    /*
+     * После ошибки старое содержимое буфера больше не считается
+     * валидным потоком.
+     *
+     * Начинаем новый логический поток с нулевой позиции.
      */
     gnss_rx_tail = 0U;
+    gnss_rx_wrap_count = 0U;
 
-    (void)HAL_UART_Receive_DMA(
-        &huart1,
-        gnss_rx_buffer,
-        GNSS_RX_BUFFER_SIZE);
+    /*
+     * Снова запускаем непрерывный Circular DMA.
+     */
+    if (HAL_UART_Receive_DMA(
+            &huart1,
+            gnss_rx_buffer,
+            GNSS_RX_BUFFER_SIZE) != HAL_OK)
+    {
+        PURRGO_LOG("GNSS RX RESTART ERROR!\r\n");
+    }
 }

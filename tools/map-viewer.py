@@ -1714,7 +1714,7 @@ if __name__ == "__main__":
 
         print("Usage:")
         print(
-            "  python dtmap-parser.py "
+            "  python map-viewer.py "
             "<layer.idx> <layer.mlp> "
             "[map.name] [layer.db]"
         )
