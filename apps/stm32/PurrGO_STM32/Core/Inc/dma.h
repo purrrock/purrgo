@@ -28,6 +28,8 @@ extern "C" {
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 
+/* DMA memory to memory transfer handles -------------------------------------*/
+
 /* USER CODE BEGIN Includes */
 
 /* USER CODE END Includes */
@@ -47,3 +49,4 @@ void MX_DMA_Init(void);
 #endif
 
 #endif /* __DMA_H__ */
+
