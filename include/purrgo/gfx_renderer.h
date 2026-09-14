@@ -25,7 +25,9 @@ typedef uint8_t gfx_color_t;
 #define LIGHT_GRAY 2
 #define WHITE      3
 
-/* * Базовая структура точки. 
+/*
+ * Базовая структура точки.
+ *
  * Знаковый int16_t позволяет координатам уходить за границы экрана (clipping),
  * при этом занимая всего 4 байта на структуру.
  */
@@ -35,34 +37,70 @@ typedef struct {
 } gfx_point_t;
 
 /*
- * Сигнатура callback-функции для отрисовки пикселя.
+ * Callback для записи одного пикселя.
+ *
  * Платформенно-зависимый код должен реализовать эту функцию,
- * выполняя необходимые битовые операции (read-modify-write) для Framebuffer.
+ * выполняя необходимые битовые операции для framebuffer.
  */
-typedef void (*gfx_draw_pixel_fn)(void *fb, int16_t x, int16_t y, gfx_color_t color);
+typedef void (*gfx_draw_pixel_fn)(
+    void *fb,
+    int16_t x,
+    int16_t y,
+    gfx_color_t color
+);
 
 /*
- * Сигнатура callback-функции для чтения пикселя.
- * Возвращает текущий цвет пикселя или 0, если координаты за пределами экрана.
+ * Callback для чтения одного пикселя.
  */
-typedef gfx_color_t (*gfx_read_pixel_fn)(void *fb, int16_t x, int16_t y);
+typedef gfx_color_t (*gfx_read_pixel_fn)(
+    void *fb,
+    int16_t x,
+    int16_t y
+);
+
+/*
+ * Callback для быстрого заполнения всего framebuffer.
+ *
+ * В отличие от draw_pixel() этот callback должен заполнить
+ * весь framebuffer непосредственно платформенным способом.
+ *
+ * Например, для STM32 2-bpp framebuffer это может быть memset()
+ * одного байта во весь буфер.
+ *
+ * Callback является необязательным. Если он не установлен,
+ * gfx_clear() использует универсальный пиксельный fallback.
+ */
+typedef void (*gfx_clear_fn)(
+    void *fb,
+    gfx_color_t color
+);
 
 /*
  * Контекст графического ядра.
- * Передается по указателю во все функции отрисовки.
  */
 typedef struct {
     int16_t width;              /* Ширина экрана в пикселях */
     int16_t height;             /* Высота экрана в пикселях */
-    
-    void *framebuffer;          /* Opaque-указатель на массив пикселей платформы */
-    gfx_draw_pixel_fn draw_pixel; /* Указатель на платформенно-зависимую функцию вывода */
-    gfx_read_pixel_fn read_pixel; /* Указатель на платформенно-зависимую функцию чтения */
-    
-    gfx_color_t color_fg;       /* Текущий цвет переднего плана (линии, текст, контуры) */
-    gfx_color_t color_bg;       /* Текущий цвет фона (заливка, очистка экрана) */
 
-    /* Clipping region.
+    void *framebuffer;          /* Opaque-указатель на framebuffer платформы */
+
+    gfx_draw_pixel_fn draw_pixel; /* Запись одного пикселя */
+    gfx_read_pixel_fn read_pixel; /* Чтение одного пикселя */
+
+    /*
+     * Необязательный быстрый callback очистки framebuffer.
+     *
+     * Если NULL, gfx_clear() использует универсальный
+     * pixel-by-pixel fallback.
+     */
+    gfx_clear_fn clear;
+
+    gfx_color_t color_fg;       /* Текущий цвет переднего плана */
+    gfx_color_t color_bg;       /* Текущий цвет фона */
+
+    /*
+     * Clipping region.
+     *
      * x >= clip_x && x < clip_x + clip_w
      * y >= clip_y && y < clip_y + clip_h
      */
@@ -74,88 +112,134 @@ typedef struct {
 
 /*
  * Инициализация контекста.
+ *
  * Возвращает false при передаче нулевых указателей.
+ *
+ * Callback быстрого clear здесь намеренно не передаётся:
+ * это сохраняет существующий API gfx_init() и не требует
+ * менять все существующие вызовы в тестах и эмуляторе.
  */
-bool gfx_init(gfx_context_t *ctx, 
-              int16_t width, 
-              int16_t height, 
-              void *framebuffer, 
-              gfx_draw_pixel_fn draw_pixel_cb,
-              gfx_read_pixel_fn read_pixel_cb);
+bool gfx_init(
+    gfx_context_t *ctx,
+    int16_t width,
+    int16_t height,
+    void *framebuffer,
+    gfx_draw_pixel_fn draw_pixel_cb,
+    gfx_read_pixel_fn read_pixel_cb
+);
+
+/*
+ * Установка платформенного callback быстрого заполнения framebuffer.
+ *
+ * Передача NULL отключает быстрый путь и возвращает gfx_clear()
+ * к универсальной реализации через draw_pixel.
+ */
+void gfx_set_clear_callback(
+    gfx_context_t *ctx,
+    gfx_clear_fn clear_cb
+);
 
 /*
  * Установка области отсечения (clipping).
- * Защищает от выхода за пределы физического экрана.
  */
-void gfx_set_clip(gfx_context_t *ctx, int16_t x, int16_t y, int16_t w, int16_t h);
+void gfx_set_clip(
+    gfx_context_t *ctx,
+    int16_t x,
+    int16_t y,
+    int16_t w,
+    int16_t h
+);
 
 /*
- * Сброс области отсечения (clipping) на весь физический экран.
+ * Сброс области отсечения на весь физический экран.
  */
 void gfx_reset_clip(gfx_context_t *ctx);
 
 /*
  * Установка текущих цветов контекста.
  */
-void gfx_set_color(gfx_context_t *ctx, gfx_color_t fg, gfx_color_t bg);
+void gfx_set_color(
+    gfx_context_t *ctx,
+    gfx_color_t fg,
+    gfx_color_t bg
+);
 
 /*
  * Получение текущих цветов контекста.
  */
-void gfx_get_color(const gfx_context_t *ctx, gfx_color_t *fg, gfx_color_t *bg);
+void gfx_get_color(
+    const gfx_context_t *ctx,
+    gfx_color_t *fg,
+    gfx_color_t *bg
+);
 
 /*
- * Базовый примитив: отрисовка точки с проверкой границ (clipping).
- * Inline-функция может быть перенесена в .c, если требуется строгая инкапсуляция,
- * но здесь оставлена как прототип для вызова внутри gfx_line.c / gfx_polygon.c
+ * Базовый примитив: отрисовка точки с проверкой clipping.
  */
-void gfx_draw_pixel(gfx_context_t *ctx, int16_t x, int16_t y);
+void gfx_draw_pixel(
+    gfx_context_t *ctx,
+    int16_t x,
+    int16_t y
+);
 
 /*
- * Чтение пикселя из Framebuffer с проверкой границ (clipping).
- * Если пиксель за пределами clipping region, возвращается 0 (Black).
+ * Чтение пикселя из framebuffer с проверкой clipping.
  */
-gfx_color_t gfx_read_pixel(gfx_context_t *ctx, int16_t x, int16_t y);
+gfx_color_t gfx_read_pixel(
+    gfx_context_t *ctx,
+    int16_t x,
+    int16_t y
+);
 
 /*
- * Очистка всего Framebuffer текущим цветом фона (color_bg).
- * Зависит от аппаратной реализации, может потребовать платформенного callback'а
- * для быстрой очистки через memset (если абстракция draw_pixel слишком медленная).
+ * Очистка всего framebuffer текущим цветом фона (color_bg).
+ *
+ * Если установлен платформенный clear callback, используется он.
+ * Иначе выполняется универсальная pixel-by-pixel реализация.
  */
 void gfx_clear(gfx_context_t *ctx);
 
 /*
- * Отрисовка горизонтальной линии с аппаратным отсечением.
- * Оптимизирована для алгоритмов заливки.
+ * Отрисовка горизонтальной линии.
  */
-void gfx_draw_hline(gfx_context_t *ctx, int16_t x_start, int16_t x_end, int16_t y);
+void gfx_draw_hline(
+    gfx_context_t *ctx,
+    int16_t x_start,
+    int16_t x_end,
+    int16_t y
+);
 
 /*
- * Отрисовка вертикальной линии с аппаратным отсечением.
+ * Отрисовка вертикальной линии.
  */
-void gfx_draw_vline(gfx_context_t *ctx, int16_t x, int16_t y_start, int16_t y_end);
+void gfx_draw_vline(
+    gfx_context_t *ctx,
+    int16_t x,
+    int16_t y_start,
+    int16_t y_end
+);
 
 /**
- * @brief Отрисовка точечной линии (чередование 1 пиксель линии, 1 пиксель пропуска).
- *
- * @param ctx Контекст графического ядра.
- * @param x0 Начальная координата x.
- * @param y0 Начальная координата y.
- * @param x1 Конечная координата x.
- * @param y1 Конечная координата y.
+ * @brief Отрисовка точечной линии
+ *        (чередование 1 пиксель линии, 1 пиксель пропуска).
  */
-void gfx_draw_dotted_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1, int16_t y1);
+void gfx_draw_dotted_line(
+    gfx_context_t *ctx,
+    int16_t x0,
+    int16_t y0,
+    int16_t x1,
+    int16_t y1
+);
 
 /**
  * @brief Отрисовка железнодорожной линии.
- *
- * @param ctx Контекст графического ядра.
- * @param x0 Начальная координата x.
- * @param y0 Начальная координата y.
- * @param x1 Конечная координата x.
- * @param y1 Конечная координата y.
  */
-void gfx_draw_railway_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1, int16_t y1);
-
+void gfx_draw_railway_line(
+    gfx_context_t *ctx,
+    int16_t x0,
+    int16_t y0,
+    int16_t x1,
+    int16_t y1
+);
 
 #endif /* GFX_RENDERER_H */
