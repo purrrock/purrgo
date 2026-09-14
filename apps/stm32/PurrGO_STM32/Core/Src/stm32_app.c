@@ -16,7 +16,7 @@
 #include "buttons.h"
 #include "display_stm32.h"
 #include "display_st7789.h"
-#include "debug_buttons.h"
+// #include "debug_buttons.h"
 
 #include "fatfs.h"
 #include "fatfs_sd.h"
@@ -112,8 +112,8 @@ void purrgo_stm32_init(void)
       PURRGO_LOG("FatFs mount OK\r\n");
   }
 
-  purrgo_debug_buttons_init();
-  PURRGO_LOG("UART2 Buttons OK\r\n");
+  // purrgo_debug_buttons_init();
+  // PURRGO_LOG("UART2 Buttons OK\r\n");
 
   /*
    * -------------------------------------------------------------------------
@@ -253,7 +253,7 @@ void purrgo_stm32_process(void)
     process_buttons();
   }
   // прием эмуляции кнопок через UART
-  purrgo_debug_buttons_process();
+  // purrgo_debug_buttons_process();
 
   /*
    * -----------------------------------------------------------------------
