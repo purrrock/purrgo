@@ -19,49 +19,32 @@ static uint8_t PowerFlag = 0;               /* Power flag */
 static void SELECT(void)
 {
     HAL_GPIO_WritePin(SD_CS_PORT, SD_CS_PIN, GPIO_PIN_RESET);
-    HAL_Delay(1);
 }
 
 /* slave deselect */
 static void DESELECT(void)
 {
     HAL_GPIO_WritePin(SD_CS_PORT, SD_CS_PIN, GPIO_PIN_SET);
-    HAL_Delay(1);
 }
 
 /* SPI transmit a byte */
 static void SPI_TxByte(uint8_t data)
 {
-    uint32_t tickstart = HAL_GetTick();
-    while(!__HAL_SPI_GET_FLAG(HSPI_SDCARD, SPI_FLAG_TXE))
-    {
-        if ((HAL_GetTick() - tickstart) >= SPI_TIMEOUT) break;
-    }
     HAL_SPI_Transmit(HSPI_SDCARD, &data, 1, SPI_TIMEOUT);
 }
 
 /* SPI transmit buffer */
 static void SPI_TxBuffer(uint8_t *buffer, uint16_t len)
 {
-    uint32_t tickstart = HAL_GetTick();
-    while(!__HAL_SPI_GET_FLAG(HSPI_SDCARD, SPI_FLAG_TXE))
-    {
-        if ((HAL_GetTick() - tickstart) >= SPI_TIMEOUT) break;
-    }
     HAL_SPI_Transmit(HSPI_SDCARD, buffer, len, SPI_TIMEOUT);
 }
 
 /* SPI receive a byte */
 static uint8_t SPI_RxByte(void)
 {
-    uint8_t dummy, data;
-    dummy = 0xFF;
+    uint8_t dummy = 0xFF;
+    uint8_t data = 0;
 
-    uint32_t tickstart = HAL_GetTick();
-    while(!__HAL_SPI_GET_FLAG(HSPI_SDCARD, SPI_FLAG_TXE))
-    {
-        if ((HAL_GetTick() - tickstart) >= SPI_TIMEOUT) break;
-    }
     HAL_SPI_TransmitReceive(HSPI_SDCARD, &dummy, &data, 1, SPI_TIMEOUT);
 
     return data;
@@ -156,8 +139,15 @@ static bool SD_RxDataBlock(BYTE *buff, UINT len)
     if(token != 0xFE) return FALSE;
 
     /* receive data */
-    while(len--) {
-        SPI_RxBytePtr(buff++);
+    if (len == 512)
+    {
+        HAL_SPI_Receive(HSPI_SDCARD, buff, len, SPI_TIMEOUT);
+    }
+    else
+    {
+        while(len--) {
+            SPI_RxBytePtr(buff++);
+        }
     }
 
     /* discard CRC */
@@ -183,7 +173,7 @@ static bool SD_TxDataBlock(const uint8_t *buff, BYTE token)
     /* if it's not STOP token, transmit data */
     if (token != 0xFD)
     {
-        SPI_TxBuffer((uint8_t*)buff, 512);
+        HAL_SPI_Transmit(HSPI_SDCARD, (uint8_t*)buff, 512, SPI_TIMEOUT);
 
         /* discard CRC */
         SPI_RxByte();
