@@ -102,6 +102,12 @@ gfx_color_t stm32_read_pixel_cb(
     return display_get_pixel(x, y);
 }
 
+void stm32_clear_cb(void *fb, gfx_color_t color)
+{
+    (void)fb;
+    display_clear((uint8_t)color);
+}
+
 /*
  * Implementation of common PurrGO display HAL.
  */

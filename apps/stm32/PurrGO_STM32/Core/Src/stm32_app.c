@@ -185,7 +185,7 @@ void purrgo_stm32_init(void)
    * через memset(), поэтому GFX больше не будет очищать экран
    * пиксель за пикселем.
    */
-  gfx_set_clear_callback(&global_gfx_ctx, display_clear);
+  gfx_set_clear_callback(&global_gfx_ctx, stm32_clear_cb);
 
   PURRGO_LOG("GFX OK\r\n");
 
