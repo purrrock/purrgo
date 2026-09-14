@@ -54,4 +54,6 @@ gfx_color_t stm32_read_pixel_cb(
     int16_t y
 );
 
+void stm32_clear_cb(void *fb, gfx_color_t color);
+
 #endif /* DISPLAY_STM32_H */
