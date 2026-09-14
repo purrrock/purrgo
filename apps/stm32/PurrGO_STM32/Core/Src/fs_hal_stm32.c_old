@@ -11,13 +11,6 @@
 struct purrgo_file_s {
     FIL fil;
     bool in_use;
-    
-    /* 
-     * Логический (виртуальный) указатель.
-     * Позволяет выполнять purrgo_fs_seek и purrgo_fs_read из кеша,
-     * вообще не дергая f_lseek и не сбрасывая внутреннее окно FatFs.
-     */
-    uint32_t logical_offset;
 };
 
 struct purrgo_dir_s {
@@ -77,21 +70,17 @@ static uint32_t read_cached_sector(purrgo_file_t* file, uint32_t sector_num, uin
     }
 
     // Cache miss: Load from disk
+    FSIZE_t current_offset = f_tell(&file->fil);
     FSIZE_t sector_offset = (FSIZE_t)sector_num * LRU_SECTOR_SIZE;
 
-    /* 
-     * ИСПРАВЛЕНИЕ КОНФЛИКТА С FATFS:
-     * Выполняем физический seek только если внутренний указатель FatFs 
-     * сбился и не равен началу нужного нам сектора.
-     */
-    if (f_tell(&file->fil) != sector_offset) {
-        if (f_lseek(&file->fil, sector_offset) != FR_OK) {
-            return 0;
-        }
+    if (f_lseek(&file->fil, sector_offset) != FR_OK) {
+        f_lseek(&file->fil, current_offset);
+        return 0;
     }
 
     UINT br = 0;
     FRESULT res = f_read(&file->fil, lru_cache[lru_index].data, LRU_SECTOR_SIZE, &br);
+    f_lseek(&file->fil, current_offset);
 
     if (res != FR_OK || br == 0) {
         return 0;
@@ -111,7 +100,7 @@ static uint32_t read_cached_sector(purrgo_file_t* file, uint32_t sector_num, uin
 }
 
 static uint32_t purrgo_fs_read_cached(purrgo_file_t* file, uint8_t* buffer, uint32_t size) {
-    uint32_t current_offset = file->logical_offset;
+    uint32_t current_offset = (uint32_t)f_tell(&file->fil);
     uint32_t bytes_to_read = size;
     uint32_t bytes_read_total = 0;
     uint8_t* ptr = buffer;
@@ -156,8 +145,7 @@ static uint32_t purrgo_fs_read_cached(purrgo_file_t* file, uint8_t* buffer, uint
         }
     }
 
-    /* ИСПРАВЛЕНИЕ: Обновляем наш логический указатель без вызова f_lseek */
-    file->logical_offset = current_offset;
+    f_lseek(&file->fil, current_offset);
     return bytes_read_total;
 }
 
@@ -211,9 +199,6 @@ purrgo_file_t* purrgo_fs_open(const char* filepath, fs_mode_t mode) {
         return NULL;
     }
 
-    /* Инициализация логического смещения для нового файла (с учетом FA_OPEN_APPEND) */
-    file->logical_offset = (uint32_t)f_tell(&file->fil);
-
     invalidate_cache_for_file(file);
 
     PURRGO_LOG("purrgo_fs_open: %s opened OK\n\r", filepath);
@@ -223,42 +208,27 @@ purrgo_file_t* purrgo_fs_open(const char* filepath, fs_mode_t mode) {
 uint32_t purrgo_fs_write(purrgo_file_t* file, const uint8_t* data, uint32_t size) {
     if (!file || !data || size == 0) return 0;
 
+    // Invalidate cache for this file if written to
     invalidate_cache_for_file(file);
-
-    /* Синхронизируем физический указатель с логическим только перед записью */
-    if (f_tell(&file->fil) != file->logical_offset) {
-        f_lseek(&file->fil, file->logical_offset);
-    }
 
     UINT bw = 0;
     FRESULT res = f_write(&file->fil, data, (UINT)size, &bw);
-    if (res == FR_OK) {
-        file->logical_offset += bw; // Обновляем виртуальный указатель
+    if (res != FR_OK) {
+        return 0;
     }
     return (uint32_t)bw;
 }
 
 uint32_t purrgo_fs_read(purrgo_file_t* file, uint8_t* buffer, uint32_t size) {
     if (!file || !buffer || size == 0) return 0;
+
     return purrgo_fs_read_cached(file, buffer, size);
 }
 
 bool purrgo_fs_seek(purrgo_file_t* file, uint32_t offset) {
     if (!file) return false;
-    
-    FSIZE_t fsize = f_size(&file->fil);
-    if (offset > fsize) {
-        file->logical_offset = fsize;
-    } else {
-        file->logical_offset = offset;
-    }
-    
-    /* 
-     * ИСПРАВЛЕНИЕ: Мы НЕ вызываем f_lseek() здесь!
-     * Это гарантирует, что хаотичный случайный доступ к кешированным
-     * именам БД не будет сбрасывать физическое состояние SD-карты и буфер FatFs.
-     */
-    return true;
+    FRESULT res = f_lseek(&file->fil, (FSIZE_t)offset);
+    return (res == FR_OK);
 }
 
 void purrgo_fs_sync(purrgo_file_t* file) {
