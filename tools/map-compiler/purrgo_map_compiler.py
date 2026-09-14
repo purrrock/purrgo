@@ -81,6 +81,7 @@ def main() -> None:
 
     # 4.1 Roads Layer
     if roads_data:
+        MapCompiler.build_spatial_order(roads_data)
         MapCompiler.compile_mlp(roads_data, out_path("roads.mlp"))
         MapCompiler.compile_db(roads_data, out_path("roads.db"))
         MapCompiler.compile_idx(roads_data, out_path("roads.idx"))
@@ -88,6 +89,7 @@ def main() -> None:
 
     # 3.2 Landuse and Water Layers
     if landuse_data:
+        MapCompiler.build_spatial_order(landuse_data)
         MapCompiler.compile_mlp(landuse_data, out_path("landuse.mlp"))
         MapCompiler.compile_db(landuse_data, out_path("landuse.db"))
         MapCompiler.compile_idx(landuse_data, out_path("landuse.idx"))
@@ -97,6 +99,7 @@ def main() -> None:
         MapCompiler.create_empty_layer(out_path("landuse"))
 
     if water_data:
+        MapCompiler.build_spatial_order(water_data)
         MapCompiler.compile_mlp(water_data, out_path("water.mlp"))
         MapCompiler.compile_db(water_data, out_path("water.db"))
         MapCompiler.compile_idx(water_data, out_path("water.idx"))
@@ -104,6 +107,7 @@ def main() -> None:
 
     # 3.3 Native POI Layer
     if pois_data:
+        MapCompiler.build_spatial_order(pois_data)
         MapCompiler.compile_db(pois_data, out_path("pois.db"), is_poi=True)
         MapCompiler.compile_idx(pois_data, out_path("pois.idx"), is_poi=True)
         meta_all.extend(pois_data)

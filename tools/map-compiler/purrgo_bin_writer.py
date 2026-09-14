@@ -57,6 +57,24 @@ class MapCompiler:
         return name.encode('ascii')[:11].ljust(11, b'\x00') + b'C' + b'\x00' * 4 + bytes([length]) + b'\x00' * 15
 
     @classmethod
+    def build_spatial_order(cls, features: List[MapFeature]) -> None:
+        """
+        Sorts features in-place according to the STR spatial clustering.
+        This ensures that adjacent map objects are physically close in .mlp and .db,
+        optimizing file caching.
+        """
+        if not features:
+            return
+
+        # Perform one pass of STR bulk loading for level 0 to determine physical order
+        nodes = cls._build_str_layer(features, level=0)
+
+        # Flatten the clusters back into the features list in the new spatial order
+        features.clear()
+        for node in nodes:
+            features.extend(node.children)
+
+    @classmethod
     def compile_mlp(cls, features: List[MapFeature], filepath: str) -> None:
         """Serializes raw geometry points into the .mlp binary format."""
         print(f"[>] Compiling geometry: {filepath}...")
