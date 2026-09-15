@@ -46,7 +46,7 @@ typedef enum {
 void purrgo_map_render_layer(
     purrgo_fs_t *idx_fs,
     purrgo_fs_t *mlp_fs,
-    purrgo_fs_t *db_fs,      // <--- ДОБАВЛЕН ФАЙЛ DBF
+    purrgo_fs_t *db_fs, 
     gfx_context_t *gfx,
     const purrgo_bbox_t *camera,
     const purrgo_viewport_t *viewport,
