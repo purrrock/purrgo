@@ -285,7 +285,11 @@ void ui_render_menu_config(gfx_context_t* gfx)
         "BACK : Save"
     );
 
-    if (cursor != prev_config_cursor) {
+    if (prev_config_cursor == -1) {
+        /* First render, the full screen refresh is handled by state change,
+           just remember the cursor. */
+        prev_config_cursor = cursor;
+    } else if (cursor != prev_config_cursor) {
         if (prev_config_cursor >= 0 && prev_config_cursor <= 6) {
             int prev_y = 25 + prev_config_cursor * 15;
             display_refresh_region(0, prev_y, PURRGO_HW_DISPLAY_WIDTH_PX, 15);

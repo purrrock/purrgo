@@ -87,7 +87,9 @@ void ui_render_menu_dir_select(gfx_context_t* gfx)
         );
     }
 
-    if (cursor != prev_dir_cursor) {
+    if (prev_dir_cursor == -1) {
+        prev_dir_cursor = cursor;
+    } else if (cursor != prev_dir_cursor) {
         if (prev_dir_cursor >= 0 && prev_dir_cursor < count) {
             int prev_y = 25 + prev_dir_cursor * 12;
             display_refresh_region(0, prev_y, PURRGO_HW_DISPLAY_WIDTH_PX, 12);

@@ -45,7 +45,9 @@ void ui_render_menu_map_layers(gfx_context_t* gfx) {
     draw_layer_item(gfx, 135, 7, cursor, config_app_get_draft_layer_route(), "Route");
     draw_layer_item(gfx, 150, 8, cursor, config_app_get_draft_layer_track(), "Track");
 
-    if (cursor != prev_map_layers_cursor) {
+    if (prev_map_layers_cursor == -1) {
+        prev_map_layers_cursor = cursor;
+    } else if (cursor != prev_map_layers_cursor) {
         if (prev_map_layers_cursor >= 0 && prev_map_layers_cursor <= 8) {
             int prev_y = 30 + prev_map_layers_cursor * 15;
             display_refresh_region(0, prev_y, PURRGO_HW_DISPLAY_WIDTH_PX, 15);
