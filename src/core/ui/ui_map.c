@@ -509,12 +509,12 @@ static void ui_update_status_bar(gfx_context_t* gfx, const purrgo_gnss_solution_
     else if (new_state.rec_state == LOGGER_STATE_ERROR) rec_str = "ERR-REC";
     gfx_draw_string(gfx, next_x, 1, rec_str);
 
-    const char* scale_label = purrgo_app_get_map_scale_label();
+    const char* scale_label = map_app_get_map_scale_label();
     int16_t scale_x = PURRGO_HW_DISPLAY_WIDTH_PX - (strlen(scale_label) * 6) - 2;
     gfx_draw_string(gfx, scale_x, 1, scale_label);
 
 
-    if (prev_status_state.valid && !purrgo_app_map_is_dirty()) {
+    if (prev_status_state.valid && !map_app_map_is_dirty()) {
         display_refresh_region(0, 0, PURRGO_HW_DISPLAY_WIDTH_PX, status_h);
     }
     prev_status_state = new_state;
@@ -527,9 +527,9 @@ static void ui_map_setup_viewport(purrgo_viewport_t* map_vp, purrgo_bbox_t* dyna
     map_vp->offset_x = 0;
     map_vp->offset_y = 9;
 
-    int32_t center_lat = purrgo_app_get_map_center_lat();
-    int32_t center_lon = purrgo_app_get_map_center_lon();
-    uint32_t width_m = purrgo_app_get_map_scale_width_m();
+    int32_t center_lat = map_app_get_map_center_lat();
+    int32_t center_lon = map_app_get_map_center_lon();
+    uint32_t width_m = map_app_get_map_scale_width_m();
 
     purrgo_geo_bbox_from_center(center_lat, center_lon, width_m, map_vp, dynamic_cam);
 }
@@ -666,7 +666,7 @@ static void ui_map_render_gnss_marker(
 }
 
 static void ui_map_render_overlays(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const purrgo_viewport_t* map_vp) {
-    if (purrgo_app_status_bar_is_dirty() || purrgo_app_map_is_dirty() || !prev_status_state.valid) {
+    if (purrgo_app_status_bar_is_dirty() || map_app_map_is_dirty() || !prev_status_state.valid) {
         ui_update_status_bar(gfx, gnss, map_vp->offset_y);
         purrgo_app_status_bar_clear_dirty();
     }
@@ -691,7 +691,7 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
 
     ui_map_render_overlays(gfx, gnss, &map_vp);
 
-    if (purrgo_app_map_is_dirty()) {
+    if (map_app_map_is_dirty()) {
         bool map_success = ui_map_render_base_layers(gfx, &map_vp, &dynamic_cam);
 
         ui_map_render_dynamic_data(gfx, &map_vp, &dynamic_cam);
@@ -702,7 +702,7 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
         gfx_reset_clip(gfx);
 
         if (map_success) {
-            purrgo_app_map_clear_dirty();
+            map_app_map_clear_dirty();
         }
         purrgo_map_controller_clear_track_dirty();
         display_refresh();

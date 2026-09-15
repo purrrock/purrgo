@@ -74,18 +74,6 @@ void purrgo_app_notify_marker_rendered(const purrgo_gnss_solution_t* rendered_fi
 // Получение текущего состояния для слоя диспетчеризации отрисовки (gfx_renderer)
 purrgo_state_t purrgo_app_get_state(void);
 
-// Получение черновика часового пояса для режима редактирования в APP_STATE_MENU_CONFIG
-int16_t purrgo_app_get_draft_tz_offset(void);
-
-// Получение индекса курсора в меню настроек
-int purrgo_app_get_config_cursor(void);
-
-// Получение списка директорий и их количества для APP_STATE_MENU_DIR_SELECT
-#include "purrgo/fs_hal.h"
-int purrgo_app_get_dir_list(purrgo_fs_dirent_t** list_out);
-int purrgo_app_get_dir_cursor(void);
-int purrgo_app_get_map_layers_cursor(void);
-
 typedef enum {
     PURRGO_MAP_SCALE_10M,
     PURRGO_MAP_SCALE_20M,
@@ -114,21 +102,9 @@ void purrgo_app_ui_mark_dirty(void);
 bool purrgo_app_ui_is_dirty(void);
 void purrgo_app_ui_clear_dirty(void);
 
-// Геттеры для состояния карты (Map Viewport)
-void purrgo_app_map_mark_dirty(void);
-bool purrgo_app_map_is_dirty(void);
-void purrgo_app_map_clear_dirty(void);
-
 void purrgo_app_status_bar_mark_dirty(void);
 bool purrgo_app_status_bar_is_dirty(void);
 void purrgo_app_status_bar_clear_dirty(void);
-
-int32_t purrgo_app_get_map_center_lat(void);
-int32_t purrgo_app_get_map_center_lon(void);
-purrgo_map_scale_t purrgo_app_get_map_zoom_level(void);
-uint32_t purrgo_app_get_map_scale_width_m(void);
-const char* purrgo_app_get_map_scale_label(void);
-bool purrgo_app_is_manual_pan_active(void);
 
 // Функция применения часового пояса с календарным пересчетом (влияет на локальное время и расчет восхода/заката)
 void purrgo_app_apply_timezone(const purrgo_gnss_solution_t* utc, purrgo_gnss_solution_t* local, int16_t tz_offset_minutes);

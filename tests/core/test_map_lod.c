@@ -1,6 +1,7 @@
 #include "purrgo/map.h"
 #include "purrgo/map.h"
 #include "purrgo/app_fsm.h"
+#include "purrgo/map_controller.h"
 #include "purrgo/config.h"
 #include "..//../src/core/map_idx.h"
 #include <stdio.h>
@@ -31,7 +32,7 @@ static bool mock_seek(void* handle, uint32_t offset) {
 }
 
 static purrgo_map_scale_t mock_zoom_level = PURRGO_MAP_SCALE_500M;
-purrgo_map_scale_t purrgo_app_get_map_zoom_level(void) {
+purrgo_map_scale_t map_app_get_map_zoom_level(void) {
     return mock_zoom_level;
 }
 
