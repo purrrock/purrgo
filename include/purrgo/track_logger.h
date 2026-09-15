@@ -10,7 +10,7 @@ typedef enum {
     LOGGER_STATE_ERROR
 } track_logger_state_t;
 
-#define TRACK_RAM_MAX_POINTS 2048 //8192 - если RAM будет с избытком
+#define TRACK_RAM_MAX_POINTS 1024 //можно больше - если RAM будет с избытком
 
 typedef struct {
     int32_t lat_1e7;
