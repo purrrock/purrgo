@@ -27,6 +27,15 @@ void reset_call_counters() {
     call_ui_render_menu_map_layers = 0;
 }
 
+void ui_menu_config_reset(void) {
+}
+
+void ui_menu_dir_select_reset(void) {
+}
+
+void ui_menu_map_layers_reset(void) {
+}
+
 void ui_render_menu_config(gfx_context_t* gfx) {
     call_ui_render_menu_config++;
 }

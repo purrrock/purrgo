@@ -6,7 +6,14 @@
 #include "purrgo/config_controller.h"
 #include "purrgo/fs_hal.h"
 #include "purrgo/purrgo_format.h"
+#include "purrgo/display_hal.h"
+#include "purrgo/hardware_config.h"
 
+static int prev_config_cursor = -1;
+
+void ui_menu_config_reset(void) {
+    prev_config_cursor = -1;
+}
 
 void ui_render_menu_config(gfx_context_t* gfx)
 {
@@ -281,4 +288,20 @@ void ui_render_menu_config(gfx_context_t* gfx)
         165,
         "BACK : Save"
     );
+
+    if (prev_config_cursor == -1) {
+        /* First render, the full screen refresh is handled by state change,
+           just remember the cursor. */
+        prev_config_cursor = cursor;
+    } else if (cursor != prev_config_cursor) {
+        if (prev_config_cursor >= 0 && prev_config_cursor <= 6) {
+            int prev_y = 25 + prev_config_cursor * 15;
+            display_refresh_region(0, prev_y, PURRGO_HW_DISPLAY_WIDTH_PX, 15);
+        }
+        if (cursor >= 0 && cursor <= 6) {
+            int curr_y = 25 + cursor * 15;
+            display_refresh_region(0, curr_y, PURRGO_HW_DISPLAY_WIDTH_PX, 15);
+        }
+        prev_config_cursor = cursor;
+    }
 }
