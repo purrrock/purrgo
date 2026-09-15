@@ -8,6 +8,10 @@
 
 static int prev_map_layers_cursor = -1;
 
+void ui_menu_map_layers_reset(void) {
+    prev_map_layers_cursor = -1;
+}
+
 static void draw_layer_item(gfx_context_t* gfx, int y, int index, int cursor, bool enabled, const char* label) {
     if (cursor == index) {
         gfx_set_color(gfx, 3, 0);

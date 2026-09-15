@@ -79,6 +79,9 @@ void purrgo_app_ui_render(
 
     switch (current_state) {
         case APP_STATE_MENU_CONFIG:
+            if (prev_state != APP_STATE_MENU_CONFIG) {
+                ui_menu_config_reset();
+            }
             ui_render_menu_config(gfx);
             break;
         case APP_STATE_TRIP_COMPUTER:
@@ -91,9 +94,15 @@ void purrgo_app_ui_render(
             ui_render_map(gfx, gnss, sun);
             break;
         case APP_STATE_MENU_DIR_SELECT:
+            if (prev_state != APP_STATE_MENU_DIR_SELECT) {
+                ui_menu_dir_select_reset();
+            }
             ui_render_menu_dir_select(gfx);
             break;
         case APP_STATE_MENU_MAP_LAYERS:
+            if (prev_state != APP_STATE_MENU_MAP_LAYERS) {
+                ui_menu_map_layers_reset();
+            }
             ui_render_menu_map_layers(gfx);
             break;
         default:

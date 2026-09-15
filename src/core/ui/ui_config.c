@@ -11,6 +11,10 @@
 
 static int prev_config_cursor = -1;
 
+void ui_menu_config_reset(void) {
+    prev_config_cursor = -1;
+}
+
 void ui_render_menu_config(gfx_context_t* gfx)
 {
     char buf[PURRGO_FS_MAX_PATH + 64];

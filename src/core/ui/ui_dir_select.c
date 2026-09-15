@@ -10,6 +10,10 @@
 
 static int prev_dir_cursor = -1;
 
+void ui_menu_dir_select_reset(void) {
+    prev_dir_cursor = -1;
+}
+
 void ui_render_menu_dir_select(gfx_context_t* gfx)
 {
     /*
