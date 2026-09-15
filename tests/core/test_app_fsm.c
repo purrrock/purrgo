@@ -1,3 +1,4 @@
+#include "purrgo/ui/ui_map_dirty.h"
 #include "purrgo/ui/ui_status_bar.h"
 #include "purrgo/app_fsm.h"
 #include "purrgo/map_controller.h"
@@ -25,7 +26,7 @@ void setup_test_state(int32_t lat, int32_t lon, purrgo_map_scale_t scale) {
     mock_config_data.last_lon_1e7 = lon;
 
     purrgo_app_init();
-    map_app_map_clear_dirty();
+    purrgo_ui_map_clear_dirty();
 
     // adjust scale
     purrgo_map_scale_t curr_scale = map_app_get_map_zoom_level();
@@ -127,21 +128,21 @@ void test_map_dirty_state() {
     purrgo_app_init();
 
     // Initial entry should be dirty
-    //assert(map_app_map_is_dirty() == true);
+    //assert(purrgo_ui_map_is_dirty() == true);
 
     // Manual clear
-    map_app_map_clear_dirty();
-    assert(map_app_map_is_dirty() == false);
+    purrgo_ui_map_clear_dirty();
+    assert(purrgo_ui_map_is_dirty() == false);
 
     // Panning sets dirty
     purrgo_app_handle_button(PURRGO_BTN_KEY3_SHORT);
-    //assert(map_app_map_is_dirty() == true);
-    map_app_map_clear_dirty();
+    //assert(purrgo_ui_map_is_dirty() == true);
+    purrgo_ui_map_clear_dirty();
 
     // Zooming sets dirty
     purrgo_app_handle_button(PURRGO_BTN_KEY2_LONG);
-    //assert(map_app_map_is_dirty() == true);
-    map_app_map_clear_dirty();
+    //assert(purrgo_ui_map_is_dirty() == true);
+    purrgo_ui_map_clear_dirty();
 
     // Leaving manual pan state sets dirty if GNSS is outside FOLLOW_START
     purrgo_gnss_solution_t fix = {0};
@@ -150,7 +151,7 @@ void test_map_dirty_state() {
 
     // Current center is modified by previous tests, so we need to reset it deterministically.
     setup_test_state(0, 0, PURRGO_MAP_SCALE_10KM);
-    map_app_map_clear_dirty();
+    purrgo_ui_map_clear_dirty();
 
 
     // Deterministic testing for the three hysteresis zones
@@ -172,7 +173,7 @@ void test_map_dirty_state() {
     fix.lon_1e7 = dist_stop_zone;
     fix.lat_1e7 = 0;
     purrgo_app_update(&fix);
-    assert(map_app_map_is_dirty() == false); // Should remain clean, inside STOP
+    assert(purrgo_ui_map_is_dirty() == false); // Should remain clean, inside STOP
 
     assert(map_app_get_map_center_lon() == 0);
 
@@ -182,7 +183,7 @@ void test_map_dirty_state() {
     fix.lon_1e7 = dist_between_zone;
     fix.lat_1e7 = 0;
     purrgo_app_update(&fix);
-    assert(map_app_map_is_dirty() == false); // Should remain clean, between STOP and START
+    assert(purrgo_ui_map_is_dirty() == false); // Should remain clean, between STOP and START
     assert(map_app_get_map_center_lon() == 0);
 
     // 3. AT/OVER FOLLOW_START: just outside the start margin
@@ -193,7 +194,7 @@ void test_map_dirty_state() {
 
     // Check dirty flag to ensure auto-follow is triggered
     purrgo_app_update(&fix);
-    //assert(map_app_map_is_dirty() == true); // Should trigger auto-follow
+    //assert(purrgo_ui_map_is_dirty() == true); // Should trigger auto-follow
 
     // Auto-follow now moves it so the marker is on the opposite side.
     // So the map center lon is NOT dist_start_zone anymore.
@@ -201,35 +202,35 @@ void test_map_dirty_state() {
     //assert(map_app_get_map_center_lon() != dist_start_zone);
     //assert(map_app_get_map_center_lon() != 0);
 
-    map_app_map_clear_dirty();
+    purrgo_ui_map_clear_dirty();
 
     // After recentering, the position is at screen center, therefore inside FOLLOW_STOP.
     // Moving it again by a small amount (1/32) relative to the new center.
     fix.lon_1e7 = dist_start_zone + dist_stop_zone;
     purrgo_app_update(&fix);
-    assert(map_app_map_is_dirty() == false); // Does not trigger redraw again
+    assert(purrgo_ui_map_is_dirty() == false); // Does not trigger redraw again
 
     // GNSS change with manual pan DOES NOT set dirty, even if far away
     purrgo_app_handle_button(PURRGO_BTN_KEY3_SHORT); // enter manual pan mode
     assert(map_app_is_manual_pan_active() == true);
-    map_app_map_clear_dirty(); // clear the pan dirty flag
+    purrgo_ui_map_clear_dirty(); // clear the pan dirty flag
 
     fix.lon_1e7 = dist_start_zone + geo_width * 2; // Far movement
     purrgo_app_update(&fix);
-    assert(map_app_map_is_dirty() == false);
+    assert(purrgo_ui_map_is_dirty() == false);
 
     // Cancel pan when GNSS is far away -> sets dirty and centers
     purrgo_app_handle_button(PURRGO_BTN_KEY3_LONG); // reset manual pan
     assert(map_app_is_manual_pan_active() == false);
-    //assert(map_app_map_is_dirty() == true);
+    //assert(purrgo_ui_map_is_dirty() == true);
     // Again, it calculates an opposite-side center instead of snapping directly to the marker.
     assert(map_app_get_map_center_lon() != dist_start_zone + geo_width * 2);
-    map_app_map_clear_dirty();
+    purrgo_ui_map_clear_dirty();
 
     // Cancel pan when GNSS is inside FOLLOW_START -> does not set dirty
     purrgo_app_handle_button(PURRGO_BTN_KEY3_SHORT); // enter manual pan mode
     assert(map_app_is_manual_pan_active() == true);
-    map_app_map_clear_dirty(); // clear the pan dirty flag
+    purrgo_ui_map_clear_dirty(); // clear the pan dirty flag
 
     // After panning, GNSS is now outside FOLLOW_START again because pan moves by 1/4 screen.
     // We update the fix to be exactly at the current map center so it's inside FOLLOW_STOP.
@@ -241,13 +242,13 @@ void test_map_dirty_state() {
     assert(map_app_is_manual_pan_active() == false);
 
     // Since fix is exactly at center, dx=0, dy=0 which is <= FOLLOW_STOP.
-    assert(map_app_map_is_dirty() == false);
+    assert(purrgo_ui_map_is_dirty() == false);
 
     // State transition sets dirty
     purrgo_app_handle_button(PURRGO_BTN_KEY4_LONG); // goto trip computer
     purrgo_app_handle_button(PURRGO_BTN_KEY4_LONG); // goto menu config
     purrgo_app_handle_button(PURRGO_BTN_KEY4_LONG); // goto map
-    //assert(map_app_map_is_dirty() == true);
+    //assert(purrgo_ui_map_is_dirty() == true);
 }
 
 #include "purrgo/app_ui.h"
@@ -274,7 +275,7 @@ void test_map_clean_refresh_skips_render() {
     purrgo_sun_info_t sun = {0};
 
     // FSM starts in APP_STATE_MAP and dirty is true
-    //assert(map_app_map_is_dirty() == true);
+    //assert(purrgo_ui_map_is_dirty() == true);
 
     int calls_before = dbg_map_render_calls;
 
@@ -282,15 +283,15 @@ void test_map_clean_refresh_skips_render() {
     purrgo_app_ui_render(&gfx, &gnss, &sun);
 
     // In our test mock, purrgo_fs_open always returns NULL so landuse_success and roads_success are false.
-    // So map_app_map_clear_dirty() will not be called automatically by app_ui_render.
+    // So purrgo_ui_map_clear_dirty() will not be called automatically by app_ui_render.
     // We will call it manually to simulate successful load.
-    map_app_map_clear_dirty();
+    purrgo_ui_map_clear_dirty();
 
     // Render should have incremented the calls
     assert(dbg_map_render_calls == calls_before + 1);
 
     // It should have cleared the dirty flag
-    assert(map_app_map_is_dirty() == false);
+    assert(purrgo_ui_map_is_dirty() == false);
 
     // Call UI render again (refresh). Since dirty is false, counter shouldn't change
     calls_before = dbg_map_render_calls;
@@ -305,7 +306,7 @@ void test_auto_follow_opposite_side() {
 
     // Setup deterministic camera
     setup_test_state(0, 0, PURRGO_MAP_SCALE_10KM);
-    map_app_map_clear_dirty();
+    purrgo_ui_map_clear_dirty();
 
     purrgo_viewport_t map_vp = {
         .width = PURRGO_HW_DISPLAY_WIDTH_PX,

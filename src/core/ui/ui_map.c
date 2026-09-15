@@ -1,3 +1,4 @@
+#include "purrgo/ui/ui_map_dirty.h"
 #include "purrgo/ui/ui_status_bar.h"
 #include "ui_map.h"
 #include "purrgo/app_fsm.h"
@@ -515,7 +516,7 @@ static void ui_update_status_bar(gfx_context_t* gfx, const purrgo_gnss_solution_
     gfx_draw_string(gfx, scale_x, 1, scale_label);
 
 
-    if (prev_status_state.valid && !map_app_map_is_dirty()) {
+    if (prev_status_state.valid && !purrgo_ui_map_is_dirty()) {
         display_refresh_region(0, 0, PURRGO_HW_DISPLAY_WIDTH_PX, status_h);
     }
     prev_status_state = new_state;
@@ -667,7 +668,7 @@ static void ui_map_render_gnss_marker(
 }
 
 static void ui_map_render_overlays(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const purrgo_viewport_t* map_vp) {
-    if (purrgo_ui_status_bar_is_dirty() || map_app_map_is_dirty() || !prev_status_state.valid) {
+    if (purrgo_ui_status_bar_is_dirty() || purrgo_ui_map_is_dirty() || !prev_status_state.valid) {
         ui_update_status_bar(gfx, gnss, map_vp->offset_y);
         purrgo_ui_status_bar_clear_dirty();
     }
@@ -692,7 +693,7 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
 
     ui_map_render_overlays(gfx, gnss, &map_vp);
 
-    if (map_app_map_is_dirty()) {
+    if (purrgo_ui_map_is_dirty()) {
         bool map_success = ui_map_render_base_layers(gfx, &map_vp, &dynamic_cam);
 
         ui_map_render_dynamic_data(gfx, &map_vp, &dynamic_cam);
@@ -703,7 +704,7 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
         gfx_reset_clip(gfx);
 
         if (map_success) {
-            map_app_map_clear_dirty();
+            purrgo_ui_map_clear_dirty();
         }
         purrgo_map_controller_clear_track_dirty();
         display_refresh();

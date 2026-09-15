@@ -1,3 +1,4 @@
+#include "purrgo/ui/ui_map_dirty.h"
 #include "purrgo/map_controller.h"
 #include "purrgo/config.h"
 #include <assert.h>
@@ -19,7 +20,7 @@ void test_initialization() {
     assert(map_app_get_map_center_lon() == 987654321);
     assert(map_app_get_map_zoom_level() == PURRGO_MAP_SCALE_500M);
     assert(map_app_is_manual_pan_active() == false);
-    assert(map_app_map_is_dirty() == true);
+    assert(purrgo_ui_map_is_dirty() == true);
     assert(purrgo_map_controller_is_track_dirty() == false);
 
     // Update config to something else to verify it's not hardcoded
@@ -36,12 +37,12 @@ void test_map_dirty_state() {
     purrgo_map_controller_init();
 
     // Test clear
-    map_app_map_clear_dirty();
-    assert(map_app_map_is_dirty() == false);
+    purrgo_ui_map_clear_dirty();
+    assert(purrgo_ui_map_is_dirty() == false);
 
     // Test mark
-    map_app_map_mark_dirty();
-    assert(map_app_map_is_dirty() == true);
+    purrgo_ui_map_mark_dirty();
+    assert(purrgo_ui_map_is_dirty() == true);
 }
 
 void test_track_dirty_state() {
