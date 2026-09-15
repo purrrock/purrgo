@@ -5,5 +5,6 @@
 #include "purrgo/gfx_renderer.h"
 
 void ui_render_menu_dir_select(gfx_context_t* gfx);
+void ui_menu_dir_select_reset(void);
 
 #endif // PURRGO_UI_DIR_SELECT_H
