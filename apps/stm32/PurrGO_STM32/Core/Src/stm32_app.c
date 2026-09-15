@@ -6,6 +6,7 @@
 #include <purrgo/config.h>
 #include <purrgo/display_hal.h>
 #include <purrgo/app_fsm.h>
+#include <purrgo/map_controller.h>
 #include <purrgo/app_ui.h>
 #include <purrgo/gfx_renderer.h>
 #include <purrgo/gfx_text.h>
@@ -264,7 +265,7 @@ void purrgo_stm32_process(void)
    */
 if (
     purrgo_app_ui_is_dirty() ||
-    purrgo_app_map_is_dirty()
+    map_app_map_is_dirty()
 )
 {
     /*
@@ -286,7 +287,7 @@ if (
      * flag again and cause another render pass.
      */
     purrgo_app_ui_clear_dirty();
-    purrgo_app_map_clear_dirty();
+    map_app_map_clear_dirty();
 }
   /*
    * Ждём событий

@@ -1,4 +1,5 @@
 #include "purrgo/config_controller.h"
+#include "purrgo/map_controller.h"
 #include "purrgo/config.h"
 #include "purrgo/purrgo_format.h"
 #include "purrgo/power.h"
@@ -594,7 +595,7 @@ bool purrgo_config_controller_handle_button(
                 *next_state_out =
                     APP_STATE_MAP;
 
-                purrgo_app_map_mark_dirty();
+                map_app_map_mark_dirty();
 
                 return true;
 
@@ -791,7 +792,7 @@ bool purrgo_config_controller_handle_button(
                 *next_state_out =
                     APP_STATE_MENU_CONFIG;
 
-                purrgo_app_map_mark_dirty();
+                map_app_map_mark_dirty();
 
                 return true;
 

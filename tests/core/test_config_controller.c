@@ -153,7 +153,7 @@ uint32_t purrgo_fs_write(purrgo_file_t* file, const uint8_t* buffer, uint32_t si
 void purrgo_fs_close(purrgo_file_t* file) {}
 void purrgo_fs_sync(purrgo_file_t* file) {}
 bool purrgo_fs_seek(purrgo_file_t* file, uint32_t offset) { return false; }
-void purrgo_app_map_mark_dirty(void) {}
+void map_app_map_mark_dirty(void) {}
 
 void test_map_details_toggling() {
     app_config.map_details = PURRGO_MAP_DETAILS_HIGH;
