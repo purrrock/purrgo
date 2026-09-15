@@ -2,6 +2,7 @@
 #include "purrgo/app_fsm.h"
 #include "purrgo/gfx_text.h"
 #include "purrgo/gfx_rect.h"
+#include "purrgo/config_controller.h"
 #include "purrgo/fs_hal.h"
 #include "purrgo/purrgo_format.h"
 
@@ -30,8 +31,8 @@ void ui_render_menu_dir_select(gfx_context_t* gfx)
      */
     purrgo_fs_dirent_t* dir_list;
 
-    int count = purrgo_app_get_dir_list(&dir_list);
-    int cursor = purrgo_app_get_dir_cursor();
+    int count = config_app_get_dir_list(&dir_list);
+    int cursor = config_app_get_dir_cursor();
 
     int y_pos = 25;
 

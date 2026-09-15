@@ -1,6 +1,7 @@
 #include "purrgo/map.h"
 #include "purrgo/logger.h"
 #include "purrgo/app_fsm.h"
+#include "purrgo/map_controller.h"
 #include "purrgo/config.h"
 #include "map_internal.h"
 #include "map_idx.h"
@@ -332,7 +333,7 @@ void purrgo_map_render_layer(
         }
     }
 
-    purrgo_map_scale_t current_scale = purrgo_app_get_map_zoom_level();
+    purrgo_map_scale_t current_scale = map_app_get_map_zoom_level();
     int target_lod = get_target_lod(current_scale, app_config.map_details);
 
     uint32_t target_lod_offset = idx_header.lod_offset[target_lod];
