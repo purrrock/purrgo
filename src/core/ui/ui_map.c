@@ -1,3 +1,4 @@
+#include "purrgo/ui/ui_status_bar.h"
 #include "ui_map.h"
 #include "purrgo/app_fsm.h"
 #include "purrgo/map_controller.h"
@@ -666,9 +667,9 @@ static void ui_map_render_gnss_marker(
 }
 
 static void ui_map_render_overlays(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const purrgo_viewport_t* map_vp) {
-    if (purrgo_app_status_bar_is_dirty() || map_app_map_is_dirty() || !prev_status_state.valid) {
+    if (purrgo_ui_status_bar_is_dirty() || map_app_map_is_dirty() || !prev_status_state.valid) {
         ui_update_status_bar(gfx, gnss, map_vp->offset_y);
-        purrgo_app_status_bar_clear_dirty();
+        purrgo_ui_status_bar_clear_dirty();
     }
 
     // Clear bottom status area

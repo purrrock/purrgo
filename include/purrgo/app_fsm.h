@@ -102,9 +102,6 @@ void purrgo_app_ui_mark_dirty(void);
 bool purrgo_app_ui_is_dirty(void);
 void purrgo_app_ui_clear_dirty(void);
 
-void purrgo_app_status_bar_mark_dirty(void);
-bool purrgo_app_status_bar_is_dirty(void);
-void purrgo_app_status_bar_clear_dirty(void);
 
 // Функция применения часового пояса с календарным пересчетом (влияет на локальное время и расчет восхода/заката)
 void purrgo_app_apply_timezone(const purrgo_gnss_solution_t* utc, purrgo_gnss_solution_t* local, int16_t tz_offset_minutes);
