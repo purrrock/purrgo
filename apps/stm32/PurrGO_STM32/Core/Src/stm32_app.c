@@ -111,7 +111,13 @@ void purrgo_stm32_init(void)
       PURRGO_LOG("FatFs mount ERROR: %d\r\n", fs_result);
   } else {
       PURRGO_LOG("FatFs mount OK\r\n");
-  }
+      /* Автоматическое создание базовой структуры директорий */
+      f_mkdir("0:/PURRGO");
+      f_mkdir("0:/PURRGO/MAPS");
+      f_mkdir("0:/PURRGO/TRACKS");
+      f_mkdir("0:/PURRGO/WAYPTS");
+      PURRGO_LOG("FatFs tree verified\r\n");
+    }
 
   // purrgo_debug_buttons_init();
   // PURRGO_LOG("UART2 Buttons OK\r\n");
