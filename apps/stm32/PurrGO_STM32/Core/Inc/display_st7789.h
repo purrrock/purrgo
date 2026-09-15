@@ -44,6 +44,10 @@ void ST7789_StartPixels(void);
 void ST7789_WritePixels(uint8_t *data, uint16_t size);
 void ST7789_EndPixels(void);
 
+/* Глобальный буфер передачи для экономии RAM */
+#define DISPLAY_TX_BUF_PIXELS 2048
+extern uint8_t display_tx_buffer[DISPLAY_TX_BUF_PIXELS * 2];
+
 #endif /* DISPLAY_ST7789_H */
 
 void ST7789_SleepIn(void);
