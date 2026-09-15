@@ -1,3 +1,4 @@
+#include "purrgo/ui/ui_map_dirty.h"
 #include <SDL2/SDL.h>
 #include <stdio.h>
 #include <stdbool.h>
@@ -171,7 +172,7 @@ static void emulator_run_loop(void) {
         if (current_time - last_eink_refresh >= EINK_REFRESH_PERIOD_MS) {
             last_eink_refresh = current_time;
 
-            if (purrgo_app_ui_is_dirty() || map_app_map_is_dirty()) {
+            if (purrgo_app_ui_is_dirty() || purrgo_ui_map_is_dirty()) {
                 int last_calls = dbg_map_render_calls;
 
                 purrgo_app_ui_render(&global_gfx_ctx, purrgo_app_get_gnss_solution(), purrgo_app_get_sun_info());

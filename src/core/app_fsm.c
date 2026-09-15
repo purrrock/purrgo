@@ -1,3 +1,4 @@
+#include "purrgo/ui/ui_map_dirty.h"
 #include "purrgo/ui/ui_status_bar.h"
 #include "purrgo/app_fsm.h"
 #include "purrgo/map_controller.h"
@@ -158,7 +159,7 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
 
             default:
                 current_state = APP_STATE_MAP;
-                map_app_map_mark_dirty();
+                purrgo_ui_map_mark_dirty();
                 break;
         }
     }
