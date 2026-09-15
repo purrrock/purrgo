@@ -17,9 +17,6 @@ bool purrgo_map_controller_is_track_dirty(void);
 void purrgo_map_controller_clear_track_dirty(void);
 
 // COMPATIBILITY API DECLARED IN APP_FSM.H
-void map_app_map_mark_dirty(void);
-bool map_app_map_is_dirty(void);
-void map_app_map_clear_dirty(void);
 int32_t map_app_get_map_center_lat(void);
 int32_t map_app_get_map_center_lon(void);
 purrgo_map_scale_t map_app_get_map_zoom_level(void);

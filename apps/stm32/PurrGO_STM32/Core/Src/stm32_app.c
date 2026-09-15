@@ -1,3 +1,4 @@
+#include "purrgo/ui/ui_map_dirty.h"
 #include "stm32_app.h"
 #include "main.h"
 
@@ -271,7 +272,7 @@ void purrgo_stm32_process(void)
    */
 if (
     purrgo_app_ui_is_dirty() ||
-    map_app_map_is_dirty()
+    purrgo_ui_map_is_dirty()
 )
 {
     /*
@@ -293,7 +294,7 @@ if (
      * flag again and cause another render pass.
      */
     purrgo_app_ui_clear_dirty();
-    map_app_map_clear_dirty();
+    purrgo_ui_map_clear_dirty();
 }
   /*
    * Ждём событий

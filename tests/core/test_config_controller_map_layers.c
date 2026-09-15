@@ -1,3 +1,4 @@
+#include "purrgo/ui/ui_map_dirty.h"
 #include "purrgo/config_controller.h"
 #include "purrgo/config.h"
 #include <stdio.h>
@@ -14,7 +15,7 @@ uint32_t purrgo_fs_write(purrgo_file_t* file, const uint8_t* buffer, uint32_t si
 void purrgo_fs_close(purrgo_file_t* file) {}
 void purrgo_fs_sync(purrgo_file_t* file) {}
 bool purrgo_fs_seek(purrgo_file_t* file, uint32_t offset) { return false; }
-void map_app_map_mark_dirty(void) {}
+void purrgo_ui_map_mark_dirty(void) {}
 
 void test_map_layers_navigation_and_toggles(void) {
     purrgo_config_init(); // Set defaults
