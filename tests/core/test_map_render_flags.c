@@ -5,6 +5,7 @@
 #include "purrgo/config.h"
 #include "purrgo/fs_hal.h"
 #include "purrgo/app_fsm.h"
+#include "purrgo/map_controller.h"
 
 // Provide mocked config
 purrgo_config_t app_config;
@@ -48,7 +49,7 @@ void reset_counters() {
     mock_queue_label_calls = 0;
 }
 
-purrgo_map_scale_t purrgo_app_get_map_zoom_level() { return PURRGO_MAP_SCALE_500M; }
+purrgo_map_scale_t map_app_get_map_zoom_level() { return PURRGO_MAP_SCALE_500M; }
 
 // We mock map_render_queue_label to test that the labels are completely omitted
 #define map_render_queue_label test_mock_map_render_queue_label

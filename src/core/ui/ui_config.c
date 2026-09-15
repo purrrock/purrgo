@@ -17,10 +17,10 @@ void ui_render_menu_config(gfx_context_t* gfx)
     gfx_set_color(gfx, 0, 3);
 
     int16_t draft_tz =
-        purrgo_app_get_draft_tz_offset();
+        config_app_get_draft_tz_offset();
 
     int cursor =
-        purrgo_app_get_config_cursor();
+        config_app_get_config_cursor();
 
     purrgo_poi_mode_t poi_mode =
         config_app_get_draft_poi_mode();

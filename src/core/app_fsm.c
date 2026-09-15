@@ -1,4 +1,5 @@
 #include "purrgo/app_fsm.h"
+#include "purrgo/map_controller.h"
 #include "purrgo/config.h"
 #include "purrgo/system_time.h"
 #include "purrgo/gnss.h"
@@ -157,7 +158,7 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
 
             default:
                 current_state = APP_STATE_MAP;
-                purrgo_app_map_mark_dirty();
+                map_app_map_mark_dirty();
                 break;
         }
     }
@@ -334,50 +335,6 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
 // but their declarations remain in app_fsm.h as per backward compatibility requirements.
 // They delegate to the corresponding implementation.
 
-// From config_controller
-extern int16_t config_app_get_draft_tz_offset(void);
-extern int config_app_get_config_cursor(void);
-extern int config_app_get_dir_list(purrgo_fs_dirent_t** list_out);
-extern int config_app_get_dir_cursor(void);
-extern int config_app_get_map_layers_cursor(void);
-
-int16_t purrgo_app_get_draft_tz_offset(void) {
-    return config_app_get_draft_tz_offset();
-}
-int purrgo_app_get_config_cursor(void) {
-    return config_app_get_config_cursor();
-}
-int purrgo_app_get_dir_list(purrgo_fs_dirent_t** list_out) {
-    return config_app_get_dir_list(list_out);
-}
-int purrgo_app_get_dir_cursor(void) {
-    return config_app_get_dir_cursor();
-}
-int purrgo_app_get_map_layers_cursor(void) {
-    return config_app_get_map_layers_cursor();
-}
-
-// From map_controller
-extern void map_app_map_mark_dirty(void);
-extern bool map_app_map_is_dirty(void);
-extern void map_app_map_clear_dirty(void);
-extern int32_t map_app_get_map_center_lat(void);
-extern int32_t map_app_get_map_center_lon(void);
-extern purrgo_map_scale_t map_app_get_map_zoom_level(void);
-extern uint32_t map_app_get_map_scale_width_m(void);
-extern const char* map_app_get_map_scale_label(void);
-extern bool map_app_is_manual_pan_active(void);
-
-void purrgo_app_map_mark_dirty(void) {
-    map_app_map_mark_dirty();
-}
-bool purrgo_app_map_is_dirty(void) {
-    return map_app_map_is_dirty();
-}
-void purrgo_app_map_clear_dirty(void) {
-    map_app_map_clear_dirty();
-}
-
 void purrgo_app_status_bar_mark_dirty(void) {
     status_bar_dirty = true;
 }
@@ -386,22 +343,4 @@ bool purrgo_app_status_bar_is_dirty(void) {
 }
 void purrgo_app_status_bar_clear_dirty(void) {
     status_bar_dirty = false;
-}
-int32_t purrgo_app_get_map_center_lat(void) {
-    return map_app_get_map_center_lat();
-}
-int32_t purrgo_app_get_map_center_lon(void) {
-    return map_app_get_map_center_lon();
-}
-purrgo_map_scale_t purrgo_app_get_map_zoom_level(void) {
-    return map_app_get_map_zoom_level();
-}
-uint32_t purrgo_app_get_map_scale_width_m(void) {
-    return map_app_get_map_scale_width_m();
-}
-const char* purrgo_app_get_map_scale_label(void) {
-    return map_app_get_map_scale_label();
-}
-bool purrgo_app_is_manual_pan_active(void) {
-    return map_app_is_manual_pan_active();
 }
