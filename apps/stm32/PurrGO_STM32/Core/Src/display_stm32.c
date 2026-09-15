@@ -115,38 +115,37 @@ static void do_refresh_region(int16_t x, int16_t y, int16_t w, int16_t h) {
     ST7789_SetWindow(x, y, x + w - 1, y + h - 1);
     ST7789_StartPixels();
 
-    // Буфер на 2048 пикселей разгружает SPI, static спасает стек
-    #define TRANSFER_BUF_PIXELS 2048
-    static uint8_t buf[TRANSFER_BUF_PIXELS * 2];
+    /* Используем разделяемый буфер из display_st7789.h */
     int buf_idx = 0;
 
     for (int row = y; row < y + h; row++) {
-        // Оптимизация: вычисляем линейный индекс в начале строки и просто инкрементируем
         int pixel_idx = row * DISPLAY_WIDTH + x;
         
         for (int col = x; col < x + w; col++) {
-            // Оптимизированный пересчет вместо деления и умножений внутри цикла
+            /* Восстановленное декодирование цвета пикселя из фреймбуфера */
             int byte_idx = pixel_idx >> 2;
             int bit_shift = (3 - (pixel_idx & 3)) << 1;
             uint8_t color2bpp = (framebuffer[byte_idx] >> bit_shift) & 0x03;
 
             uint16_t rgb565 = color_lut[color2bpp];
 
-            buf[buf_idx << 1] = rgb565 >> 8;
-            buf[(buf_idx << 1) | 1] = rgb565 & 0xFF;
+            display_tx_buffer[buf_idx << 1] = rgb565 >> 8;
+            display_tx_buffer[(buf_idx << 1) | 1] = rgb565 & 0xFF;
             
             buf_idx++;
             pixel_idx++;
 
-            if (buf_idx >= TRANSFER_BUF_PIXELS) {
-                ST7789_WritePixels(buf, buf_idx << 1);
+            /* Если глобальный буфер заполнился, отправляем его по SPI */
+            if (buf_idx >= DISPLAY_TX_BUF_PIXELS) {
+                ST7789_WritePixels(display_tx_buffer, buf_idx << 1);
                 buf_idx = 0;
             }
         }
     }
 
+    /* Отправляем остаток пикселей, если они есть */
     if (buf_idx > 0) {
-        ST7789_WritePixels(buf, buf_idx << 1);
+        ST7789_WritePixels(display_tx_buffer, buf_idx << 1);
     }
 
     ST7789_EndPixels();

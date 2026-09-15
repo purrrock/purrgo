@@ -116,6 +116,9 @@ void ST7789_DrawPixel(uint16_t x, uint16_t y, uint16_t color) {
     ST7789_WriteDataBlock(data, 2);
 }
 
+/* Глобальный буфер передачи (выделяется 4 КБ RAM один раз) */
+uint8_t display_tx_buffer[DISPLAY_TX_BUF_PIXELS * 2];
+
 void ST7789_FillRect(uint16_t x, uint16_t y, uint16_t width, uint16_t height, uint16_t color) {
     if ((width == 0) || (height == 0) || (x >= ST7789_WIDTH) || (y >= ST7789_HEIGHT)) {
         return;
@@ -133,14 +136,10 @@ void ST7789_FillRect(uint16_t x, uint16_t y, uint16_t width, uint16_t height, ui
 
     uint8_t data[2] = {color >> 8, color & 0xFF};
 
-    /* Увеличенный до 2048 буфер снижает количество SPI транзакций в 16 раз.
-       Ключевое слово static гарантирует, что массив в 4 КБ не переполнит стек потока. */
-    #define FILL_BUF_SIZE 2048
-    static uint8_t buf[FILL_BUF_SIZE * 2];
-    
-    for (int i = 0; i < FILL_BUF_SIZE; i++) {
-        buf[i * 2] = data[0];
-        buf[i * 2 + 1] = data[1];
+/* Используем разделяемый глобальный буфер */
+    for (int i = 0; i < DISPLAY_TX_BUF_PIXELS; i++) {
+        display_tx_buffer[i * 2] = data[0];
+        display_tx_buffer[i * 2 + 1] = data[1];
     }
 
     uint32_t pixels_to_write = width * height;
@@ -148,9 +147,9 @@ void ST7789_FillRect(uint16_t x, uint16_t y, uint16_t width, uint16_t height, ui
     HAL_GPIO_WritePin(TFT_DC_GPIO_Port, TFT_DC_Pin, GPIO_PIN_SET);
     HAL_GPIO_WritePin(TFT_CS_GPIO_Port, TFT_CS_Pin, GPIO_PIN_RESET);
 
-    while (pixels_to_write > 0) {
-        uint16_t chunk_pixels = (pixels_to_write > FILL_BUF_SIZE) ? FILL_BUF_SIZE : pixels_to_write;
-        if (HAL_SPI_Transmit(&hspi1, buf, chunk_pixels * 2, HAL_MAX_DELAY) != HAL_OK) {
+	while (pixels_to_write > 0) {
+        uint16_t chunk_pixels = (pixels_to_write > DISPLAY_TX_BUF_PIXELS) ? DISPLAY_TX_BUF_PIXELS : pixels_to_write;
+        if (HAL_SPI_Transmit(&hspi1, display_tx_buffer, chunk_pixels * 2, HAL_MAX_DELAY) != HAL_OK) {
             Error_Handler();
         }
         pixels_to_write -= chunk_pixels;
