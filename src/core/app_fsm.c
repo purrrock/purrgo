@@ -330,8 +330,3 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
             break;
     }
 }
-
-// COMPATIBILITY WRAPPERS: These functions are conceptually owned by the sub-controllers
-// but their declarations remain in app_fsm.h as per backward compatibility requirements.
-// They delegate to the corresponding implementation.
-
