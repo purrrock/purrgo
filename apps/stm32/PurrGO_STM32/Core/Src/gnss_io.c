@@ -122,6 +122,23 @@ void purrgo_gnss_init(void)
     static const uint8_t gnss_nmea_cmd[] =
         "$PCAS03,1,0,1,0,1,0,0,0,0,0,,,0*3A\r\n";
 
+    /*
+     * 1. Запускаем непрерывный приём через Circular DMA ДО отправки конфигурации,
+     * чтобы не пропустить возможные ответы модуля или асинхронные пакеты,
+     * и избежать аппаратной ошибки переполнения буфера ORE (Overrun Error).
+     */
+    if (HAL_UART_Receive_DMA(
+            &huart1,
+            gnss_rx_buffer,
+            GNSS_RX_BUFFER_SIZE) != HAL_OK)
+    {
+        PURRGO_LOG("GNSS INIT ERROR!\r\n");
+    }
+
+    /*
+     * 2. Теперь безопасно отправляем конфигурацию. Любые ответы от модуля 
+     * мгновенно и без задержек будут перехвачены работающим контроллером DMA.
+     */
     HAL_UART_Transmit(
         &huart1,
         (uint8_t *)gnss_update_rate_cmd,
@@ -133,17 +150,6 @@ void purrgo_gnss_init(void)
         (uint8_t *)gnss_nmea_cmd,
         sizeof(gnss_nmea_cmd) - 1U,
         1000U);
-
-    /*
-     * Запускаем непрерывный приём через Circular DMA.
-     */
-    if (HAL_UART_Receive_DMA(
-            &huart1,
-            gnss_rx_buffer,
-            GNSS_RX_BUFFER_SIZE) != HAL_OK)
-    {
-        PURRGO_LOG("GNSS INIT ERROR!\r\n");
-    }
 }
 
 /**
