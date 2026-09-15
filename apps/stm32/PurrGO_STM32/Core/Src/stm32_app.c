@@ -262,11 +262,17 @@ void purrgo_stm32_process(void)
    * UI перерисовывается только при наличии dirty-флага.
    * Проверяем как общий UI-флаг, так и флаг карты.
    */
-  if (
-      purrgo_app_ui_is_dirty() ||
-      purrgo_app_map_is_dirty()
-  )
-  {
+if (
+    purrgo_app_ui_is_dirty() ||
+    purrgo_app_map_is_dirty()
+)
+{
+    /*
+     * Render the complete current UI state.
+     * map_dirty is cleared only after rendering has completed.
+     * This is important because map_dirty is one of the conditions
+     * that starts a new rendering pass.
+     */
     purrgo_app_ui_render(
         &global_gfx_ctx,
         purrgo_app_get_gnss_solution(),
@@ -274,10 +280,14 @@ void purrgo_stm32_process(void)
     );
 
     /*
-     * После отрисовки считаем UI обновлённым.
+     * The current UI state has now been rendered into the display
+     * framebuffer, so both dirty flags can be cleared.
+     * Future changes to the map or UI will set the corresponding
+     * flag again and cause another render pass.
      */
     purrgo_app_ui_clear_dirty();
-  }
+    purrgo_app_map_clear_dirty();
+}
   /*
    * Ждём событий
   */
