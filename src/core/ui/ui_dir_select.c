@@ -5,7 +5,8 @@
 #include "purrgo/config_controller.h"
 #include "purrgo/fs_hal.h"
 #include "purrgo/purrgo_format.h"
-
+#include "purrgo/display_hal.h"
+#include "purrgo/hardware_config.h"
 
 void ui_render_menu_dir_select(gfx_context_t* gfx)
 {
@@ -83,4 +84,6 @@ void ui_render_menu_dir_select(gfx_context_t* gfx)
             "(No directories)"
         );
     }
+
+    display_refresh_region(0, 0, PURRGO_HW_DISPLAY_WIDTH_PX, PURRGO_HW_DISPLAY_HEIGHT_PX - 8);
 }

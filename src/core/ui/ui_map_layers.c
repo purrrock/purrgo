@@ -3,6 +3,8 @@
 #include "purrgo/gfx_text.h"
 #include "purrgo/config_controller.h"
 #include "purrgo/purrgo_format.h"
+#include "purrgo/display_hal.h"
+#include "purrgo/hardware_config.h"
 
 static void draw_layer_item(gfx_context_t* gfx, int y, int index, int cursor, bool enabled, const char* label) {
     if (cursor == index) {
@@ -40,4 +42,6 @@ void ui_render_menu_map_layers(gfx_context_t* gfx) {
     draw_layer_item(gfx, 120, 6, cursor, config_app_get_draft_layer_poi_labels(), "POI labels");
     draw_layer_item(gfx, 135, 7, cursor, config_app_get_draft_layer_route(), "Route");
     draw_layer_item(gfx, 150, 8, cursor, config_app_get_draft_layer_track(), "Track");
+
+    display_refresh_region(0, 0, PURRGO_HW_DISPLAY_WIDTH_PX, PURRGO_HW_DISPLAY_HEIGHT_PX - 8);
 }
