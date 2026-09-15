@@ -1,3 +1,4 @@
+#include "purrgo/ui/ui_map_dirty.h"
 #include "purrgo/config_controller.h"
 #include "purrgo/map_controller.h"
 #include "purrgo/config.h"
@@ -595,7 +596,7 @@ bool purrgo_config_controller_handle_button(
                 *next_state_out =
                     APP_STATE_MAP;
 
-                map_app_map_mark_dirty();
+                purrgo_ui_map_mark_dirty();
 
                 return true;
 
@@ -792,7 +793,7 @@ bool purrgo_config_controller_handle_button(
                 *next_state_out =
                     APP_STATE_MENU_CONFIG;
 
-                map_app_map_mark_dirty();
+                purrgo_ui_map_mark_dirty();
 
                 return true;
 
