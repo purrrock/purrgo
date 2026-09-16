@@ -61,22 +61,22 @@ static struct {
     gfx_color_t pixels[MARKER_BG_CACHE_W * MARKER_BG_CACHE_H];
 } marker_bg_cache = {0};
 
-static void log_marker_diagnostic(const char* reason, const marker_state_t* m) {
-    if (m->rendered) {
+//static void log_marker_diagnostic(const char* reason, const marker_state_t* m) {
+//    if (m->rendered) {
       //  PURRGO_LOG(
       //      "%s | valid: %d | pos: %ld,%ld | course_valid: %d | course: %d | bbox: %d,%d -> %d,%d\n\r",
       //      reason, m->gnss_valid, (long)m->lat_1e7, (long)m->lon_1e7,
       //      m->course_valid, m->course_valid ? m->course_deg : 0,
       //      m->min_x, m->min_y, m->max_x, m->max_y
       //  );
-    } else {
+//    } else {
       //  PURRGO_LOG(
       //      "%s | valid: %d | pos: %ld,%ld | course_valid: %d | course: %d | NOT RENDERED\n\r",
       //      reason, m->gnss_valid, (long)m->lat_1e7, (long)m->lon_1e7,
       //      m->course_valid, m->course_valid ? m->course_deg : 0
       //  );
-    }
-}
+//    }
+//}
 
 #include "purrgo/gfx_polygon.h"
 #include "purrgo/sun_tables.h"
@@ -576,20 +576,20 @@ static void ui_map_render_gnss_marker(
                            (new_marker_state.lat_1e7 != prev_marker_state.lat_1e7) ||
                            (new_marker_state.lon_1e7 != prev_marker_state.lon_1e7);
 
-            if (changed) {
-                const char* reason = "MARKER: unknown";
-                if (new_marker_state.gnss_valid != prev_marker_state.gnss_valid) {
-                    reason = "MARKER: validity changed";
-                } else if (new_marker_state.lat_1e7 != prev_marker_state.lat_1e7 || new_marker_state.lon_1e7 != prev_marker_state.lon_1e7) {
-                    reason = "MARKER: position changed";
-                } else if (new_marker_state.course_valid != prev_marker_state.course_valid || new_marker_state.course_deg != prev_marker_state.course_deg) {
-                    reason = "MARKER: course changed";
-                } else if (new_marker_state.rendered != prev_marker_state.rendered) {
-                    reason = "MARKER: visibility changed";
-                }
-                // log_marker_diagnostic(reason, &new_marker_state);
-            }
-        }
+ //           if (changed) {
+ //               const char* reason = "MARKER: unknown";
+ //               if (new_marker_state.gnss_valid != prev_marker_state.gnss_valid) {
+ //                   reason = "MARKER: validity changed";
+ //               } else if (new_marker_state.lat_1e7 != prev_marker_state.lat_1e7 || new_marker_state.lon_1e7 != prev_marker_state.lon_1e7) {
+ //                   reason = "MARKER: position changed";
+ //               } else if (new_marker_state.course_valid != prev_marker_state.course_valid || new_marker_state.course_deg != prev_marker_state.course_deg) {
+ //                   reason = "MARKER: course changed";
+ //               } else if (new_marker_state.rendered != prev_marker_state.rendered) {
+ //                   reason = "MARKER: visibility changed";
+ //               }
+ //               // log_marker_diagnostic(reason, &new_marker_state);
+ //           }
+       }
 
         ui_save_marker_bg(gfx, &new_marker_state);
         ui_draw_marker(gfx, &new_marker_state);
