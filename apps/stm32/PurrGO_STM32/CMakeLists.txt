@@ -86,6 +86,7 @@ target_sources(PurrGO_STM32 PRIVATE
 	
 	# Waveshare STM32 E-Ink 2.7" V2 driver.
 	../../../third_party/e-Paper/STM32/STM32-F103ZET6/User/e-Paper/EPD_2in7_V2.c
+    Core/Src/DEV_Config.c
 
     # Display test
     Core/Src/eink_test.c
