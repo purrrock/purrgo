@@ -83,6 +83,9 @@ target_sources(PurrGO_STM32 PRIVATE
 
     # Application wrapper
     Core/Src/stm32_app.c
+
+    # Display test
+    Core/Src/eink_test.c
 )
 
 # Add include paths

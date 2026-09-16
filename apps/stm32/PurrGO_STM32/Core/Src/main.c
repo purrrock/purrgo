@@ -29,6 +29,7 @@
 
 #include "stm32_app.h"
 #include "purrgo/logger.h"
+#include "eink_test.h"
 
 /* USER CODE END Includes */
 
@@ -101,6 +102,10 @@ int main(void)
   MX_SPI2_Init();
   /* USER CODE BEGIN 2 */
   
+  /* E-Ink hardware test */
+  EinkTest_Run();
+
+
   purrgo_stm32_init();
 
   /* USER CODE END 2 */
