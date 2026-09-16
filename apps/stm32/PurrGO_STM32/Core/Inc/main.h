@@ -65,6 +65,8 @@ void Error_Handler(void);
 #define TFT_RST_GPIO_Port GPIOB
 #define TFT_DC_Pin GPIO_PIN_1
 #define TFT_DC_GPIO_Port GPIOB
+#define EINK_BUSY_Pin GPIO_PIN_2
+#define EINK_BUSY_GPIO_Port GPIOB
 #define KEY1_Pin GPIO_PIN_3
 #define KEY1_GPIO_Port GPIOB
 #define KEY2_Pin GPIO_PIN_4
@@ -73,6 +75,12 @@ void Error_Handler(void);
 #define KEY3_GPIO_Port GPIOB
 #define KEY4_Pin GPIO_PIN_6
 #define KEY4_GPIO_Port GPIOB
+#define EINK_CS_Pin GPIO_PIN_7
+#define EINK_CS_GPIO_Port GPIOB
+#define EINK_DC_Pin GPIO_PIN_8
+#define EINK_DC_GPIO_Port GPIOB
+#define EINK_RST_Pin GPIO_PIN_9
+#define EINK_RST_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 
