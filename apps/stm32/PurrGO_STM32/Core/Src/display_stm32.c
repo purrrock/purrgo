@@ -72,6 +72,18 @@ void display_init(void)
 #endif
 }
 
+/*
+ * Перевод дисплея в режим пониженного энергопотребления.
+ */
+void display_sleep(void)
+{
+#if PURRGO_HW_DISPLAY_BACKEND == PURRGO_DISPLAY_BACKEND_EINK
+    display_eink_sleep();
+#elif PURRGO_HW_DISPLAY_BACKEND == PURRGO_DISPLAY_BACKEND_ST7789
+    ST7789_SleepIn();
+#endif
+}
+
 
 void display_clear(uint8_t color)
 {
