@@ -103,8 +103,8 @@ int main(void)
   /* USER CODE BEGIN 2 */
   
   /* E-Ink hardware test */
-  EinkTest_Run();
-  //while (1)  {}
+  // EinkTest_Run();
+  // while (1)  {}
 
   purrgo_stm32_init();
 
