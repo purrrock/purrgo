@@ -3,7 +3,7 @@
 #include "purrgo/track_logger.h"
 #include "purrgo/map.h"
 #include "purrgo/config.h"
-#include "display_st7789.h"
+#include "purrgo/display_hal.h"
 #include "main.h"
 #include "fatfs.h"
 #include "stm32f4xx_hal.h"
@@ -38,7 +38,7 @@ void purrgo_system_power_off(void) {
     /*
      * 5. Put display into low-power mode.
      */
-    ST7789_SleepIn();
+    display_sleep();
     PURRGO_LOG("Display off\r\n");
     
        /* Ensure Wakeup pin is enabled to allow turning back on (usually WKUP pin, PA0). */
