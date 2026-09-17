@@ -17,7 +17,7 @@
 #include "purrgo/logger.h"
 #include "buttons.h"
 #include "display_stm32.h"
-#include "display_st7789.h"
+// #include "display_st7789.h"
 // #include "debug_buttons.h"
 
 #include "fatfs.h"
@@ -134,12 +134,10 @@ void purrgo_stm32_init(void)
 
   /*
    * -------------------------------------------------------------------------
-   * Display framebuffer.
+   * Display driver.
    * -------------------------------------------------------------------------
    */
   display_init();
-  PURRGO_LOG("ST7789 display init...\r\n");
-  ST7789_Init();
   PURRGO_LOG("Display OK\r\n");
 
   /*

@@ -20,6 +20,19 @@
 // #define PURRGO_GNSS_MOCK             1
 // #define PURRGO_HW_GNSS PURRGO_GNSS_MOCK
 
+
+#define PURRGO_DISPLAY_BACKEND_ST7789 0
+#define PURRGO_DISPLAY_BACKEND_EINK   1
+
+#ifndef PURRGO_HW_DISPLAY_BACKEND
+#define PURRGO_HW_DISPLAY_BACKEND PURRGO_DISPLAY_BACKEND_ST7789
+#endif
+
+#if (PURRGO_HW_DISPLAY_BACKEND != PURRGO_DISPLAY_BACKEND_ST7789) && \
+    (PURRGO_HW_DISPLAY_BACKEND != PURRGO_DISPLAY_BACKEND_EINK)
+#error "Invalid PURRGO_HW_DISPLAY_BACKEND"
+#endif
+
 /*
  * ============================================================================
  * Display resolution
@@ -48,11 +61,6 @@
 #ifndef PURRGO_HW_DISPLAY_BPP
 #define PURRGO_HW_DISPLAY_BPP 2
 #endif
-
-#if PURRGO_HW_DISPLAY_BPP < 2
-#error "PurrGo requires at least 2 bits per pixel (4 logical shades)"
-#endif
-
 
 /*
  * --------------------------------------------------------------------------
