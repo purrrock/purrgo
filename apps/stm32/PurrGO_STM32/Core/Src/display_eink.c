@@ -103,3 +103,8 @@ void display_eink_refresh(const uint8_t *framebuffer)
      * CubeMX и приложению.
      */
 }
+
+void display_eink_sleep(void)
+{
+    EPD_2IN7_V2_Sleep();
+}

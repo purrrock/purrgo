@@ -31,4 +31,9 @@ void display_eink_init(void);
  */
 void display_eink_refresh(const uint8_t *framebuffer);
 
+/*
+ * Перевод E-Ink дисплея в режим сна.
+ */
+void display_eink_sleep(void);
+
 #endif /* DISPLAY_EINK_H */
