@@ -18,24 +18,6 @@ typedef struct {
     uint32_t lod_offset[3];
 } pgo_header_info_t;
 
-typedef struct {
-    uint32_t sqt_blocks;
-
-    uint32_t nav_visited;
-
-    uint32_t data_visited;
-    uint32_t data_passed;
-    uint32_t data_culled;
-
-    uint32_t lines_drawn;
-
-    uint32_t polygons_filled;
-    uint32_t polygons_skipped;
-
-    uint32_t styles_unknown;
-    uint32_t style_none;
-} map_diag_t;
-
 /* Little-endian helpers */
 static inline int32_t unpack_i32_le(const uint8_t *buf)
 {

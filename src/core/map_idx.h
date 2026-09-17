@@ -16,7 +16,6 @@ bool map_idx_parse_node(
     const purrgo_viewport_t *vp,
     gfx_context_t *gfx,
     purrgo_map_layer_t layer_type,
-    map_diag_t *diag,
     uint32_t lod_end
 );
 
