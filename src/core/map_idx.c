@@ -71,7 +71,6 @@ bool map_idx_parse_node(
     const purrgo_viewport_t *vp,
     gfx_context_t *gfx,
     purrgo_map_layer_t layer_type,
-    map_diag_t *diag,
     uint32_t lod_end
 )
 {
@@ -96,10 +95,6 @@ bool map_idx_parse_node(
      */
     if (!is_nav_node) {
 
-        if (diag != NULL) {
-            diag->data_visited++;
-        }
-
         int32_t ymin = unpack_i32_le(&node_buf[4]);
         int32_t ymax = unpack_i32_le(&node_buf[12]);
 
@@ -117,12 +112,7 @@ bool map_idx_parse_node(
         }
 
         if (!passes) {
-            if (diag != NULL) diag->data_culled++;
             return true;
-        }
-
-        if (diag != NULL) {
-            diag->data_passed++;
         }
 
         uint8_t obj_type = node_buf[16];
@@ -211,17 +201,13 @@ bool map_idx_parse_node(
     purrgo_map_style_from_feature((uint32_t)obj_type);
 
 if (style == PURRGO_STYLE_NONE) {
-    if (diag != NULL) {
-        if (obj_type == 0) diag->style_none++;
-        else diag->styles_unknown++;
-    }
     return true;
 }
 		 
         if (v1 > 0) {
             bool is_polygon = (layer_type == MAP_LAYER_POLYGONS);
             
-            map_render_feature(mlp_fs, v1, cam, vp, gfx, is_polygon, style, diag);
+            map_render_feature(mlp_fs, v1, cam, vp, gfx, is_polygon, style);
 
             /*
              * Подписываем только площади (Landuse/Water).
@@ -287,10 +273,6 @@ if (style == PURRGO_STYLE_NONE) {
      * ================================================================
      */
 
-    if (diag != NULL) {
-        diag->nav_visited++;
-    }
-
     uint32_t v3_jump = unpack_u32_le(&node_buf[0]);
     int32_t c_ymin = unpack_i32_le(&node_buf[8]);
     int32_t c_ymax = unpack_i32_le(&node_buf[16]);
@@ -334,7 +316,7 @@ if (style == PURRGO_STYLE_NONE) {
 
     for (uint32_t i = 0; i < obj_count; i++) {
         if (!map_idx_parse_node(idx_fs, current_idx_offset, mlp_fs, db_fs,
-                                child_is_nav, cam, vp, gfx, layer_type, diag, lod_end)) {
+                                child_is_nav, cam, vp, gfx, layer_type, lod_end)) {
             return false;
         }
     }

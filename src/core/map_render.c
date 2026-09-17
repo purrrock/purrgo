@@ -224,8 +224,7 @@ void map_render_feature(
     const purrgo_viewport_t *vp,
     gfx_context_t *gfx,
     bool is_polygon_layer,
-    purrgo_map_style_t style,
-    map_diag_t *diag
+    purrgo_map_style_t style
 )
 {
     if (mlp_fs == NULL ||
@@ -239,11 +238,6 @@ void map_render_feature(
     map_mlp_iter_t iter;
 
     if (!map_mlp_iter_init(&iter, mlp_fs, v1_offset)) {
-
-        if (is_polygon_layer && diag != NULL) {
-            diag->polygons_skipped++;
-        }
-
         return;
     }
 
@@ -428,11 +422,6 @@ void map_render_feature(
                     prev_fg,
                     gfx->color_bg
                 );
-
-
-                if (diag != NULL) {
-                    diag->lines_drawn++;
-                }
             }
         }
 
@@ -446,11 +435,6 @@ void map_render_feature(
      * Проверяем, была ли полностью прочитана геометрия.
      */
     if (iter.points_read < iter.num_points) {
-
-        if (is_polygon_layer && diag != NULL) {
-            diag->polygons_skipped++;
-        }
-
         return;
     }
 
@@ -467,10 +451,6 @@ void map_render_feature(
                 (long)iter.num_points
             );
 
-            if (diag != NULL) {
-                diag->polygons_skipped++;
-            }
-
             return;
         }
 
@@ -484,10 +464,6 @@ void map_render_feature(
                 (long)iter.num_points,
                 (long)part_count
             );
-
-            if (diag != NULL) {
-                diag->polygons_skipped++;
-            }
 
             return;
         }
@@ -531,10 +507,5 @@ void map_render_feature(
             prev_fg,
             gfx->color_bg
         );
-
-
-        if (diag != NULL) {
-            diag->polygons_filled++;
-        }
     }
 }
