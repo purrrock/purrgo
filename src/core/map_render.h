@@ -14,8 +14,7 @@ void map_render_feature(
     const purrgo_viewport_t *vp,
     gfx_context_t *gfx,
     bool is_polygon_layer,
-    purrgo_map_style_t style,
-    map_diag_t *diag
+    purrgo_map_style_t style
 );
 
 // Очистка BBox-кэша меток и очереди отложенных меток.
