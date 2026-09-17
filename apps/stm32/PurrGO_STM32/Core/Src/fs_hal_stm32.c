@@ -55,7 +55,7 @@ static void invalidate_cache_for_file(purrgo_file_t* file) {
     }
 }
 
-static uint32_t read_cached_sector(purrgo_file_t* file, uint32_t sector_num, uint8_t* out_data) {
+static const uint8_t* read_cached_sector(purrgo_file_t* file, uint32_t sector_num, uint32_t* out_read_bytes) {
     int lru_index = -1;
     uint32_t oldest_time = 0xFFFFFFFF;
 
@@ -63,8 +63,8 @@ static uint32_t read_cached_sector(purrgo_file_t* file, uint32_t sector_num, uin
     for (int i = 0; i < LRU_CACHE_ENTRIES; i++) {
         if (lru_cache[i].valid && lru_cache[i].file_id == file && lru_cache[i].sector_num == sector_num) {
             lru_cache[i].last_used = ++lru_counter;
-            memcpy(out_data, lru_cache[i].data, LRU_SECTOR_SIZE);
-            return LRU_SECTOR_SIZE;
+            if (out_read_bytes) *out_read_bytes = LRU_SECTOR_SIZE;
+            return lru_cache[i].data;
         }
 
         if (!lru_cache[i].valid) {
@@ -86,7 +86,8 @@ static uint32_t read_cached_sector(purrgo_file_t* file, uint32_t sector_num, uin
      */
     if (f_tell(&file->fil) != sector_offset) {
         if (f_lseek(&file->fil, sector_offset) != FR_OK) {
-            return 0;
+            if (out_read_bytes) *out_read_bytes = 0;
+            return NULL;
         }
     }
 
@@ -94,7 +95,8 @@ static uint32_t read_cached_sector(purrgo_file_t* file, uint32_t sector_num, uin
     FRESULT res = f_read(&file->fil, lru_cache[lru_index].data, LRU_SECTOR_SIZE, &br);
 
     if (res != FR_OK || br == 0) {
-        return 0;
+        if (out_read_bytes) *out_read_bytes = 0;
+        return NULL;
     }
 
     lru_cache[lru_index].valid = true;
@@ -106,8 +108,8 @@ static uint32_t read_cached_sector(purrgo_file_t* file, uint32_t sector_num, uin
         memset(lru_cache[lru_index].data + br, 0, LRU_SECTOR_SIZE - br);
     }
 
-    memcpy(out_data, lru_cache[lru_index].data, LRU_SECTOR_SIZE);
-    return br;
+    if (out_read_bytes) *out_read_bytes = br;
+    return lru_cache[lru_index].data;
 }
 
 static uint32_t purrgo_fs_read_cached(purrgo_file_t* file, uint8_t* buffer, uint32_t size) {
@@ -124,8 +126,6 @@ static uint32_t purrgo_fs_read_cached(purrgo_file_t* file, uint8_t* buffer, uint
         bytes_to_read = fsize - current_offset;
     }
 
-    uint8_t sector_buf[LRU_SECTOR_SIZE];
-
     while (bytes_to_read > 0) {
         uint32_t sector_num = current_offset / LRU_SECTOR_SIZE;
         uint32_t offset_in_sector = current_offset % LRU_SECTOR_SIZE;
@@ -134,8 +134,9 @@ static uint32_t purrgo_fs_read_cached(purrgo_file_t* file, uint8_t* buffer, uint
             chunk_size = bytes_to_read;
         }
 
-        uint32_t sector_read = read_cached_sector(file, sector_num, sector_buf);
-        if (sector_read <= offset_in_sector) {
+        uint32_t sector_read = 0;
+        const uint8_t* sector_data = read_cached_sector(file, sector_num, &sector_read);
+        if (!sector_data || sector_read <= offset_in_sector) {
             break;
         }
 
@@ -144,7 +145,7 @@ static uint32_t purrgo_fs_read_cached(purrgo_file_t* file, uint8_t* buffer, uint
             chunk_size = available_in_sector;
         }
 
-        memcpy(ptr, sector_buf + offset_in_sector, chunk_size);
+        memcpy(ptr, sector_data + offset_in_sector, chunk_size);
 
         ptr += chunk_size;
         current_offset += chunk_size;
