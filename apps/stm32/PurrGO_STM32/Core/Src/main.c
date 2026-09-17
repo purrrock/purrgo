@@ -104,7 +104,7 @@ int main(void)
   
   /* E-Ink hardware test */
   EinkTest_Run();
-
+  while (1)  {}
 
   purrgo_stm32_init();
 
