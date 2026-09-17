@@ -304,7 +304,6 @@ void purrgo_map_render_layer(
         return;
     }
 
-    map_diag_t diag = {0};
     uint32_t current_idx_offset = 0;
 
     pgo_header_info_t idx_header = {0};
@@ -375,8 +374,6 @@ void purrgo_map_render_layer(
         return;
     }
 
-    diag.sqt_blocks++;
-
     uint32_t mode = unpack_u32_le(&sqt_header[8]);
     uint32_t count = unpack_u32_le(&sqt_header[12]);
 
@@ -394,7 +391,6 @@ void purrgo_map_render_layer(
                     viewport,
                     gfx,
                     layer_type,
-                    &diag,
                     lod_end)) {
                 return;
             }
