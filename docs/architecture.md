@@ -79,8 +79,7 @@ purrgo/
 │       ├── stm32/          # STM32 adapters
 │       └── ublox/          # u-blox-specific functionality
 │
-├── tests/
-│   └── core/               # Core tests
+├── tests/                  # Map test datasets and audit tools
 │
 ├── tools/                  # Build-time and development tools
 ├── third_party/            # External dependencies
