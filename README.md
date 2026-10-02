@@ -161,7 +161,7 @@ purrgo/
 │   ├── core/               # Portable core
 │   └── platform/           # Platform-specific code
 │
-├── tests/                  # Tests
+├── tests/                  # Map test datasets and audit tools
 ├── third_party/            # External dependencies
 ├── tools/                  # Development/build tools
 │
