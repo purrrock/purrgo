@@ -66,4 +66,4 @@ apps/emulator/purrgo_emulator
 tests/data
 
 #maps
-.osm
+*.osm
