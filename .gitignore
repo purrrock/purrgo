@@ -64,3 +64,6 @@ apps/emulator/purrgo_emulator
 .settings
 .clangd
 tests/data
+
+#maps
+.osm
