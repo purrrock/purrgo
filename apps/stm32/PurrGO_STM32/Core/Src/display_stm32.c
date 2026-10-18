@@ -446,21 +446,11 @@ static void do_refresh_region(
 )
 {
     /*
-     * Параметры области здесь намеренно не используются.
-     *
-     * EPD_2IN7_V2_4GrayDisplay() выполняет полное
-     * обновление всего дисплея.
-     *
-     * Поэтому даже если GFX сообщает небольшую
-     * dirty-region, физически обновляется весь
-     * E-Ink экран.
+     * 1-bit: частичное обновление указанной области
+     *        (display_eink сам переходит на полное, когда нужно).
+     * 4-gray: частичного обновления нет, физически обновляется весь экран.
      */
-    (void)x;
-    (void)y;
-    (void)w;
-    (void)h;
-
-    display_eink_refresh(framebuffer);
+    display_eink_refresh_region(framebuffer, x, y, w, h);
 }
 
 #endif
@@ -474,12 +464,17 @@ void display_refresh(void)
     partial_refresh_count = 0;
     pending_has_region = 0;
 
+#if PURRGO_HW_DISPLAY_BACKEND == PURRGO_DISPLAY_BACKEND_EINK
+    /* Явное ПОЛНОЕ обновление (сброс остаточного изображения). */
+    display_eink_refresh(framebuffer);
+#else
     do_refresh_region(
         0,
         0,
         DISPLAY_WIDTH,
         DISPLAY_HEIGHT
     );
+#endif
 }
 
 
@@ -583,23 +578,20 @@ void display_flush(void)
 #if PURRGO_HW_DISPLAY_BACKEND == PURRGO_DISPLAY_BACKEND_EINK
 
     /*
-     * Для E-Ink 4-gray нет соответствующего
-     * partial-refresh пути в используемом
-     * EPD_2IN7_V2 driver.
+     * E-Ink 1-bit: обновляем только накопленную область. Переход на
+     * полное обновление (первое обновление, лимит частичных подряд)
+     * выполняет display_eink_refresh_region().
      *
-     * Поэтому любая dirty-region приводит
-     * к полному обновлению экрана.
+     * E-Ink 4-gray: display_eink_refresh_region() обновляет весь экран.
      */
     do_refresh_region(
-        0,
-        0,
-        DISPLAY_WIDTH,
-        DISPLAY_HEIGHT
+        pending_x1,
+        pending_y1,
+        (int16_t)(pending_x2 - pending_x1 + 1),
+        (int16_t)(pending_y2 - pending_y1 + 1)
     );
 
     pending_has_region = 0;
-    partial_refresh_count = 0;
-
 
 #elif PURRGO_HW_DISPLAY_BACKEND == PURRGO_DISPLAY_BACKEND_ST7789
 

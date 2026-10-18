@@ -115,6 +115,12 @@ int main(void)
   while (1) {}
 #endif
 
+#if defined(PURRGO_EINK_SELFTEST_PARTIAL)
+  /* Самотест частичного обновления (режим 1-bit). */
+  EinkTest_RunPartial();
+  while (1) {}
+#endif
+
   purrgo_stm32_init();
 
   /* USER CODE END 2 */
