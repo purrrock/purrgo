@@ -4,7 +4,6 @@ out/
 cmake-build-*/
 
 # IDE/editor
-.vscode/
 .idea/
 *.user
 *.userossc
