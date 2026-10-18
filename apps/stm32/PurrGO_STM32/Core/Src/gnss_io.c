@@ -14,6 +14,11 @@
  * После достижения конца массива DMA начинает запись с начала.
  */
 #define GNSS_RX_BUFFER_SIZE 1024U
+#define GNSS_RX_BUFFER_MASK (GNSS_RX_BUFFER_SIZE - 1U)
+
+#if (GNSS_RX_BUFFER_SIZE & GNSS_RX_BUFFER_MASK) != 0U
+#error "GNSS_RX_BUFFER_SIZE must be a power of two"
+#endif
 
 /*
  * Буфер приёма GNSS.
@@ -24,22 +29,20 @@
 static uint8_t gnss_rx_buffer[GNSS_RX_BUFFER_SIZE];
 
 /*
- * Абсолютная позиция следующего байта, который должен прочитать
- * потребитель.
+ * Индекс (0..GNSS_RX_BUFFER_SIZE-1) следующего байта, который должен
+ * прочитать потребитель.
  *
- * Это не индекс внутри буфера.
+ * Положение DMA-producer берётся только из счётчика NDTR. Отдельный
+ * счётчик "оборотов", увеличиваемый в прерывании TC, не используется:
+ * между перезагрузкой NDTR и обработкой прерывания пара (wrap, NDTR)
+ * оказывалась несогласованной, и потребитель мог потерять до одного
+ * буфера данных.
  *
- * Значение увеличивается без ограничения и естественным образом
- * переполняется uint32_t. Для разности позиций это безопасно,
- * пока разница между producer и consumer существенно меньше
- * UINT32_MAX.
+ * Условие корректности: потребитель обязан вызывать
+ * purrgo_gnss_read_byte() чаще, чем DMA заполняет весь буфер
+ * (при 9600 бод и 1024 байтах это ~1.07 с).
  */
-static uint32_t gnss_rx_tail;
-
-/*
- * Количество полных оборотов DMA по кольцевому буферу.
- */
-static volatile uint32_t gnss_rx_wrap_count;
+static uint16_t gnss_rx_tail;
 
 /*
  * Флаг ошибки UART.
@@ -51,51 +54,52 @@ static volatile uint32_t gnss_rx_wrap_count;
 static volatile bool gnss_rx_error_flag = false;
 
 /**
- * @brief Получить согласованное состояние DMA producer.
+ * @brief Индекс, в который DMA запишет СЛЕДУЮЩИЙ принятый байт.
  */
-static uint32_t gnss_rx_get_producer_position(void)
+static uint16_t gnss_rx_get_head(void)
 {
-    uint32_t wrap_before;
-    uint32_t wrap_after;
-    uint16_t ndtr;
-    uint16_t position;
-
-    do
-    {
-        /*
-         * Считаем количество завершённых полных оборотов DMA.
-         */
-        wrap_before = gnss_rx_wrap_count;
-
-        /*
-         * NDTR содержит количество элементов, которые DMA
-         * должен передать до окончания текущего оборота.
-         */
-        ndtr = __HAL_DMA_GET_COUNTER(huart1.hdmarx);
-
-        /*
-         * Считываем счётчик ещё раз.
-         */
-        wrap_after = gnss_rx_wrap_count;
-
-        /*
-         * Если DMA завершил оборот между двумя чтениями
-         * wrap_count, полученная пара wrap/NDTR несогласована.
-         * Повторяем чтение.
-         */
-    } while (wrap_before != wrap_after);
+    uint32_t ndtr = __HAL_DMA_GET_COUNTER(huart1.hdmarx);
 
     /*
-     * Защита от некорректного значения NDTR.
+     * В circular-режиме NDTR изменяется в диапазоне 1..N и затем
+     * перезагружается значением N. Значение 0 (кратковременное)
+     * и значения вне диапазона трактуем как "буфер полностью свободен".
      */
-    if (ndtr > GNSS_RX_BUFFER_SIZE)
+    if ((ndtr == 0U) || (ndtr > GNSS_RX_BUFFER_SIZE))
     {
         ndtr = GNSS_RX_BUFFER_SIZE;
     }
 
-    position = GNSS_RX_BUFFER_SIZE - ndtr;
+    return (uint16_t)((GNSS_RX_BUFFER_SIZE - ndtr) & GNSS_RX_BUFFER_MASK);
+}
 
-    return wrap_before * GNSS_RX_BUFFER_SIZE + position;
+/**
+ * @brief Отправить NMEA-команду, добавив '$', контрольную сумму и CRLF.
+ *
+ * @param body Тело команды БЕЗ '$' и '*hh', например "PCAS02,1000".
+ */
+static void gnss_send_nmea(const char *body)
+{
+    static const char hex[] = "0123456789ABCDEF";
+    char frame[96];
+    uint8_t checksum = 0U;
+    size_t pos = 0U;
+
+    frame[pos++] = '$';
+
+    for (const char *p = body; (*p != '\0') && (pos < (sizeof(frame) - 6U)); p++)
+    {
+        checksum ^= (uint8_t)*p;
+        frame[pos++] = *p;
+    }
+
+    frame[pos++] = '*';
+    frame[pos++] = hex[checksum >> 4];
+    frame[pos++] = hex[checksum & 0x0FU];
+    frame[pos++] = '\r';
+    frame[pos++] = '\n';
+
+    (void)HAL_UART_Transmit(&huart1, (uint8_t *)frame, (uint16_t)pos, 1000U);
 }
 
 /**
@@ -107,20 +111,7 @@ void purrgo_gnss_init(void)
      * Сначала сбрасываем состояние software producer/consumer.
      */
     gnss_rx_tail = 0U;
-    gnss_rx_wrap_count = 0U;
     gnss_rx_error_flag = false;
-
-    /*
-     * AT6558R: установить период выдачи навигационных данных 1000 мс.
-     */
-    static const uint8_t gnss_update_rate_cmd[] =
-        "$PCAS02,1000*2E\r\n";
-
-    /*
-     * Для выдачи только GGA + GSA + RMC.
-     */
-    static const uint8_t gnss_nmea_cmd[] =
-        "$PCAS03,1,0,1,0,1,0,0,0,0,0,,,0*3A\r\n";
 
     /*
      * 1. Запускаем непрерывный приём через Circular DMA ДО отправки конфигурации,
@@ -139,17 +130,18 @@ void purrgo_gnss_init(void)
      * 2. Теперь безопасно отправляем конфигурацию. Любые ответы от модуля 
      * мгновенно и без задержек будут перехвачены работающим контроллером DMA.
      */
-    HAL_UART_Transmit(
-        &huart1,
-        (uint8_t *)gnss_update_rate_cmd,
-        sizeof(gnss_update_rate_cmd) - 1U,
-        1000U);
+    /*
+     * AT6558R: период выдачи навигационных данных 1000 мс.
+     * Контрольная сумма вычисляется в gnss_send_nmea(): ранее она была
+     * записана вручную, и для PCAS03 не совпадала с вычисленной
+     * (3A вместо 1F), поэтому модуль мог игнорировать команду.
+     */
+    gnss_send_nmea("PCAS02,1000");
 
-    HAL_UART_Transmit(
-        &huart1,
-        (uint8_t *)gnss_nmea_cmd,
-        sizeof(gnss_nmea_cmd) - 1U,
-        1000U);
+    /*
+     * Выдавать только GGA + GSA + RMC.
+     */
+    gnss_send_nmea("PCAS03,1,0,1,0,1,0,0,0,0,0,,,0");
 }
 
 /**
@@ -157,9 +149,7 @@ void purrgo_gnss_init(void)
  */
 bool purrgo_gnss_read_byte(uint8_t *byte)
 {
-    uint32_t producer;
-    uint32_t available;
-    uint32_t buffer_index;
+    uint16_t head;
 
     if (byte == NULL)
     {
@@ -185,7 +175,6 @@ bool purrgo_gnss_read_byte(uint8_t *byte)
     {
         gnss_rx_error_flag = false;
         gnss_rx_tail = 0U;
-        gnss_rx_wrap_count = 0U;
 
         if (HAL_UART_Receive_DMA(
                 &huart1,
@@ -197,45 +186,16 @@ bool purrgo_gnss_read_byte(uint8_t *byte)
         return false;
     }
 
-    /*
-     * Получаем согласованную абсолютную позицию DMA producer.
-     */
-    producer = gnss_rx_get_producer_position();
+    head = gnss_rx_get_head();
 
-    /*
-     * Благодаря unsigned arithmetic разность корректно работает
-     * и при естественном переполнении uint32_t.
-     */
-    available = producer - gnss_rx_tail;
-
-    /*
-     * DMA успел записать больше данных, чем помещается в буфере.
-     * Сохраняем только последние BUFFER_SIZE байт.
-     */
-    if (available > GNSS_RX_BUFFER_SIZE)
-    {
-        gnss_rx_tail = producer - GNSS_RX_BUFFER_SIZE;
-        available = GNSS_RX_BUFFER_SIZE;
-    }
-
-    /*
-     * Новых данных нет.
-     */
-    if (available == 0U)
+    /* Новых данных нет. */
+    if (head == gnss_rx_tail)
     {
         return false;
     }
 
-    /*
-     * Преобразуем абсолютную позицию consumer в индекс буфера.
-     */
-    buffer_index = gnss_rx_tail % GNSS_RX_BUFFER_SIZE;
-
-    /* Читаем байт. */
-    *byte = gnss_rx_buffer[buffer_index];
-
-    /* Переходим к следующему байту. */
-    gnss_rx_tail++;
+    *byte = gnss_rx_buffer[gnss_rx_tail];
+    gnss_rx_tail = (uint16_t)((gnss_rx_tail + 1U) & GNSS_RX_BUFFER_MASK);
 
     return true;
 }
@@ -262,9 +222,9 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
     }
 
     /*
-     * DMA завершил очередной полный оборот буфера.
+     * Положение producer определяется по NDTR, поэтому счётчик оборотов
+     * больше не нужен.
      */
-    gnss_rx_wrap_count++;
 }
 
 /**
