@@ -10,10 +10,18 @@
 #include "purrgo/gfx_rect.h"
 #include "purrgo/hardware_config.h"
 #include "purrgo/display_hal.h"
+#include <stdbool.h>
 
 int dbg_map_render_calls = 0;
 
-static void ui_draw_key_hints(gfx_context_t* gfx, purrgo_state_t state)
+static bool s_full_refresh_requested = false;
+
+void purrgo_app_ui_request_full_refresh(void)
+{
+    s_full_refresh_requested = true;
+}
+
+static void ui_draw_key_hints(gfx_context_t* gfx, purrgo_state_t state, bool mark_region)
 {
     int y = PURRGO_HW_DISPLAY_HEIGHT_PX - 8;
 
@@ -60,13 +68,25 @@ static void ui_draw_key_hints(gfx_context_t* gfx, purrgo_state_t state)
     if (k3[0]) gfx_draw_string(gfx, 2 + step * 2, y + 1, k3);
     if (k4[0]) gfx_draw_string(gfx, 2 + step * 3, y + 1, k4);
 
-    /* Refresh only the area occupied by the key hints. */
-    display_refresh_region(
-        0,
-        y,
-        PURRGO_HW_DISPLAY_WIDTH_PX,
-        8
-    );
+    /*
+     * Подсказки статичны для данного экрана, поэтому на экране карты
+     * область помечается как изменённая только при смене экрана: все
+     * остальные обновления карты (маркер, трек, строка статуса) сами
+     * регистрируют свои области. Раньше любой проход render (например,
+     * смена скорости) через эту отметку превращался в физический
+     * refresh (на E-Ink - полный).
+     *
+     * На остальных экранах (например, Trip computer) модули не
+     * регистрируют области сами, поэтому отметка сохраняется.
+     */
+    if (mark_region) {
+        display_refresh_region(
+            0,
+            y,
+            PURRGO_HW_DISPLAY_WIDTH_PX,
+            8
+        );
+    }
 }
 
 void purrgo_app_ui_render(
@@ -109,13 +129,17 @@ void purrgo_app_ui_render(
             break;
     }
 
-    ui_draw_key_hints(gfx, current_state);
+    ui_draw_key_hints(gfx, current_state,
+                      (current_state != prev_state) ||
+                      (current_state != APP_STATE_MAP));
 
-    if (current_state != prev_state) {
+    if (current_state != prev_state || s_full_refresh_requested) {
         display_refresh();
     } else {
         display_flush();
     }
+
+    s_full_refresh_requested = false;
 
     prev_state = current_state;
 }
