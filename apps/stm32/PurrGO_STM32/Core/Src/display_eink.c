@@ -3,7 +3,26 @@
 #include "DEV_Config.h"
 #include "EPD_2in7_V2.h"
 
+#include "main.h"
+#include "spi.h"
+
 #include <stddef.h>
+
+/*
+ * Делитель SPI1 для E-Ink.
+ *
+ * CubeMX настраивает SPI1 (APB2 = 84 МГц) с делителем 2, то есть ~42 МГц.
+ * Это общая шина с ST7789, который такую частоту выдерживает, но
+ * контроллер панели рассчитан на существенно меньшую (в референсных
+ * проектах Waveshare - единицы МГц). Простые команды и константные
+ * данные проходят и на 42 МГц, а данные с плотными переходами (LUT
+ * 4-gray, реальное изображение) искажаются: на экране остаётся мусор.
+ *
+ * Делитель 8 -> 10.5 МГц. Можно переопределить в compile definitions.
+ */
+#ifndef PURRGO_EINK_SPI_PRESCALER
+#define PURRGO_EINK_SPI_PRESCALER SPI_BAUDRATEPRESCALER_8
+#endif
 
 /*
  * Размер framebuffer PurrGO для E-Ink.
@@ -48,6 +67,18 @@ void display_eink_init(void)
      *
      * SPI1 повторно не инициализируется.
      */
+    /*
+     * Переключаем SPI1 на тактовую частоту, допустимую для панели.
+     * HAL_SPI_DeInit/Init вызывает MspDeInit/MspInit, GPIO PA5/PA7
+     * настраиваются заново тем же кодом CubeMX.
+     */
+    (void)HAL_SPI_DeInit(&hspi1);
+    hspi1.Init.BaudRatePrescaler = PURRGO_EINK_SPI_PRESCALER;
+    if (HAL_SPI_Init(&hspi1) != HAL_OK)
+    {
+        Error_Handler();
+    }
+
     (void)DEV_Module_Init();
 }
 

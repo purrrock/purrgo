@@ -103,8 +103,17 @@ int main(void)
   /* USER CODE BEGIN 2 */
   
   /* E-Ink hardware test */
- EinkTest_Run();
+  // EinkTest_Run();
   // while (1)  {}
+
+#if defined(PURRGO_EINK_SELFTEST_4GRAY)
+  /*
+   * Самотест 4-gray через путь приложения (см. eink_test.h).
+   * Включается определением PURRGO_EINK_SELFTEST_4GRAY.
+   */
+  EinkTest_Run4Gray();
+  while (1) {}
+#endif
 
   purrgo_stm32_init();
 
