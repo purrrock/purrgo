@@ -211,3 +211,49 @@ void EinkTest_Run4Gray(void)
     display_eink_init();
     display_eink_refresh(fb);
 }
+
+
+void EinkTest_RunPartial(void)
+{
+    static uint8_t fb[(EPD_2IN7_V2_WIDTH * EPD_2IN7_V2_HEIGHT * 2U) / 8U];
+    const int w = EPD_2IN7_V2_WIDTH;
+    const int h = EPD_2IN7_V2_HEIGHT;
+
+    /* Белый фон (цвет 3 во всех 4 позициях байта) и рамка. */
+    for (unsigned i = 0; i < sizeof(fb); i++)
+    {
+        fb[i] = 0xFFU;
+    }
+
+    for (int x = 0; x < w; x++)
+    {
+        eink_set_px2(fb, w, x, 0, 0);
+        eink_set_px2(fb, w, x, h - 1, 0);
+    }
+    for (int y = 0; y < h; y++)
+    {
+        eink_set_px2(fb, w, 0, y, 0);
+        eink_set_px2(fb, w, w - 1, y, 0);
+    }
+
+    display_eink_init();
+    display_eink_refresh(fb);            /* полное обновление */
+    DEV_Delay_ms(1000);
+
+    for (int i = 0; i < 4; i++)
+    {
+        const int bx = 12 + i * 36;      /* намеренно не кратно 8 */
+        const int by = 100;
+
+        for (int y = by; y < by + 24; y++)
+        {
+            for (int x = bx; x < bx + 24; x++)
+            {
+                eink_set_px2(fb, w, x, y, 0);
+            }
+        }
+
+        display_eink_refresh_region(fb, (int16_t)bx, (int16_t)by, 24, 24);
+        DEV_Delay_ms(1000);
+    }
+}

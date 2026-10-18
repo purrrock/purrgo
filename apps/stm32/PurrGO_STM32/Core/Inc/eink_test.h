@@ -45,4 +45,15 @@ void EinkTest_Run4Gray(void);
  */
 void EinkTest_FillPattern4Gray(uint8_t *fb2bpp, int width, int height);
 
+/*
+ * Тест частичного обновления (режим PURRGO_EINK_MODE_1BIT).
+ *
+ * Выводит рамку полным обновлением, затем 4 раза подряд рисует чёрный
+ * квадрат 24x24 в новом месте, обновляя ТОЛЬКО эту область. Экран не
+ * должен мигать при частичных обновлениях; квадраты остаются на месте.
+ * После PURRGO_EINK_PARTIALS_BEFORE_FULL подряд идущих частичных
+ * обновлений display_eink сам выполняет полное.
+ */
+void EinkTest_RunPartial(void);
+
 #endif /* EINK_TEST_H */
