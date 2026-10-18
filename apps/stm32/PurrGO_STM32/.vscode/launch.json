@@ -1,0 +1,20 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Cortex Debug: OpenOCD (PurrGO)",
+            "type": "cortex-debug",
+            "request": "launch",
+            "servertype": "openocd",
+            "executable": "${workspaceFolder}/build/Debug/PurrGO_STM32.elf",
+            "cwd": "${workspaceFolder}",
+            "device": "STM32F411CE",
+            "configFiles": [
+                "interface/stlink.cfg",
+                "target/stm32f4x.cfg"
+            ],
+            "svdFile": "${workspaceFolder}/STM32F411.svd",
+            "runToEntryPoint": "main"
+        }
+    ]
+}

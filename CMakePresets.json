@@ -3,14 +3,16 @@
     "configurePresets": [
         {
             "name": "Debug",
-            "displayName": "STM32 ARM GCC 14.3.1",
-            "description": "Using compilers: C = C:\\Users\\veska\\AppData\\Local\\stm32cube\\bundles\\gnu-tools-for-stm32\\14.3.1+st.2\\bin\\arm-none-eabi-gcc.exe, CXX = C:\\Users\\veska\\AppData\\Local\\stm32cube\\bundles\\gnu-tools-for-stm32\\14.3.1+st.2\\bin\\arm-none-eabi-g++.exe",
+            "displayName": "GCC 16.2.0 x86_64-w64-mingw32 (ucrt64)",
+            "description": "Using compilers: C = C:\\msys64\\ucrt64\\bin\\gcc.exe, CXX = C:\\msys64\\ucrt64\\bin\\g++.exe",
+            "generator": "MinGW Makefiles",
             "binaryDir": "${sourceDir}/out/build/${presetName}",
             "cacheVariables": {
                 "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",
-                "CMAKE_C_COMPILER": "C:/Users/veska/AppData/Local/stm32cube/bundles/gnu-tools-for-stm32/14.3.1+st.2/bin/arm-none-eabi-gcc.exe",
-                "CMAKE_CXX_COMPILER": "C:/Users/veska/AppData/Local/stm32cube/bundles/gnu-tools-for-stm32/14.3.1+st.2/bin/arm-none-eabi-g++.exe",
+                "CMAKE_C_COMPILER": "C:/msys64/ucrt64/bin/gcc.exe",
+                "CMAKE_CXX_COMPILER": "C:/msys64/ucrt64/bin/g++.exe",
                 "CMAKE_BUILD_TYPE": "Debug"
             }
         }
+    ]
 }
