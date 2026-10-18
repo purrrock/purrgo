@@ -1,3 +1,4 @@
+#include "purrgo/app_ui.h"
 #include "purrgo/ui/ui_map_dirty.h"
 #include "purrgo/ui/ui_status_bar.h"
 #include "ui_map.h"
@@ -707,7 +708,7 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
             purrgo_ui_map_clear_dirty();
         }
         purrgo_map_controller_clear_track_dirty();
-        display_refresh();
+        purrgo_app_ui_request_full_refresh();
         dbg_map_render_calls++;
     } else {
         if (purrgo_map_controller_is_track_dirty()) {
