@@ -2,6 +2,7 @@
 
 #include "DEV_Config.h"
 #include "EPD_2in7_V2.h"
+#include "display_eink.h"
 
 #include <stddef.h>
 
@@ -145,3 +146,68 @@ void EinkTest_Run(void)
     DEV_Module_Exit();
 }
 
+
+/*
+ * Логические цвета PurrGO: 0 = чёрный, 1 = тёмно-серый,
+ * 2 = светло-серый, 3 = белый.
+ */
+static void eink_set_px2(uint8_t *fb, int width, int x, int y, uint8_t c)
+{
+    int idx   = y * width + x;
+    int shift = (3 - (idx & 3)) << 1;
+
+    fb[idx >> 2] = (uint8_t)((fb[idx >> 2] & ~(0x03 << shift)) | ((c & 0x03) << shift));
+}
+
+void EinkTest_FillPattern4Gray(uint8_t *fb2bpp, int width, int height)
+{
+    const int band_h = 24;
+
+    for (int y = 0; y < height; y++)
+    {
+        for (int x = 0; x < width; x++)
+        {
+            uint8_t c;
+
+            if (y < band_h * 4)
+            {
+                /* 4 сплошные полосы: проверка всех уровней серого. */
+                c = (uint8_t)(y / band_h);
+            }
+            else if (y < band_h * 5)
+            {
+                /* Вертикальные полосы 1 px: максимальная плотность переходов. */
+                c = (x & 1) ? 3U : 0U;
+            }
+            else if (y < band_h * 6)
+            {
+                /* Шахматка 2x2. */
+                c = (((x >> 1) + (y >> 1)) & 1) ? 3U : 0U;
+            }
+            else if (y < band_h * 7)
+            {
+                /* Горизонтальный градиент из 4 уровней. */
+                c = (uint8_t)((x * 4) / width);
+            }
+            else
+            {
+                /* Рамка по краю экрана, остальное белое. */
+                c = (x < 2 || y < 2 || x >= width - 2 || y >= height - 2) ? 0U : 3U;
+            }
+
+            eink_set_px2(fb2bpp, width, x, y, c);
+        }
+    }
+}
+
+void EinkTest_Run4Gray(void)
+{
+    /* 176 * 264 * 2 bit / 8 = 11616 байт. */
+    static uint8_t fb[(EPD_2IN7_V2_WIDTH * EPD_2IN7_V2_HEIGHT * 2U) / 8U];
+
+    EinkTest_FillPattern4Gray(fb, EPD_2IN7_V2_WIDTH, EPD_2IN7_V2_HEIGHT);
+
+    /* Ровно тот же вызов, который делает display_stm32.c. */
+    display_eink_init();
+    display_eink_refresh(fb);
+}
