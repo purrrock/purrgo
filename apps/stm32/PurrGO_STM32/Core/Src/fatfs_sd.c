@@ -255,7 +255,13 @@ static void SD_SPI_SpeedUp(void)
     DESELECT();
 
     HAL_SPI_DeInit(HSPI_SDCARD);
-    hspi2.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_16;
+    /*
+     * SPI2 тактируется от APB1 (42 МГц при HCLK = 84 МГц).
+     * Prescaler 16 давал ~2.6 МГц, что ограничивало чтение карт при
+     * отрисовке карты. Prescaler 4 -> 10.5 МГц: безопасный первый шаг.
+     * После проверки целостности сигнала можно перейти на prescaler 2.
+     */
+    hspi2.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_4;
     HAL_SPI_Init(HSPI_SDCARD);
 }
 
