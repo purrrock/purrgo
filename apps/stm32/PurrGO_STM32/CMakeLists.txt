@@ -1,35 +1,29 @@
 cmake_minimum_required(VERSION 3.22)
 
 #
-# This file is generated only once,
+# This file is generated only once by STM32CubeMX,
 # and is not re-generated if converter is called multiple times.
 #
 # User is free to modify the file as much as necessary
 #
-
-# Setup compiler settings
-set(CMAKE_C_STANDARD 11)
-set(CMAKE_C_STANDARD_REQUIRED ON)
-set(CMAKE_C_EXTENSIONS ON)
-
-
-# Define the build type
-if(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE "Debug")
+# Подпроект прошивки STM32. Подключается из корневого CMakeLists.txt репозитория
+# (PURRGO_PLATFORM=stm32, пресеты stm32-debug / stm32-release). Самостоятельным
+# CMake-проектом больше не является: third_party, purrgo_core, project(),
+# C-стандарт и тип сборки задаются корневым CMakeLists.txt.
+#
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+    message(FATAL_ERROR
+        "Эту папку нельзя конфигурировать напрямую. "
+        "Откройте корень репозитория и выберите пресет stm32-debug / stm32-release "
+        "(cmake --preset stm32-debug).")
 endif()
 
-# Set the project name
+# cmake/stm32cubemx/CMakeLists.txt (генерируется CubeMX) обращается к цели
+# прошивки через ${CMAKE_PROJECT_NAME}. Корневой проект называется purrgo, поэтому
+# в области видимости этой папки (и дочерних) имя переопределяется.
 set(CMAKE_PROJECT_NAME PurrGO_STM32)
 
-# Enable compile command to ease indexing with e.g. clangd
-set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
-
-# Core project settings
-project(${CMAKE_PROJECT_NAME})
-message("Build type: " ${CMAKE_BUILD_TYPE})
-
-# Enable CMake support for ASM and C languages
-enable_language(C ASM)
+message(STATUS "Firmware target: ${CMAKE_PROJECT_NAME}")
 
 # Create an executable object type
 add_executable(${CMAKE_PROJECT_NAME})
@@ -37,19 +31,13 @@ add_executable(${CMAKE_PROJECT_NAME})
 # Add STM32CubeMX generated sources
 add_subdirectory(cmake/stm32cubemx)
 
-# Add third-party dependencies required by the portable core.
-add_subdirectory(../../../third_party third_party_build)
-
-# Add the portable PurrGO core.
-add_subdirectory(../../../src/core purrgo_core_build)
-
 # Link directories setup
 target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined library search paths
 )
 
 # Add sources to executable
-target_sources(PurrGO_STM32 PRIVATE
+target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Platform-dependent PurrGO logger.
     Core/Src/purrgo_logger.c
 
@@ -83,22 +71,23 @@ target_sources(PurrGO_STM32 PRIVATE
 
     # Application wrapper
     Core/Src/stm32_app.c
-	
-	# Waveshare STM32 E-Ink 2.7" V2 driver.
-	../../../third_party/e-Paper/STM32/STM32-F103ZET6/User/e-Paper/EPD_2in7_V2.c
+
+    # Waveshare STM32 E-Ink 2.7" V2 driver.
+    ${PROJECT_SOURCE_DIR}/third_party/e-Paper/STM32/STM32-F103ZET6/User/e-Paper/EPD_2in7_V2.c
     Core/Src/DEV_Config.c
-	Core/Src/display_eink.c
-	
+    Core/Src/display_eink.c
+
     # Display test
     Core/Src/eink_test.c
 )
 
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
-    ../../../include
+    ${PROJECT_SOURCE_DIR}/include
     # Add user defined include paths
-	    # Waveshare STM32 E-Paper V2 driver.
-    ../../../third_party/e-Paper/STM32/STM32-F103ZET6/User/e-Paper
+
+    # Waveshare STM32 E-Paper V2 driver.
+    ${PROJECT_SOURCE_DIR}/third_party/e-Paper/STM32/STM32-F103ZET6/User/e-Paper
 )
 
 # Add project symbols (macros)
@@ -114,4 +103,11 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
     stm32cubemx
     purrgo_core
     # Add user defined libraries
+)
+
+# Артефакты (.elf, .map) лежат в корне каталога сборки пресета:
+# out/build/<preset>/PurrGO_STM32.elf
+set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+    ADDITIONAL_CLEAN_FILES   "${CMAKE_BINARY_DIR}/${CMAKE_PROJECT_NAME}.map"
 )

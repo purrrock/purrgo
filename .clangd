@@ -1,2 +1,4 @@
 CompileFlags:
-  CompilationDatabase: out/build/Debug
+  # compile_commands.json копируется в корень репозитория расширением CMake Tools
+  # (cmake.copyCompileCommands) после конфигурации активного пресета.
+  CompilationDatabase: .

@@ -6,14 +6,15 @@
             "type": "cortex-debug",
             "request": "launch",
             "servertype": "openocd",
-            "executable": "${workspaceFolder}/build/Debug/PurrGO_STM32.elf",
+            // Активный пресет CMake (stm32-debug / stm32-release) определяет, какой .elf отлаживается.
+            "executable": "${workspaceFolder}/out/build/${command:cmake.activeConfigurePresetName}/PurrGO_STM32.elf",
             "cwd": "${workspaceFolder}",
             "device": "STM32F411CE",
             "configFiles": [
                 "interface/stlink.cfg",
                 "target/stm32f4x.cfg"
             ],
-            "svdFile": "${workspaceFolder}/STM32F411.svd",
+            "svdFile": "${workspaceFolder}/apps/stm32/PurrGO_STM32/STM32F411.svd",
             "runToEntryPoint": "main"
         }
     ]

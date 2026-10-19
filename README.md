@@ -165,7 +165,11 @@ purrgo/
 ├── third_party/            # External dependencies
 ├── tools/                  # Development/build tools
 │
-├── CMakeLists.txt
+├── cmake/
+│   └── toolchains/         # CMake toolchain files (STM32)
+│
+├── CMakeLists.txt          # Единая точка входа сборки
+├── CMakePresets.json       # Пресеты: win-mingw-*, linux-gcc-*, stm32-*
 ├── HARDWARE.md
 ├── TODO.md
 └── README.md
@@ -175,16 +179,52 @@ purrgo/
 
 ## Building
 
-Инициализация сабмодулей 
+Инициализация сабмодулей:
 
+```sh
 git submodule update --init --recursive
+```
 
-PC-версия использует:
+Проект собирается из **корня репозитория**. Что именно собирать (PC-эмулятор или
+прошивку STM32, Debug или Release) выбирается **CMake-пресетом** из
+[`CMakePresets.json`](CMakePresets.json), а не выбором папки проекта.
 
-- C11;
-- CMake;
-- MinGW-w64 GCC или MSVC;
-- Visual Studio Code.
+| Пресет | Что собирается | Окружение |
+|---|---|---|
+| `win-mingw-debug`, `win-mingw-release` | PC-эмулятор (SDL2) | Windows, MSYS2 ucrt64 (`C:/msys64/ucrt64`) |
+| `linux-gcc-debug`, `linux-gcc-release` | PC-эмулятор (SDL2) | Linux, GCC, Ninja, `libsdl2-dev` |
+| `stm32-debug`, `stm32-release` | Прошивка STM32F411 | `arm-none-eabi-gcc` в `PATH`, Ninja |
+
+Пресеты, неподходящие для текущей ОС, в списке не показываются.
+
+### Visual Studio Code
+
+Откройте корень репозитория (или `purrgo.code-workspace`), установите расширение
+CMake Tools и выберите пресет в строке состояния. Для STM32 расширение
+STM32Cube for VS Code предоставляет `cube-cmake` (см. `.vscode/settings.json`).
+Отладка прошивки — конфигурация `Cortex Debug: OpenOCD (PurrGO)`: она берёт `.elf`
+активного пресета.
+
+### Командная строка
+
+```sh
+cmake --preset stm32-debug
+cmake --build --preset stm32-debug
+```
+
+Результат сборки: `out/build/<пресет>/`. Прошивка — `out/build/stm32-*/PurrGO_STM32.elf`,
+эмулятор — `out/build/<пресет>/apps/emulator/purrgo_emulator`.
+
+Платформу выбирает переменная `PURRGO_PLATFORM` (`pc` | `stm32`), которую задаёт
+пресет. Без пресета `cmake -S . -B build` собирает PC-эмулятор.
+
+### STM32CubeMX
+
+CubeMX-проект находится в `apps/stm32/PurrGO_STM32/` (`.ioc`, `Core/`, `Drivers/`, ...).
+Перегенерация кода обновляет `cmake/stm32cubemx/CMakeLists.txt` и
+`cmake/gcc-arm-none-eabi.cmake` в этой папке — они подхватываются автоматически.
+`apps/stm32/PurrGO_STM32/CMakeLists.txt` (пользовательский, CubeMX его не перезаписывает)
+подключается из корневого `CMakeLists.txt` и самостоятельно не конфигурируется.
 
 ---
 

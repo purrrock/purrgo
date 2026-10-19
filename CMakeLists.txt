@@ -1,51 +1,74 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.22)
 
-project(purrgo C)
+# ==============================================================================
+# PurrGO — единая точка входа сборки.
+#
+# Конфигурация выбирается CMake-пресетом (см. CMakePresets.json), а не выбором
+# корневой папки проекта:
+#
+#   win-mingw-debug / win-mingw-release  — PC-эмулятор, Windows (MSYS2 ucrt64)
+#   linux-gcc-debug / linux-gcc-release  — PC-эмулятор, Linux
+#   stm32-debug     / stm32-release      — прошивка STM32 (arm-none-eabi-gcc)
+#
+# Платформу задаёт кэш-переменная PURRGO_PLATFORM (pc | stm32), которую
+# выставляет пресет. Без пресета по умолчанию собирается PC-эмулятор.
+# ==============================================================================
+
+set(PURRGO_PLATFORM "pc" CACHE STRING "Target platform: pc | stm32")
+set_property(CACHE PURRGO_PLATFORM PROPERTY STRINGS pc stm32)
+if(NOT PURRGO_PLATFORM MATCHES "^(pc|stm32)$")
+    message(FATAL_ERROR "PURRGO_PLATFORM must be 'pc' or 'stm32' (got '${PURRGO_PLATFORM}')")
+endif()
+
+# Тип сборки по умолчанию для одноконфигурационных генераторов.
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type")
+endif()
+
+# compile_commands.json для clangd / IntelliSense.
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+if(PURRGO_PLATFORM STREQUAL "stm32")
+    project(purrgo LANGUAGES C ASM)
+else()
+    project(purrgo LANGUAGES C)
+endif()
+
+message(STATUS "PurrGO platform: ${PURRGO_PLATFORM}, build type: ${CMAKE_BUILD_TYPE}")
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
-set(CMAKE_C_EXTENSIONS OFF)
-
-# Опции эмуляции GNSS
-option(USE_MOCK_GNSS "Enable mock GNSS data generator" ON)
-if(USE_MOCK_GNSS)
-    add_compile_definitions(USE_MOCK_GNSS)
+if(PURRGO_PLATFORM STREQUAL "pc")
+    set(CMAKE_C_EXTENSIONS OFF)
+else()
+    # Как и раньше для прошивки: gnu11 (код CubeMX/HAL рассчитан на расширения).
+    set(CMAKE_C_EXTENSIONS ON)
 endif()
 
-# Внешние зависимости (например, minmea)
-add_subdirectory(third_party)
+# Опции эмуляции GNSS (только PC; в прошивке мок не используется).
+if(PURRGO_PLATFORM STREQUAL "pc")
+    option(USE_MOCK_GNSS "Enable mock GNSS data generator" ON)
+    if(USE_MOCK_GNSS)
+        add_compile_definitions(USE_MOCK_GNSS)
+    endif()
+endif()
 
 # ==============================================================================
-# 1. ПОРТАТИВНОЕ ЯДРО
+# Общая часть: внешние зависимости и портативное ядро
 # ==============================================================================
 
-# Автоматически ищем все .c файлы в src/core и её подпапках
-file(GLOB_RECURSE CORE_SOURCES CONFIGURE_DEPENDS "src/core/*.c")
-
-add_library(purrgo_core STATIC ${CORE_SOURCES})
-
-target_include_directories(purrgo_core PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
-
-target_link_libraries(purrgo_core PRIVATE minmea)
+add_subdirectory(third_party)   # minmea
+add_subdirectory(src/core)      # purrgo_core
 
 # ==============================================================================
-# 2. PC APPLICATIONS
+# Платформа
 # ==============================================================================
 
-message(STATUS "--- Target: PC Applications (.exe) ---")
-
-# Платформенный слой для ПК
-file(GLOB_RECURSE PC_PLATFORM_SOURCES CONFIGURE_DEPENDS "src/platform/pc/*.c")
-
-add_library(purrgo_platform_pc STATIC ${PC_PLATFORM_SOURCES})
-
-target_include_directories(purrgo_platform_pc PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/platform/pc
-)
-
-# Графический эмулятор
-add_subdirectory(apps/emulator)
-
+if(PURRGO_PLATFORM STREQUAL "pc")
+    message(STATUS "--- Target: PC Applications ---")
+    add_subdirectory(src/platform/pc)   # purrgo_platform_pc
+    add_subdirectory(apps/emulator)     # purrgo_emulator
+else()
+    message(STATUS "--- Target: STM32 firmware ---")
+    add_subdirectory(apps/stm32/PurrGO_STM32)
+endif()
