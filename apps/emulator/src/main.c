@@ -30,6 +30,7 @@
 #include <purrgo/sun.h>
 #include <purrgo/map.h>
 #include <purrgo/fs_hal.h>
+#include <purrgo/system_time.h>
 
 #include "emu_window.h"
 #include <purrgo/app_ui.h>
@@ -131,13 +132,14 @@ static bool emulator_sys_init(int argc, char* argv[]) {
 }
 
 static void emulator_run_loop(void) {
-    uint32_t last_gnss_time = SDL_GetTicks();
+    /* Время ядра - только purrgo_system_time_ms(): им же ядро метит последний RMC. */
+    uint32_t last_gnss_time = purrgo_system_time_ms();
     uint32_t last_eink_refresh = 0;
 
     bool quit = false;
 
     while (!quit) {
-        uint32_t current_time = SDL_GetTicks();
+        uint32_t current_time = purrgo_system_time_ms();
 
         {
             uint8_t rx_byte;

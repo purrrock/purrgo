@@ -50,6 +50,15 @@ if(PURRGO_PLATFORM STREQUAL "pc")
     option(USE_MOCK_GNSS "Enable mock GNSS data generator" ON)
     if(USE_MOCK_GNSS)
         add_compile_definitions(USE_MOCK_GNSS)
+        # Стартовая точка mock (по умолчанию - Беларусь, 150 м). Пример для берега
+        # Мёртвого моря: -DPURRGO_MOCK_LAT_1E7=315590000 -DPURRGO_MOCK_LON_1E7=354731666
+        # -DPURRGO_MOCK_ALT_M=-430
+        foreach(_mock_var PURRGO_MOCK_LAT_1E7 PURRGO_MOCK_LON_1E7 PURRGO_MOCK_ALT_M)
+            set(${_mock_var} "" CACHE STRING "Override mock GNSS start value (empty = default)")
+            if(NOT "${${_mock_var}}" STREQUAL "")
+                add_compile_definitions(${_mock_var}=${${_mock_var}})
+            endif()
+        endforeach()
     endif()
 endif()
 
