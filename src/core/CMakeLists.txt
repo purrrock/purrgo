@@ -10,3 +10,7 @@ target_include_directories(purrgo_core PUBLIC
 
 # Линкуем библиотеку парсинга NMEA
 target_link_libraries(purrgo_core PRIVATE minmea)
+
+# Предупреждения (-Wall -Wextra -Wshadow -Wformat=2 -Wconversion -Wdouble-promotion),
+# -ffunction-sections -fdata-sections (см. cmake/PurrgoWarnings.cmake).
+purrgo_target_warnings(purrgo_core)

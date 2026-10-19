@@ -1,0 +1,20 @@
+# Статический анализ ядра (src/core, src/platform/pc). Запуск:
+#   clang-tidy -p out/build/linux-gcc-test src/core/*.c
+# Набор осознанно узкий: только проверки, находящие реальные дефекты (UB, выход за
+# границы, неинициализированные данные). Стилевые проверки не включены.
+Checks: >
+  -*,
+  clang-analyzer-core.*,
+  clang-analyzer-security.*,
+  -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,
+  clang-analyzer-unix.*,
+  clang-analyzer-deadcode.*,
+  bugprone-integer-division,
+  bugprone-sizeof-expression,
+  bugprone-suspicious-memset-usage,
+  bugprone-too-small-loop-variable,
+  bugprone-signed-char-misuse,
+  bugprone-misplaced-widening-cast,
+  bugprone-implicit-widening-of-multiplication-result
+WarningsAsErrors: ''
+HeaderFilterRegex: '(include/purrgo|src/core)/.*'

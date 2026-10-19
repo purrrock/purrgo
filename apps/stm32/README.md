@@ -7,7 +7,7 @@ Planned targets:
 - STM32F411CEU6 prototype ( or NUCLEO-F446RE )
 - STM32U585CIU6 final hardware
 
-Keep MCU startup code, HAL initialization, interrupt handlers and board wiring here or under `src/platform/stm32/`. Do not move those dependencies into `src/core/`.
+Keep MCU startup code, HAL initialization, interrupt handlers, board wiring and the STM32 platform adapters here (`PurrGO_STM32/Core/Src/`). Do not move those dependencies into `src/core/`.
 
 ## Build
 

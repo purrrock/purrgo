@@ -8,3 +8,5 @@ target_include_directories(purrgo_platform_pc PUBLIC
     ${PROJECT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
+
+purrgo_target_warnings(purrgo_platform_pc)

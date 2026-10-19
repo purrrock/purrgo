@@ -61,7 +61,7 @@ Portable C core разрабатывается и тестируется на PC
               v
 +---------------------------+
 |      Platform layer       |
-|   PC / STM32 / u-blox     |
+|        PC / STM32         |
 +-------------+-------------+
               |
               v
@@ -149,9 +149,9 @@ map.name
 ```text
 purrgo/
 ├── apps/
-│   ├── pc/                 # PC applications
-│   ├── stm32/              # STM32 application
-│   └── emulator/           # PC emulator
+│   ├── emulator/           # PC-эмулятор (SDL2)
+│   └── stm32/              # Прошивка STM32 (CubeMX-проект + пользовательский код)
+│       └── PurrGO_STM32/Core/Src/   # STM32-адаптеры: GNSS (UART+DMA), SD, дисплеи, кнопки, питание
 │
 ├── docs/                   # Project documentation
 ├── include/
@@ -159,15 +159,20 @@ purrgo/
 │
 ├── src/
 │   ├── core/               # Portable core
-│   └── platform/           # Platform-specific code
+│   └── platform/
+│       └── pc/             # PC-адаптеры (ФС, serial, дисплей, логгер)
 │
-├── tests/                  # Map test datasets and audit tools
-├── third_party/            # External dependencies
+├── tests/
+│   ├── host/               # Host-тесты ядра (ctest, ASan/UBSan) и тестовые данные
+│   └── audit_maps.py       # Аудит бинарных файлов карт
+├── third_party/            # External dependencies (сабмодули: minmea, e-Paper)
 ├── tools/                  # Development/build tools
 │
 ├── cmake/
-│   └── toolchains/         # CMake toolchain files (STM32)
+│   ├── toolchains/         # CMake toolchain files (STM32)
+│   └── PurrgoWarnings.cmake# Флаги предупреждений проекта
 │
+├── .github/workflows/      # CI (GitHub Actions)
 ├── CMakeLists.txt          # Единая точка входа сборки
 ├── CMakePresets.json       # Пресеты: win-mingw-*, linux-gcc-*, stm32-*
 ├── HARDWARE.md
@@ -193,6 +198,7 @@ git submodule update --init --recursive
 |---|---|---|
 | `win-mingw-debug`, `win-mingw-release` | PC-эмулятор (SDL2) | Windows, MSYS2 ucrt64 (`C:/msys64/ucrt64`) |
 | `linux-gcc-debug`, `linux-gcc-release` | PC-эмулятор (SDL2) | Linux, GCC, Ninja, `libsdl2-dev` |
+| `linux-gcc-test` | Только ядро + host-тесты, ASan/UBSan (без SDL2) | Linux, GCC, Ninja |
 | `stm32-debug`, `stm32-release` | Прошивка STM32F411 | `arm-none-eabi-gcc` в `PATH`, Ninja |
 
 Пресеты, неподходящие для текущей ОС, в списке не показываются.
@@ -228,19 +234,59 @@ CubeMX-проект находится в `apps/stm32/PurrGO_STM32/` (`.ioc`, `C
 
 ---
 
-## PC GNSS
+## Тестирование
 
-В репозитории имеется PC-приложение для работы с GNSS-приёмником через последовательный порт.
+Host-тесты проверяют переносимое ядро на ПК, без железа и без SDL2. Код запускается под
+AddressSanitizer и UndefinedBehaviorSanitizer; платформенный слой подменяется фейковой ФС
+с внедрением сбоев (`tests/host/fake_fs.c`).
 
-Пример запуска:
-
-```cmd
-.\build\apps\pc_realtime_logger\pc_realtime_logger.exe COM3
+```sh
+cmake --preset linux-gcc-test
+cmake --build --preset linux-gcc-test
+ctest --preset linux-gcc-test
 ```
 
-`COM3` необходимо заменить на порт GNSS-приёмника.
+Без CMake (только `gcc`, из корня репозитория): `sh tests/host/run.sh`.
 
-Приложение используется для проверки GNSS pipeline на реальном приёмнике до переноса соответствующего кода на STM32.
+| Тест | Что проверяет |
+|---|---|
+| `test_gnss` | Кольцевой буфер приёма GNSS (`purrgo/gnss_ring.h`), разбор NMEA на записанном логе `tests/host/data/gnss_sample.nmea`, повреждённые и усечённые фразы |
+| `test_map` | Парсер Map Format V3: корректная карта, повреждённые заголовки PGO/SQT/MLP, лимит глубины дерева, `v3_jump`, усечение и подмена байтов (фаззинг) |
+| `test_time_logger` | `purrgo_time` и `track_logger` на границах: високосные годы, 2099, полночь и Новый год с часовым поясом, год < 26, прореживание точек, RAM-кольцо трека |
+| `test_refact_critical` | Исправления из `TODO_refact.md` раздел 1: таймаут фикса, ошибки записи SD, атомарное сохранение конфига, политика перерисовки |
+
+Условия, которые сейчас не выполняются из-за известных дефектов (`TODO_refact.md`, раздел 2),
+помечены в тестах как `XFAIL`: это не провал. Когда дефект исправлен, тест печатает `XPASS` -
+тогда `XFAIL` нужно заменить на `CHECK`.
+
+Тесты на железе (SD, дисплей, ток, время кадра) в этот набор не входят.
+
+## CI
+
+`.github/workflows/ci.yml` на каждый push и pull request: host-тесты (ASan/UBSan), сборка
+PC-эмулятора, сборка прошивки STM32 (с выводом использования RAM/FLASH), `cppcheck`
+(блокирующий) и `clang-tidy` (информативный, набор проверок в `.clang-tidy`).
+
+### Флаги сборки
+
+Код проекта (`src/core`, `src/platform`, `apps/emulator`, пользовательские файлы прошивки)
+собирается с `-Wall -Wextra -Wshadow -Wformat=2 -Wconversion -Wdouble-promotion`
+(`cmake/PurrgoWarnings.cmake`); сторонний и сгенерированный CubeMX код - без них. Опция
+`-DPURRGO_WERROR=ON` превращает предупреждения в ошибки (кроме `-Wconversion`). Для
+прошивки `-ffunction-sections -fdata-sections -fstack-usage`, `--gc-sections` и
+`--print-memory-usage` задаёт CubeMX-тулчейн; для ПК секции добавляются тем же файлом.
+
+---
+
+## GNSS на ПК
+
+Эмулятор (`apps/emulator`) получает GNSS одним из двух способов:
+
+- по умолчанию (`USE_MOCK_GNSS=ON`) - встроенный генератор NMEA;
+- с реального приёмника через последовательный порт: сконфигурируйте с `-DUSE_MOCK_GNSS=OFF`
+  и запустите `purrgo_emulator COM3` (`COM3` замените на порт приёмника, скорость 9600).
+
+Так GNSS pipeline проверяется на реальном приёмнике до проверки на STM32.
 
 ---
 
@@ -251,6 +297,7 @@ CubeMX-проект находится в `apps/stm32/PurrGO_STM32/` (`.ioc`, `C
 | [`docs/architecture.md`](docs/architecture.md) | Архитектура программного обеспечения |
 | [`HARDWARE.md`](HARDWARE.md) | Аппаратная конфигурация |
 | [`TODO.md`](TODO.md) | Текущие задачи |
+| [`TODO_refact.md`](TODO_refact.md) | Результаты ревью кода и план исправлений |
 | [`docs/purrgo_map_specification_v3.md`](docs/purrgo_map_specification_v3.md) | Формат карт V3 |
 | [`docs/PurrGO Map Format V3 — Binary Format Conformance.md`](docs/PurrGO%20Map%20Format%20V3%20%E2%80%94%20Binary%20Format%20Conformance.md) | Conformance V3 |
 | [`tools/map-compiler/README.md`](tools/map-compiler/README.md) | Создание карт |

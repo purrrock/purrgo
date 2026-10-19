@@ -3,14 +3,20 @@ build/
 out/
 cmake-build-*/
 /compile_commands.json
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+.ninja_log
+*.exe
 
 # IDE/editor
 .idea/
 *.user
-*.userossc
+*.userosscache
 *.suo
+# .vscode/ коммитится намеренно (настройки CMake Tools, отладка); .clangd - тоже.
 
-# STM32CubeIDE / Eclipse
+# STM32CubeIDE / Eclipse / расширение STM32Cube для VS Code
 .metadata/
 .settings/
 .cproject
@@ -29,6 +35,8 @@ STM32CubeIDE/
 *.bin
 *.map
 *.lst
+*.su
+ai_project_dump.txt
 
 # Python caches
 __pycache__/
@@ -39,31 +47,7 @@ venv/
 # OS
 .DS_Store
 Thumbs.db
- 
- *.exe
- ai_project_dump.txt
- 
- build/
-CMakeCache.txt
-CMakeFiles/
-cmake_install.cmake
-Makefile
-third_party/CMakeFiles/
-third_party/Makefile
-third_party/cmake_install.cmake
-apps/emulator/CMakeFiles/
-apps/emulator/Makefile
-apps/emulator/cmake_install.cmake
-libpurrgo_core.a
-libpurrgo_platform_pc.a
-purrgo_pc
-pc_realtime_logger
-third_party/libminmea.a
-apps/emulator/purrgo_emulator
-.ninja_log
-.settings
-.clangd
-tests/data
 
-#maps
+# Карты (OSM-исходники и тестовые данные карт)
 *.osm
+tests/data

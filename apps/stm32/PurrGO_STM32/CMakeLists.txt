@@ -81,6 +81,23 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Core/Src/eink_test.c
 )
 
+# Предупреждения только для пользовательских файлов (не для CubeMX/HAL/драйвера Waveshare).
+# -ffunction-sections -fdata-sections -fstack-usage, --gc-sections и
+# --print-memory-usage уже заданы CubeMX-тулчейном (cmake/gcc-arm-none-eabi.cmake).
+purrgo_sources_warnings(
+    Core/Src/purrgo_logger.c
+    Core/Src/gnss_io.c
+    Core/Src/system_time.c
+    Core/Src/buttons.c
+    Core/Src/fs_hal_stm32.c
+    Core/Src/display_stm32.c
+    Core/Src/debug_buttons.c
+    Core/Src/power_stm32.c
+    Core/Src/stm32_app.c
+    Core/Src/display_eink.c
+    Core/Src/eink_test.c
+)
+
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${PROJECT_SOURCE_DIR}/include
