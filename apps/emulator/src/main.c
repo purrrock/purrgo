@@ -172,11 +172,10 @@ static void emulator_run_loop(void) {
         if (current_time - last_eink_refresh >= EINK_REFRESH_PERIOD_MS) {
             last_eink_refresh = current_time;
 
-            if (purrgo_app_ui_is_dirty() || purrgo_ui_map_is_dirty()) {
+            if (purrgo_app_ui_needs_render(current_time)) {
                 int last_calls = dbg_map_render_calls;
 
                 purrgo_app_ui_render(&global_gfx_ctx, purrgo_app_get_gnss_solution(), purrgo_app_get_sun_info());
-                purrgo_app_ui_clear_dirty();
 
                 if (last_calls != dbg_map_render_calls) {
                     printf("MAP RENDER EXECUTED. Total renders: %d\n", dbg_map_render_calls);

@@ -22,12 +22,21 @@ typedef enum {
 } fs_mode_t;
 
 purrgo_file_t* purrgo_fs_open(const char* filepath, fs_mode_t mode);
+/* Возвращает число реально записанных байт; значение меньше size означает ошибку записи. */
 uint32_t purrgo_fs_write(purrgo_file_t* file, const uint8_t* data, uint32_t size);
 // Добавлена функция чтения (уже использовалась в прототипе gpx_parser)
 uint32_t purrgo_fs_read(purrgo_file_t* file, uint8_t* buffer, uint32_t size);
 bool purrgo_fs_seek(purrgo_file_t* file, uint32_t offset);
-void purrgo_fs_sync(purrgo_file_t* file);
-void purrgo_fs_close(purrgo_file_t* file);
+/* true - данные сброшены на носитель. false - ошибка (файл следует закрыть и открыть заново). */
+bool purrgo_fs_sync(purrgo_file_t* file);
+/* Файл закрывается (слот освобождается) в любом случае; false - данные могли быть потеряны. */
+bool purrgo_fs_close(purrgo_file_t* file);
+/*
+ * Заменяет файл dst файлом src (src перестаёт существовать).
+ * Используется для атомарного сохранения: запись во временный файл, sync, replace.
+ * Оба файла должны быть закрыты.
+ */
+bool purrgo_fs_replace(const char* src, const char* dst);
 
 purrgo_dir_t* purrgo_fs_opendir(const char* path);
 bool purrgo_fs_readdir(purrgo_dir_t* dir, purrgo_fs_dirent_t* dirent);

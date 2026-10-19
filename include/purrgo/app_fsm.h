@@ -97,10 +97,25 @@ typedef enum {
     PURRGO_MAP_SCALE_COUNT
 } purrgo_map_scale_t;
 
-// Глобальный флаг перерисовки UI
+/*
+ * Перерисовка UI.
+ *
+ * Единственный владелец флагов - ядро; платформенный цикл только спрашивает
+ * purrgo_app_ui_needs_render() и вызывает purrgo_app_ui_render(), ничего
+ * не сбрасывая сам:
+ *   - ui_dirty (общий флаг) забирает purrgo_app_ui_render() в начале прохода;
+ *   - map_dirty (полная перерисовка карты) сбрасывает ui_render_map() только
+ *     после успешной отрисовки; при неудаче проход повторяется через
+ *     purrgo_app_ui_defer_render() ограниченное число раз.
+ */
 void purrgo_app_ui_mark_dirty(void);
-bool purrgo_app_ui_is_dirty(void);
-void purrgo_app_ui_clear_dirty(void);
+bool purrgo_app_ui_needs_render(uint32_t now_ms);
+
+// Вызывается из purrgo_app_ui_render(): забрать общий флаг перед отрисовкой.
+void purrgo_app_ui_consume_dirty(void);
+
+// Не начинать новый проход отрисовки раньше, чем через delay_ms (повтор после неудачи).
+void purrgo_app_ui_defer_render(uint32_t delay_ms);
 
 
 // Функция применения часового пояса с календарным пересчетом (влияет на локальное время и расчет восхода/заката)

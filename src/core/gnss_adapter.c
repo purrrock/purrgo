@@ -59,10 +59,12 @@ static int32_t convert_to_1e7(struct minmea_float f)
     return (int32_t)(f.value < 0 ? -result : result);
 }
 
-void purrgo_gnss_process_nmea(const char *nmea_line, purrgo_gnss_solution_t *solution) {
+bool purrgo_gnss_process_nmea(const char *nmea_line, purrgo_gnss_solution_t *solution) {
+    bool rmc_parsed = false;
+
     // Validate checksum strictly before modifying the solution
     if (!minmea_check(nmea_line, true)) {
-        return;
+        return false;
     }
 
     // Определение типа NMEA-сообщения
@@ -70,6 +72,7 @@ void purrgo_gnss_process_nmea(const char *nmea_line, purrgo_gnss_solution_t *sol
         case MINMEA_SENTENCE_RMC: {
             struct minmea_sentence_rmc frame;
             if (minmea_parse_rmc(&frame, nmea_line)) {
+                rmc_parsed = true;
                 solution->valid = frame.valid;
                 if (frame.valid) {
                     solution->lat_1e7 = convert_to_1e7(frame.latitude);
@@ -132,5 +135,7 @@ void purrgo_gnss_process_nmea(const char *nmea_line, purrgo_gnss_solution_t *sol
             // Игнорируем $GPVTG, $GPGSV, $GPGLL и проприетарные $GPTXT от u-blox
             break;
     }
+
+    return rmc_parsed;
 }
 

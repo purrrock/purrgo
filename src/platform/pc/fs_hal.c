@@ -100,17 +100,34 @@ bool purrgo_fs_seek(
 }
 
 
-void purrgo_fs_sync(purrgo_file_t* file) {
-    if (file) {
-        fflush((FILE*)file);
+bool purrgo_fs_sync(purrgo_file_t* file) {
+    if (!file) {
+        return false;
     }
+    return fflush((FILE*)file) == 0;
 }
 
 
-void purrgo_fs_close(purrgo_file_t* file) {
-    if (file) {
-        fclose((FILE*)file);
+bool purrgo_fs_close(purrgo_file_t* file) {
+    if (!file) {
+        return false;
     }
+    return fclose((FILE*)file) == 0;
+}
+
+
+bool purrgo_fs_replace(const char* src, const char* dst) {
+    if (!src || !dst) {
+        return false;
+    }
+
+    if (rename(src, dst) == 0) {
+        return true;
+    }
+
+    /* На Windows rename() не заменяет существующий файл. */
+    remove(dst);
+    return rename(src, dst) == 0;
 }
 
 

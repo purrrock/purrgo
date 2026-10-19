@@ -122,6 +122,54 @@ void purrgo_config_init(void)
 }
 
 
+#define CONFIG_PATH_MAX 96
+
+/* Путь временного файла для атомарного сохранения: <config>.TMP */
+static bool config_make_tmp_path(char* out, size_t out_size)
+{
+    int n = purrgo_snprintf(out, out_size, "%s.TMP", purrgo_fs_get_config_path());
+    return n > 0 && (size_t)n < out_size;
+}
+
+/*
+ * Восстановление после прерванного сохранения.
+ *
+ * purrgo_fs_replace() на FatFs выполняется как "удалить старый, переименовать
+ * временный", поэтому при потере питания между этими шагами PURRGO.CFG
+ * отсутствует, а полный и синхронизированный PURRGO.CFG.TMP есть.
+ * Если рабочего конфига нет, а временный файл заканчивается переводом
+ * строки (то есть не оборван посреди записи), завершаем замену.
+ */
+static void config_recover_interrupted_save(void)
+{
+    const char* cfg_path = purrgo_fs_get_config_path();
+
+    purrgo_file_t* file = purrgo_fs_open(cfg_path, FS_READ);
+    if (file) {
+        (void)purrgo_fs_close(file);
+        return;
+    }
+
+    char tmp_path[CONFIG_PATH_MAX];
+    if (!config_make_tmp_path(tmp_path, sizeof(tmp_path))) {
+        return;
+    }
+
+    file = purrgo_fs_open(tmp_path, FS_READ);
+    if (!file) {
+        return;
+    }
+
+    char buf[CONFIG_MAX_SIZE];
+    uint32_t n = purrgo_fs_read(file, (uint8_t*)buf, (uint32_t)sizeof(buf));
+    (void)purrgo_fs_close(file);
+
+    if (n > 0 && n < sizeof(buf) && buf[n - 1] == '\n') {
+        PURRGO_LOG("Recovering config from interrupted save\r\n");
+        (void)purrgo_fs_replace(tmp_path, cfg_path);
+    }
+}
+
 bool purrgo_config_load(void)
 {
     /*
@@ -132,6 +180,8 @@ bool purrgo_config_load(void)
      */
     PURRGO_LOG("DEFAULT CONFIG VALUES SET\r\n");
     purrgo_config_init();
+
+    config_recover_interrupted_save();
 
     PURRGO_LOG("LOADING CONFIG FROM FILE: %s\r\n", purrgo_fs_get_config_path());
     purrgo_file_t* file = purrgo_fs_open(
@@ -387,16 +437,15 @@ bool purrgo_config_save(void)
         purrgo_fs_get_config_path()
     );
 
-    purrgo_file_t* file = purrgo_fs_open(
-        purrgo_fs_get_config_path(),
-        FS_WRITE_CREATE
-    );
-
-    if (!file) {
-        PURRGO_LOG(
-            "purrgo_config_save: failed to open file\n\r"
-        );
-
+    /*
+     * Атомарное сохранение: текст формируется заранее и пишется во
+     * временный файл. Рабочий PURRGO.CFG заменяется только после того,
+     * как временный файл полностью записан и синхронизирован.
+     * Сбой питания или ошибка SD в середине записи оставляет старый
+     * конфиг нетронутым.
+     */
+    char tmp_path[CONFIG_PATH_MAX];
+    if (!config_make_tmp_path(tmp_path, sizeof(tmp_path))) {
         return false;
     }
 
@@ -464,27 +513,48 @@ bool purrgo_config_save(void)
         len < 0 ||
         (size_t)len >= sizeof(buf)
     ) {
-        purrgo_fs_close(file);
+        PURRGO_LOG("purrgo_config_save: config does not fit buffer\n\r");
         return false;
     }
 
-    /*
-     * Проверяем фактическое количество записанных байт.
-     */
+    purrgo_file_t* file = purrgo_fs_open(
+        tmp_path,
+        FS_WRITE_CREATE
+    );
+
+    if (!file) {
+        PURRGO_LOG(
+            "purrgo_config_save: failed to open temporary file\n\r"
+        );
+
+        return false;
+    }
+
     uint32_t written = purrgo_fs_write(
         file,
         (const uint8_t*)buf,
         (uint32_t)len
     );
 
-    if (written != (uint32_t)len) {
-        purrgo_fs_close(file);
+    bool ok = (written == (uint32_t)len);
+
+    if (ok) {
+        ok = purrgo_fs_sync(file);
+    }
+
+    if (!purrgo_fs_close(file)) {
+        ok = false;
+    }
+
+    if (!ok) {
+        PURRGO_LOG("purrgo_config_save: write error\n\r");
         return false;
     }
 
-    purrgo_fs_sync(file);
-
-    purrgo_fs_close(file);
+    if (!purrgo_fs_replace(tmp_path, purrgo_fs_get_config_path())) {
+        PURRGO_LOG("purrgo_config_save: replace error\n\r");
+        return false;
+    }
 
     return true;
 }
