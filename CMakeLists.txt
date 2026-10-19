@@ -53,6 +53,22 @@ if(PURRGO_PLATFORM STREQUAL "pc")
     endif()
 endif()
 
+# Опции сборки (только PC).
+#   PURRGO_BUILD_EMULATOR - собирать SDL2-эмулятор (нужен SDL2); без него можно
+#                           собрать ядро и host-тесты.
+#   PURRGO_BUILD_TESTS    - host-тесты (tests/host), запуск через ctest.
+#   PURRGO_SANITIZE       - ASan + UBSan для ядра и тестов (GCC/Clang).
+option(PURRGO_BUILD_EMULATOR "Build the SDL2 PC emulator (pc platform)" ON)
+option(PURRGO_BUILD_TESTS    "Build host unit tests (pc platform)" OFF)
+option(PURRGO_SANITIZE       "Enable AddressSanitizer + UndefinedBehaviorSanitizer" OFF)
+
+if(PURRGO_SANITIZE)
+    add_compile_options(-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer)
+    add_link_options(-fsanitize=address,undefined)
+endif()
+
+include(cmake/PurrgoWarnings.cmake)
+
 # ==============================================================================
 # Общая часть: внешние зависимости и портативное ядро
 # ==============================================================================
@@ -67,7 +83,13 @@ add_subdirectory(src/core)      # purrgo_core
 if(PURRGO_PLATFORM STREQUAL "pc")
     message(STATUS "--- Target: PC Applications ---")
     add_subdirectory(src/platform/pc)   # purrgo_platform_pc
-    add_subdirectory(apps/emulator)     # purrgo_emulator
+    if(PURRGO_BUILD_EMULATOR)
+        add_subdirectory(apps/emulator) # purrgo_emulator
+    endif()
+    if(PURRGO_BUILD_TESTS)
+        enable_testing()
+        add_subdirectory(tests/host)
+    endif()
 else()
     message(STATUS "--- Target: STM32 firmware ---")
     add_subdirectory(apps/stm32/PurrGO_STM32)

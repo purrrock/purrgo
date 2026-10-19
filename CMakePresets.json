@@ -1,6 +1,10 @@
 {
     "version": 3,
-    "cmakeMinimumRequired": { "major": 3, "minor": 22, "patch": 0 },
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 22,
+        "patch": 0
+    },
     "configurePresets": [
         {
             "name": "base",
@@ -11,7 +15,6 @@
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
             }
         },
-
         {
             "name": "pc-base",
             "hidden": true,
@@ -25,7 +28,11 @@
             "hidden": true,
             "inherits": "pc-base",
             "generator": "MinGW Makefiles",
-            "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            },
             "cacheVariables": {
                 "CMAKE_C_COMPILER": "C:/msys64/ucrt64/bin/gcc.exe"
             }
@@ -34,34 +41,57 @@
             "name": "win-mingw-debug",
             "displayName": "Windows MinGW (ucrt64) - Debug",
             "inherits": "win-mingw-base",
-            "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
         },
         {
             "name": "win-mingw-release",
             "displayName": "Windows MinGW (ucrt64) - Release",
             "inherits": "win-mingw-base",
-            "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
         },
         {
             "name": "linux-gcc-base",
             "hidden": true,
             "inherits": "pc-base",
             "generator": "Ninja",
-            "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux" }
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            }
         },
         {
             "name": "linux-gcc-debug",
             "displayName": "Linux GCC - Debug",
             "inherits": "linux-gcc-base",
-            "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
         },
         {
             "name": "linux-gcc-release",
             "displayName": "Linux GCC - Release",
             "inherits": "linux-gcc-base",
-            "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
         },
-
+        {
+            "name": "linux-gcc-test",
+            "displayName": "Linux GCC - host tests (ASan+UBSan, no SDL2)",
+            "inherits": "linux-gcc-base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "PURRGO_BUILD_TESTS": "ON",
+                "PURRGO_BUILD_EMULATOR": "OFF",
+                "PURRGO_SANITIZE": "ON",
+                "USE_MOCK_GNSS": "OFF"
+            }
+        },
         {
             "name": "stm32-base",
             "hidden": true,
@@ -76,37 +106,86 @@
             "name": "stm32-debug",
             "displayName": "STM32F411 firmware - Debug",
             "inherits": "stm32-base",
-            "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
         },
         {
             "name": "stm32-release",
             "displayName": "STM32F411 firmware - Release",
             "inherits": "stm32-base",
-            "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
         }
     ],
     "buildPresets": [
         {
             "name": "win-mingw-debug",
             "configurePreset": "win-mingw-debug",
-            "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            }
         },
         {
             "name": "win-mingw-release",
             "configurePreset": "win-mingw-release",
-            "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            }
         },
         {
             "name": "linux-gcc-debug",
             "configurePreset": "linux-gcc-debug",
-            "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux" }
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            }
         },
         {
             "name": "linux-gcc-release",
             "configurePreset": "linux-gcc-release",
-            "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux" }
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            }
         },
-        { "name": "stm32-debug",   "configurePreset": "stm32-debug" },
-        { "name": "stm32-release", "configurePreset": "stm32-release" }
+        {
+            "name": "linux-gcc-test",
+            "configurePreset": "linux-gcc-test",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            }
+        },
+        {
+            "name": "stm32-debug",
+            "configurePreset": "stm32-debug"
+        },
+        {
+            "name": "stm32-release",
+            "configurePreset": "stm32-release"
+        }
+    ],
+    "testPresets": [
+        {
+            "name": "linux-gcc-test",
+            "configurePreset": "linux-gcc-test",
+            "output": {
+                "outputOnFailure": true
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            }
+        }
     ]
 }

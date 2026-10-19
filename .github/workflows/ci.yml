@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Host-тесты ядра: ASan + UBSan (пресет linux-gcc-test, SDL2 не нужен).
+  host-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Submodule minmea
+        run: git submodule update --init --depth 1 third_party/minmea
+      - name: Install
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+      - name: Configure
+        run: cmake --preset linux-gcc-test
+      - name: Build
+        run: cmake --build --preset linux-gcc-test
+      - name: Test
+        run: ctest --preset linux-gcc-test
+
+  # Эмулятор для ПК (проверяет, что ядро собирается вместе с SDL2-приложением).
+  build-pc:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Submodule minmea
+        run: git submodule update --init --depth 1 third_party/minmea
+      - name: Install
+        run: sudo apt-get update && sudo apt-get install -y ninja-build libsdl2-dev
+      - name: Configure
+        run: cmake --preset linux-gcc-release
+      - name: Build
+        run: cmake --build --preset linux-gcc-release
+
+  # Прошивка STM32F411 (arm-none-eabi-gcc). В логе - использование RAM/FLASH
+  # (-Wl,--print-memory-usage), .su-файлы со стеком лежат рядом с объектами.
+  build-stm32:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Submodules
+        run: git submodule update --init --depth 1
+      - name: Install
+        run: sudo apt-get update && sudo apt-get install -y ninja-build gcc-arm-none-eabi
+      - name: Configure
+        run: cmake --preset stm32-release
+      - name: Build
+        run: cmake --build --preset stm32-release
+      - name: Size and soft-float check
+        run: |
+          arm-none-eabi-size out/build/stm32-release/PurrGO_STM32.elf
+          echo "--- soft-float helpers (__aeabi_[fd]*), информативно ---"
+          arm-none-eabi-nm out/build/stm32-release/PurrGO_STM32.elf | grep -E "__aeabi_[fd]" || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PurrGO_STM32-release
+          path: |
+            out/build/stm32-release/PurrGO_STM32.elf
+            out/build/stm32-release/PurrGO_STM32.map
+
+  # Статический анализ ядра. cppcheck блокирует при ошибках/предупреждениях,
+  # clang-tidy информативный (набор проверок - в .clang-tidy).
+  static-analysis:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Submodule minmea
+        run: git submodule update --init --depth 1 third_party/minmea
+      - name: Install
+        run: sudo apt-get update && sudo apt-get install -y ninja-build cppcheck clang-tidy
+      - name: cppcheck
+        run: |
+          cppcheck --std=c11 --enable=warning,portability --inline-suppr \
+            --error-exitcode=1 -q \
+            -Iinclude -Isrc/core -Ithird_party/minmea -D__GNUC__ \
+            src/core src/platform/pc include
+      - name: Configure (compile_commands.json)
+        run: cmake --preset linux-gcc-test
+      - name: clang-tidy (informational)
+        continue-on-error: true
+        run: clang-tidy -p out/build/linux-gcc-test src/core/*.c src/core/*/*.c

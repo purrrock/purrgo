@@ -1,4 +1,5 @@
 #include "purrgo/gnss_io.h"
+#include "purrgo/gnss_ring.h"
 #include "usart.h"
 
 #include <stdbool.h>
@@ -14,9 +15,8 @@
  * После достижения конца массива DMA начинает запись с начала.
  */
 #define GNSS_RX_BUFFER_SIZE 1024U
-#define GNSS_RX_BUFFER_MASK (GNSS_RX_BUFFER_SIZE - 1U)
 
-#if (GNSS_RX_BUFFER_SIZE & GNSS_RX_BUFFER_MASK) != 0U
+#if (GNSS_RX_BUFFER_SIZE & (GNSS_RX_BUFFER_SIZE - 1U)) != 0U
 #error "GNSS_RX_BUFFER_SIZE must be a power of two"
 #endif
 
@@ -29,20 +29,15 @@
 static uint8_t gnss_rx_buffer[GNSS_RX_BUFFER_SIZE];
 
 /*
- * Индекс (0..GNSS_RX_BUFFER_SIZE-1) следующего байта, который должен
- * прочитать потребитель.
- *
- * Положение DMA-producer берётся только из счётчика NDTR. Отдельный
- * счётчик "оборотов", увеличиваемый в прерывании TC, не используется:
- * между перезагрузкой NDTR и обработкой прерывания пара (wrap, NDTR)
- * оказывалась несогласованной, и потребитель мог потерять до одного
- * буфера данных.
+ * Потребитель кольцевого буфера (индекс tail и расчёт положения DMA по NDTR).
+ * Логика вынесена в purrgo/gnss_ring.h и проверяется host-тестами
+ * (tests/host/test_gnss.c).
  *
  * Условие корректности: потребитель обязан вызывать
  * purrgo_gnss_read_byte() чаще, чем DMA заполняет весь буфер
  * (при 9600 бод и 1024 байтах это ~1.07 с).
  */
-static uint16_t gnss_rx_tail;
+static purrgo_gnss_ring_t gnss_ring;
 
 /*
  * Флаг ошибки UART.
@@ -52,26 +47,6 @@ static uint16_t gnss_rx_tail;
  * безопасного перезапуска без гонки данных.
  */
 static volatile bool gnss_rx_error_flag = false;
-
-/**
- * @brief Индекс, в который DMA запишет СЛЕДУЮЩИЙ принятый байт.
- */
-static uint16_t gnss_rx_get_head(void)
-{
-    uint32_t ndtr = __HAL_DMA_GET_COUNTER(huart1.hdmarx);
-
-    /*
-     * В circular-режиме NDTR изменяется в диапазоне 1..N и затем
-     * перезагружается значением N. Значение 0 (кратковременное)
-     * и значения вне диапазона трактуем как "буфер полностью свободен".
-     */
-    if ((ndtr == 0U) || (ndtr > GNSS_RX_BUFFER_SIZE))
-    {
-        ndtr = GNSS_RX_BUFFER_SIZE;
-    }
-
-    return (uint16_t)((GNSS_RX_BUFFER_SIZE - ndtr) & GNSS_RX_BUFFER_MASK);
-}
 
 /**
  * @brief Отправить NMEA-команду, добавив '$', контрольную сумму и CRLF.
@@ -110,7 +85,7 @@ void purrgo_gnss_init(void)
     /*
      * Сначала сбрасываем состояние software producer/consumer.
      */
-    gnss_rx_tail = 0U;
+    (void)purrgo_gnss_ring_init(&gnss_ring, gnss_rx_buffer, GNSS_RX_BUFFER_SIZE);
     gnss_rx_error_flag = false;
 
     /*
@@ -174,7 +149,7 @@ bool purrgo_gnss_read_byte(uint8_t *byte)
     if (gnss_rx_error_flag)
     {
         gnss_rx_error_flag = false;
-        gnss_rx_tail = 0U;
+        purrgo_gnss_ring_reset(&gnss_ring);
 
         if (HAL_UART_Receive_DMA(
                 &huart1,
@@ -186,18 +161,11 @@ bool purrgo_gnss_read_byte(uint8_t *byte)
         return false;
     }
 
-    head = gnss_rx_get_head();
+    head = purrgo_gnss_ring_head_from_ndtr(&gnss_ring,
+                                           __HAL_DMA_GET_COUNTER(huart1.hdmarx));
 
-    /* Новых данных нет. */
-    if (head == gnss_rx_tail)
-    {
-        return false;
-    }
-
-    *byte = gnss_rx_buffer[gnss_rx_tail];
-    gnss_rx_tail = (uint16_t)((gnss_rx_tail + 1U) & GNSS_RX_BUFFER_MASK);
-
-    return true;
+    /* false - новых данных нет. */
+    return purrgo_gnss_ring_pop(&gnss_ring, head, byte);
 }
 
 /**

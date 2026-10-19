@@ -1,4 +1,2 @@
 CompileFlags:
-  # compile_commands.json копируется в корень репозитория расширением CMake Tools
-  # (cmake.copyCompileCommands) после конфигурации активного пресета.
-  CompilationDatabase: .
+  CompilationDatabase: out/build/win-mingw-debug

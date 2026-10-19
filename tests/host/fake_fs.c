@@ -16,12 +16,15 @@ static struct purrgo_file_s handles[8];
 static int handle_used[8];
 
 fake_fs_faults_t g_fault;
+static int open_calls;
+int fake_fs_open_calls(void) { return open_calls; }
 
 void fake_fs_reset(void) {
     for (int i = 0; i < 32; i++) { free(files[i].data); }
     memset(files, 0, sizeof(files));
     memset(handle_used, 0, sizeof(handle_used));
     memset(&g_fault, 0, sizeof(g_fault));
+    open_calls = 0;
 }
 
 static int find(const char* n) {
@@ -45,7 +48,20 @@ void fake_fs_put(const char* n, const char* text) {
     files[i].used = 1;
 }
 
+void fake_fs_put_bin(const char* n, const uint8_t* d, uint32_t size) {
+    int i = find(n);
+    if (i < 0) { for (i = 0; i < 32 && files[i].used; i++); }
+    free(files[i].data);
+    snprintf(files[i].name, sizeof(files[i].name), "%s", n);
+    files[i].size = size;
+    files[i].data = malloc(size + 1u);
+    if (size) { memcpy(files[i].data, d, size); }
+    files[i].data[size] = 0;
+    files[i].used = 1;
+}
+
 purrgo_file_t* purrgo_fs_open(const char* p, fs_mode_t m) {
+    open_calls++;
     if (g_fault.fail_open_append && m == FS_WRITE_APPEND) return NULL;
     if (g_fault.fail_open_all) return NULL;
     int i = find(p);

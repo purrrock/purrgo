@@ -6,6 +6,11 @@
 
 # 1. Завершение PC-версии
 
+Выполнено: переносимое ядро, эмулятор, host-тесты и CI (см. `TODO_refact.md`, раздел 5). Остальные пункты PC-версии перенесены в разделы ниже.
+
+- [x] Host-тесты ядра (ASan/UBSan) и CI.
+- [ ] Закрыть оставшиеся пункты `TODO_refact.md` (разделы 2-4).
+
 # 2. Навигация по Waypoint
 
 Маршрутизация в PurrGO не реализуется.
@@ -19,7 +24,7 @@
 
 ---
 
-# 4. Planned route
+# 3. Planned route
 
 Расчёт маршрута не входит в PurrGO.
 
@@ -29,7 +34,7 @@
 
 ---
 
-# 5. Release display
+# 4. Release display
 
 Release-дисплей выбран:
 
@@ -47,7 +52,7 @@ Release-дисплей выбран:
 
 ---
 
-# 6. microSD
+# 5. microSD
 
 - [ ] Выбрать low-voltage microSD-модуль для Release.
 - [X] Реализовать STM32 SPI driver.
@@ -61,7 +66,7 @@ Release-дисплей выбран:
 
 ---
 
-# 7. GNSS
+# 6. GNSS
 
 ## STM32
 
@@ -76,7 +81,7 @@ Release-дисплей выбран:
 
 ---
 
-# 8. STM32 migration
+# 7. STM32 migration
 
 Целевой MCU Release:
 
@@ -121,7 +126,7 @@ Release-дисплей выбран:
 
 ---
 
-# 9. Power management
+# 8. Power management
 
 Цель автономной работы:
 
@@ -148,7 +153,7 @@ Release-дисплей выбран:
 
 ---
 
-# 10. User interface
+# 9. User interface
 
 - [X] Определить окончательное количество и расположение кнопок.
 - [X] Проверить, достаточно ли четырёх встроенных кнопок Waveshare для основного интерфейса.
@@ -159,7 +164,7 @@ Release-дисплей выбран:
 
 ---
 
-# 11. Встроенный TXT reader
+# 10. Встроенный TXT reader
 
 Дополнительная функция после основной навигационной части:
 
@@ -171,7 +176,7 @@ Release-дисплей выбран:
 
 ---
 
-# 12. Release validation
+# 11. Release validation
 
 Перед Release:
 
@@ -193,7 +198,7 @@ Release-дисплей выбран:
 
 ---
 
-# 13. После стабилизации Release
+# 12. После стабилизации Release
 
 - [ ] Запретить изменения Map Format V3 без увеличения версии формата.
 - [ ] Зафиксировать Release hardware configuration.
