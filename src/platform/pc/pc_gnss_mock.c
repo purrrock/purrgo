@@ -2,6 +2,22 @@
 #include <stdio.h>
 #include <string.h>
 
+/*
+ * Стартовая точка mock-приёмника. Переопределяется при конфигурации, например для
+ * проверки отрицательной высоты (берег Мёртвого моря):
+ *   cmake --preset linux-gcc-debug -DPURRGO_MOCK_LAT_1E7=315590000 \
+ *         -DPURRGO_MOCK_LON_1E7=354731666 -DPURRGO_MOCK_ALT_M=-430
+ */
+#ifndef PURRGO_MOCK_LAT_1E7
+#define PURRGO_MOCK_LAT_1E7 537135000
+#endif
+#ifndef PURRGO_MOCK_LON_1E7
+#define PURRGO_MOCK_LON_1E7 284199000
+#endif
+#ifndef PURRGO_MOCK_ALT_M
+#define PURRGO_MOCK_ALT_M 150
+#endif
+
 static purrgo_gnss_solution_t state;
 static char nmea_buffer[384];
 static size_t nmea_len = 0;
@@ -87,12 +103,12 @@ void pc_gnss_mock_init(void) {
 
     // Base coordinates: 53.7135, 28.4199
     // Converted to int32_t * 10^7
-    state.lat_1e7 = 537135000;
-    state.lon_1e7 = 284199000;
+    state.lat_1e7 = PURRGO_MOCK_LAT_1E7;
+    state.lon_1e7 = PURRGO_MOCK_LON_1E7;
 
     // Static Mock data
     state.speed_knots = 269; // 5km/h ~ 2.69 knots -> 269
-    state.alt_m = 150;
+    state.alt_m = PURRGO_MOCK_ALT_M;
     state.satellites_tracked = 9;
 
     // Set course to valid and 45.00 degrees initially
