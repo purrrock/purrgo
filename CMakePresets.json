@@ -1,18 +1,112 @@
 {
-    "version": 8,
+    "version": 3,
+    "cmakeMinimumRequired": { "major": 3, "minor": 22, "patch": 0 },
     "configurePresets": [
         {
-            "name": "Debug",
-            "displayName": "GCC 16.2.0 x86_64-w64-mingw32 (ucrt64)",
-            "description": "Using compilers: C = C:\\msys64\\ucrt64\\bin\\gcc.exe, CXX = C:\\msys64\\ucrt64\\bin\\g++.exe",
-            "generator": "MinGW Makefiles",
+            "name": "base",
+            "hidden": true,
             "binaryDir": "${sourceDir}/out/build/${presetName}",
+            "installDir": "${sourceDir}/out/install/${presetName}",
             "cacheVariables": {
-                "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",
-                "CMAKE_C_COMPILER": "C:/msys64/ucrt64/bin/gcc.exe",
-                "CMAKE_CXX_COMPILER": "C:/msys64/ucrt64/bin/g++.exe",
-                "CMAKE_BUILD_TYPE": "Debug"
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
             }
+        },
+
+        {
+            "name": "pc-base",
+            "hidden": true,
+            "inherits": "base",
+            "cacheVariables": {
+                "PURRGO_PLATFORM": "pc"
+            }
+        },
+        {
+            "name": "win-mingw-base",
+            "hidden": true,
+            "inherits": "pc-base",
+            "generator": "MinGW Makefiles",
+            "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" },
+            "cacheVariables": {
+                "CMAKE_C_COMPILER": "C:/msys64/ucrt64/bin/gcc.exe"
+            }
+        },
+        {
+            "name": "win-mingw-debug",
+            "displayName": "Windows MinGW (ucrt64) - Debug",
+            "inherits": "win-mingw-base",
+            "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+        },
+        {
+            "name": "win-mingw-release",
+            "displayName": "Windows MinGW (ucrt64) - Release",
+            "inherits": "win-mingw-base",
+            "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+        },
+        {
+            "name": "linux-gcc-base",
+            "hidden": true,
+            "inherits": "pc-base",
+            "generator": "Ninja",
+            "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux" }
+        },
+        {
+            "name": "linux-gcc-debug",
+            "displayName": "Linux GCC - Debug",
+            "inherits": "linux-gcc-base",
+            "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+        },
+        {
+            "name": "linux-gcc-release",
+            "displayName": "Linux GCC - Release",
+            "inherits": "linux-gcc-base",
+            "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+        },
+
+        {
+            "name": "stm32-base",
+            "hidden": true,
+            "inherits": "base",
+            "generator": "Ninja",
+            "toolchainFile": "${sourceDir}/cmake/toolchains/stm32-gcc-arm-none-eabi.cmake",
+            "cacheVariables": {
+                "PURRGO_PLATFORM": "stm32"
+            }
+        },
+        {
+            "name": "stm32-debug",
+            "displayName": "STM32F411 firmware - Debug",
+            "inherits": "stm32-base",
+            "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+        },
+        {
+            "name": "stm32-release",
+            "displayName": "STM32F411 firmware - Release",
+            "inherits": "stm32-base",
+            "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
         }
+    ],
+    "buildPresets": [
+        {
+            "name": "win-mingw-debug",
+            "configurePreset": "win-mingw-debug",
+            "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
+        },
+        {
+            "name": "win-mingw-release",
+            "configurePreset": "win-mingw-release",
+            "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
+        },
+        {
+            "name": "linux-gcc-debug",
+            "configurePreset": "linux-gcc-debug",
+            "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux" }
+        },
+        {
+            "name": "linux-gcc-release",
+            "configurePreset": "linux-gcc-release",
+            "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux" }
+        },
+        { "name": "stm32-debug",   "configurePreset": "stm32-debug" },
+        { "name": "stm32-release", "configurePreset": "stm32-release" }
     ]
 }
