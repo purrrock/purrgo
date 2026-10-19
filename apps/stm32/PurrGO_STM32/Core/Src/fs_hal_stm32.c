@@ -228,14 +228,23 @@ uint32_t purrgo_fs_write(purrgo_file_t* file, const uint8_t* data, uint32_t size
 
     /* Синхронизируем физический указатель с логическим только перед записью */
     if (f_tell(&file->fil) != file->logical_offset) {
-        f_lseek(&file->fil, file->logical_offset);
+        FRESULT seek_res = f_lseek(&file->fil, file->logical_offset);
+        if (seek_res != FR_OK) {
+            PURRGO_LOG("purrgo_fs_write: seek error: %d\n\r", seek_res);
+            return 0;
+        }
     }
 
     UINT bw = 0;
     FRESULT res = f_write(&file->fil, data, (UINT)size, &bw);
-    if (res == FR_OK) {
-        file->logical_offset += bw; // Обновляем виртуальный указатель
+    if (res != FR_OK) {
+        PURRGO_LOG("purrgo_fs_write: write error: %d\n\r", res);
     }
+    /*
+     * При ошибке FatFs bw может быть > 0 (часть данных записана);
+     * логический указатель должен соответствовать реальному положению.
+     */
+    file->logical_offset = (uint32_t)f_tell(&file->fil);
     return (uint32_t)bw;
 }
 
@@ -262,16 +271,60 @@ bool purrgo_fs_seek(purrgo_file_t* file, uint32_t offset) {
     return true;
 }
 
-void purrgo_fs_sync(purrgo_file_t* file) {
-    if (!file) return;
-    f_sync(&file->fil);
+bool purrgo_fs_sync(purrgo_file_t* file) {
+    if (!file) return false;
+    FRESULT res = f_sync(&file->fil);
+    if (res != FR_OK) {
+        PURRGO_LOG("purrgo_fs_sync: error: %d\n\r", res);
+    }
+    return res == FR_OK;
 }
 
-void purrgo_fs_close(purrgo_file_t* file) {
-    if (!file || !file->in_use) return;
+/*
+ * Внутренние флаги FIL::flag из ff.c (FatFs R0.12c, в ff.h не экспортируются).
+ */
+#define PURRGO_FA_MODIFIED 0x40
+#define PURRGO_FA_DIRTY    0x80
+
+bool purrgo_fs_close(purrgo_file_t* file) {
+    if (!file || !file->in_use) return false;
     invalidate_cache_for_file(file);
-    f_close(&file->fil);
+
+    FRESULT res = f_close(&file->fil);
+    if (res != FR_OK) {
+        PURRGO_LOG("purrgo_fs_close: error: %d\n\r", res);
+        /*
+         * В FatFs R0.12c f_close() при ошибке внутреннего f_sync() не
+         * вызывает dec_lock(): запись в таблице блокировок (_FS_LOCK)
+         * остаётся занятой, и повторное открытие того же файла вернёт
+         * FR_LOCKED. Данные уже потеряны, поэтому сбрасываем признак
+         * "изменён" и закрываем повторно, чтобы освободить блокировку.
+         */
+        if (file->fil.obj.fs != NULL) {
+            file->fil.flag &= (BYTE)~(PURRGO_FA_MODIFIED | PURRGO_FA_DIRTY);
+            (void)f_close(&file->fil);
+        }
+    }
     file->in_use = false;
+    return res == FR_OK;
+}
+
+bool purrgo_fs_replace(const char* src, const char* dst) {
+    if (!src || !dst) return false;
+
+    /* f_rename() не перезаписывает существующий файл: сначала удаляем. */
+    FRESULT res = f_unlink(dst);
+    if (res != FR_OK && res != FR_NO_FILE && res != FR_NO_PATH) {
+        PURRGO_LOG("purrgo_fs_replace: unlink %s error: %d\n\r", dst, res);
+        return false;
+    }
+
+    res = f_rename(src, dst);
+    if (res != FR_OK) {
+        PURRGO_LOG("purrgo_fs_replace: rename error: %d\n\r", res);
+        return false;
+    }
+    return true;
 }
 
 purrgo_dir_t* purrgo_fs_opendir(const char* path) {

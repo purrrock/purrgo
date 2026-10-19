@@ -97,6 +97,12 @@ void purrgo_app_ui_render(
     static purrgo_state_t prev_state = APP_STATE_MAP;
     purrgo_state_t current_state = purrgo_app_get_state();
 
+    /*
+     * Общий флаг забирается до отрисовки: всё, что изменится во время
+     * прохода, взведёт его заново и приведёт к следующему проходу.
+     */
+    purrgo_app_ui_consume_dirty();
+
     switch (current_state) {
         case APP_STATE_MENU_CONFIG:
             if (prev_state != APP_STATE_MENU_CONFIG) {

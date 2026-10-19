@@ -679,6 +679,12 @@ static void ui_map_render_overlays(gfx_context_t* gfx, const purrgo_gnss_solutio
     gfx_fill_rect(gfx, 0, map_vp->offset_y + map_vp->height, PURRGO_HW_DISPLAY_WIDTH_PX, PURRGO_HW_DISPLAY_HEIGHT_PX - (map_vp->offset_y + map_vp->height));
 }
 
+/* Неудачная отрисовка карты: одна повторная попытка через 3 с. */
+#define PURRGO_MAP_RENDER_MAX_ATTEMPTS  2U
+#define PURRGO_MAP_RENDER_RETRY_DELAY_MS 3000U
+
+static uint8_t s_map_render_attempts = 0;
+
 void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const purrgo_sun_info_t* sun) {
     (void)sun;  // Currently unused in map view
 
@@ -706,6 +712,19 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
 
         if (map_success) {
             purrgo_ui_map_clear_dirty();
+            s_map_render_attempts = 0;
+        } else if (++s_map_render_attempts >= PURRGO_MAP_RENDER_MAX_ATTEMPTS) {
+            /*
+             * Карта не рисуется (нет файлов, ошибка чтения SD). Каждый проход -
+             * полный refresh e-ink, поэтому повторы ограничены; следующая
+             * попытка будет при очередном действии пользователя.
+             */
+            PURRGO_LOG("Map render failed, giving up until next change\n\r");
+            purrgo_ui_map_clear_dirty();
+            s_map_render_attempts = 0;
+        } else {
+            PURRGO_LOG("Map render failed, retrying\n\r");
+            purrgo_app_ui_defer_render(PURRGO_MAP_RENDER_RETRY_DELAY_MS);
         }
         purrgo_map_controller_clear_track_dirty();
         purrgo_app_ui_request_full_refresh();
