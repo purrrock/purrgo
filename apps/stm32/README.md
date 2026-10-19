@@ -4,7 +4,7 @@ This directory is the composition point for the STM32 firmware.
 
 Planned targets:
 
-- STM32F411CEU6 prototype ( or NUCLEO-F446RE )
+- STM32F411CEU6 prototype
 - STM32U585CIU6 final hardware
 
 Keep MCU startup code, HAL initialization, interrupt handlers, board wiring and the STM32 platform adapters here (`PurrGO_STM32/Core/Src/`). Do not move those dependencies into `src/core/`.
