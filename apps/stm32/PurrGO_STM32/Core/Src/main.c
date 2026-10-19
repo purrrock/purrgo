@@ -20,6 +20,7 @@
 #include "main.h"
 #include "dma.h"
 #include "fatfs.h"
+#include "sdio.h"
 #include "spi.h"
 #include "usart.h"
 #include "gpio.h"
@@ -99,7 +100,7 @@ int main(void)
   MX_USART1_UART_Init();
   MX_SPI1_Init();
   MX_FATFS_Init();
-  MX_SPI2_Init();
+  MX_SDIO_SD_Init();
   /* USER CODE BEGIN 2 */
   
   /* E-Ink hardware test */

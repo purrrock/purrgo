@@ -50,29 +50,29 @@ void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(BLUE_LED_GPIO_Port, BLUE_LED_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12|EINK_CS_Pin|EINK_RST_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(GPIOB, EINK_CS_Pin|EINK_RST_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(EINK_DC_GPIO_Port, EINK_DC_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin : BLUE_LED_Pin */
-  GPIO_InitStruct.Pin = BLUE_LED_Pin;
+  /*Configure GPIO pin : PC13 */
+  GPIO_InitStruct.Pin = GPIO_PIN_13;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(BLUE_LED_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : EINK_BUSY_Pin */
-  GPIO_InitStruct.Pin = EINK_BUSY_Pin;
+  /*Configure GPIO pins : EINK_BUSY_Pin Detect_SDIO_Pin */
+  GPIO_InitStruct.Pin = EINK_BUSY_Pin|Detect_SDIO_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(EINK_BUSY_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PB12 EINK_CS_Pin EINK_DC_Pin EINK_RST_Pin */
-  GPIO_InitStruct.Pin = GPIO_PIN_12|EINK_CS_Pin|EINK_DC_Pin|EINK_RST_Pin;
+  /*Configure GPIO pins : EINK_CS_Pin EINK_DC_Pin EINK_RST_Pin */
+  GPIO_InitStruct.Pin = EINK_CS_Pin|EINK_DC_Pin|EINK_RST_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
