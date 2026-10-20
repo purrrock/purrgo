@@ -8,27 +8,15 @@
 #include <string.h>
 
 /*
- * Выбор аппаратного display backend выполняется во время компиляции.
+ * Аппаратный display backend: E-Ink Waveshare 2.7" e-Paper V2.
  *
- * ST7789:
- *   используется для текущей отладки на LCD.
- *
- * E-Ink:
- *   используется для конечного Waveshare 2.7" E-Paper V2.
+ * Отладочный TFT ST7789 удалён из проекта.
  */
-#if PURRGO_HW_DISPLAY_BACKEND == PURRGO_DISPLAY_BACKEND_EINK
+#if PURRGO_HW_DISPLAY_BACKEND != PURRGO_DISPLAY_BACKEND_EINK
+#error "Unsupported PurrGO display backend"
+#endif
 
 #include "display_eink.h"
-
-#elif PURRGO_HW_DISPLAY_BACKEND == PURRGO_DISPLAY_BACKEND_ST7789
-
-#include "display_st7789.h"
-
-#else
-
-#error "Unsupported PurrGO display backend"
-
-#endif
 
 
 /*
@@ -61,15 +49,7 @@ void display_init(void)
      */
     display_clear(COLOR_WHITE);
 
-#if PURRGO_HW_DISPLAY_BACKEND == PURRGO_DISPLAY_BACKEND_EINK
-
     display_eink_init();
-
-#elif PURRGO_HW_DISPLAY_BACKEND == PURRGO_DISPLAY_BACKEND_ST7789
-
-    ST7789_Init();
-
-#endif
 }
 
 /*
@@ -77,11 +57,7 @@ void display_init(void)
  */
 void display_sleep(void)
 {
-#if PURRGO_HW_DISPLAY_BACKEND == PURRGO_DISPLAY_BACKEND_EINK
     display_eink_sleep();
-#elif PURRGO_HW_DISPLAY_BACKEND == PURRGO_DISPLAY_BACKEND_ST7789
-    ST7789_SleepIn();
-#endif
 }
 
 
@@ -281,7 +257,8 @@ void stm32_clear_cb(
  * Refresh management
  * --------------------------------------------------------------------------
  *
- * Для ST7789 поддерживается накопление dirty-region и partial refresh.
+ * Dirty-region накапливается в display_refresh_region() и выводится в
+ * display_flush().
  *
  * Для E-Ink 4-gray backend каждый refresh является полным:
  *
@@ -293,8 +270,6 @@ void stm32_clear_cb(
  * непосредственно в драйвер.
  */
 
-static int partial_refresh_count = 0;
-
 static int16_t pending_x1 = -1;
 static int16_t pending_y1 = -1;
 static int16_t pending_x2 = -1;
@@ -302,141 +277,6 @@ static int16_t pending_y2 = -1;
 
 static int pending_has_region = 0;
 
-
-#if PURRGO_HW_DISPLAY_BACKEND == PURRGO_DISPLAY_BACKEND_ST7789
-
-/*
- * Преобразование логических цветов PurrGO в RGB565
- * для отладочного ST7789.
- */
-static const uint16_t color_lut[4] =
-{
-    ST7789_COLOR_BLACK,
-    0x52AA,
-    0xAD55,
-    ST7789_COLOR_WHITE
-};
-
-
-static void do_refresh_region(
-    int16_t x,
-    int16_t y,
-    int16_t w,
-    int16_t h
-)
-{
-    /*
-     * Clip области к границам дисплея.
-     */
-    if (x < 0)
-    {
-        w += x;
-        x = 0;
-    }
-
-    if (y < 0)
-    {
-        h += y;
-        y = 0;
-    }
-
-    if (x + w > DISPLAY_WIDTH)
-    {
-        w = DISPLAY_WIDTH - x;
-    }
-
-    if (y + h > DISPLAY_HEIGHT)
-    {
-        h = DISPLAY_HEIGHT - y;
-    }
-
-    if (w <= 0 || h <= 0)
-    {
-        return;
-    }
-
-    ST7789_SetWindow(
-        x,
-        y,
-        x + w - 1,
-        y + h - 1
-    );
-
-    ST7789_StartPixels();
-
-    int buffer_index = 0;
-
-    for (int row = y; row < y + h; row++)
-    {
-        int pixel_index =
-            row * DISPLAY_WIDTH + x;
-
-        for (int col = x; col < x + w; col++)
-        {
-            /*
-             * Извлекаем 2-битный цвет PurrGO
-             * из framebuffer.
-             */
-            int byte_index =
-                pixel_index >> 2;
-
-            int bit_shift =
-                (3 - (pixel_index & 3)) << 1;
-
-            uint8_t color2bpp =
-                (uint8_t)(
-                    (framebuffer[byte_index] >> bit_shift) &
-                    0x03
-                );
-
-            /*
-             * Преобразуем логический цвет
-             * в RGB565 ST7789.
-             */
-            uint16_t rgb565 =
-                color_lut[color2bpp];
-
-            display_tx_buffer[buffer_index << 1] =
-                (uint8_t)(rgb565 >> 8);
-
-            display_tx_buffer[(buffer_index << 1) | 1] =
-                (uint8_t)(rgb565 & 0xFF);
-
-            buffer_index++;
-            pixel_index++;
-
-            /*
-             * Передаём заполненную часть
-             * промежуточного SPI-буфера.
-             */
-            if (buffer_index >= DISPLAY_TX_BUF_PIXELS)
-            {
-                ST7789_WritePixels(
-                    display_tx_buffer,
-                    buffer_index << 1
-                );
-
-                buffer_index = 0;
-            }
-        }
-    }
-
-    /*
-     * Передаём остаток данных.
-     */
-    if (buffer_index > 0)
-    {
-        ST7789_WritePixels(
-            display_tx_buffer,
-            buffer_index << 1
-        );
-    }
-
-    ST7789_EndPixels();
-}
-
-
-#elif PURRGO_HW_DISPLAY_BACKEND == PURRGO_DISPLAY_BACKEND_EINK
 
 static void do_refresh_region(
     int16_t x,
@@ -453,28 +293,16 @@ static void do_refresh_region(
     display_eink_refresh_region(framebuffer, x, y, w, h);
 }
 
-#endif
-
 
 /*
  * Полное обновление дисплея.
  */
 void display_refresh(void)
 {
-    partial_refresh_count = 0;
     pending_has_region = 0;
 
-#if PURRGO_HW_DISPLAY_BACKEND == PURRGO_DISPLAY_BACKEND_EINK
     /* Явное ПОЛНОЕ обновление (сброс остаточного изображения). */
     display_eink_refresh(framebuffer);
-#else
-    do_refresh_region(
-        0,
-        0,
-        DISPLAY_WIDTH,
-        DISPLAY_HEIGHT
-    );
-#endif
 }
 
 
@@ -574,9 +402,6 @@ void display_flush(void)
         return;
     }
 
-
-#if PURRGO_HW_DISPLAY_BACKEND == PURRGO_DISPLAY_BACKEND_EINK
-
     /*
      * E-Ink 1-bit: обновляем только накопленную область. Переход на
      * полное обновление (первое обновление, лимит частичных подряд)
@@ -592,36 +417,4 @@ void display_flush(void)
     );
 
     pending_has_region = 0;
-
-#elif PURRGO_HW_DISPLAY_BACKEND == PURRGO_DISPLAY_BACKEND_ST7789
-
-    int16_t w =
-        pending_x2 - pending_x1 + 1;
-
-    int16_t h =
-        pending_y2 - pending_y1 + 1;
-
-    /*
-     * После определённого количества partial refresh
-     * выполняем полный refresh.
-     */
-    if (partial_refresh_count >= MAX_PARTIAL_REFRESHES)
-    {
-        display_refresh();
-    }
-    else
-    {
-        partial_refresh_count++;
-
-        do_refresh_region(
-            pending_x1,
-            pending_y1,
-            w,
-            h
-        );
-
-        pending_has_region = 0;
-    }
-
-#endif
 }
