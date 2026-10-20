@@ -39,7 +39,7 @@
  * 2 -> 10.5 МГц, 4 -> 7 МГц. Если на проводном макете 21 МГц даёт сбои
  * чтения/записи, задайте 2 в compile definitions. */
 #ifndef PURRGO_SD_CLOCK_DIV
-#define PURRGO_SD_CLOCK_DIV 0U
+#define PURRGO_SD_CLOCK_DIV 2U
 #endif
 
 /*
