@@ -34,6 +34,14 @@
 #define PURRGO_SD_RETRY_PERIOD_MS 10000U
 #endif
 
+/* Делитель тактовой частоты SDIO после идентификации карты:
+ * SDIO_CK = SDIOCLK / (div + 2). При SDIOCLK = 42 МГц: 0 -> 21 МГц,
+ * 2 -> 10.5 МГц, 4 -> 7 МГц. На макете с проводами 21 МГц часто не
+ * работает; для финальной платы можно вернуть 0. */
+#ifndef PURRGO_SD_CLOCK_DIV
+#define PURRGO_SD_CLOCK_DIV 2U
+#endif
+
 /*
  * Верхняя граница времени одного обмена, мс: база + на каждый блок.
  * Значение, пришедшее из sd_diskio.c, ограничивается этой границей
@@ -76,9 +84,7 @@ static bool s_present_prev;
 
 static uint32_t s_last_poll_ms;
 static bool s_retry_armed;
-#if PURRGO_SD_DETECT_MODE != PURRGO_SD_DETECT_NONE
 static uint32_t s_retry_at_ms;
-#endif
 
 /* Учёт непрерывной занятости карты (BSP_SD_GetCardState). */
 static bool s_busy_active;
@@ -134,6 +140,43 @@ static void card_lost(const char *reason)
 uint8_t BSP_SD_IsDetected(void)
 {
     return card_inserted() ? SD_PRESENT : SD_NOT_PRESENT;
+}
+
+/*
+ * Замена слабой BSP_SD_Init() с диагностикой: в логе видно, на каком этапе
+ * (идентификация карты или переключение на 4 бита) и с каким кодом ошибки
+ * HAL (hsd.ErrorCode, биты HAL_SD_ERROR_*) не удалось инициализировать карту.
+ *
+ * Если определить PURRGO_SD_FORCE_1BIT, шина остаётся 1-битной (проверка
+ * проводки D1..D3).
+ */
+uint8_t BSP_SD_Init(void)
+{
+    if (BSP_SD_IsDetected() != SD_PRESENT)
+    {
+        PURRGO_LOG("SD: init: card not detected\r\n");
+        return MSD_ERROR;
+    }
+
+    if (HAL_SD_Init(&hsd) != HAL_OK)
+    {
+        PURRGO_LOG("SD: HAL_SD_Init FAILED, state %lu, err 0x%08lX\r\n",
+                   (unsigned long)hsd.State,
+                   (unsigned long)HAL_SD_GetError(&hsd));
+        return MSD_ERROR;
+    }
+
+#ifndef PURRGO_SD_FORCE_1BIT
+    if (HAL_SD_ConfigWideBusOperation(&hsd, SDIO_BUS_WIDE_4B) != HAL_OK)
+    {
+        PURRGO_LOG("SD: 4-bit bus FAILED, state %lu, err 0x%08lX\r\n",
+                   (unsigned long)hsd.State,
+                   (unsigned long)HAL_SD_GetError(&hsd));
+        return MSD_ERROR;
+    }
+#endif
+
+    return MSD_OK;
 }
 
 /* Ожидание возврата карты в состояние TRANSFER с таймаутом. */
@@ -354,13 +397,17 @@ static bool mount_card(void)
      * BSP_SD_Init() после HAL_SD_Init().
      */
     hsd.Init.BusWide = SDIO_BUS_WIDE_1B;
+    hsd.Init.ClockDiv = PURRGO_SD_CLOCK_DIV;
 
     /* opt = 1: смонтировать немедленно (инициализация диска + чтение FAT). */
     const FRESULT res = f_mount(&s_fs, "0:", 1);
 
     if (res != FR_OK)
     {
-        PURRGO_LOG("SD: mount ERROR: %d\r\n", (int)res);
+        PURRGO_LOG("SD: mount ERROR: %d (FatFs FRESULT), hsd state %lu, err 0x%08lX\r\n",
+                   (int)res,
+                   (unsigned long)hsd.State,
+                   (unsigned long)HAL_SD_GetError(&hsd));
         unmount();
         s_state = PURRGO_SD_MOUNT_ERROR;
         return false;
@@ -402,13 +449,11 @@ bool purrgo_sd_init(void)
 
     const bool ok = mount_card();
 
-#if PURRGO_SD_DETECT_MODE != PURRGO_SD_DETECT_NONE
     if (!ok)
     {
         s_retry_armed = true;
         s_retry_at_ms = HAL_GetTick() + PURRGO_SD_RETRY_PERIOD_MS;
     }
-#endif
 
     return ok;
 }
@@ -478,8 +523,34 @@ void purrgo_sd_poll(uint32_t now_ms)
         }
     }
 #else
-    /* Нет вывода Detect: горячая замена не отслеживается. */
-    (void)now_ms;
+    /*
+     * Нет вывода Detect: вставка не отслеживается, но неудачное монтирование
+     * (и потеря карты при обмене) повторяется каждые PURRGO_SD_RETRY_PERIOD_MS.
+     */
+    if (s_state == PURRGO_SD_READY)
+    {
+        if (s_card_lost)
+        {
+            PURRGO_LOG("SD: I/O failure, remounting later\r\n");
+            unmount();
+            s_state = PURRGO_SD_MOUNT_ERROR;
+            s_retry_armed = true;
+            s_retry_at_ms = now_ms + PURRGO_SD_RETRY_PERIOD_MS;
+        }
+        return;
+    }
+
+    if (s_retry_armed && ((int32_t)(now_ms - s_retry_at_ms) >= 0))
+    {
+        if (mount_card())
+        {
+            s_retry_armed = false;
+        }
+        else
+        {
+            s_retry_at_ms = now_ms + PURRGO_SD_RETRY_PERIOD_MS;
+        }
+    }
 #endif
 }
 
