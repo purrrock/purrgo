@@ -53,11 +53,8 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # STM32 system time implementation.
     Core/Src/system_time.c
 
-    # STM32 button driver.
-    # TODO(E-Ink buttons): отключён до подключения кнопок E-Ink HAT. Драйвер
-    # опрашивает PB3..PB6, а PB4/PB5 теперь SDIO_D0/SDIO_D3. Перед
-    # включением назначить новые выводы в buttons.c и PurrGO_STM32_PINOUT.md.
-    # Core/Src/buttons.c
+    # STM32 button driver (кнопки E-Ink HAT: K1 PA0, K2 PA1, K3 PC14, K4 PC15).
+    Core/Src/buttons.c
 
     # STM32 stub implementation of the filesystem HAL.
     Core/Src/fs_hal_stm32.c
@@ -90,7 +87,7 @@ purrgo_sources_warnings(
     Core/Src/purrgo_logger.c
     Core/Src/gnss_io.c
     Core/Src/system_time.c
-    # Core/Src/buttons.c
+    Core/Src/buttons.c
     Core/Src/sd_card.c
     Core/Src/fs_hal_stm32.c
     Core/Src/display_stm32.c

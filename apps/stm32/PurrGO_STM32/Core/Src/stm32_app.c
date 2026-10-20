@@ -15,13 +15,7 @@
 #include <purrgo/sun.h>
 #include "purrgo/gnss_io.h"
 #include "purrgo/logger.h"
-/*
- * TODO(E-Ink buttons): обработка кнопок временно отключена. Вывод PB3..PB6
- * больше не отведён под кнопки (PB4/PB5 теперь SDIO_D0/SDIO_D3). Вернуть,
- * когда будут подключены кнопки E-Ink HAT и назначены их выводы
- * (см. PurrGO_STM32_PINOUT.md, раздел "Кнопки").
- */
-// #include "buttons.h"
+#include "buttons.h"
 #include "display_stm32.h"
 // #include "debug_buttons.h"
 
@@ -38,7 +32,7 @@
 /*
  * Период опроса кнопок.
  */
-// #define BUTTON_POLL_PERIOD_MS 10U
+#define BUTTON_POLL_PERIOD_MS 10U
 
 /*
  * Период пересчёта параметров восхода/заката.
@@ -63,7 +57,7 @@ static gfx_context_t global_gfx_ctx;
 /*
  * Время последнего опроса кнопок.
  */
-// static uint32_t last_button_poll_ms;
+static uint32_t last_button_poll_ms;
 
 /**
  * @brief Обновление драйвера кнопок и передача событий в FSM.
@@ -72,23 +66,23 @@ static gfx_context_t global_gfx_ctx;
  * Здесь физические кнопки уже не перебираются:
  * приложение получает готовые события.
  */
-// static void process_buttons(void)
-// {
-//     purrgo_btn_t event;
-//
-//     /*
-//      * Обновить debounce и определить новые SHORT/LONG события.
-//      */
-//     purrgo_stm32_buttons_update();
-//
-//     /*
-//      * Передать FSM все события, накопившиеся за этот цикл.
-//      */
-//     while (purrgo_stm32_buttons_get_event(&event))
-//     {
-//         purrgo_app_handle_button(event);
-//     }
-// }
+static void process_buttons(void)
+{
+    purrgo_btn_t event;
+
+    /*
+     * Обновить debounce и определить новые SHORT/LONG события.
+     */
+    purrgo_stm32_buttons_update();
+
+    /*
+     * Передать FSM все события, накопившиеся за этот цикл.
+     */
+    while (purrgo_stm32_buttons_get_event(&event))
+    {
+        purrgo_app_handle_button(event);
+    }
+}
 
 void purrgo_stm32_init(void)
 {
@@ -141,10 +135,10 @@ void purrgo_stm32_init(void)
    * -------------------------------------------------------------------------
    * Buttons.
    * -------------------------------------------------------------------------
-   * TODO(E-Ink buttons): отключено до подключения кнопок E-Ink HAT.
+   * Кнопки E-Ink HAT: K1 PA0, K2 PA1, K3 PC14, K4 PC15.
    */
-  // purrgo_stm32_buttons_init();
-  // PURRGO_LOG("Buttons OK\r\n");
+  purrgo_stm32_buttons_init();
+  PURRGO_LOG("Buttons OK\r\n");
 
   /*
    * -------------------------------------------------------------------------
@@ -207,7 +201,7 @@ void purrgo_stm32_init(void)
   display_refresh();
   //HAL_Delay(300);
 
-  // last_button_poll_ms = purrgo_system_time_ms();
+  last_button_poll_ms = purrgo_system_time_ms();
 }
 
 void purrgo_stm32_process(void)
@@ -244,18 +238,17 @@ void purrgo_stm32_process(void)
    * -----------------------------------------------------------------------
    * 3. Опрос кнопок.
    * -----------------------------------------------------------------------
-   * TODO(E-Ink buttons): временно отключён. FSM получает события через
-   * единый API purrgo_app_handle_button().
+   * FSM получает события через единый API purrgo_app_handle_button().
    */
-  // if (
-  //     (uint32_t)(current_time_ms - last_button_poll_ms)
-  //     >= BUTTON_POLL_PERIOD_MS
-  // )
-  // {
-  //   last_button_poll_ms = current_time_ms;
-  //   //обработка кнопок
-  //   process_buttons();
-  // }
+  if (
+      (uint32_t)(current_time_ms - last_button_poll_ms)
+      >= BUTTON_POLL_PERIOD_MS
+  )
+  {
+    last_button_poll_ms = current_time_ms;
+    //обработка кнопок
+    process_buttons();
+  }
   // прием эмуляции кнопок через UART
   // purrgo_debug_buttons_process();
 

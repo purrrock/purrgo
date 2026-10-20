@@ -1,12 +1,12 @@
 /*
  * STM32 button event driver for PurrGO.
  *
- * Temporary hardware configuration:
+ * Hardware configuration (buttons of the Waveshare 2.7" e-Paper HAT):
  *
- *   KEY1 -> PB3
- *   KEY2 -> PB4
- *   KEY3 -> PB5
- *   KEY4 -> PB6
+ *   KEY1 -> PA0  (K1)
+ *   KEY2 -> PA1  (K2)
+ *   KEY3 -> PC14 (K3)
+ *   KEY4 -> PC15 (K4)
  *
  * Buttons are connected between GPIO pin and GND.
  * GPIO inputs therefore use the internal pull-up:
