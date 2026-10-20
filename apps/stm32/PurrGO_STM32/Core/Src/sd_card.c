@@ -36,10 +36,10 @@
 
 /* Делитель тактовой частоты SDIO после идентификации карты:
  * SDIO_CK = SDIOCLK / (div + 2). При SDIOCLK = 42 МГц: 0 -> 21 МГц,
- * 2 -> 10.5 МГц, 4 -> 7 МГц. На макете с проводами 21 МГц часто не
- * работает; для финальной платы можно вернуть 0. */
+ * 2 -> 10.5 МГц, 4 -> 7 МГц. Если на проводном макете 21 МГц даёт сбои
+ * чтения/записи, задайте 2 в compile definitions. */
 #ifndef PURRGO_SD_CLOCK_DIV
-#define PURRGO_SD_CLOCK_DIV 2U
+#define PURRGO_SD_CLOCK_DIV 0U
 #endif
 
 /*
@@ -355,13 +355,20 @@ static void log_card_info(void)
     const uint32_t capacity_mb =
         (uint32_t)(((uint64_t)info.LogBlockNbr * info.LogBlockSize) >> 20);
 
+    /* hsd.Init.BusWide HAL не обновляет при переключении на 4 бита, поэтому
+     * реальные ширину шины и делитель читаем из регистра CLKCR. */
+    const uint32_t clkcr = SDIO->CLKCR;
+    const uint32_t wid = clkcr & SDIO_CLKCR_WIDBUS;
+    const uint32_t clkdiv = clkcr & SDIO_CLKCR_CLKDIV;
+
     PURRGO_LOG(
         "SD: %s, %lu MB, block %lu, bus %s, SDIO clkdiv %lu\r\n",
         (info.CardType == CARD_SDHC_SDXC) ? "SDHC/SDXC" : "SDSC",
         (unsigned long)capacity_mb,
         (unsigned long)info.LogBlockSize,
-        (hsd.Init.BusWide == SDIO_BUS_WIDE_4B) ? "4-bit" : "1-bit",
-        (unsigned long)hsd.Init.ClockDiv
+        (wid == SDIO_BUS_WIDE_4B) ? "4-bit" :
+            ((wid == SDIO_BUS_WIDE_8B) ? "8-bit" : "1-bit"),
+        (unsigned long)clkdiv
     );
 }
 
@@ -435,6 +442,11 @@ static bool mount_card(void)
 
 bool purrgo_sd_init(void)
 {
+#if PURRGO_SD_DETECT_MODE != PURRGO_SD_DETECT_NONE
+    PURRGO_LOG("SD: Detect_SDIO level %d\r\n",
+               (int)HAL_GPIO_ReadPin(Detect_SDIO_GPIO_Port, Detect_SDIO_Pin));
+#endif
+
     s_present_stable = card_inserted();
     s_present_candidate = s_present_stable;
     s_present_prev = s_present_stable;
