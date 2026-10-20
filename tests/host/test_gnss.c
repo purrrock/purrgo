@@ -198,6 +198,7 @@ typedef struct {
 static void run_parser(const uint8_t *log, size_t len, size_t chunk_max, nmea_result_t *res,
                        bool via_ring)
 {
+    purrgo_gnss_adapter_reset();
     purrgo_gnss_parser_t p;
     purrgo_gnss_parser_init(&p);
     purrgo_gnss_solution_t sol;
@@ -343,28 +344,79 @@ static void test_nmea_robustness(void)
     CHECK(s3.valid && s3.lat_1e7 == 537135943);
 }
 
-/*
- * Известный дефект (TODO_refact.md, раздел 2, GNSS): GSA от разных систем
- * (GP/GL/BD) перезаписывают fix_type/hdop по очереди. Здесь GP-GSA говорит
- * «3D», затем GL-GSA («нет фикса» по ГЛОНАСС) затирает общий fix_type.
- */
-static void test_known_issue_multi_gsa(void)
+/* GSA от разных систем: сводка по системам, а не "последний победил" (раздел 2, GNSS). */
+static bool feed(const char *body, purrgo_gnss_solution_t *s)
+{
+    char line[160];
+    unsigned c = 0;
+    for (const char *q = body; *q; q++) { c ^= (unsigned char)*q; }
+    snprintf(line, sizeof line, "$%s*%02X", body, c);
+    return purrgo_gnss_process_nmea(line, s);
+}
+
+static const char *RMC_OK = "GNRMC,120000.00,A,5342.1234,N,02824.5678,E,0.5,90.0,191026,,,A";
+
+static void test_multi_gsa(void)
 {
     purrgo_gnss_solution_t s;
-    memset(&s, 0, sizeof s);
 
-    const char *ba = "GPGSA,A,3,01,02,03,04,05,06,07,08,09,,,,1.8,0.9,1.5";  /* 3D */
-    const char *bb = "GLGSA,A,1,,,,,,,,,,,,,99.0,99.0,99.0";                /* нет фикса */
-    char a[96], b[96];
-    unsigned ca = 0, cb = 0;
-    for (const char *q = ba; *q; q++) { ca ^= (unsigned char)*q; }
-    for (const char *q = bb; *q; q++) { cb ^= (unsigned char)*q; }
-    snprintf(a, sizeof a, "$%s*%02X", ba, ca);
-    snprintf(b, sizeof b, "$%s*%02X", bb, cb);
-    (void)purrgo_gnss_process_nmea(a, &s);
-    CHECK(s.fix_type == 3);
-    (void)purrgo_gnss_process_nmea(b, &s);
-    XFAIL(s.fix_type == 3, "GSA от разных систем перезаписывают fix_type (раздел 2)");
+    /* GP: 3D, GL: нет фикса (99.0) - фикс не пропадает, DOP берётся из GP. */
+    purrgo_gnss_adapter_reset();
+    memset(&s, 0, sizeof s);
+    (void)feed("GPGSA,A,3,01,02,03,04,05,06,07,08,09,,,,1.8,0.9,1.5", &s);
+    CHECK(s.fix_type == 3 && s.hdop_100 == 90 && s.pdop_100 == 180 && s.vdop_100 == 150);
+    (void)feed("GLGSA,A,1,,,,,,,,,,,,,99.0,99.0,99.0", &s);
+    CHECK(s.fix_type == 3 && s.hdop_100 == 90);
+    /* Порядок обратный: GL приходит первой. */
+    purrgo_gnss_adapter_reset();
+    memset(&s, 0, sizeof s);
+    (void)feed("GLGSA,A,1,,,,,,,,,,,,,99.0,99.0,99.0", &s);
+    CHECK(s.fix_type == 1);
+    (void)feed("GPGSA,A,3,01,02,03,04,05,06,07,08,09,,,,1.8,0.9,1.5", &s);
+    CHECK(s.fix_type == 3 && s.hdop_100 == 90);
+
+    /* GN с идентификатором системы NMEA 4.1: GPS 3D, BDS без спутников. */
+    purrgo_gnss_adapter_reset();
+    memset(&s, 0, sizeof s);
+    (void)feed("GNGSA,A,3,01,02,03,04,05,06,,,,,,,1.8,1.2,1.3,1", &s);
+    (void)feed("GNGSA,A,1,,,,,,,,,,,,,99.0,99.0,99.0,4", &s);
+    CHECK(s.fix_type == 3 && s.hdop_100 == 120);
+    /* То же, другой порядок. */
+    purrgo_gnss_adapter_reset();
+    memset(&s, 0, sizeof s);
+    (void)feed("GNGSA,A,1,,,,,,,,,,,,,99.0,99.0,99.0,4", &s);
+    (void)feed("GNGSA,A,3,01,02,03,04,05,06,,,,,,,1.8,1.2,1.3,1", &s);
+    CHECK(s.fix_type == 3 && s.hdop_100 == 120);
+
+    /* 2D у одной системы, 3D у другой -> 3D; при равенстве берётся меньший HDOP. */
+    purrgo_gnss_adapter_reset();
+    memset(&s, 0, sizeof s);
+    (void)feed("GPGSA,A,2,01,02,03,,,,,,,,,,3.0,2.0,2.5", &s);
+    CHECK(s.fix_type == 2);
+    (void)feed("BDGSA,A,3,01,02,03,04,,,,,,,,,2.0,1.5,1.6", &s);
+    CHECK(s.fix_type == 3 && s.hdop_100 == 150);
+    (void)feed("GAGSA,A,3,01,02,03,04,,,,,,,,,1.7,1.1,1.2", &s);
+    CHECK(s.fix_type == 3 && s.hdop_100 == 110);
+
+    /* Все системы сообщают "нет фикса" - фикс потерян. */
+    (void)feed("GPGSA,A,1,,,,,,,,,,,,,99.0,99.0,99.0", &s);
+    (void)feed("BDGSA,A,1,,,,,,,,,,,,,99.0,99.0,99.0", &s);
+    (void)feed("GAGSA,A,1,,,,,,,,,,,,,99.0,99.0,99.0", &s);
+    CHECK(s.fix_type == 1);
+
+    /* Система замолчала: через GSA_STALE_EPOCHS (3) фраз RMC её GSA устаревает. */
+    purrgo_gnss_adapter_reset();
+    memset(&s, 0, sizeof s);
+    (void)feed("GPGSA,A,3,01,02,03,04,05,06,07,08,09,,,,1.8,0.9,1.5", &s);
+    CHECK(feed(RMC_OK, &s) && s.fix_type == 3);
+    CHECK(feed(RMC_OK, &s) && s.fix_type == 3);
+    CHECK(feed(RMC_OK, &s) && s.fix_type == 1);
+
+    /* Без единой GSA fix_type не трогается (приёмник их не шлёт). */
+    purrgo_gnss_adapter_reset();
+    memset(&s, 0, sizeof s);
+    s.fix_type = 2;
+    CHECK(feed(RMC_OK, &s) && s.fix_type == 2);
 }
 
 int main(void)
@@ -377,6 +429,6 @@ int main(void)
     test_ring_reset_after_error();
     test_nmea_recorded_log();
     test_nmea_robustness();
-    test_known_issue_multi_gsa();
+    test_multi_gsa();
     return test_finish("test_gnss");
 }

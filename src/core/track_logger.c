@@ -165,6 +165,18 @@ static bool finalize_active_file(void) {
     return ok && closed;
 }
 
+#define LOGGER_NAME_MAX_ATTEMPTS 8U
+
+static void make_track_filename(char* out, size_t out_size, uint32_t track_id) {
+    const char* prefix = purrgo_fs_get_tracks_path();
+
+    if (prefix[0] != '\0') {
+        purrgo_snprintf(out, out_size, "%s/%08X.gpx", prefix, (unsigned int)track_id);
+    } else {
+        purrgo_snprintf(out, out_size, "%08X.gpx", (unsigned int)track_id);
+    }
+}
+
 static void logger_stop_impl(bool clear_ram);
 
 /*
@@ -202,31 +214,41 @@ static bool logger_start_impl(const purrgo_gnss_solution_t* first_fix, bool keep
     // Запоминаем ЛОКАЛЬНЫЙ день старта для проверки смены суток
     current_track_day = local_fix.day;
 
-// формируем имя файла трека
-// Имя: секунды от 01.01.2026, в HEX.
-// 8 символов + .gpx — формат FAT 8.3.
-// Фиксированная ширина обеспечивает сортировку по имени.
-uint32_t epoch = 0;
-purrgo_time_datetime_to_epoch(local_fix.year, local_fix.month, local_fix.day,
-                              local_fix.hours, local_fix.minutes, local_fix.seconds,
-                              &epoch);
+    /*
+     * Имя файла: UTC-секунды от 01.01.2000 (эпоха purrgo_time) в HEX.
+     * 8 символов + .gpx - формат FAT 8.3. Фиксированная ширина обеспечивает
+     * сортировку по имени (до 2136 года). Не зависит от часового пояса и
+     * не может переполниться при любой допустимой дате. Имена прежнего формата
+     * (секунды от 01.01.2026 по местному времени) числово меньше и сортируются
+     * раньше новых.
+     */
+    uint32_t track_id = 0;
+    if (!purrgo_time_datetime_to_epoch(first_fix->year, first_fix->month, first_fix->day,
+                                       first_fix->hours, first_fix->minutes, first_fix->seconds,
+                                       &track_id)) {
+        return false;
+    }
 
-// Epoch purrgo_time начинается с 01.01.2000.
-// 01.01.2026 = 820454400 секунд.
-const uint32_t epoch_2026 = 820454400UL;
-uint32_t track_id = epoch - epoch_2026;
-
-char filename[64];
-const char* prefix = purrgo_fs_get_tracks_path();
-
-if (prefix[0] != '\0') {
-    purrgo_snprintf(filename, sizeof(filename), "%s/%08X.gpx",
-                    prefix, (unsigned int)track_id);
-} else {
-    purrgo_snprintf(filename, sizeof(filename), "%08X.gpx",
-                    (unsigned int)track_id);
-}
-// закончили формирование имя файла трека
+    /*
+     * Не затираем существующий файл (FS_WRITE_CREATE = FA_CREATE_ALWAYS):
+     * при совпадении имени (перезапуск в ту же секунду) берём следующий номер.
+     */
+    char filename[64];
+    bool name_found = false;
+    for (uint32_t attempt = 0; attempt < LOGGER_NAME_MAX_ATTEMPTS; attempt++, track_id++) {
+        make_track_filename(filename, sizeof(filename), track_id);
+        purrgo_file_t* probe = purrgo_fs_open(filename, FS_READ);
+        if (probe == NULL) {
+            name_found = true;
+            break;
+        }
+        (void)purrgo_fs_close(probe);
+    }
+    if (!name_found) {
+        PURRGO_LOG("Track logger: no free file name\r\n");
+        current_state = LOGGER_STATE_ERROR;
+        return false;
+    }
 
     active_file = purrgo_fs_open(filename, FS_WRITE_CREATE);
     if (!active_file) {

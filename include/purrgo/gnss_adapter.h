@@ -9,4 +9,8 @@
 // (в том числе со статусом 'V'). Используется для таймаута фикса.
 bool purrgo_gnss_process_nmea(const char *nmea_line, purrgo_gnss_solution_t *solution);
 
+// Сбрасывает внутреннее состояние адаптера (сводка GSA по навигационным системам).
+// Нужна юнит-тестам; в прошивке вызывать не требуется.
+void purrgo_gnss_adapter_reset(void);
+
 #endif // PURRGO_GNSS_ADAPTER_H
