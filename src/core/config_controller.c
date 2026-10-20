@@ -406,7 +406,7 @@ void purrgo_config_controller_update(
 
 bool purrgo_config_controller_handle_button(
     purrgo_state_t current_state,
-    purrgo_btn_t button,
+    purrgo_action_t button,
     purrgo_state_t* next_state_out
 )
 {
