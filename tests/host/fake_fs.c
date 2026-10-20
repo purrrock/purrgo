@@ -17,6 +17,7 @@ static int handle_used[8];
 
 fake_fs_faults_t g_fault;
 static int open_calls;
+static int sync_calls;
 int fake_fs_open_calls(void) { return open_calls; }
 
 void fake_fs_reset(void) {
@@ -25,6 +26,7 @@ void fake_fs_reset(void) {
     memset(handle_used, 0, sizeof(handle_used));
     memset(&g_fault, 0, sizeof(g_fault));
     open_calls = 0;
+    sync_calls = 0;
 }
 
 static int find(const char* n) {
@@ -95,7 +97,8 @@ uint32_t purrgo_fs_read(purrgo_file_t* f, uint8_t* b, uint32_t n) {
     memcpy(b, ff->data + f->pos, n); f->pos += n; return n;
 }
 bool purrgo_fs_seek(purrgo_file_t* f, uint32_t o) { f->pos = o; return true; }
-bool purrgo_fs_sync(purrgo_file_t* f) { (void)f; return !g_fault.fail_sync; }
+bool purrgo_fs_sync(purrgo_file_t* f) { (void)f; sync_calls++; return !g_fault.fail_sync; }
+int fake_fs_sync_calls(void) { return sync_calls; }
 bool purrgo_fs_close(purrgo_file_t* f) { handle_used[f - handles] = 0; return !g_fault.fail_close; }
 bool purrgo_fs_replace(const char* s, const char* d) {
     if (g_fault.fail_replace) return false;

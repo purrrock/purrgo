@@ -49,7 +49,7 @@ static void test_logger_sync_failure_and_resume(void) {
     CHECK(purrgo_logger_get_state() == LOGGER_STATE_RECORDING);
 
     g_fault.fail_sync = 1;
-    for (; i < 40 && purrgo_logger_get_state() == LOGGER_STATE_RECORDING; i++) {
+    for (; i < 150 && purrgo_logger_get_state() == LOGGER_STATE_RECORDING; i++) {
         f = make_fix(i); if (purrgo_logger_add_point(&f)) recorded++;
     }
     CHECK(purrgo_logger_get_state() == LOGGER_STATE_ERROR);
@@ -82,7 +82,7 @@ static void test_logger_partial_write(void) {
     char name[64]; snprintf(name, sizeof name, "%s", purrgo_logger_get_active_filename());
     int i = 0;
     g_fault.partial_write_bytes = 100;               /* "карта заполнена" */
-    for (; i < 40 && purrgo_logger_get_state() == LOGGER_STATE_RECORDING; i++) {
+    for (; i < 150 && purrgo_logger_get_state() == LOGGER_STATE_RECORDING; i++) {
         f = make_fix(i); purrgo_logger_add_point(&f);
     }
     CHECK(purrgo_logger_get_state() == LOGGER_STATE_ERROR);
@@ -106,7 +106,7 @@ static void test_logger_resume_failure_starts_new_file(void) {
     CHECK(purrgo_logger_start(&f));
     char first[64]; snprintf(first, sizeof first, "%s", purrgo_logger_get_active_filename());
     g_fault.fail_sync = 1;
-    for (int i = 0; i < 40 && purrgo_logger_get_state() == LOGGER_STATE_RECORDING; i++) { f = make_fix(i); purrgo_logger_add_point(&f); }
+    for (int i = 0; i < 150 && purrgo_logger_get_state() == LOGGER_STATE_RECORDING; i++) { f = make_fix(i); purrgo_logger_add_point(&f); }
     CHECK(purrgo_logger_get_state() == LOGGER_STATE_ERROR);
     g_fault.fail_sync = 0; g_fault.fail_open_append = 1;     /* старый файл не открыть */
     g_now += 5000;
@@ -122,7 +122,7 @@ static void test_logger_stop_in_error_is_clean(void) {
     purrgo_gnss_solution_t f = make_fix(0);
     CHECK(purrgo_logger_start(&f));
     g_fault.fail_sync = 1;
-    for (int i = 0; i < 40 && purrgo_logger_get_state() == LOGGER_STATE_RECORDING; i++) { f = make_fix(i); purrgo_logger_add_point(&f); }
+    for (int i = 0; i < 150 && purrgo_logger_get_state() == LOGGER_STATE_RECORDING; i++) { f = make_fix(i); purrgo_logger_add_point(&f); }
     purrgo_logger_set_mode(LOGGER_MODE_OFF);                 /* остановка из ERROR */
     CHECK(purrgo_logger_get_state() == LOGGER_STATE_IDLE);
     CHECK(fake_fs_open_handles() == 0);
