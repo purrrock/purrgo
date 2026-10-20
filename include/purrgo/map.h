@@ -43,7 +43,8 @@ typedef enum {
     MAP_LAYER_POIS
 } purrgo_map_layer_t;
 
-void purrgo_map_render_layer(
+/* true - слой отрисован целиком; false - ошибка заголовков, чтения или разбора. */
+bool purrgo_map_render_layer(
     purrgo_fs_t *idx_fs,
     purrgo_fs_t *mlp_fs,
     purrgo_fs_t *db_fs, 

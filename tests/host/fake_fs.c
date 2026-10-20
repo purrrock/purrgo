@@ -10,7 +10,7 @@
 struct purrgo_file_s { int idx; uint32_t pos; };
 struct purrgo_dir_s  { int unused; };
 
-typedef struct { char name[96]; uint8_t* data; uint32_t size; int used; } ffile_t;
+typedef struct { char name[320]; uint8_t* data; uint32_t size; int used; } ffile_t;
 static ffile_t files[32];
 static struct purrgo_file_s handles[8];
 static int handle_used[8];
