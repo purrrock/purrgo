@@ -1,12 +1,12 @@
 /*
  * STM32 button event driver for PurrGO.
  *
- * Temporary hardware configuration:
+ * Hardware configuration (buttons of the Waveshare 2.7" e-Paper HAT):
  *
- *   KEY1 -> PB3
- *   KEY2 -> PB4
- *   KEY3 -> PB5
- *   KEY4 -> PB6
+ *   KEY1 -> PA0  (K1)
+ *   KEY2 -> PA1  (K2)
+ *   KEY3 -> PC14 (K3)
+ *   KEY4 -> PC15 (K4)
  *
  * Buttons are connected between GPIO pin and GND.
  * GPIO inputs therefore use the internal pull-up:
@@ -105,14 +105,14 @@ typedef struct
 /*
  * Physical button mapping.
  *
- * These pins are deliberately specified directly rather than
- * depending on CubeMX-generated KEY1_Pin macros.
+ * The pins come from the CubeMX user labels K1..K4 (main.h), so a pin
+ * change in CubeMX does not require editing this file.
  */
 static purrgo_button_hw_t buttons[] =
 {
     {
-        .gpio_port = GPIOB,
-        .gpio_pin = GPIO_PIN_3,
+        .gpio_port = K1_GPIO_Port,
+        .gpio_pin = K1_Pin,
         .raw_state = GPIO_PIN_SET,
         .stable_state = GPIO_PIN_SET,
         .last_change_time = 0U,
@@ -121,8 +121,8 @@ static purrgo_button_hw_t buttons[] =
     },
 
     {
-        .gpio_port = GPIOB,
-        .gpio_pin = GPIO_PIN_4,
+        .gpio_port = K2_GPIO_Port,
+        .gpio_pin = K2_Pin,
         .raw_state = GPIO_PIN_SET,
         .stable_state = GPIO_PIN_SET,
         .last_change_time = 0U,
@@ -131,8 +131,8 @@ static purrgo_button_hw_t buttons[] =
     },
 
     {
-        .gpio_port = GPIOB,
-        .gpio_pin = GPIO_PIN_5,
+        .gpio_port = K3_GPIO_Port,
+        .gpio_pin = K3_Pin,
         .raw_state = GPIO_PIN_SET,
         .stable_state = GPIO_PIN_SET,
         .last_change_time = 0U,
@@ -141,8 +141,8 @@ static purrgo_button_hw_t buttons[] =
     },
 
     {
-        .gpio_port = GPIOB,
-        .gpio_pin = GPIO_PIN_6,
+        .gpio_port = K4_GPIO_Port,
+        .gpio_pin = K4_Pin,
         .raw_state = GPIO_PIN_SET,
         .stable_state = GPIO_PIN_SET,
         .last_change_time = 0U,

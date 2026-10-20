@@ -19,6 +19,7 @@
 |---|---|---|
 | SPI1 | E-Ink дисплей (только передача) | **Определено** |
 | SDIO (4 бита) | MicroSD-карта | **Определено** (в CubeMX), на железе не проверено |
+| GPIO | Кнопки E-Ink HAT K1…K4 | **Определено** (в CubeMX) |
 | UART1 | GNSS-приёмник | **Определено** |
 | UART2 | Отладочный лог | **Определено** |
 
@@ -54,7 +55,8 @@ MicroSD подключена по SDIO, шина 4 бита. SPI2 больше �
 - SDIO: SD 4 bits Wide bus, `SDIO_HARDWARE_FLOW_CONTROL_ENABLE`, ClockDiv = 0.
 - Частоты: идентификация карты ≈ 350 кГц (42 МГц / 120), рабочая шина 21 МГц (42 МГц / 2).
 - FatFs: драйвер диска «SD» (`FATFS/Target/sd_diskio.c`, `bsp_driver_sd.c`), обмен в режиме опроса. DMA SDIO (DMA2 Stream3 — RX, Stream6 — TX) настроен в CubeMX, но в этом режиме не используется.
-- Detect_SDIO: вход. По умолчанию прошивка считает, что карта вставлена, если на выводе **низкий** уровень (контакт гнезда замыкается на GND), как в коде CubeMX. Нужна подтяжка к 3.3 В (на модуле или Pull-up в CubeMX). Полярность и отключение Detect задаются макросом `PURRGO_SD_DETECT_MODE` (см. `Core/Inc/sd_card.h`).
+- Подтяжки Pull-up включены в CubeMX на CMD, D0–D3 и Detect_SDIO; на CK подтяжки нет.
+- Detect_SDIO: вход. По умолчанию прошивка считает, что карта вставлена, если на выводе **низкий** уровень (контакт гнезда замыкается на GND), как в коде CubeMX. Подтяжка к 3.3 В включена в CubeMX (Pull-up). Полярность и отключение Detect задаются макросом `PURRGO_SD_DETECT_MODE` (см. `Core/Inc/sd_card.h`).
 - Пины SDIO нельзя использовать как GPIO.
 
 Код: `Core/Src/sd_card.c` (монтирование, Detect, защита от зависаний), `Core/Src/fs_hal_stm32.c` (файловый HAL PurrGO поверх FatFs).
@@ -91,7 +93,11 @@ UART2 предназначен исключительно для диагнос�
 | PB8 | E-Ink DC | **FIXED** |
 | PB9 | E-Ink RST | **FIXED** |
 | PB12 | Detect_SDIO (MicroSD) | **CONFIGURED** |
-| PC13 | Alive LED | **FIXED** |
+| PA0 | K1, кнопка E-Ink HAT | **CONFIGURED** |
+| PA1 | K2, кнопка E-Ink HAT | **CONFIGURED** |
+| PC14 | K3, кнопка E-Ink HAT | **CONFIGURED** |
+| PC15 | K4, кнопка E-Ink HAT | **CONFIGURED** |
+| PC13 | Alive_LED | **FIXED** |
 
 ## 4. E-Ink дисплей
 
@@ -123,17 +129,25 @@ UART2 предназначен исключительно для диагнос�
 
 ## 6. Кнопки
 
-Временные отладочные кнопки (PB3, PB4, PB5, PB6) удалены. PB4 и PB5 теперь SDIO_D0 и SDIO_D3.
+Используются четыре кнопки Waveshare 2.7" e-Paper HAT (K1…K4). Каждая замыкает вывод на GND, поэтому входы настроены с внутренним Pull-up: отпущена = 1, нажата = 0.
 
-Обработка кнопок в прошивке временно **отключена** (закомментирована в `stm32_app.c`, `buttons.c` исключён из сборки в `CMakeLists.txt`) до подключения кнопок E-Ink HAT.
+| Кнопка | Вывод HAT (нумерация Raspberry Pi) | Пин STM32 | Метка CubeMX | Статус |
+|---|---|---|---|---|
+| K1 (KEY1) | GPIO5 | PA0 | `K1` | **CONFIGURED** |
+| K2 (KEY2) | GPIO6 | PA1 | `K2` | **CONFIGURED** |
+| K3 (KEY3) | GPIO13 | PC14 | `K3` | **CONFIGURED** |
+| K4 (KEY4) | GPIO19 | PC15 | `K4` | **CONFIGURED** |
 
-Кнопки E-Ink HAT: четыре кнопки K1…K4, каждая замыкает на GND свой вывод разъёма HAT (по схеме HAT — GPIO5, GPIO6, GPIO13, GPIO19 в нумерации Raspberry Pi). Подключение этих сигналов к выводам STM32 — **НЕ РЕШЕНО**.
+- PC14/PC15 — выводы кварца LSE (OSC32); в проекте LSE не используется. Если на плате установлен кварц 32.768 кГц, его нужно снять, иначе он искажает сигнал кнопок.
+- PA0 (WKUP) на многих платах также соединён со встроенной кнопкой KEY на GND — это не мешает.
+- Выводы PC13…PC15 допускают малый ток и низкую скорость, для входов кнопок это неважно.
+- Код: `Core/Src/buttons.c` (антидребезг 20 мс, SHORT/LONG), выводы берутся из меток CubeMX `K1_Pin`…`K4_Pin` (`main.h`). Назначение функций — `docs/PURRGO_KEYS.md`.
 
 ## 7. Светодиод
 
 | GPIO | Назначение | Статус |
 |---|---|---|
-| PC13 | Alive LED | **FIXED** |
+| PC13 | Alive_LED | **FIXED** |
 
 ## 8. Свободные выводы
 
@@ -141,14 +155,12 @@ UART2 предназначен исключительно для диагнос�
 
 | GPIO | Примечание | Статус |
 |---|---|---|
-| PA0, PA1 | — | **FREE** |
 | PA4 | ранее ST7789 CS | **FREE** |
 | PB0, PB1 | ранее ST7789 RST, DC | **FREE** |
 | PB3 | SWO ST-LINK | **FREE** |
 | PB6 | ранее отладочная кнопка | **FREE** |
 | PB10, PB13, PB14 | PB10, PB14 ранее SPI2 (MicroSD) | **FREE** |
 | PA11, PA12 | на отладочных платах обычно USB D−/D+ | **FREE** |
-| PC14, PC15 | на отладочных платах обычно выводы кварца LSE | **FREE** |
 
 ## 9. Полная таблица ресурсов STM32
 
@@ -156,6 +168,8 @@ UART2 предназначен исключительно для диагнос�
 
 | GPIO / ресурс | Назначение | Статус |
 |---|---|---|
+| PA0 | K1 (кнопка E-Ink HAT) | **CONFIGURED** |
+| PA1 | K2 (кнопка E-Ink HAT) | **CONFIGURED** |
 | PA2 | USART2_TX / Debug | **FIXED** |
 | PA3 | USART2_RX / Debug | **FIXED** |
 | PA5 | SPI1_SCK / E-Ink | **FIXED** |
@@ -175,7 +189,7 @@ UART2 предназначен исключительно для диагнос�
 | PB9 | E-Ink RST | **FIXED** |
 | PB12 | Detect_SDIO / MicroSD | **CONFIGURED** |
 | PB15 | SDIO_CK / MicroSD | **CONFIGURED** |
-| PC13 | Alive LED | **FIXED** |
+| PC13 | Alive_LED | **FIXED** |
 | SPI1 | E-Ink (TX only) | **FIXED** |
 | SDIO | MicroSD, 4 бита | **CONFIGURED** |
 | UART1 | GNSS | **FIXED** |
@@ -212,3 +226,4 @@ UART2 предназначен исключительно для диагнос�
 | 2026-09-07 | Создан рабочий документ распиновки PurrGO. Зафиксированы SPI2 → MicroSD, PB12 → MicroSD CS, UART1 → GNSS, UART2 → debug log, SPI1 зарезервирован под периферию/E-Ink. |
 | 2026-09-16 | Зафиксировано подключение Waveshare 2.7" E-Ink: PA5/PA7 — общие SPI1 SCK/MOSI, PB7 — CS, PB8 — DC, PB9 — RST, PB2 — BUSY. ST7789 остаётся на PA4/PB0/PB1. |
 | 2026-10-19 | MicroSD переведена с SPI2 на SDIO (4 бита): PB15 CK, PA6 CMD, PB4 D0, PA8 D1, PA9 D2, PB5 D3, PB12 Detect. SPI2 удалён. USART1_TX перенесён с PA9 на PA15. Дисплей ST7789 удалён, PA4/PB0/PB1 свободны. Временные кнопки PB3…PB6 удалены, обработка кнопок отключена до подключения кнопок E-Ink HAT. |
+| 2026-10-20 | Подключены кнопки E-Ink HAT: K1 → PA0, K2 → PA1, K3 → PC14, K4 → PC15 (вход, Pull-up). Обработка кнопок включена. В CubeMX включены Pull-up на SDIO CMD/D0–D3 и Detect_SDIO. |
