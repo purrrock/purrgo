@@ -24,7 +24,17 @@ static int32_t last_recorded_lat = 0;
 static int32_t last_recorded_lon = 0;
 static uint32_t last_recorded_time = 0;
 
-static uint32_t last_sync_time = 0;
+/*
+ * Синхронизация FAT (f_sync) - не на каждый сброс буфера (~каждые 4 точки), а
+ * раз в LOGGER_SYNC_INTERVAL_S секунд или LOGGER_SYNC_POINTS точек. При внезапной
+ * потере питания теряется не больше этого окна; при штатной остановке файл
+ * закрывается (f_close синхронизирует).
+ */
+#define LOGGER_SYNC_INTERVAL_S 60U
+#define LOGGER_SYNC_POINTS     50U
+
+static uint32_t last_sync_time = 0;      /* UTC epoch последней синхронизации, 0 - ещё не было */
+static uint32_t points_since_sync = 0;
 
 static char write_buffer[GPX_BUFFER_SIZE];
 static size_t buffer_pos = 0;
@@ -41,8 +51,9 @@ static size_t buffer_pos = 0;
  * discarding the oldest points once full. It does NOT affect the GPX file recording,
  * which continues writing all points indefinitely.
  *
- * The maximum is 8192 points, which uses exactly 64 KiB of RAM (8192 * 8 bytes).
- * This is an acceptable and deterministic footprint for the target STM32 platform.
+ * The size is TRACK_RAM_MAX_POINTS (see track_logger.h): 1024 points use
+ * exactly 8 KiB of RAM (1024 * 8 bytes), a deterministic footprint for the
+ * target STM32 platform.
  */
 static track_point_t ram_track_buffer[TRACK_RAM_MAX_POINTS];
 static size_t ram_track_head = 0;
@@ -99,7 +110,8 @@ static bool flush_buffer(void) {
         return false;
     }
 
-    // Физическая запись накопленных данных (до 512 байт)
+    // Передача накопленных данных (до 512 байт) во FatFs. На носитель FAT и размер
+    // файла попадут при ближайшем sync_active_file() или закрытии файла.
     uint32_t written = purrgo_fs_write(active_file, (const uint8_t*)write_buffer, (uint32_t)buffer_pos);
     if (written < buffer_pos) {
         // Часть данных могла дойти до файла: оставляем в буфере только хвост.
@@ -108,14 +120,19 @@ static bool flush_buffer(void) {
         return false;
     }
     buffer_pos = 0;
+    return true;
+}
 
-    // Синхронизация FAT-таблицы при каждом сбросе буфера.
-    // Гарантирует выживание файла при внезапном отключении аккумулятора.
-    if (!purrgo_fs_sync(active_file)) {
-        // Данные переданы FatFs, но на носитель не попали: файл нужно переоткрыть.
+// Сброс буфера и синхронизация FAT-таблицы (защита от внезапного отключения питания).
+static bool sync_active_file(void) {
+    if (active_file == NULL) {
         return false;
     }
-    return true;
+    if (!flush_buffer()) {
+        return false;
+    }
+    // Данные переданы FatFs, но на носитель не попали: файл нужно переоткрыть.
+    return purrgo_fs_sync(active_file);
 }
 
 // Запись строки в буфер: строка помещается целиком или не записывается вовсе
@@ -148,7 +165,13 @@ static bool finalize_active_file(void) {
     return ok && closed;
 }
 
-bool purrgo_logger_start(const purrgo_gnss_solution_t* first_fix) {
+static void logger_stop_impl(bool clear_ram);
+
+/*
+ * keep_ram: не очищать RAM-буфер трека (смена суток, переход на новый файл после
+ * сбоя): уже нарисованный на экране трек не должен пропадать.
+ */
+static bool logger_start_impl(const purrgo_gnss_solution_t* first_fix, bool keep_ram) {
     if (current_mode == LOGGER_MODE_OFF) return false;
     if (current_state == LOGGER_STATE_RECORDING) return false;
     if (!first_fix || !first_fix->valid) return false;
@@ -168,6 +191,7 @@ bool purrgo_logger_start(const purrgo_gnss_solution_t* first_fix) {
         PURRGO_LOG("Track logging: cannot resume %s, starting new file\r\n", s_active_filename);
         s_active_filename[0] = '\0';
         buffer_pos = 0;
+        keep_ram = true;    /* сессия продолжается в новом файле */
     }
 
     purrgo_gnss_solution_t local_fix;
@@ -215,10 +239,13 @@ if (prefix[0] != '\0') {
     buffer_pos = 0;
     is_first_point = true;
     last_sync_time = 0;
-    
+    points_since_sync = 0;
+
     // Clear the RAM buffer for the new session
-    ram_track_head = 0;
-    ram_track_count = 0;
+    if (!keep_ram) {
+        ram_track_head = 0;
+        ram_track_count = 0;
+    }
 
     if (!write_to_buffer(GPX_HEADER)) {
         // Заголовок (< размера буфера) в пустой буфер помещается всегда.
@@ -227,6 +254,10 @@ if (prefix[0] != '\0') {
     }
     current_state = LOGGER_STATE_RECORDING;
     return true;
+}
+
+bool purrgo_logger_start(const purrgo_gnss_solution_t* first_fix) {
+    return logger_start_impl(first_fix, false);
 }
 
 bool purrgo_logger_add_point(const purrgo_gnss_solution_t* fix) {
@@ -246,8 +277,8 @@ bool purrgo_logger_add_point(const purrgo_gnss_solution_t* fix) {
 
     // Проверка смены суток происходит по ЛОКАЛЬНОМУ времени
     if (local_fix.day != current_track_day) {
-        purrgo_logger_stop();
-        if (!purrgo_logger_start(fix)) {
+        logger_stop_impl(false);
+        if (!logger_start_impl(fix, true)) {
             return false;
         }
     }
@@ -299,6 +330,9 @@ bool purrgo_logger_add_point(const purrgo_gnss_solution_t* fix) {
     last_recorded_lon = fix->lon_1e7;
     last_recorded_time = utc_epoch; // Фильтр хранит историю в UTC
     is_first_point = false;
+    if (last_sync_time == 0) {
+        last_sync_time = utc_epoch;
+    }
 
     // Also add to the RAM circular buffer
     ram_track_buffer[ram_track_head].lat_1e7 = fix->lat_1e7;
@@ -308,9 +342,23 @@ bool purrgo_logger_add_point(const purrgo_gnss_solution_t* fix) {
         ram_track_count++;
     }
 
+    // Периодическая синхронизация FAT. Точка уже в буфере и в RAM-треке,
+    // поэтому при сбое она не теряется: после дозаписи файла уйдёт на SD.
+    points_since_sync++;
+    if (points_since_sync >= LOGGER_SYNC_POINTS ||
+        (utc_epoch >= last_sync_time && utc_epoch - last_sync_time >= LOGGER_SYNC_INTERVAL_S)) {
+        if (sync_active_file()) {
+            points_since_sync = 0;
+            last_sync_time = utc_epoch;
+        } else {
+            enter_error_state("sync");
+        }
+    }
+
     return true;
 }
-void purrgo_logger_stop(void) {
+
+static void logger_stop_impl(bool clear_ram) {
     if (current_state == LOGGER_STATE_ERROR && s_active_filename[0] != '\0') {
         // Файл остался без футера после сбоя: одна попытка дозаписать его.
         active_file = purrgo_fs_open(s_active_filename, FS_WRITE_APPEND);
@@ -331,8 +379,14 @@ void purrgo_logger_stop(void) {
     current_state = LOGGER_STATE_IDLE;
 
     // Clear the RAM buffer
-    ram_track_head = 0;
-    ram_track_count = 0;
+    if (clear_ram) {
+        ram_track_head = 0;
+        ram_track_count = 0;
+    }
+}
+
+void purrgo_logger_stop(void) {
+    logger_stop_impl(true);
 }
 
 const char* purrgo_logger_get_active_filename(void) {

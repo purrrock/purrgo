@@ -303,9 +303,8 @@ static void test_logger_midnight(void)
     free(old);
     CHECK(fake_fs_open_handles() == 1);
 
-    /* Известный дефект (раздел 2): при смене суток logger_stop() очищает RAM-буфер,
-       и уже нарисованный на экране трек пропадает. */
-    XFAIL(purrgo_logger_get_track_point_count() >= before + 1, "RAM-буфер трека очищается в полночь (раздел 2)");
+    /* При смене суток RAM-буфер не очищается: нарисованный трек остаётся на экране. */
+    CHECK(purrgo_logger_get_track_point_count() == before + 1);
 
     purrgo_logger_stop();
     char *neu = file_text("TRACKS/01824785.gpx");
@@ -394,6 +393,37 @@ static void test_logger_ram_ring(void)
     CHECK(!purrgo_logger_get_last_two_points(&prev, &last));
 }
 
+/* f_sync - не на каждый сброс буфера, а раз в 50 точек или 60 с. */
+static void test_logger_sync_cadence(void)
+{
+    logger_reset(0);
+    purrgo_gnss_solution_t f = fixt(26, 10, 19, 12, 0, 0);
+    CHECK(purrgo_logger_start(&f));
+    int i;
+    for (i = 0; i < 49; i++) {                       /* 49 точек за 49 с: буфер сбрасывался, sync - нет */
+        f = fixt(26, 10, 19, 12, 0, (uint8_t)i); f.lat_1e7 += i * 1000;
+        CHECK(purrgo_logger_add_point(&f));
+    }
+    CHECK(fake_fs_sync_calls() == 0);
+    f = fixt(26, 10, 19, 12, 0, 49); f.lat_1e7 += 49 * 1000;
+    CHECK(purrgo_logger_add_point(&f));              /* 50-я точка */
+    CHECK(fake_fs_sync_calls() == 1);
+
+    f = fixt(26, 10, 19, 12, 1, 20); f.lat_1e7 += 60 * 1000;     /* 31 с после sync */
+    CHECK(purrgo_logger_add_point(&f));
+    CHECK(fake_fs_sync_calls() == 1);
+    f = fixt(26, 10, 19, 12, 2, 0); f.lat_1e7 += 61 * 1000;      /* 71 с после sync */
+    CHECK(purrgo_logger_add_point(&f));
+    CHECK(fake_fs_sync_calls() == 2);
+
+    char name[64];
+    snprintf(name, sizeof name, "%s", purrgo_logger_get_active_filename());
+    purrgo_logger_stop();
+    char *t = file_text(name);                       /* всё записано и закрыто футером */
+    CHECK(t && strstr(t, "</gpx>") && count_str(t, "<trkpt") == 52);
+    free(t);
+}
+
 int main(void)
 {
     test_time_calendar();
@@ -407,5 +437,6 @@ int main(void)
     test_logger_year_before_2026();
     test_logger_same_name_overwrite();
     test_logger_ram_ring();
+    test_logger_sync_cadence();
     return test_finish("test_time_logger");
 }

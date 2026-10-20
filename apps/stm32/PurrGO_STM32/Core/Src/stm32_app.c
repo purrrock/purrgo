@@ -7,6 +7,7 @@
 #include <purrgo/config.h>
 #include <purrgo/display_hal.h>
 #include <purrgo/app_fsm.h>
+#include <purrgo/map.h>
 #include <purrgo/map_controller.h>
 #include <purrgo/app_ui.h>
 #include <purrgo/gfx_renderer.h>
@@ -28,6 +29,9 @@
  * при каждом проходе главного цикла.
  */
 #define GNSS_UPDATE_PERIOD_MS 1000U
+
+/* Состояние SD на прошлом проходе цикла: для реакции на вставку карты. */
+static purrgo_sd_state_t s_prev_sd_state = PURRGO_SD_NO_CARD;
 
 /*
  * Период опроса кнопок.
@@ -110,6 +114,7 @@ void purrgo_stm32_init(void)
   {
       PURRGO_LOG("SD card is not available\r\n");
   }
+  s_prev_sd_state = purrgo_sd_state();
 
   // purrgo_debug_buttons_init();
   // PURRGO_LOG("UART2 Buttons OK\r\n");
@@ -277,6 +282,21 @@ void purrgo_stm32_process(void)
    * повторном монтировании карты.
    */
   purrgo_sd_poll(current_time_ms);
+
+  /*
+   * После (пере)монтирования карты открытые файлы карты недействительны, а
+   * ядро помнит слои, которые не открылись. Закрываем всё и перерисовываем:
+   * файлы откроются заново на следующем кадре.
+   */
+  {
+    purrgo_sd_state_t sd_state = purrgo_sd_state();
+    if (sd_state == PURRGO_SD_READY && s_prev_sd_state != PURRGO_SD_READY)
+    {
+      purrgo_map_shutdown();
+      purrgo_ui_map_mark_dirty();
+    }
+    s_prev_sd_state = sd_state;
+  }
 
   /*
    * Ждём событий
