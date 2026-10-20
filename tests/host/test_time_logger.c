@@ -2,7 +2,7 @@
  * Host-тесты purrgo_time и track_logger на границах (TODO_refact.md, раздел 5):
  * високосные годы, конец диапазона 2000..2099, переход через полночь и Новый год
  * с часовым поясом, год < 26 (до эпохи имён треков), прореживание точек,
- * кольцевой RAM-буфер трека. Известные дефекты раздела 2 помечены XFAIL.
+ * кольцевой RAM-буфер трека, имена файлов треков. Известные дефекты раздела 2 помечены XFAIL.
  */
 #include <stdlib.h>
 #include <string.h>
@@ -155,6 +155,14 @@ static int count_str(const char *hay, const char *needle)
     return c;
 }
 
+/* Ожидаемое имя трека: UTC-секунды от 2000 года, 8 hex-цифр. */
+static void tname(char out[32], uint8_t y, uint8_t mo, uint8_t d, uint8_t h, uint8_t mi, uint8_t sec)
+{
+    uint32_t e = 0;
+    CHECK(purrgo_time_datetime_to_epoch(y, mo, d, h, mi, sec, &e));
+    snprintf(out, 32, "TRACKS/%08X.gpx", (unsigned int)e);
+}
+
 static void logger_reset(int tz_minutes)
 {
     purrgo_logger_stop();
@@ -177,13 +185,15 @@ static char *file_text(const char *name)
 static void test_logger_filename_and_gpx(void)
 {
     logger_reset(0);
+    char nm[32];
+    tname(nm, 26, 10, 19, 12, 0, 0);
     purrgo_gnss_solution_t f = fixt(26, 10, 19, 12, 0, 0);
     CHECK(purrgo_logger_start(&f));
-    CHECK(strcmp(purrgo_logger_get_active_filename(), "TRACKS/01819EC0.gpx") == 0);
+    CHECK(strcmp(purrgo_logger_get_active_filename(), nm) == 0);
     CHECK(purrgo_logger_add_point(&f));                           /* первая точка пишется всегда */
     purrgo_logger_stop();
 
-    char *t = file_text("TRACKS/01819EC0.gpx");
+    char *t = file_text(nm);
     CHECK(t != NULL);
     if (t) {
         CHECK(strncmp(t, "<?xml", 5) == 0);
@@ -204,7 +214,7 @@ static void test_logger_filename_and_gpx(void)
     f.lat_1e7 = -338688000; f.lon_1e7 = -1512050000;
     CHECK(purrgo_logger_start(&f) && purrgo_logger_add_point(&f));
     purrgo_logger_stop();
-    t = file_text("TRACKS/01819EC0.gpx");
+    t = file_text(nm);
     CHECK(t && strstr(t, "lat=\"-33.8688000\"") && strstr(t, "lon=\"-151.2050000\""));
     free(t);
 }
@@ -286,7 +296,10 @@ static void test_logger_midnight(void)
     logger_reset(180);
     purrgo_gnss_solution_t f = fixt(26, 10, 19, 20, 59, 50);          /* локально 23:59:50 */
     CHECK(purrgo_logger_start(&f) && purrgo_logger_add_point(&f));
-    CHECK(strcmp(purrgo_logger_get_active_filename(), "TRACKS/01824776.gpx") == 0);
+    char n_old[32], n_new[32];
+    tname(n_old, 26, 10, 19, 20, 59, 50);
+    tname(n_new, 26, 10, 19, 21, 0, 5);
+    CHECK(strcmp(purrgo_logger_get_active_filename(), n_old) == 0);
 
     purrgo_gnss_solution_t g = fixt(26, 10, 19, 20, 59, 58); g.lat_1e7 += 1000;
     CHECK(purrgo_logger_add_point(&g));
@@ -295,10 +308,10 @@ static void test_logger_midnight(void)
 
     purrgo_gnss_solution_t h = fixt(26, 10, 19, 21, 0, 5); h.lat_1e7 += 2000;   /* локально 00:00:05 */
     CHECK(purrgo_logger_add_point(&h));                                         /* первая точка нового дня */
-    CHECK(strcmp(purrgo_logger_get_active_filename(), "TRACKS/01824785.gpx") == 0);
+    CHECK(strcmp(purrgo_logger_get_active_filename(), n_new) == 0);
     CHECK(purrgo_logger_get_state() == LOGGER_STATE_RECORDING);
 
-    char *old = file_text("TRACKS/01824776.gpx");
+    char *old = file_text(n_old);
     CHECK(old && strstr(old, "</gpx>") && count_str(old, "<trkpt") == 2);       /* старый файл закрыт корректно */
     free(old);
     CHECK(fake_fs_open_handles() == 1);
@@ -307,7 +320,7 @@ static void test_logger_midnight(void)
     CHECK(purrgo_logger_get_track_point_count() == before + 1);
 
     purrgo_logger_stop();
-    char *neu = file_text("TRACKS/01824785.gpx");
+    char *neu = file_text(n_new);
     CHECK(neu && strstr(neu, "</gpx>") && count_str(neu, "<trkpt") == 1);
     free(neu);
     CHECK(fake_fs_open_handles() == 0);
@@ -317,48 +330,83 @@ static void test_logger_year_before_2026(void)
 {
     logger_reset(0);
     purrgo_gnss_solution_t f = fixt(25, 6, 1, 12, 0, 0);
+    char exp25[32], exp26[32], exp26_midnight[32];
+    tname(exp25, 25, 6, 1, 12, 0, 0);
     CHECK(purrgo_logger_start(&f));                                   /* не падает, пишет файл */
     CHECK(purrgo_logger_get_state() == LOGGER_STATE_RECORDING);
     const char *n25 = purrgo_logger_get_active_filename();
-    CHECK(n25 != NULL && strlen(n25) == strlen("TRACKS/FEE7D940.gpx"));
+    CHECK(n25 != NULL && strcmp(n25, exp25) == 0);
     char name25[64];
     snprintf(name25, sizeof name25, "%s", n25 ? n25 : "");
     purrgo_logger_stop();
 
     f = fixt(26, 1, 1, 12, 0, 0);
+    tname(exp26, 26, 1, 1, 12, 0, 0);
     CHECK(purrgo_logger_start(&f));
     char name26[64];
     snprintf(name26, sizeof name26, "%s", purrgo_logger_get_active_filename());
     purrgo_logger_stop();
+    CHECK(strcmp(name26, exp26) == 0);
 
-    /* Известные дефекты (раздел 2): epoch - 820454400 при годе < 2026 даёт uint32-underflow,
-       из-за чего имена старых треков сортируются ПОСЛЕ новых; кроме того, константа epoch_2026
-       в track_logger.c на сутки меньше настоящей 01.01.2026 (820540800). */
-    XFAIL(strcmp(name25, name26) < 0, "имя трека при year < 26 переполняется (раздел 2)");
+    /* Имя не переполняется: старые треки сортируются раньше новых. */
+    CHECK(strcmp(name25, name26) < 0);
+
+    /* Имя не зависит от часового пояса (раньше - местное время). */
+    logger_reset(180);
+    f = fixt(26, 1, 1, 12, 0, 0);
+    CHECK(purrgo_logger_start(&f));
+    CHECK(strcmp(purrgo_logger_get_active_filename(), exp26) == 0);
+    purrgo_logger_stop();
+
+    /* Эпоха 01.01.2026 00:00 UTC = 820540800 (0x30..): прежняя константа была на сутки меньше. */
     logger_reset(0);
     f = fixt(26, 1, 1, 0, 0, 0);
+    tname(exp26_midnight, 26, 1, 1, 0, 0, 0);
     CHECK(purrgo_logger_start(&f));
-    XFAIL(strcmp(purrgo_logger_get_active_filename(), "TRACKS/00000000.gpx") == 0,
-          "epoch_2026 в track_logger.c = 820454400, а 01.01.2026 = 820540800");
+    CHECK(strcmp(purrgo_logger_get_active_filename(), exp26_midnight) == 0);
     purrgo_logger_stop();
 }
 
 static void test_logger_same_name_overwrite(void)
 {
     logger_reset(0);
+    char nm[32], nm2[32], nm3[32];
+    tname(nm, 26, 10, 19, 12, 0, 0);
+    tname(nm2, 26, 10, 19, 12, 0, 1);
+    tname(nm3, 26, 10, 19, 12, 0, 2);
     purrgo_gnss_solution_t f = fixt(26, 10, 19, 12, 0, 0);
     CHECK(purrgo_logger_start(&f) && purrgo_logger_add_point(&f));
     purrgo_logger_stop();
-    char *first = file_text("TRACKS/01819EC0.gpx");
+    char *first = file_text(nm);
     CHECK(first && count_str(first, "<trkpt") == 1);
 
-    /* Повторный старт в ту же секунду (перезапуск после сбоя): файл создаётся заново. */
+    /* Повторный старт в ту же секунду (перезапуск после сбоя): существующий файл не затирается. */
     CHECK(purrgo_logger_start(&f));
+    CHECK(strcmp(purrgo_logger_get_active_filename(), nm2) == 0);
     purrgo_logger_stop();
-    char *second = file_text("TRACKS/01819EC0.gpx");
-    XFAIL(second && count_str(second, "<trkpt") == 1, "FA_CREATE_ALWAYS затирает существующий трек с тем же именем (раздел 2)");
-    free(first);
+    char *again = file_text(nm);
+    CHECK(again && count_str(again, "<trkpt") == 1);
+    char *second = file_text(nm2);
+    CHECK(second != NULL);
     free(second);
+
+    /* И ещё раз: берётся следующий свободный номер. */
+    CHECK(purrgo_logger_start(&f));
+    CHECK(strcmp(purrgo_logger_get_active_filename(), nm3) == 0);
+    purrgo_logger_stop();
+
+    /* Все подряд идущие имена заняты: старт отклоняется, существующие файлы целы. */
+    logger_reset(0);
+    for (uint32_t k = 0; k < 8; k++) {
+        char n[32];
+        tname(n, 26, 10, 19, 12, 0, (uint8_t)k);
+        fake_fs_put(n, "x");
+    }
+    CHECK(!purrgo_logger_start(&f));
+    CHECK(purrgo_logger_get_state() == LOGGER_STATE_ERROR);
+    CHECK(fake_fs_open_handles() == 0);
+    free(first);
+    free(again);
 }
 
 static void test_logger_ram_ring(void)
