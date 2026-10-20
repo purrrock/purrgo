@@ -48,9 +48,9 @@
 
 `apps/stm32/PurrGO_STM32/Core/Inc/` — прикладные и аппаратные заголовочные файлы STM32-приложения
 `buttons.h` — интерфейс кнопок PurrGO  
-`display_st7789.h` — интерфейс временного драйвера TFT-дисплея ST7789  
 `display_stm32.h` — STM32-реализация интерфейса дисплея PurrGo  
-`fatfs_sd.h` — интерфейс работы с SD-картой через FatFs  
+`sd_card.h` — интерфейс SD-карты (SDIO + FatFs): монтирование, Detect, горячая замена  
+`sdio.h` — конфигурация SDIO  
 `gpio.h` — конфигурация GPIO  
 `main.h` — основной заголовок STM32-приложения  
 `purrgo_logger.h` — STM32-адаптер журналирования PurrGo  
@@ -62,11 +62,10 @@
 ##### apps/stm32/PurrGO_STM32/Core/Src/
 
 `apps/stm32/PurrGO_STM32/Core/Src/` — исходный код STM32-приложения
-`buttons.c` — обработка кнопок  
-`display_st7789.c` — драйвер TFT-дисплея ST7789 по SPI  
+`buttons.c` — обработка кнопок (временно исключён из сборки)  
 `display_stm32.c` — адаптер дисплея для STM32 и интеграция с PurrGo display API  
-`fatfs_sd.c` — работа с SD-картой через FatFs  
-`fatfs_sd_with_diags.c` — диагностическая версия SD/FatFs-кода  
+`sd_card.c` — SD-карта по SDIO: монтирование FatFs, Detect, защита от зависаний при извлечении карты  
+`sdio.c` — инициализация SDIO  
 `fs_hal_stm32.c` — STM32-реализация файлового HAL PurrGo  
 `gnss_io.c` — STM32-ввод GNSS-данных  
 `gpio.c` — инициализация GPIO  
@@ -87,8 +86,9 @@
 `FATFS/App/fatfs.c` — инициализация FatFs  
 `FATFS/App/fatfs.h` — интерфейс и объявления FatFs-приложения  
 `FATFS/Target/ffconf.h` — конфигурация FatFs  
-`FATFS/Target/user_diskio.c` — интерфейс дискового устройства для FatFs  
-`FATFS/Target/user_diskio.h` — объявления дискового интерфейса  
+`FATFS/Target/sd_diskio.c` — диск FatFs поверх SD (SDIO), генерирует CubeMX  
+`FATFS/Target/bsp_driver_sd.c` — BSP SD поверх HAL SD, генерирует CubeMX  
+`FATFS/Target/fatfs_platform.c` — определение наличия карты (Detect_SDIO)  
 
 ##### apps/stm32/PurrGO_STM32/Middlewares/Third_Party/FatFs/
 

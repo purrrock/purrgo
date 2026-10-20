@@ -15,13 +15,17 @@
 #include <purrgo/sun.h>
 #include "purrgo/gnss_io.h"
 #include "purrgo/logger.h"
-#include "buttons.h"
+/*
+ * TODO(E-Ink buttons): обработка кнопок временно отключена. Вывод PB3..PB6
+ * больше не отведён под кнопки (PB4/PB5 теперь SDIO_D0/SDIO_D3). Вернуть,
+ * когда будут подключены кнопки E-Ink HAT и назначены их выводы
+ * (см. PurrGO_STM32_PINOUT.md, раздел "Кнопки").
+ */
+// #include "buttons.h"
 #include "display_stm32.h"
-// #include "display_st7789.h"
 // #include "debug_buttons.h"
 
-#include "fatfs.h"
-#include "fatfs_sd.h"
+#include "sd_card.h"
 
 /*
  * Интервал обновления логики GNSS/FSM.
@@ -34,7 +38,7 @@
 /*
  * Период опроса кнопок.
  */
-#define BUTTON_POLL_PERIOD_MS 10U
+// #define BUTTON_POLL_PERIOD_MS 10U
 
 /*
  * Период пересчёта параметров восхода/заката.
@@ -50,8 +54,6 @@
  */
 #define GNSS_MAX_BYTES_PER_LOOP 256U
 
-static FATFS purrgo_fs;
-
 /*
  * Доступ к framebuffer осуществляется через callbacks,
  * определённые ниже.
@@ -61,7 +63,7 @@ static gfx_context_t global_gfx_ctx;
 /*
  * Время последнего опроса кнопок.
  */
-static uint32_t last_button_poll_ms;
+// static uint32_t last_button_poll_ms;
 
 /**
  * @brief Обновление драйвера кнопок и передача событий в FSM.
@@ -70,23 +72,23 @@ static uint32_t last_button_poll_ms;
  * Здесь физические кнопки уже не перебираются:
  * приложение получает готовые события.
  */
-static void process_buttons(void)
-{
-    purrgo_btn_t event;
-
-    /*
-     * Обновить debounce и определить новые SHORT/LONG события.
-     */
-    purrgo_stm32_buttons_update();
-
-    /*
-     * Передать FSM все события, накопившиеся за этот цикл.
-     */
-    while (purrgo_stm32_buttons_get_event(&event))
-    {
-        purrgo_app_handle_button(event);
-    }
-}
+// static void process_buttons(void)
+// {
+//     purrgo_btn_t event;
+//
+//     /*
+//      * Обновить debounce и определить новые SHORT/LONG события.
+//      */
+//     purrgo_stm32_buttons_update();
+//
+//     /*
+//      * Передать FSM все события, накопившиеся за этот цикл.
+//      */
+//     while (purrgo_stm32_buttons_get_event(&event))
+//     {
+//         purrgo_app_handle_button(event);
+//     }
+// }
 
 void purrgo_stm32_init(void)
 {
@@ -104,21 +106,16 @@ void purrgo_stm32_init(void)
 
   /*
    * -------------------------------------------------------------------------
-   * FatFs: монтирование файловой системы SD-карты.
+   * SD-карта (SDIO, 4 бита) + FatFs.
    * -------------------------------------------------------------------------
+   * Монтирование, создание каталогов 0:/PURRGO/... и диагностика карты
+   * выполняются в sd_card.c. Если карты нет, прошивка продолжает работу;
+   * вставка карты отслеживается в purrgo_stm32_process().
    */
-  FRESULT fs_result = f_mount(&purrgo_fs, "0:", 1);
-  if (fs_result != FR_OK) {
-      PURRGO_LOG("FatFs mount ERROR: %d\r\n", fs_result);
-  } else {
-      PURRGO_LOG("FatFs mount OK\r\n");
-      /* Автоматическое создание базовой структуры директорий */
-      f_mkdir("0:/PURRGO");
-      f_mkdir("0:/PURRGO/MAPS");
-      f_mkdir("0:/PURRGO/TRACKS");
-      f_mkdir("0:/PURRGO/WAYPTS");
-      PURRGO_LOG("FatFs tree verified\r\n");
-    }
+  if (!purrgo_sd_init())
+  {
+      PURRGO_LOG("SD card is not available\r\n");
+  }
 
   // purrgo_debug_buttons_init();
   // PURRGO_LOG("UART2 Buttons OK\r\n");
@@ -144,9 +141,10 @@ void purrgo_stm32_init(void)
    * -------------------------------------------------------------------------
    * Buttons.
    * -------------------------------------------------------------------------
+   * TODO(E-Ink buttons): отключено до подключения кнопок E-Ink HAT.
    */
-   purrgo_stm32_buttons_init();
-   PURRGO_LOG("Buttons OK\r\n");
+  // purrgo_stm32_buttons_init();
+  // PURRGO_LOG("Buttons OK\r\n");
 
   /*
    * -------------------------------------------------------------------------
@@ -209,7 +207,7 @@ void purrgo_stm32_init(void)
   display_refresh();
   //HAL_Delay(300);
 
-  last_button_poll_ms = purrgo_system_time_ms();
+  // last_button_poll_ms = purrgo_system_time_ms();
 }
 
 void purrgo_stm32_process(void)
@@ -246,18 +244,18 @@ void purrgo_stm32_process(void)
    * -----------------------------------------------------------------------
    * 3. Опрос кнопок.
    * -----------------------------------------------------------------------
-   * FSM получает
-   * события через единый API purrgo_app_handle_button().
+   * TODO(E-Ink buttons): временно отключён. FSM получает события через
+   * единый API purrgo_app_handle_button().
    */
-  if (
-      (uint32_t)(current_time_ms - last_button_poll_ms)
-      >= BUTTON_POLL_PERIOD_MS
-  )
-  {
-    last_button_poll_ms = current_time_ms;
-    //обработка кнопок
-    process_buttons();
-  }
+  // if (
+  //     (uint32_t)(current_time_ms - last_button_poll_ms)
+  //     >= BUTTON_POLL_PERIOD_MS
+  // )
+  // {
+  //   last_button_poll_ms = current_time_ms;
+  //   //обработка кнопок
+  //   process_buttons();
+  // }
   // прием эмуляции кнопок через UART
   // purrgo_debug_buttons_process();
 
@@ -278,6 +276,15 @@ void purrgo_stm32_process(void)
         purrgo_app_get_sun_info()
     );
   }
+  /*
+   * -----------------------------------------------------------------------
+   * 5. SD-карта: отслеживание вставки/извлечения.
+   * -----------------------------------------------------------------------
+   * Вызов дешёвый (сам ограничивает частоту). Блокирует цикл только при
+   * повторном монтировании карты.
+   */
+  purrgo_sd_poll(current_time_ms);
+
   /*
    * Ждём событий
   */
