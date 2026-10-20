@@ -193,18 +193,12 @@ void purrgo_stm32_init(void)
   PURRGO_LOG("GFX OK\r\n");
 
   PURRGO_LOG("Splash Screen\r\n");
-  /* Splash: Purr... */
+  /* Splash: PurrGO! */
   gfx_set_color(&global_gfx_ctx, COLOR_WHITE, COLOR_BLACK);
   gfx_clear(&global_gfx_ctx);
-  gfx_draw_string(&global_gfx_ctx, DISPLAY_WIDTH / 2 - 20, DISPLAY_HEIGHT / 2, "Purr...");
+  gfx_draw_string(&global_gfx_ctx, DISPLAY_WIDTH / 2 - 23, DISPLAY_HEIGHT / 2, "PurrGO!");
   display_refresh();
   HAL_Delay(300);
-
-  /* Splash: GO! */
-  gfx_clear(&global_gfx_ctx);
-  gfx_draw_string(&global_gfx_ctx, DISPLAY_WIDTH / 2 - 10, DISPLAY_HEIGHT / 2, "GO!");
-  display_refresh();
-  //HAL_Delay(300);
 
   last_button_poll_ms = purrgo_system_time_ms();
 }
