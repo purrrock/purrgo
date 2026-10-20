@@ -104,6 +104,7 @@ static purrgo_gnss_solution_t fixt(uint8_t y, uint8_t mo, uint8_t d, uint8_t h, 
     memset(&f, 0, sizeof f);
     f.valid = true; f.year = y; f.month = mo; f.day = d; f.hours = h; f.minutes = mi; f.seconds = s;
     f.lat_1e7 = 537000000; f.lon_1e7 = 284000000; f.alt_m = 100;
+    f.speed_knots = 500;                /* 5 уз: движемся (порог стоянки - 0,5 уз) */
     return f;
 }
 
@@ -472,6 +473,86 @@ static void test_logger_sync_cadence(void)
     free(t);
 }
 
+/* Фильтры качества фикса, шума на стоянке, поворотов и выбросов. */
+static void test_logger_filters(void)
+{
+    purrgo_gnss_solution_t f;
+
+    /* Качество: 2D-фикс, HDOP > 5, меньше 4 спутников - не пишем; 0 = неизвестно - пишем. */
+    logger_reset(0);
+    f = fixt(26, 10, 19, 12, 0, 0);
+    CHECK(purrgo_logger_start(&f));
+    f.fix_type = 2;                       CHECK(!purrgo_logger_add_point(&f));
+    f.fix_type = 1;                       CHECK(!purrgo_logger_add_point(&f));
+    f.fix_type = 3; f.hdop_100 = 501;     CHECK(!purrgo_logger_add_point(&f));
+    f.hdop_100 = 500; f.satellites_tracked = 3;   CHECK(!purrgo_logger_add_point(&f));
+    CHECK(purrgo_logger_get_track_point_count() == 0);
+    f.satellites_tracked = 4;             CHECK(purrgo_logger_add_point(&f));      /* граница: пишем */
+    CHECK(purrgo_logger_get_track_point_count() == 1);
+    purrgo_logger_stop();
+
+    logger_reset(0);
+    f = fixt(26, 10, 19, 12, 0, 0);       /* fix_type = hdop = sats = 0: приёмник их не присылает */
+    CHECK(purrgo_logger_start(&f) && purrgo_logger_add_point(&f));
+    purrgo_logger_stop();
+
+    /* Стоянка: дрейф на 6-7 м при скорости < 0,5 уз не пишется, точка по таймауту - пишется. */
+    logger_reset(0);
+    f = fixt(26, 10, 19, 12, 0, 0);
+    CHECK(purrgo_logger_start(&f) && purrgo_logger_add_point(&f));
+    f = fixt(26, 10, 19, 12, 0, 10); f.lat_1e7 += 700; f.speed_knots = 49;
+    CHECK(!purrgo_logger_add_point(&f));
+    f.speed_knots = 50;
+    CHECK(purrgo_logger_add_point(&f));                             /* граница: движемся */
+    f = fixt(26, 10, 19, 12, 5, 10); f.lat_1e7 += 700; f.speed_knots = 0;
+    CHECK(purrgo_logger_add_point(&f));                             /* 300 с: по таймауту */
+    purrgo_logger_stop();
+
+    /* Выброс: скачок быстрее 500 м/с отбрасывается и не сдвигает точку отсчёта. */
+    logger_reset(0);
+    f = fixt(26, 10, 19, 12, 0, 0);
+    CHECK(purrgo_logger_start(&f) && purrgo_logger_add_point(&f));
+    f = fixt(26, 10, 19, 12, 0, 1); f.lat_1e7 += 50000;             /* ~5,5 км за 1 с */
+    CHECK(!purrgo_logger_add_point(&f));
+    f = fixt(26, 10, 19, 12, 0, 1); f.lat_1e7 += 1000;              /* ~11 м, нормальное движение */
+    CHECK(purrgo_logger_add_point(&f));
+    f = fixt(26, 10, 19, 12, 0, 1); f.lat_1e7 += 1000 + 4000;       /* ~44 м за тот же момент: dt = 0 -> 1 с */
+    CHECK(purrgo_logger_add_point(&f));
+    CHECK(purrgo_logger_get_track_point_count() == 3);
+    f = fixt(26, 10, 19, 12, 10, 1); f.lat_1e7 += 5000 + 300000;    /* ~33 км за 600 с = 55 м/с: допустимо */
+    CHECK(purrgo_logger_add_point(&f));
+    purrgo_logger_stop();
+
+    /* EXPEDITION: поворот >= 20 градусов при смещении >= 10 м пишется раньше, чем 100 м. */
+    logger_reset(0);
+    purrgo_logger_set_mode(LOGGER_MODE_EXPEDITION);
+    f = fixt(26, 10, 19, 12, 0, 0); f.course_valid = true; f.course_deg_100 = 35000;   /* 350 */
+    CHECK(purrgo_logger_start(&f) && purrgo_logger_add_point(&f));
+    f = fixt(26, 10, 19, 12, 0, 5); f.lat_1e7 += 500;               /* ~5,5 м, курс 350 -> 5 (15 град) */
+    f.course_valid = true; f.course_deg_100 = 500;
+    CHECK(!purrgo_logger_add_point(&f));
+    f = fixt(26, 10, 19, 12, 0, 10); f.lat_1e7 += 1500;             /* ~16,7 м, 350 -> 15 (25 град через 0) */
+    f.course_valid = true; f.course_deg_100 = 1500;
+    CHECK(purrgo_logger_add_point(&f));
+    f = fixt(26, 10, 19, 12, 0, 12); f.lat_1e7 += 1500 + 400;       /* ~4,4 м, курс 15 -> 90: мало смещения */
+    f.course_valid = true; f.course_deg_100 = 9000;
+    CHECK(!purrgo_logger_add_point(&f));
+    f = fixt(26, 10, 19, 12, 0, 14); f.lat_1e7 += 1500 + 1500;      /* ~16,7 м, курс неизвестен */
+    f.course_valid = false;
+    CHECK(!purrgo_logger_add_point(&f));
+    purrgo_logger_stop();
+    purrgo_logger_set_mode(LOGGER_MODE_STANDARD);
+
+    /* STANDARD: критерий поворота не действует. */
+    logger_reset(0);
+    f = fixt(26, 10, 19, 12, 0, 0); f.course_valid = true; f.course_deg_100 = 0;
+    CHECK(purrgo_logger_start(&f) && purrgo_logger_add_point(&f));
+    f = fixt(26, 10, 19, 12, 0, 1); f.lat_1e7 += 300;               /* ~3,3 м (< 5 м) */
+    f.course_valid = true; f.course_deg_100 = 9000;
+    CHECK(!purrgo_logger_add_point(&f));
+    purrgo_logger_stop();
+}
+
 int main(void)
 {
     test_time_calendar();
@@ -486,5 +567,6 @@ int main(void)
     test_logger_same_name_overwrite();
     test_logger_ram_ring();
     test_logger_sync_cadence();
+    test_logger_filters();
     return test_finish("test_time_logger");
 }
