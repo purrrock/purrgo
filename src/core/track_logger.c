@@ -35,6 +35,8 @@ static uint32_t last_recorded_time = 0;
 
 static uint32_t last_sync_time = 0;      /* UTC epoch последней синхронизации, 0 - ещё не было */
 static uint32_t points_since_sync = 0;
+static bool     last_recorded_course_valid = false;
+static int32_t  last_recorded_course_100 = 0;
 
 static char write_buffer[GPX_BUFFER_SIZE];
 static size_t buffer_pos = 0;
@@ -167,6 +169,44 @@ static bool finalize_active_file(void) {
 
 #define LOGGER_NAME_MAX_ATTEMPTS 8U
 
+/*
+ * Фильтры качества и шума. Параметр, равный 0 (приёмник его не присылает: нет
+ * GSA/GGA), считается неизвестным и точку не отклоняет.
+ */
+#define LOGGER_MIN_FIX_TYPE        3U      /* только 3D-фикс (GSA) */
+#define LOGGER_MAX_HDOP_100        500     /* HDOP > 5.0 - точку не пишем */
+#define LOGGER_MIN_SATELLITES      4U      /* меньше 4 спутников в решении - не пишем */
+#define LOGGER_STATIONARY_KNOTS_100 50     /* < 0.5 уз - стоим, дрейф координат - шум */
+#define LOGGER_MAX_SPEED_MPS       500U    /* быстрее - выброс (скачок координат) */
+#define LOGGER_TURN_MIN_DEG_100    2000    /* EXPEDITION: поворот >= 20 градусов ... */
+#define LOGGER_TURN_MIN_DIST_M     10U     /* ... при смещении >= 10 м от последней точки */
+
+static bool fix_quality_ok(const purrgo_gnss_solution_t* fix) {
+    if (fix->fix_type != 0 && fix->fix_type < LOGGER_MIN_FIX_TYPE) {
+        return false;
+    }
+    if (fix->hdop_100 > LOGGER_MAX_HDOP_100) {
+        return false;
+    }
+    if (fix->satellites_tracked != 0 && fix->satellites_tracked < LOGGER_MIN_SATELLITES) {
+        return false;
+    }
+    return true;
+}
+
+/* Наименьший угол между курсами (сотые доли градуса, 0..18000). */
+static uint32_t course_diff_100(int32_t a, int32_t b) {
+    int32_t d = a - b;
+    if (d < 0) {
+        d = -d;
+    }
+    d %= 36000;
+    if (d > 18000) {
+        d = 36000 - d;
+    }
+    return (uint32_t)d;
+}
+
 static void make_track_filename(char* out, size_t out_size, uint32_t track_id) {
     const char* prefix = purrgo_fs_get_tracks_path();
 
@@ -262,6 +302,7 @@ static bool logger_start_impl(const purrgo_gnss_solution_t* first_fix, bool keep
     is_first_point = true;
     last_sync_time = 0;
     points_since_sync = 0;
+    last_recorded_course_valid = false;
 
     // Clear the RAM buffer for the new session
     if (!keep_ram) {
@@ -285,6 +326,7 @@ bool purrgo_logger_start(const purrgo_gnss_solution_t* first_fix) {
 bool purrgo_logger_add_point(const purrgo_gnss_solution_t* fix) {
     if (current_mode == LOGGER_MODE_OFF) return false;
     if (current_state != LOGGER_STATE_RECORDING || !fix || !fix->valid) return false;
+    if (!fix_quality_ok(fix)) return false;
 
     uint32_t utc_epoch = 0;
     if (!purrgo_time_datetime_to_epoch(fix->year, fix->month, fix->day,
@@ -316,8 +358,26 @@ bool purrgo_logger_add_point(const purrgo_gnss_solution_t* fix) {
 
         uint32_t target_dist = (current_mode == LOGGER_MODE_EXPEDITION) ? 100 : 5;
         uint32_t target_time = (current_mode == LOGGER_MODE_EXPEDITION) ? 900 : 300;
+        bool timeout = (dt_s >= target_time);
 
-        if (dist_m >= target_dist || dt_s >= target_time) {
+        // Выброс: скачок координат быстрее LOGGER_MAX_SPEED_MPS (dt < 1 с считаем за 1 с).
+        uint64_t dt_eff = (dt_s != 0) ? dt_s : 1;
+        if ((uint64_t)dist_m > (uint64_t)LOGGER_MAX_SPEED_MPS * dt_eff) {
+            return false;
+        }
+
+        // Стоим на месте: смещение в пределах шума GNSS не пишем, остаётся точка по таймауту.
+        if (!timeout && fix->speed_knots < LOGGER_STATIONARY_KNOTS_100) {
+            return false;
+        }
+
+        // EXPEDITION: поворот при достаточном смещении (дистанция 100 м на повороте теряет излом).
+        bool turn = (current_mode == LOGGER_MODE_EXPEDITION) &&
+                    fix->course_valid && last_recorded_course_valid &&
+                    dist_m >= LOGGER_TURN_MIN_DIST_M &&
+                    course_diff_100(fix->course_deg_100, last_recorded_course_100) >= (uint32_t)LOGGER_TURN_MIN_DEG_100;
+
+        if (timeout || dist_m >= target_dist || turn) {
             should_record = true;
         }
     }
@@ -352,6 +412,8 @@ bool purrgo_logger_add_point(const purrgo_gnss_solution_t* fix) {
     last_recorded_lon = fix->lon_1e7;
     last_recorded_time = utc_epoch; // Фильтр хранит историю в UTC
     is_first_point = false;
+    last_recorded_course_valid = fix->course_valid;
+    last_recorded_course_100 = fix->course_deg_100;
     if (last_sync_time == 0) {
         last_sync_time = utc_epoch;
     }

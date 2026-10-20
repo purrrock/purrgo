@@ -30,6 +30,7 @@ static purrgo_gnss_solution_t make_fix(int i) {
     f.hours = 12; f.minutes = 0; f.seconds = (uint8_t)(i % 60);
     f.lat_1e7 = 537000000 + i * 1000;   /* ~11 м шаг */
     f.lon_1e7 = 284000000; f.alt_m = 100;
+    f.speed_knots = 500;
     return f;
 }
 
