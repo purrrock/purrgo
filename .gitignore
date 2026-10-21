@@ -14,7 +14,7 @@ cmake_install.cmake
 *.user
 *.userosscache
 *.suo
-# .vscode/ коммитится намеренно (настройки CMake Tools, отладка); .clangd - тоже.
+.vscode
 
 # STM32CubeIDE / Eclipse / расширение STM32Cube для VS Code
 .metadata/
@@ -37,6 +37,7 @@ STM32CubeIDE/
 *.lst
 *.su
 ai_project_dump.txt
+.clangd
 
 # Python caches
 __pycache__/
