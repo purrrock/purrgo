@@ -232,7 +232,7 @@ void gfx_draw_hline(gfx_context_t *ctx, int16_t x_start, int16_t x_end, int16_t 
     }
 
     if (x_end >= ctx->clip_x + ctx->clip_w) {
-        x_end = ctx->clip_x + ctx->clip_w - 1;
+        x_end = (int16_t)(ctx->clip_x + ctx->clip_w - 1);
     }
 
     /*
@@ -281,7 +281,7 @@ void gfx_draw_vline(gfx_context_t *ctx, int16_t x, int16_t y_start, int16_t y_en
     }
 
     if (y_end >= ctx->clip_y + ctx->clip_h) {
-        y_end = ctx->clip_y + ctx->clip_h - 1;
+        y_end = (int16_t)(ctx->clip_y + ctx->clip_h - 1);
     }
 
     /*

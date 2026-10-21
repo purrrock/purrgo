@@ -25,11 +25,11 @@ void gfx_draw_circle(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t r)
 
         if (err < 0) {
             // Оптимизация: 2 * y заменено на битовый сдвиг влево (y << 1)
-            err += (y << 1) + 1;
+            err = (int16_t)(err + (y << 1) + 1);
         } else {
             x--;
             // Avoid UB with negative shifts by using multiplication
-            err += ((y - x) * 2) + 1;
+            err = (int16_t)(err + ((y - x) * 2) + 1);
         }
     }
 }
@@ -59,11 +59,11 @@ void gfx_fill_circle(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t r)
 
         if (err < 0) {
             // Оптимизация вычисления ошибки
-            err += (y << 1) + 1;
+            err = (int16_t)(err + (y << 1) + 1);
         } else {
             x--;
             // Avoid UB with negative shifts by using multiplication
-            err += ((y - x) * 2) + 1;
+            err = (int16_t)(err + ((y - x) * 2) + 1);
         }
     }
 
@@ -127,10 +127,10 @@ void gfx_draw_poi_circle(
         y++;
 
         if (err < 0) {
-            err += (y << 1) + 1;
+            err = (int16_t)(err + (y << 1) + 1);
         } else {
             x--;
-            err += ((y - x) * 2) + 1;
+            err = (int16_t)(err + ((y - x) * 2) + 1);
         }
     }
 
@@ -159,10 +159,10 @@ void gfx_draw_poi_circle(
         y++;
 
         if (err < 0) {
-            err += (y << 1) + 1;
+            err = (int16_t)(err + (y << 1) + 1);
         } else {
             x--;
-            err += ((y - x) * 2) + 1;
+            err = (int16_t)(err + ((y - x) * 2) + 1);
         }
     }
 

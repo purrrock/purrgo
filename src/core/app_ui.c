@@ -23,7 +23,7 @@ void purrgo_app_ui_request_full_refresh(void)
 
 static void ui_draw_key_hints(gfx_context_t* gfx, purrgo_state_t state, bool mark_region)
 {
-    int y = PURRGO_HW_DISPLAY_HEIGHT_PX - 8;
+    int16_t y = PURRGO_HW_DISPLAY_HEIGHT_PX - 8;
 
     /* Clear the bottom area */
     gfx_set_color(gfx, BLACK, WHITE);
@@ -61,12 +61,12 @@ static void ui_draw_key_hints(gfx_context_t* gfx, purrgo_state_t state, bool mar
             break;
     }
 
-    int step = PURRGO_HW_DISPLAY_WIDTH_PX / 4;
+    int16_t step = PURRGO_HW_DISPLAY_WIDTH_PX / 4;
 
-    if (k1[0]) gfx_draw_string(gfx, 2, y + 1, k1);
-    if (k2[0]) gfx_draw_string(gfx, 2 + step, y + 1, k2);
-    if (k3[0]) gfx_draw_string(gfx, 2 + step * 2, y + 1, k3);
-    if (k4[0]) gfx_draw_string(gfx, 2 + step * 3, y + 1, k4);
+    if (k1[0]) gfx_draw_string(gfx, 2, (int16_t)(y + 1), k1);
+    if (k2[0]) gfx_draw_string(gfx, (int16_t)(2 + step), (int16_t)(y + 1), k2);
+    if (k3[0]) gfx_draw_string(gfx, (int16_t)(2 + step * 2), (int16_t)(y + 1), k3);
+    if (k4[0]) gfx_draw_string(gfx, (int16_t)(2 + step * 3), (int16_t)(y + 1), k4);
 
     /*
      * Подсказки статичны для данного экрана, поэтому на экране карты

@@ -375,10 +375,10 @@ static void ui_save_marker_bg(gfx_context_t* gfx, const marker_state_t* state) {
 
     // Safety margin is important to cover anti-aliasing or slight rounding errors
     int margin = 2;
-    int16_t x = state->min_x - margin;
-    int16_t y = state->min_y - margin;
-    int16_t w = (state->max_x - state->min_x + 1) + 2 * margin;
-    int16_t h = (state->max_y - state->min_y + 1) + 2 * margin;
+    int16_t x = (int16_t)(state->min_x - margin);
+    int16_t y = (int16_t)(state->min_y - margin);
+    int16_t w = (int16_t)((state->max_x - state->min_x + 1) + 2 * margin);
+    int16_t h = (int16_t)((state->max_y - state->min_y + 1) + 2 * margin);
 
     // Clip to screen to prevent buffer overflow
     // Map viewport offset_y is 9 and height is HEIGHT - 18
@@ -387,9 +387,9 @@ static void ui_save_marker_bg(gfx_context_t* gfx, const marker_state_t* state) {
     int16_t map_vp_height = PURRGO_HW_DISPLAY_HEIGHT_PX - 18;
 
     if (x < 0) { w += x; x = 0; }
-    if (y < map_vp_offset_y) { h -= (map_vp_offset_y - y); y = map_vp_offset_y; }
+    if (y < map_vp_offset_y) { h = (int16_t)(h - (map_vp_offset_y - y)); y = map_vp_offset_y; }
     if (x + w > PURRGO_HW_DISPLAY_WIDTH_PX) { w = PURRGO_HW_DISPLAY_WIDTH_PX - x; }
-    if (y + h > map_vp_offset_y + map_vp_height) { h = map_vp_offset_y + map_vp_height - y; }
+    if (y + h > map_vp_offset_y + map_vp_height) { h = (int16_t)(map_vp_offset_y + map_vp_height - y); }
 
     if (w <= 0 || h <= 0 || w > MARKER_BG_CACHE_W || h > MARKER_BG_CACHE_H) {
         // Can't fit in cache or invalid size, invalidate cache
@@ -474,7 +474,7 @@ static void ui_draw_marker(gfx_context_t* gfx, const marker_state_t* state) {
 static int16_t get_string_width(const char* str) {
     int len = 0;
     while (str[len] != '\0') len++;
-    return len * 6; // 5x7 font + 1px spacing
+    return (int16_t)(len * 6); // 5x7 font + 1px spacing
 }
 
 static void ui_update_status_bar(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, int16_t status_h) {
@@ -501,11 +501,11 @@ static void ui_update_status_bar(gfx_context_t* gfx, const purrgo_gnss_solution_
     char time_str[8];
     purrgo_snprintf(time_str, sizeof(time_str), "%02d:%02d", new_state.hours, new_state.minutes);
     gfx_draw_string(gfx, next_x, 1, time_str);
-    next_x += get_string_width(time_str) + 6;
+    next_x = (int16_t)(next_x + get_string_width(time_str) + 6);
 
     const char* fix_str = new_state.gnss_valid ? "FIX" : "NO-FIX";
     gfx_draw_string(gfx, next_x, 1, fix_str);
-    next_x += get_string_width(fix_str) + 6;
+    next_x = (int16_t)(next_x + get_string_width(fix_str) + 6);
 
     const char* rec_str = "NO-REC";
     if (new_state.rec_state == LOGGER_STATE_RECORDING) rec_str = "REC";
@@ -513,7 +513,7 @@ static void ui_update_status_bar(gfx_context_t* gfx, const purrgo_gnss_solution_
     gfx_draw_string(gfx, next_x, 1, rec_str);
 
     const char* scale_label = map_app_get_map_scale_label();
-    int16_t scale_x = PURRGO_HW_DISPLAY_WIDTH_PX - (strlen(scale_label) * 6) - 2;
+    int16_t scale_x = (int16_t)(PURRGO_HW_DISPLAY_WIDTH_PX - (int)(strlen(scale_label) * 6) - 2);
     gfx_draw_string(gfx, scale_x, 1, scale_label);
 
 
@@ -540,10 +540,10 @@ static void ui_map_setup_viewport(purrgo_viewport_t* map_vp, purrgo_bbox_t* dyna
 static bool ui_map_render_base_layers(gfx_context_t* gfx, const purrgo_viewport_t* map_vp, const purrgo_bbox_t* dynamic_cam) {
     // Clear map viewport
     gfx_set_color(gfx, 0, 3);
-    gfx_fill_rect(gfx, map_vp->offset_x, map_vp->offset_y, map_vp->width, map_vp->height);
+    gfx_fill_rect(gfx, map_vp->offset_x, map_vp->offset_y, (int16_t)map_vp->width, (int16_t)map_vp->height);
 
     // Limit rendering strictly to the map viewport to protect the status bars
-    gfx_set_clip(gfx, map_vp->offset_x, map_vp->offset_y, map_vp->width, map_vp->height);
+    gfx_set_clip(gfx, map_vp->offset_x, map_vp->offset_y, (int16_t)map_vp->width, (int16_t)map_vp->height);
 
     return purrgo_map_render_viewport(gfx, map_vp, dynamic_cam, app_config.map_dir);
 }
@@ -612,12 +612,12 @@ static void ui_map_render_gnss_marker(
             if (min_x <= max_x && min_y <= max_y) {
                 // Clamp to viewport
                 if (min_x < map_vp->offset_x) min_x = map_vp->offset_x;
-                if (max_x >= map_vp->offset_x + map_vp->width) max_x = map_vp->offset_x + map_vp->width - 1;
+                if (max_x >= map_vp->offset_x + map_vp->width) max_x = (int16_t)(map_vp->offset_x + map_vp->width - 1);
                 if (min_y < map_vp->offset_y) min_y = map_vp->offset_y;
-                if (max_y >= map_vp->offset_y + map_vp->height) max_y = map_vp->offset_y + map_vp->height - 1;
+                if (max_y >= map_vp->offset_y + map_vp->height) max_y = (int16_t)(map_vp->offset_y + map_vp->height - 1);
 
-                int16_t clip_w = max_x - min_x + 1;
-                int16_t clip_h = max_y - min_y + 1;
+                int16_t clip_w = (int16_t)(max_x - min_x + 1);
+                int16_t clip_h = (int16_t)(max_y - min_y + 1);
 
                 if (clip_w > 0 && clip_h > 0) {
                     display_refresh_region(min_x, min_y, clip_w, clip_h);
@@ -640,7 +640,7 @@ static void ui_map_render_overlays(gfx_context_t* gfx, const purrgo_gnss_solutio
 
     // Clear bottom status area
     gfx_set_color(gfx, 0, 3);
-    gfx_fill_rect(gfx, 0, map_vp->offset_y + map_vp->height, PURRGO_HW_DISPLAY_WIDTH_PX, PURRGO_HW_DISPLAY_HEIGHT_PX - (map_vp->offset_y + map_vp->height));
+    gfx_fill_rect(gfx, 0, (int16_t)(map_vp->offset_y + map_vp->height), PURRGO_HW_DISPLAY_WIDTH_PX, (int16_t)(PURRGO_HW_DISPLAY_HEIGHT_PX - (map_vp->offset_y + map_vp->height)));
 }
 
 /* Неудачная отрисовка карты: одна повторная попытка через 3 с. */
