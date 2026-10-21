@@ -52,7 +52,6 @@ Release-дисплей выбран:
 # 5. microSD
 
 - [ ] Выбрать low-voltage microSD-модуль для Release.
-- [ ] Перейти от SPI к SDIO.
 - [ ] Реализовать управление питанием SD.
 - [ ] Проверить power-up/power-down.
 - [ ] Измерить ток потребления.

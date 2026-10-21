@@ -2,9 +2,8 @@
 # apps/*/src, пользовательские файлы прошивки). Сторонний и сгенерированный CubeMX
 # код (HAL, FatFs, minmea, драйвер Waveshare) эти флаги не получает.
 #
-#   PURRGO_WERROR=ON  - превращает предупреждения в ошибки (используется в CI для
-#                       -Wall -Wextra; -Wconversion остаётся предупреждением, пока
-#                       не вычищены ~140 замечаний int -> int16_t в gfx и ui).
+#   PURRGO_WERROR=ON  - превращает предупреждения в ошибки (включена в пресете
+#                       linux-gcc-test, то есть в CI).
 
 option(PURRGO_WERROR "Treat warnings as errors in project code" OFF)
 
@@ -19,7 +18,7 @@ set(PURRGO_SECTION_FLAGS -ffunction-sections -fdata-sections)
 function(purrgo_target_warnings target)
     target_compile_options(${target} PRIVATE ${PURRGO_WARNING_FLAGS} ${PURRGO_SECTION_FLAGS})
     if(PURRGO_WERROR)
-        target_compile_options(${target} PRIVATE -Werror -Wno-error=conversion)
+        target_compile_options(${target} PRIVATE -Werror)
     endif()
 endfunction()
 
@@ -27,7 +26,7 @@ endfunction()
 function(purrgo_sources_warnings)
     set(_flags ${PURRGO_WARNING_FLAGS})
     if(PURRGO_WERROR)
-        list(APPEND _flags -Werror -Wno-error=conversion)
+        list(APPEND _flags -Werror)
     endif()
     set_source_files_properties(${ARGN} PROPERTIES COMPILE_OPTIONS "${_flags}")
 endfunction()

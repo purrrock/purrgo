@@ -79,12 +79,12 @@ bool purrgo_track_render_last_segment(
 
     // Clamp to viewport
     if (min_x < vp->offset_x) min_x = vp->offset_x;
-    if (max_x >= vp->offset_x + vp->width) max_x = vp->offset_x + vp->width - 1;
+    if (max_x >= vp->offset_x + vp->width) max_x = (int16_t)(vp->offset_x + vp->width - 1);
     if (min_y < vp->offset_y) min_y = vp->offset_y;
-    if (max_y >= vp->offset_y + vp->height) max_y = vp->offset_y + vp->height - 1;
+    if (max_y >= vp->offset_y + vp->height) max_y = (int16_t)(vp->offset_y + vp->height - 1);
 
-    int16_t clip_w = max_x - min_x + 1;
-    int16_t clip_h = max_y - min_y + 1;
+    int16_t clip_w = (int16_t)(max_x - min_x + 1);
+    int16_t clip_h = (int16_t)(max_y - min_y + 1);
 
     if (clip_w > 0 && clip_h > 0) {
         out_rect->x = min_x;

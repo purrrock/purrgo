@@ -54,7 +54,7 @@ void purrgo_geo_bbox_from_center(int32_t center_lat_1e7, int32_t center_lon_1e7,
     uint32_t width_1e7 = (uint32_t)width_1e7_64;
 
     // Половина ширины для X
-    int32_t rad_x_base = width_1e7 / 2;
+    int32_t rad_x_base = (int32_t)(width_1e7 / 2);
 
     // Расчет высоты через пропорцию экрана
     // Используем int64_t, чтобы избежать переполнения до приведения к int32_t.

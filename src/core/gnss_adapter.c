@@ -220,12 +220,12 @@ bool purrgo_gnss_process_nmea(const char *nmea_line, purrgo_gnss_solution_t *sol
                         solution->course_valid = false;
                     }
                     
-                    solution->hours = frame.time.hours;
-                    solution->minutes = frame.time.minutes;
-                    solution->seconds = frame.time.seconds;
-                    solution->day = frame.date.day;
-                    solution->month = frame.date.month;
-                    solution->year = frame.date.year;
+                    solution->hours = (uint8_t)frame.time.hours;
+                    solution->minutes = (uint8_t)frame.time.minutes;
+                    solution->seconds = (uint8_t)frame.time.seconds;
+                    solution->day = (uint8_t)frame.date.day;
+                    solution->month = (uint8_t)frame.date.month;
+                    solution->year = (uint8_t)frame.date.year;
                 }
             }
             break;
@@ -233,11 +233,11 @@ bool purrgo_gnss_process_nmea(const char *nmea_line, purrgo_gnss_solution_t *sol
         case MINMEA_SENTENCE_GGA: {
             struct minmea_sentence_gga frame;
             if (minmea_parse_gga(&frame, nmea_line)) {
-                solution->satellites_tracked = frame.satellites_tracked;
+                solution->satellites_tracked = (uint8_t)frame.satellites_tracked;
                 if (frame.altitude.scale != 0) {
                     solution->alt_m = frame.altitude.value / frame.altitude.scale;
                 }
-                solution->fix_quality = frame.fix_quality;
+                solution->fix_quality = (uint8_t)frame.fix_quality;
                 if (frame.hdop.scale != 0) {
                     solution->hdop_100 = (int32_t)(((int64_t)frame.hdop.value * 100) / frame.hdop.scale);
                 }

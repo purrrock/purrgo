@@ -104,8 +104,8 @@ static void apply_auto_follow(const purrgo_gnss_solution_t* fix) {
         &sy
     );
 
-    int16_t center_x = map_vp.offset_x + map_vp.width / 2;
-    int16_t center_y = map_vp.offset_y + map_vp.height / 2;
+    int16_t center_x = (int16_t)(map_vp.offset_x + map_vp.width / 2);
+    int16_t center_y = (int16_t)(map_vp.offset_y + map_vp.height / 2);
 
     int32_t dx = (int32_t)sx - center_x;
     if (dx < 0) dx = -dx;

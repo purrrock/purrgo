@@ -26,13 +26,13 @@ static void write_int(char** buf, size_t* size, size_t* count, long long val, in
         num_buf[pos++] = '0';
     } else {
         while (uval > 0) {
-            int digit = uval % base;
+            unsigned digit = (unsigned)(uval % (unsigned long long)base);
             if (digit < 10) {
-                num_buf[pos++] = '0' + digit;
+                num_buf[pos++] = (char)('0' + digit);
             } else {
-                num_buf[pos++] = (uppercase ? 'A' : 'a') + (digit - 10);
+                num_buf[pos++] = (char)((uppercase ? 'A' : 'a') + (digit - 10));
             }
-            uval /= base;
+            uval /= (unsigned long long)base;
         }
     }
 
@@ -171,15 +171,15 @@ int purrgo_vsnprintf(char* buf, size_t size, const char* format, va_list args) {
             format++;
         } else if (*format == 'u') {
             unsigned long val = is_long ? va_arg(args, unsigned long) : va_arg(args, unsigned int);
-            write_int(&buf, &size, &count, val, 10, width, pad_char, 0, 0, left_justify);
+            write_int(&buf, &size, &count, (long long)val, 10, width, pad_char, 0, 0, left_justify);
             format++;
         } else if (*format == 'x') {
             unsigned long val = is_long ? va_arg(args, unsigned long) : va_arg(args, unsigned int);
-            write_int(&buf, &size, &count, val, 16, width, pad_char, 0, 0, left_justify);
+            write_int(&buf, &size, &count, (long long)val, 16, width, pad_char, 0, 0, left_justify);
             format++;
         } else if (*format == 'X') {
             unsigned long val = is_long ? va_arg(args, unsigned long) : va_arg(args, unsigned int);
-            write_int(&buf, &size, &count, val, 16, width, pad_char, 1, 0, left_justify);
+            write_int(&buf, &size, &count, (long long)val, 16, width, pad_char, 1, 0, left_justify);
             format++;
         } else {
             write_char(&buf, &size, &count, '%');

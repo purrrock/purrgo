@@ -50,7 +50,7 @@ static void format_lon(int32_t lon_1e7, char* buf, size_t size) {
 static uint8_t calc_checksum(const char* sentence) {
     uint8_t cksum = 0;
     for (int i = 1; sentence[i] && sentence[i] != '*'; i++) {
-        cksum ^= sentence[i];
+        cksum ^= (uint8_t)sentence[i];
     }
     return cksum;
 }
@@ -140,7 +140,7 @@ void pc_gnss_mock_update(void) {
         if (state.minutes >= 60) {
             state.minutes = 0;
             // Hours wrap around at 24 using modulo operation
-            state.hours = (state.hours + 1) % 24;
+            state.hours = (uint8_t)((state.hours + 1) % 24);
         }
     }
 

@@ -89,6 +89,7 @@
                 "PURRGO_BUILD_TESTS": "ON",
                 "PURRGO_BUILD_EMULATOR": "OFF",
                 "PURRGO_SANITIZE": "ON",
+                "PURRGO_WERROR": "ON",
                 "USE_MOCK_GNSS": "OFF"
             }
         },

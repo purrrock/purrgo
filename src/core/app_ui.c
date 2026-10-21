@@ -5,6 +5,8 @@
 #include "ui/ui_config.h"
 #include "ui/ui_dir_select.h"
 #include "ui/ui_map_layers.h"
+#include "purrgo/ui/ui_map_dirty.h"
+#include "purrgo/ui/ui_status_bar.h"
 
 #include "purrgo/gfx_text.h"
 #include "purrgo/gfx_rect.h"
@@ -16,6 +18,19 @@ int dbg_map_render_calls = 0;
 
 static bool s_full_refresh_requested = false;
 
+/* Данные последнего purrgo_app_ui_render() для финального экрана выключения. */
+static gfx_context_t* s_last_gfx = NULL;
+static purrgo_gnss_solution_t s_last_gnss;
+static purrgo_sun_info_t s_last_sun;
+static bool s_power_off_screen = false;
+
+#define POWER_OFF_TEXT "POWER OFF"
+
+bool purrgo_app_ui_is_power_off(void)
+{
+    return s_power_off_screen;
+}
+
 void purrgo_app_ui_request_full_refresh(void)
 {
     s_full_refresh_requested = true;
@@ -26,6 +41,24 @@ static void ui_draw_key_hints(gfx_context_t* gfx, purrgo_state_t state, bool mar
     int16_t y = PURRGO_HW_DISPLAY_HEIGHT_PX - 8;
 
     /* Clear the bottom area */
+    if (s_power_off_screen) {
+        /*
+         * Инверсная нижняя строка вместо подсказок кнопок. Высота 9 строк
+         * (как у верхней строки статуса): карта заканчивается на y = H - 9.
+         * Область не регистрируется: экран выключения обновляется целиком.
+         */
+        int16_t bar_y = (int16_t)(PURRGO_HW_DISPLAY_HEIGHT_PX - 9);
+        int16_t text_w = (int16_t)(6 * (sizeof(POWER_OFF_TEXT) - 1));
+
+        gfx_set_color(gfx, WHITE, BLACK);
+        gfx_fill_rect(gfx, 0, bar_y, PURRGO_HW_DISPLAY_WIDTH_PX, 9);
+        gfx_draw_string(gfx, (int16_t)((PURRGO_HW_DISPLAY_WIDTH_PX - text_w) / 2),
+                        (int16_t)(y + 1), POWER_OFF_TEXT);
+        gfx_set_color(gfx, BLACK, WHITE);
+        (void)mark_region;
+        return;
+    }
+
     gfx_set_color(gfx, BLACK, WHITE);
     gfx_fill_rect(gfx, 0, y, PURRGO_HW_DISPLAY_WIDTH_PX, 8);
 
@@ -97,6 +130,14 @@ void purrgo_app_ui_render(
     static purrgo_state_t prev_state = APP_STATE_MAP;
     purrgo_state_t current_state = purrgo_app_get_state();
 
+    s_last_gfx = gfx;
+    if (gnss != NULL) {
+        s_last_gnss = *gnss;
+    }
+    if (sun != NULL) {
+        s_last_sun = *sun;
+    }
+
     /*
      * Общий флаг забирается до отрисовки: всё, что изменится во время
      * прохода, взведёт его заново и приведёт к следующему проходу.
@@ -148,4 +189,26 @@ void purrgo_app_ui_render(
     s_full_refresh_requested = false;
 
     prev_state = current_state;
+}
+
+bool purrgo_app_ui_render_power_off(void)
+{
+    if (s_last_gfx == NULL) {
+        return false;
+    }
+
+    s_power_off_screen = true;
+
+    /*
+     * Показываем карту независимо от текущего экрана (выключение из меню):
+     * карта и строка статуса перерисовываются целиком.
+     */
+    purrgo_ui_map_mark_dirty();
+    purrgo_ui_status_bar_mark_dirty();
+    ui_render_map(s_last_gfx, &s_last_gnss, &s_last_sun);
+    ui_draw_key_hints(s_last_gfx, APP_STATE_MAP, false);
+
+    /* Платформа сделает полный refresh сама. */
+    s_full_refresh_requested = false;
+    return true;
 }
