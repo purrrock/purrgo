@@ -29,14 +29,14 @@ void display_refresh_region(int16_t x, int16_t y, int16_t w, int16_t h) {
     if (!pending_has_region) {
         pending_x1 = x;
         pending_y1 = y;
-        pending_x2 = x + w - 1;
-        pending_y2 = y + h - 1;
+        pending_x2 = (int16_t)(x + w - 1);
+        pending_y2 = (int16_t)(y + h - 1);
         pending_has_region = 1;
     } else {
         if (x < pending_x1) pending_x1 = x;
         if (y < pending_y1) pending_y1 = y;
-        if (x + w - 1 > pending_x2) pending_x2 = x + w - 1;
-        if (y + h - 1 > pending_y2) pending_y2 = y + h - 1;
+        if (x + w - 1 > pending_x2) pending_x2 = (int16_t)(x + w - 1);
+        if (y + h - 1 > pending_y2) pending_y2 = (int16_t)(y + h - 1);
     }
 }
 
@@ -45,8 +45,8 @@ void display_flush(void) {
         return;
     }
 
-    int16_t w = pending_x2 - pending_x1 + 1;
-    int16_t h = pending_y2 - pending_y1 + 1;
+    int16_t w = (int16_t)(pending_x2 - pending_x1 + 1);
+    int16_t h = (int16_t)(pending_y2 - pending_y1 + 1);
 
     if (partial_refresh_count >= MAX_PARTIAL_REFRESHES) {
         display_refresh();

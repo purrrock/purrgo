@@ -4,6 +4,7 @@
 #include "purrgo/map.h"
 #include "purrgo/config.h"
 #include "purrgo/display_hal.h"
+#include "purrgo/app_ui.h"
 #include "main.h"
 #include "fatfs.h"
 #include "stm32f4xx_hal.h"
@@ -11,6 +12,15 @@
 
 void purrgo_system_power_off(void) {
     PURRGO_LOG("Powering off...\n\r");
+
+    /*
+     * 0. Финальный экран: последняя карта с треком и маркером и инверсные
+     * строки "POWER OFF". Рисуется во framebuffer ДО остановки логгера
+     * (трек - в его RAM-буфере) и до размонтирования SD (с неё читается
+     * карта). На дисплей экран уходит позже, после сохранения данных:
+     * полный refresh e-ink занимает секунды, а данные важнее.
+     */
+    bool power_off_screen = purrgo_app_ui_render_power_off();
 
     /*
      * 1. Stop GPX logging if active.
@@ -36,8 +46,13 @@ void purrgo_system_power_off(void) {
     f_mount(NULL, "0:", 1);
     PURRGO_LOG("FatFs dismount\r\n");
     /*
-     * 5. Put display into low-power mode.
+     * 5. Show the final screen (the image stays on e-ink without power) and
+     * put the display into low-power mode.
      */
+    if (power_off_screen) {
+        display_refresh();
+        PURRGO_LOG("Power-off screen shown\r\n");
+    }
     display_sleep();
     PURRGO_LOG("Display off\r\n");
     

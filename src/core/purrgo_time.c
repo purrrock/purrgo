@@ -27,7 +27,7 @@ bool purrgo_time_datetime_to_epoch(uint8_t year, uint8_t month, uint8_t day,
     static const uint16_t days_before_month[12] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334};
 
     // Подсчет прошедших лет и дней до начала текущего года
-    uint32_t days = year * 365 + (year + 3) / 4 + days_before_month[month - 1] + day - 1;
+    uint32_t days = (uint32_t)(year * 365 + (year + 3) / 4 + days_before_month[month - 1] + day - 1);
 
     // Корректировка, если текущий год високосный и месяц больше февраля
     if (purrgo_time_is_leap_year(year) && month > 2) {
@@ -53,9 +53,9 @@ bool purrgo_time_epoch_to_datetime(uint32_t epoch, uint8_t* year, uint8_t* month
     uint32_t time_of_day = epoch % 86400;
     uint32_t days = epoch / 86400;
 
-    if (h) *h = time_of_day / 3600;
-    if (m) *m = (time_of_day % 3600) / 60;
-    if (s) *s = time_of_day % 60;
+    if (h) *h = (uint8_t)(time_of_day / 3600);
+    if (m) *m = (uint8_t)((time_of_day % 3600) / 60);
+    if (s) *s = (uint8_t)(time_of_day % 60);
 
     uint32_t y = 0;
     while (1) {
@@ -98,7 +98,7 @@ bool purrgo_time_apply_timezone(const purrgo_gnss_solution_t* utc, purrgo_gnss_s
 
     int64_t local_epoch_64 = (int64_t)utc_epoch + ((int64_t)tz_offset_minutes * 60);
 
-    if (local_epoch_64 < 0 || local_epoch_64 > PURRGO_TIME_MAX_EPOCH) {
+    if (local_epoch_64 < 0 || local_epoch_64 > (int64_t)PURRGO_TIME_MAX_EPOCH) {
         return false;
     }
 

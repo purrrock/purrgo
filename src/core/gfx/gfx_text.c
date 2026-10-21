@@ -63,7 +63,7 @@ static void gfx_draw_char_halo(gfx_context_t *ctx, int16_t x, int16_t y, char c)
         uint8_t column_data = bitmap[col];
         if (!column_data) continue;
 
-        uint16_t expanded_y = (uint16_t)column_data | ((uint16_t)column_data << 1) | ((uint16_t)column_data << 2);
+        uint16_t expanded_y = (uint16_t)((uint16_t)column_data | ((uint16_t)column_data << 1) | ((uint16_t)column_data << 2));
 
         halo[col] |= expanded_y;
         halo[col+1] |= expanded_y;

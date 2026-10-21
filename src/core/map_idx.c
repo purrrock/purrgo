@@ -168,30 +168,30 @@ static bool map_idx_parse_node_impl(
                 v2 > 0 &&
                 db_fs != NULL) {
                 if (map_db_read_name(db_fs, v2, true, name_buf, sizeof(name_buf))) {
-                    int len = strlen(name_buf);
+                    int len = (int)strlen(name_buf);
                     
-                    int16_t text_w = len * 6; // Ширина: 5px символ + 1px промежуток
+                    int16_t text_w = (int16_t)(len * 6); // Ширина: 5px символ + 1px промежуток
                     int16_t text_h = 8;       // Высота: 8px
                     
                     if (obj_type == 11)  {
                         // Для POI_BIG: центрируем текст строго под маркером
                         int16_t text_x = sx - (text_w / 2);
-                        int16_t text_y = sy + radius + 2;
+                        int16_t text_y = (int16_t)(sy + radius + 2);
 
-                        if (map_render_try_place_label(text_x, text_y, text_w, text_h)) {
+                        if (map_render_try_place_label(text_x, text_y, (uint16_t)text_w, (uint16_t)text_h)) {
                             gfx_draw_string_halo(gfx, text_x, text_y, name_buf);
                         }
                     } else {
                         // Для POI_SMALL: Основной вариант размещения справа
-                        int16_t text_x = sx + radius + 2;
+                        int16_t text_x = (int16_t)(sx + radius + 2);
                         int16_t text_y = sy - (text_h / 2);
 
-                        if (map_render_try_place_label(text_x, text_y, text_w, text_h)) {
+                        if (map_render_try_place_label(text_x, text_y, (uint16_t)text_w, (uint16_t)text_h)) {
                             gfx_draw_string_halo(gfx, text_x, text_y, name_buf);
                         } else {
                             // Коллизия справа: Запасной вариант "правее-ниже"
-                            text_y = sy + radius + 2;
-                            if (map_render_try_place_label(text_x, text_y, text_w, text_h)) {
+                            text_y = (int16_t)(sy + radius + 2);
+                            if (map_render_try_place_label(text_x, text_y, (uint16_t)text_w, (uint16_t)text_h)) {
                                 gfx_draw_string_halo(gfx, text_x, text_y, name_buf);
                             }
                         }
@@ -245,9 +245,9 @@ if (style == PURRGO_STYLE_NONE) {
                     int16_t sx, sy;
                     project_to_screen(center_x, center_y, cam, vp, &sx, &sy);
 
-                    int len = strlen(name_buf);
+                    int len = (int)strlen(name_buf);
 
-                    int16_t text_w = len * 6;
+                    int16_t text_w = (int16_t)(len * 6);
                     int16_t text_h = 8;
 
                     /*
@@ -267,8 +267,8 @@ if (style == PURRGO_STYLE_NONE) {
                     map_render_queue_label(
                         text_x,
                         text_y,
-                        text_w,
-                        text_h,
+                        (uint16_t)text_w,
+                        (uint16_t)text_h,
                         name_buf
                     );
                 }

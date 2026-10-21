@@ -7,7 +7,9 @@ add_library(minmea STATIC
 
 # Указание директории с заголовочными файлами. 
 # PUBLIC позволяет транслировать путь к include всем таргетам, которые линкуют minmea.
-target_include_directories(minmea PUBLIC minmea)
+# SYSTEM: заголовок minmea.h (inline-функции с float) не должен давать предупреждений
+# в коде проекта при PURRGO_WERROR=ON.
+target_include_directories(minmea SYSTEM PUBLIC minmea)
 
 # Отключение предупреждений компилятора для стороннего кода
 target_compile_options(minmea PRIVATE -w)

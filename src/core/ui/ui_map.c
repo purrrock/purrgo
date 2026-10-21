@@ -478,6 +478,20 @@ static int16_t get_string_width(const char* str) {
 }
 
 static void ui_update_status_bar(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, int16_t status_h) {
+    if (purrgo_app_ui_is_power_off()) {
+        /* Выключение: инверсная строка "POWER OFF", масштаб карты остаётся справа. */
+        const char* off_scale_label = map_app_get_map_scale_label();
+        int16_t off_scale_x = (int16_t)(PURRGO_HW_DISPLAY_WIDTH_PX - (int)(strlen(off_scale_label) * 6) - 2);
+
+        gfx_set_color(gfx, WHITE, BLACK);
+        gfx_fill_rect(gfx, 0, 0, PURRGO_HW_DISPLAY_WIDTH_PX, status_h);
+        gfx_draw_string(gfx, 2, 1, "POWER OFF");
+        gfx_draw_string(gfx, off_scale_x, 1, off_scale_label);
+        gfx_set_color(gfx, BLACK, WHITE);
+        prev_status_state.valid = true;
+        return;
+    }
+
     purrgo_gnss_solution_t display_fix;
     if (!purrgo_time_apply_timezone(gnss, &display_fix, app_config.tz_offset_minutes)) {
         display_fix = *gnss;
