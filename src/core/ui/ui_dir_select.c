@@ -41,7 +41,7 @@ void ui_render_menu_dir_select(gfx_context_t* gfx)
     int count = config_app_get_dir_list(&dir_list);
     int cursor = config_app_get_dir_cursor();
 
-    int y_pos = 25;
+    int16_t y_pos = 25;
 
 
     /*
@@ -73,7 +73,7 @@ void ui_render_menu_dir_select(gfx_context_t* gfx)
             buf
         );
 
-        y_pos += 12;
+        y_pos = (int16_t)(y_pos + 12);
     }
 
 
@@ -95,11 +95,11 @@ void ui_render_menu_dir_select(gfx_context_t* gfx)
         prev_dir_cursor = cursor;
     } else if (cursor != prev_dir_cursor) {
         if (prev_dir_cursor >= 0 && prev_dir_cursor < count) {
-            int prev_y = 25 + prev_dir_cursor * 12;
+            int16_t prev_y = (int16_t)(25 + prev_dir_cursor * 12);
             display_refresh_region(0, prev_y, PURRGO_HW_DISPLAY_WIDTH_PX, 12);
         }
         if (cursor >= 0 && cursor < count) {
-            int curr_y = 25 + cursor * 12;
+            int16_t curr_y = (int16_t)(25 + cursor * 12);
             display_refresh_region(0, curr_y, PURRGO_HW_DISPLAY_WIDTH_PX, 12);
         }
         prev_dir_cursor = cursor;

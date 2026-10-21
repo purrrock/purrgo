@@ -28,7 +28,7 @@ void gfx_draw_icon_11x11(gfx_context_t *ctx, int16_t x, int16_t y, const uint8_t
                 gfx_set_color(ctx, color, old_bg);
 
                 // Отрисовываем пиксель с использованием существующего clipping
-                gfx_draw_pixel(ctx, start_x + col, start_y + row);
+                gfx_draw_pixel(ctx, (int16_t)(start_x + col), (int16_t)(start_y + row));
             }
         }
     }

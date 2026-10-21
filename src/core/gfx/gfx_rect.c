@@ -8,12 +8,12 @@ void gfx_draw_rect(gfx_context_t *ctx, int16_t x, int16_t y, int16_t w, int16_t 
     // Top and bottom
     for (int16_t i = x; i < x + w; i++) {
         gfx_draw_pixel(ctx, i, y);
-        gfx_draw_pixel(ctx, i, y + h - 1);
+        gfx_draw_pixel(ctx, i, (int16_t)(y + h - 1));
     }
     // Left and right (avoiding corners already drawn by top/bottom)
     for (int16_t i = y + 1; i < y + h - 1; i++) {
         gfx_draw_pixel(ctx, x, i);
-        gfx_draw_pixel(ctx, x + w - 1, i);
+        gfx_draw_pixel(ctx, (int16_t)(x + w - 1), i);
     }
 }
 

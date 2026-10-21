@@ -226,7 +226,7 @@ void gfx_fill_compound_polygon(
     }
 
     if (max_y >= ctx->clip_y + ctx->clip_h) {
-        max_y = ctx->clip_y + ctx->clip_h - 1;
+        max_y = (int16_t)(ctx->clip_y + ctx->clip_h - 1);
     }
 
 
@@ -407,7 +407,7 @@ void gfx_fill_compound_polygon(
          */
         for (uint16_t i = 1; i < nodes; i++) {
             int16_t key = nodeX[i];
-            int16_t j = i - 1;
+            int16_t j = (int16_t)(i - 1);
 
             while (j >= 0 && nodeX[j] > key) {
                 nodeX[j + 1] = nodeX[j];

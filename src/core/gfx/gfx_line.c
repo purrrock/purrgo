@@ -50,16 +50,16 @@ static bool clip_line(gfx_context_t *ctx, int16_t *x0, int16_t *y0, int16_t *x1,
             int32_t dy = *y1 - *y0;
 
             if (outcodeOut & TOP) {
-                x = *x0 + dx * (ctx->clip_y + ctx->clip_h - 1 - *y0) / dy;
-                y = ctx->clip_y + ctx->clip_h - 1;
+                x = (int16_t)(*x0 + dx * (ctx->clip_y + ctx->clip_h - 1 - *y0) / dy);
+                y = (int16_t)(ctx->clip_y + ctx->clip_h - 1);
             } else if (outcodeOut & BOTTOM) {
-                x = *x0 + dx * (ctx->clip_y - *y0) / dy;
+                x = (int16_t)(*x0 + dx * (ctx->clip_y - *y0) / dy);
                 y = ctx->clip_y;
             } else if (outcodeOut & RIGHT) {
-                y = *y0 + dy * (ctx->clip_x + ctx->clip_w - 1 - *x0) / dx;
-                x = ctx->clip_x + ctx->clip_w - 1;
+                y = (int16_t)(*y0 + dy * (ctx->clip_x + ctx->clip_w - 1 - *x0) / dx);
+                x = (int16_t)(ctx->clip_x + ctx->clip_w - 1);
             } else if (outcodeOut & LEFT) {
-                y = *y0 + dy * (ctx->clip_x - *x0) / dx;
+                y = (int16_t)(*y0 + dy * (ctx->clip_x - *x0) / dx);
                 x = ctx->clip_x;
             }
 
@@ -262,7 +262,7 @@ void gfx_draw_thick_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1,
         } else {
             int16_t half_thick = thickness >> 1;
             int16_t start_offset = -half_thick;
-            int16_t end_offset = start_offset + thickness - 1;
+            int16_t end_offset = (int16_t)(start_offset + thickness - 1);
             for (int16_t offset = start_offset; offset <= end_offset; ++offset) {
                 if (is_horizontal) {
                     gfx_draw_pixel(ctx, x0, y0 + offset);

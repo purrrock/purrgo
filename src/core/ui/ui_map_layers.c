@@ -27,7 +27,7 @@ static void draw_layer_item(gfx_context_t* gfx, int y, int index, int cursor, bo
      */
     purrgo_snprintf(buf, sizeof(buf), "%s %s", enabled ? "x" : " ", label);
 
-    gfx_draw_string(gfx, 10, y, buf);
+    gfx_draw_string(gfx, 10, (int16_t)y, buf);
 }
 
 void ui_render_menu_map_layers(gfx_context_t* gfx) {
@@ -53,11 +53,11 @@ void ui_render_menu_map_layers(gfx_context_t* gfx) {
         prev_map_layers_cursor = cursor;
     } else if (cursor != prev_map_layers_cursor) {
         if (prev_map_layers_cursor >= 0 && prev_map_layers_cursor <= 8) {
-            int prev_y = 30 + prev_map_layers_cursor * 15;
+            int16_t prev_y = (int16_t)(30 + prev_map_layers_cursor * 15);
             display_refresh_region(0, prev_y, PURRGO_HW_DISPLAY_WIDTH_PX, 15);
         }
         if (cursor >= 0 && cursor <= 8) {
-            int curr_y = 30 + cursor * 15;
+            int16_t curr_y = (int16_t)(30 + cursor * 15);
             display_refresh_region(0, curr_y, PURRGO_HW_DISPLAY_WIDTH_PX, 15);
         }
         prev_map_layers_cursor = cursor;

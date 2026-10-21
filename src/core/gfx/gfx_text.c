@@ -13,7 +13,7 @@ static void gfx_draw_char_transparent(gfx_context_t *ctx, int16_t x, int16_t y, 
     for (int col = 0; col < 5; col++) {
         for (int row = 0; row < 8; row++) {
             if ((bitmap[col] >> row) & 1) {
-                gfx_draw_pixel(ctx, x + col, y + row);
+                gfx_draw_pixel(ctx, (int16_t)(x + col), (int16_t)(y + row));
             }
         }
     }
@@ -35,14 +35,14 @@ void gfx_draw_char(gfx_context_t *ctx, int16_t x, int16_t y, char c) {
         for (int row = 0; row < 8; row++) {
             // Рисуем либо цвет текста, либо цвет фона
             ctx->color_fg = ((bitmap[col] >> row) & 1) ? fg : bg;
-            gfx_draw_pixel(ctx, x + col, y + row);
+            gfx_draw_pixel(ctx, (int16_t)(x + col), (int16_t)(y + row));
         }
     }
     
     // Обязательная заливка межбуквенного интервала (6-я колонка) цветом фона
     ctx->color_fg = bg;
     for (int row = 0; row < 8; row++) {
-        gfx_draw_pixel(ctx, x + 5, y + row);
+        gfx_draw_pixel(ctx, (int16_t)(x + 5), (int16_t)(y + row));
     }
     
     // Восстановление оригинального цвета в контексте
@@ -84,7 +84,7 @@ static void gfx_draw_char_halo(gfx_context_t *ctx, int16_t x, int16_t y, char c)
                 }
 
                 if (!is_font) {
-                    gfx_draw_pixel(ctx, x + col - 1, y + row - 1);
+                    gfx_draw_pixel(ctx, (int16_t)(x + col - 1), (int16_t)(y + row - 1));
                 }
             }
         }
