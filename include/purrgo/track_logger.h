@@ -31,6 +31,13 @@ track_logger_mode_t purrgo_logger_get_mode(void);
 bool purrgo_logger_start(const purrgo_gnss_solution_t* first_fix);
 bool purrgo_logger_add_point(const purrgo_gnss_solution_t* fix);
 void purrgo_logger_stop(void);
+
+/*
+ * Полный сброс состояния логгера (для юнит-тестов и повторной инициализации):
+ * режим STANDARD, состояние IDLE, RAM-трек и счётчики очищены. В отличие от
+ * purrgo_logger_stop() футер GPX не пишется: открытый файл только закрывается.
+ */
+void purrgo_logger_reset(void);
 const char* purrgo_logger_get_active_filename(void);
 track_logger_state_t purrgo_logger_get_state(void);
 

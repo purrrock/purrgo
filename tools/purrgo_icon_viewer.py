@@ -90,6 +90,6 @@ def visualize_purrgo_icons(filepath, output_image='purrgo_icons_preview.png'):
     plt.show()
 
 if __name__ == '__main__':
-    # Укажите путь к вашему заголовочному файлу
-    filepath = 'purrgo_poi_icons.h' 
+    # Укажите путь к файлу с данными иконок
+    filepath = '../src/core/purrgo_poi_icons.c'
     visualize_purrgo_icons(filepath)

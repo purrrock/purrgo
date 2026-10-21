@@ -36,6 +36,13 @@ void purrgo_app_ui_request_full_refresh(void);
  */
 bool purrgo_app_ui_render_power_off(void);
 
+/*
+ * Сброс состояния UI (для юнит-тестов): экран выключения снят, сохранённые
+ * данные последнего рендера забыты, состояние экрана карты сброшено, карта и
+ * строка статуса помечены грязными.
+ */
+void purrgo_app_ui_reset(void);
+
 /* true, пока выбран экран выключения (его проверяют модули, рисующие строки статуса). */
 bool purrgo_app_ui_is_power_off(void);
 

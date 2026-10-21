@@ -149,6 +149,11 @@ static void test_power_off_screen(void)
     /* Карта осталась: чёрных пикселей столько же, сколько у одного маркера, то есть
        текст Trip computer стёрт, а маркер на месте. */
     CHECK(count_px(0, 9, W, H - 9, PX_BLACK) == marker_px);      /* маркер на прежнем месте */
+
+    /* purrgo_app_ui_reset(): экран выключения снят, данные последнего рендера забыты. */
+    purrgo_app_ui_reset();
+    CHECK(!purrgo_app_ui_is_power_off());
+    CHECK(!purrgo_app_ui_render_power_off());
 }
 
 int main(void)
