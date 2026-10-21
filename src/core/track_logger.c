@@ -538,3 +538,25 @@ bool purrgo_logger_get_last_two_points(
 
     return true;
 }
+
+void purrgo_logger_reset(void) {
+    if (active_file != NULL) {
+        (void)purrgo_fs_close(active_file);
+        active_file = NULL;
+    }
+    current_state = LOGGER_STATE_IDLE;
+    current_mode = LOGGER_MODE_STANDARD;
+    s_active_filename[0] = '\0';
+    current_track_day = 0;
+    is_first_point = true;
+    last_recorded_lat = 0;
+    last_recorded_lon = 0;
+    last_recorded_time = 0;
+    last_sync_time = 0;
+    points_since_sync = 0;
+    last_recorded_course_valid = false;
+    last_recorded_course_100 = 0;
+    buffer_pos = 0;
+    ram_track_head = 0;
+    ram_track_count = 0;
+}

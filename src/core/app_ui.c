@@ -13,6 +13,7 @@
 #include "purrgo/hardware_config.h"
 #include "purrgo/display_hal.h"
 #include <stdbool.h>
+#include <string.h>
 
 int dbg_map_render_calls = 0;
 
@@ -23,6 +24,7 @@ static gfx_context_t* s_last_gfx = NULL;
 static purrgo_gnss_solution_t s_last_gnss;
 static purrgo_sun_info_t s_last_sun;
 static bool s_power_off_screen = false;
+static purrgo_state_t prev_state = APP_STATE_MAP;
 
 #define POWER_OFF_TEXT "POWER OFF"
 
@@ -127,7 +129,6 @@ void purrgo_app_ui_render(
     const purrgo_gnss_solution_t* gnss,
     const purrgo_sun_info_t* sun
 ) {
-    static purrgo_state_t prev_state = APP_STATE_MAP;
     purrgo_state_t current_state = purrgo_app_get_state();
 
     s_last_gfx = gfx;
@@ -211,4 +212,17 @@ bool purrgo_app_ui_render_power_off(void)
     /* Платформа сделает полный refresh сама. */
     s_full_refresh_requested = false;
     return true;
+}
+
+void purrgo_app_ui_reset(void)
+{
+    s_last_gfx = NULL;
+    memset(&s_last_gnss, 0, sizeof(s_last_gnss));
+    memset(&s_last_sun, 0, sizeof(s_last_sun));
+    s_power_off_screen = false;
+    s_full_refresh_requested = false;
+    prev_state = APP_STATE_MAP;
+    ui_map_reset();
+    purrgo_ui_map_mark_dirty();
+    purrgo_ui_status_bar_mark_dirty();
 }

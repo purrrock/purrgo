@@ -166,7 +166,7 @@ static void tname(char out[32], uint8_t y, uint8_t mo, uint8_t d, uint8_t h, uin
 
 static void logger_reset(int tz_minutes)
 {
-    purrgo_logger_stop();
+    purrgo_logger_reset();
     fake_fs_reset();
     app_config.tz_offset_minutes = (int16_t)tz_minutes;
     purrgo_logger_set_mode(LOGGER_MODE_STANDARD);
@@ -473,6 +473,35 @@ static void test_logger_sync_cadence(void)
     free(t);
 }
 
+/* purrgo_logger_reset(): полный сброс без записи футера и без утечки дескрипторов. */
+static void test_logger_reset(void)
+{
+    purrgo_gnss_solution_t f;
+
+    logger_reset(0);
+    purrgo_logger_set_mode(LOGGER_MODE_EXPEDITION);
+    f = fixt(26, 10, 19, 12, 0, 0);
+    CHECK(purrgo_logger_start(&f) && purrgo_logger_add_point(&f));
+    char name[64];
+    snprintf(name, sizeof name, "%s", purrgo_logger_get_active_filename());
+    CHECK(purrgo_logger_get_track_point_count() == 1);
+
+    purrgo_logger_reset();
+    CHECK(purrgo_logger_get_state() == LOGGER_STATE_IDLE);
+    CHECK(purrgo_logger_get_mode() == LOGGER_MODE_STANDARD);
+    CHECK(purrgo_logger_get_active_filename() == NULL);
+    CHECK(purrgo_logger_get_track_point_count() == 0);
+    CHECK(fake_fs_open_handles() == 0);
+    char *t = file_text(name);
+    CHECK(t != NULL && strstr(t, "</gpx>") == NULL);   /* футер не писался */
+    free(t);
+
+    /* После сброса логгер снова работает с нуля. */
+    CHECK(purrgo_logger_start(&f) && purrgo_logger_add_point(&f));
+    CHECK(purrgo_logger_get_track_point_count() == 1);
+    purrgo_logger_stop();
+}
+
 /* Фильтры качества фикса, шума на стоянке, поворотов и выбросов. */
 static void test_logger_filters(void)
 {
@@ -568,5 +597,6 @@ int main(void)
     test_logger_ram_ring();
     test_logger_sync_cadence();
     test_logger_filters();
+    test_logger_reset();
     return test_finish("test_time_logger");
 }

@@ -718,3 +718,10 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
         ui_map_render_gnss_marker(gfx, gnss, &map_vp, &dynamic_cam, false);
     }
 }
+
+void ui_map_reset(void) {
+    memset(&prev_marker_state, 0, sizeof(prev_marker_state));
+    prev_marker_state_valid = false;
+    memset(&prev_status_state, 0, sizeof(prev_status_state));
+    s_map_render_attempts = 0;
+}
