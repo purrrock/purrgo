@@ -21,16 +21,21 @@ void purrgo_track_render(
     gfx_set_color(gfx, BLACK, gfx->color_bg);
 
     bool has_prev = false;
-    int16_t prev_sx = 0, prev_sy = 0;
+    int32_t prev_sx = 0, prev_sy = 0;
 
     for (size_t i = 0; i < num_points; i++) {
         track_point_t point;
         if (purrgo_logger_get_track_point(i, &point)) {
-            int16_t sx, sy;
-            project_to_screen(point.lon_1e7, point.lat_1e7, camera, vp, &sx, &sy);
+            int32_t sx, sy;
+            project_to_screen_i32(point.lon_1e7, point.lat_1e7, camera, vp, &sx, &sy);
 
             if (has_prev) {
-                gfx_draw_line(gfx, prev_sx, prev_sy, sx, sy);
+                /* Далёкий конец отрезка отсекается с сохранением наклона (не насыщается в int16). */
+                int32_t x0 = prev_sx, y0 = prev_sy, x1 = sx, y1 = sy;
+
+                if (map_clip_segment_to_safe(&x0, &y0, &x1, &y1)) {
+                    gfx_draw_line(gfx, (int16_t)x0, (int16_t)y0, (int16_t)x1, (int16_t)y1);
+                }
             }
             prev_sx = sx;
             prev_sy = sy;
@@ -52,9 +57,19 @@ bool purrgo_track_render_last_segment(
         return false;
     }
 
-    int16_t prev_sx, prev_sy, sx, sy;
-    project_to_screen(prev_point.lon_1e7, prev_point.lat_1e7, camera, vp, &prev_sx, &prev_sy);
-    project_to_screen(last_point.lon_1e7, last_point.lat_1e7, camera, vp, &sx, &sy);
+    int32_t x0, y0, x1, y1;
+    project_to_screen_i32(prev_point.lon_1e7, prev_point.lat_1e7, camera, vp, &x0, &y0);
+    project_to_screen_i32(last_point.lon_1e7, last_point.lat_1e7, camera, vp, &x1, &y1);
+
+    /* Далёкий конец отрезка отсекается с сохранением наклона; отрезок целиком вне области не рисуется. */
+    if (!map_clip_segment_to_safe(&x0, &y0, &x1, &y1)) {
+        return false;
+    }
+
+    int16_t prev_sx = (int16_t)x0;
+    int16_t prev_sy = (int16_t)y0;
+    int16_t sx = (int16_t)x1;
+    int16_t sy = (int16_t)y1;
 
     int16_t min_x = (prev_sx < sx) ? prev_sx : sx;
     int16_t max_x = (prev_sx > sx) ? prev_sx : sx;

@@ -20,6 +20,29 @@
 // #define PURRGO_GNSS_MOCK             1
 // #define PURRGO_HW_GNSS PURRGO_GNSS_MOCK
 
+/*
+ * Модель приёмника: определяет, какие настроечные команды ему отправляются при
+ * старте (см. purrgo/gnss_receiver.h).
+ *
+ *   PURRGO_GNSS_RECEIVER_NONE  - ничего не отправлять (приёмник работает с
+ *                                настройками по умолчанию);
+ *   PURRGO_GNSS_RECEIVER_CASIC - CASIC AT6558R (команды $PCAS...). Отладочный
+ *                                модуль; приёмник Release (G10A F30, u-blox M10)
+ *                                настраивается командами UBX - отдельная
+ *                                реализация в gnss_receiver.c.
+ */
+#define PURRGO_GNSS_RECEIVER_NONE   0
+#define PURRGO_GNSS_RECEIVER_CASIC  1
+
+#ifndef PURRGO_HW_GNSS_RECEIVER
+#define PURRGO_HW_GNSS_RECEIVER PURRGO_GNSS_RECEIVER_CASIC
+#endif
+
+#if (PURRGO_HW_GNSS_RECEIVER != PURRGO_GNSS_RECEIVER_NONE) && \
+    (PURRGO_HW_GNSS_RECEIVER != PURRGO_GNSS_RECEIVER_CASIC)
+#error "Invalid PURRGO_HW_GNSS_RECEIVER"
+#endif
+
 
 /*
  * Аппаратный backend дисплея. Единственный поддерживаемый - E-Ink
