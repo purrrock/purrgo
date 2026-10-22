@@ -37,6 +37,12 @@ void gfx_fill_rect(gfx_context_t *ctx, int16_t x, int16_t y, int16_t w, int16_t 
     int16_t end_y = min16(ctx->clip_y + ctx->clip_h, y + h);
 
     for (int16_t cy = start_y; cy < end_y; cy++) {
+        if (ctx->fill_span != NULL) {
+            if (start_x < end_x) {
+                ctx->fill_span(ctx->framebuffer, start_x, (int16_t)(end_x - 1), cy, ctx->color_bg);
+            }
+            continue;
+        }
         for (int16_t cx = start_x; cx < end_x; cx++) {
             ctx->draw_pixel(ctx->framebuffer, cx, cy, ctx->color_bg);
         }

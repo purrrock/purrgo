@@ -2,6 +2,7 @@
 
 #include "purrgo/display_hal.h"
 #include "purrgo/logger.h"
+#include "purrgo/gfx_fb2bpp.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -249,6 +250,32 @@ void stm32_clear_cb(
     (void)fb;
 
     display_clear((uint8_t)color);
+}
+
+
+/*
+ * Быстрая заливка горизонтального отрезка: целые байты - одним memset(),
+ * раскладка пикселей та же, что у display_set_pixel() (см. gfx_fb2bpp.h).
+ */
+void stm32_fill_span_cb(
+    void *fb,
+    int16_t x0,
+    int16_t x1,
+    int16_t y,
+    gfx_color_t color
+)
+{
+    (void)fb;
+
+    gfx_fb2bpp_fill_span(
+        framebuffer,
+        DISPLAY_WIDTH,
+        DISPLAY_HEIGHT,
+        x0,
+        x1,
+        y,
+        (uint8_t)color
+    );
 }
 
 

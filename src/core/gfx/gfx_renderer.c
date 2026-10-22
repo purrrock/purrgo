@@ -28,6 +28,7 @@ bool gfx_init(gfx_context_t *ctx,
      * pixel-by-pixel fallback в gfx_clear().
      */
     ctx->clear = NULL;
+    ctx->fill_span = NULL;
 
     ctx->color_fg = 1;
     ctx->color_bg = 0;
@@ -47,6 +48,15 @@ void gfx_set_clear_callback(gfx_context_t *ctx, gfx_clear_fn clear_cb)
     }
 
     ctx->clear = clear_cb;
+}
+
+void gfx_set_fill_span_callback(gfx_context_t *ctx, gfx_fill_span_fn fill_span_cb)
+{
+    if (ctx == NULL) {
+        return;
+    }
+
+    ctx->fill_span = fill_span_cb;
 }
 
 void gfx_set_clip(gfx_context_t *ctx, int16_t x, int16_t y, int16_t w, int16_t h)
@@ -233,6 +243,15 @@ void gfx_draw_hline(gfx_context_t *ctx, int16_t x_start, int16_t x_end, int16_t 
 
     if (x_end >= ctx->clip_x + ctx->clip_w) {
         x_end = (int16_t)(ctx->clip_x + ctx->clip_w - 1);
+    }
+
+    /*
+     * Быстрый путь платформы: весь отрезок за один вызов.
+     * Координаты уже отсечены по clip; clip не выходит за экран.
+     */
+    if (ctx->fill_span != NULL) {
+        ctx->fill_span(ctx->framebuffer, x_start, x_end, y, ctx->color_fg);
+        return;
     }
 
     /*

@@ -88,4 +88,12 @@ void stm32_clear_cb(
     gfx_color_t color
 );
 
+void stm32_fill_span_cb(
+    void *fb,
+    int16_t x0,
+    int16_t x1,
+    int16_t y,
+    gfx_color_t color
+);
+
 #endif /* DISPLAY_STM32_H */

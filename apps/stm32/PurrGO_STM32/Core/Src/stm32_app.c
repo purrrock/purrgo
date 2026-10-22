@@ -190,6 +190,12 @@ void purrgo_stm32_init(void)
    */
   gfx_set_clear_callback(&global_gfx_ctx, stm32_clear_cb);
 
+  /*
+   * Быстрая заливка горизонтальных отрезков (заливка полигонов карты,
+   * очистка прямоугольников): целые байты 2-bpp буфера - одним memset().
+   */
+  gfx_set_fill_span_callback(&global_gfx_ctx, stm32_fill_span_cb);
+
   PURRGO_LOG("GFX OK\r\n");
 
   PURRGO_LOG("Splash Screen\r\n");
