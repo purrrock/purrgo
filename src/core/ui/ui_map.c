@@ -324,26 +324,26 @@ static void ui_calc_marker_state(
     /*
      * Determine the complete marker bounding box.
      */
-    int16_t min_x = out_state->pts[0].x;
-    int16_t max_x = out_state->pts[0].x;
-    int16_t min_y = out_state->pts[0].y;
-    int16_t max_y = out_state->pts[0].y;
+    int16_t min_x = (int16_t)out_state->pts[0].x;
+    int16_t max_x = (int16_t)out_state->pts[0].x;
+    int16_t min_y = (int16_t)out_state->pts[0].y;
+    int16_t max_y = (int16_t)out_state->pts[0].y;
 
     for (uint8_t i = 1; i < out_state->point_count; i++) {
         if (out_state->pts[i].x < min_x) {
-            min_x = out_state->pts[i].x;
+            min_x = (int16_t)out_state->pts[i].x;
         }
 
         if (out_state->pts[i].x > max_x) {
-            max_x = out_state->pts[i].x;
+            max_x = (int16_t)out_state->pts[i].x;
         }
 
         if (out_state->pts[i].y < min_y) {
-            min_y = out_state->pts[i].y;
+            min_y = (int16_t)out_state->pts[i].y;
         }
 
         if (out_state->pts[i].y > max_y) {
-            max_y = out_state->pts[i].y;
+            max_y = (int16_t)out_state->pts[i].y;
         }
     }
 

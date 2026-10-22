@@ -6,16 +6,37 @@
 #include <stddef.h>
 
 /*
- * Максимальное количество пересечений одной scanline
- * с рёбрами polygon.
+ * Размер буфера пересечений одной scanline (быстрый путь).
  *
- * nodeX[] хранит int16_t, поэтому буфер занимает:
- *
- *     128 * 2 = 256 байт
- *
- * Это приемлемо для STM32 и не требует динамического выделения памяти.
+ * nodeX[] хранит int16_t: 128 * 2 = 256 байт стека, без динамической памяти.
+ * Если пересечений больше, scanline заливается запасным путём
+ * (fill_scanline_streaming), который не ограничен этим размером.
  */
 #define GFX_MAX_POLYGON_NODES 128
+
+/*
+ * Размер порции запасного пути: 64 * 4 = 256 байт стека.
+ */
+#define GFX_STREAM_BATCH 64
+
+/*
+ * Порог "широких" координат. Пока все вершины внутри +-GFX_NARROW_LIMIT,
+ * (x_end - x_start) * (y - y_start) помещается в int32 (не больше 2^15 * 2^15 * 2),
+ * иначе произведение считается в int64.
+ */
+#define GFX_NARROW_LIMIT 16384
+
+
+static int16_t clamp_i16(int32_t v)
+{
+    if (v < INT16_MIN) {
+        return INT16_MIN;
+    }
+    if (v > INT16_MAX) {
+        return INT16_MAX;
+    }
+    return (int16_t)v;
+}
 
 
 /*
@@ -23,6 +44,9 @@
  *
  * Последняя точка соединяется с первой, поэтому polygon
  * всегда получается замкнутым.
+ *
+ * Контур рассчитан на вершины в пределах int16 (маркер, рамки): gfx_draw_line()
+ * принимает int16, поэтому большие координаты насыщаются.
  */
 void gfx_draw_polygon(
     gfx_context_t *ctx,
@@ -36,20 +60,20 @@ void gfx_draw_polygon(
     for (uint16_t i = 0; i < count - 1; i++) {
         gfx_draw_line(
             ctx,
-            points[i].x,
-            points[i].y,
-            points[i + 1].x,
-            points[i + 1].y
+            clamp_i16(points[i].x),
+            clamp_i16(points[i].y),
+            clamp_i16(points[i + 1].x),
+            clamp_i16(points[i + 1].y)
         );
     }
 
     /* Замыкаем полигон. */
     gfx_draw_line(
         ctx,
-        points[count - 1].x,
-        points[count - 1].y,
-        points[0].x,
-        points[0].y
+        clamp_i16(points[count - 1].x),
+        clamp_i16(points[count - 1].y),
+        clamp_i16(points[0].x),
+        clamp_i16(points[0].y)
     );
 }
 
@@ -85,6 +109,227 @@ void gfx_fill_polygon(
 
 
 /*
+ * Пересечение ребра (i -> j) со scanline y.
+ *
+ * Используется полуоткрытый интервал:
+ *
+ *     y_start <= y < y_end   или   y_end <= y < y_start
+ *
+ * Это предотвращает двойной учёт вершины, в которой сходятся два ребра.
+ * Горизонтальное ребро пересечения не создаёт.
+ *
+ * X пересечения усекается делением к нулю и насыщается в int16: порядок
+ * пересечений при этом сохраняется, а заливаемый интервал всё равно отсекается
+ * по clip.
+ */
+static bool edge_crossing(
+    const gfx_point_t *points,
+    uint16_t i,
+    uint16_t j,
+    int32_t y,
+    bool wide,
+    int16_t *out_x
+) {
+    int32_t y_start = points[i].y;
+    int32_t y_end   = points[j].y;
+
+    if (y_start == y_end) {
+        return false;
+    }
+
+    if (
+        !(
+            (y_start <= y && y_end > y) ||
+            (y_end <= y && y_start > y)
+        )
+    ) {
+        return false;
+    }
+
+    int32_t x_start = points[i].x;
+    int32_t x_end   = points[j].x;
+    int32_t x;
+
+    if (wide) {
+        x = x_start + (int32_t)(
+            ((int64_t)(x_end - x_start) * (int64_t)(y - y_start)) /
+            (int64_t)(y_end - y_start)
+        );
+    } else {
+        x = x_start +
+            ((x_end - x_start) * (y - y_start)) /
+            (y_end - y_start);
+    }
+
+    *out_x = clamp_i16(x);
+    return true;
+}
+
+
+/*
+ * Границы кольца ring_idx в массиве points[]. false - кольцо вырожденное
+ * (меньше 3 точек), его рёбра пропускаются.
+ */
+static bool ring_bounds(
+    const uint32_t *parts,
+    uint16_t num_parts,
+    uint16_t num_points,
+    uint16_t ring_idx,
+    uint16_t *start,
+    uint16_t *end
+) {
+    *start = (uint16_t)parts[ring_idx];
+    *end = (ring_idx + 1 < num_parts)
+        ? (uint16_t)parts[ring_idx + 1]
+        : num_points;
+
+    return (uint16_t)(*end - *start) >= 3;
+}
+
+
+/*
+ * Быстрый путь: собирает все пересечения scanline в nodeX[].
+ * Возвращает false, если пересечений больше capacity (nodeX содержит
+ * неполный набор и использовать его нельзя).
+ */
+static bool collect_nodes(
+    const gfx_point_t *points,
+    uint16_t num_points,
+    const uint32_t *parts,
+    uint16_t num_parts,
+    int32_t y,
+    bool wide,
+    int16_t *nodeX,
+    uint16_t capacity,
+    uint16_t *out_nodes
+) {
+    uint16_t nodes = 0;
+
+    for (uint16_t part_idx = 0; part_idx < num_parts; part_idx++) {
+        uint16_t start;
+        uint16_t end;
+
+        if (!ring_bounds(parts, num_parts, num_points, part_idx, &start, &end)) {
+            continue;
+        }
+
+        for (uint16_t i = start; i < end; i++) {
+            uint16_t j = (i == end - 1) ? start : (uint16_t)(i + 1);
+            int16_t x;
+
+            if (!edge_crossing(points, i, j, y, wide, &x)) {
+                continue;
+            }
+
+            if (nodes >= capacity) {
+                return false;
+            }
+
+            nodeX[nodes++] = x;
+        }
+    }
+
+    *out_nodes = nodes;
+    return true;
+}
+
+
+/*
+ * Запасной путь для scanline с очень большим числом пересечений.
+ *
+ * Пересечения упорядочиваются без массива на все пересечения: каждый проход по
+ * рёбрам выбирает GFX_STREAM_BATCH наименьших ключей среди ещё не обработанных.
+ * Ключ = (x + 32768) << 16 | индекс ребра, поэтому ключи уникальны и порядок
+ * полностью определён даже при совпадающих x. Заливка идёт по чётно-нечётному
+ * правилу с сохранением состояния между порциями. Число проходов не больше
+ * ceil(рёбер / GFX_STREAM_BATCH).
+ */
+static void fill_scanline_streaming(
+    gfx_context_t *ctx,
+    const gfx_point_t *points,
+    uint16_t num_points,
+    const uint32_t *parts,
+    uint16_t num_parts,
+    int32_t y,
+    bool wide
+) {
+    uint32_t batch[GFX_STREAM_BATCH];
+    uint32_t after = 0;
+    bool have_after = false;
+    bool inside = false;
+    int16_t open_x = 0;
+
+    for (;;) {
+        uint16_t n = 0;
+
+        for (uint16_t part_idx = 0; part_idx < num_parts; part_idx++) {
+            uint16_t start;
+            uint16_t end;
+
+            if (!ring_bounds(parts, num_parts, num_points, part_idx, &start, &end)) {
+                continue;
+            }
+
+            for (uint16_t i = start; i < end; i++) {
+                uint16_t j = (i == end - 1) ? start : (uint16_t)(i + 1);
+                int16_t x;
+
+                if (!edge_crossing(points, i, j, y, wide, &x)) {
+                    continue;
+                }
+
+                uint32_t key =
+                    ((uint32_t)((int32_t)x + 32768) << 16) | (uint32_t)i;
+
+                if (have_after && key <= after) {
+                    continue;
+                }
+
+                if (n == GFX_STREAM_BATCH) {
+                    if (key >= batch[n - 1]) {
+                        continue;
+                    }
+                    n--;    /* вытесняем наибольший ключ порции */
+                }
+
+                uint16_t pos = n;
+
+                while (pos > 0 && batch[pos - 1] > key) {
+                    batch[pos] = batch[pos - 1];
+                    pos--;
+                }
+                batch[pos] = key;
+                n++;
+            }
+        }
+
+        if (n == 0) {
+            return;
+        }
+
+        for (uint16_t k = 0; k < n; k++) {
+            int16_t x = (int16_t)((int32_t)(batch[k] >> 16) - 32768);
+
+            if (!inside) {
+                open_x = x;
+                inside = true;
+            } else {
+                gfx_draw_hline(ctx, open_x, x, (int16_t)y);
+                inside = false;
+            }
+        }
+
+        after = batch[n - 1];
+        have_after = true;
+
+        if (n < GFX_STREAM_BATCH) {
+            return;
+        }
+    }
+}
+
+
+/*
  * Заполняет compound polygon текущим цветом foreground.
  *
  * Поддерживает несколько колец:
@@ -111,12 +356,10 @@ void gfx_fill_polygon(
  * Благодаря even-odd правилу направление обхода колец
  * (CW / CCW) не влияет на наличие hole.
  *
- * ВАЖНО:
- * nodeX имеет фиксированный размер.
- * Если одна scanline требует более
- * GFX_MAX_POLYGON_NODES пересечений, функция прекращает
- * дальнейшую отрисовку polygon, чтобы гарантированно
- * не допустить выхода за границы массива.
+ * Вершины - int32 (до +-2^29): координаты далёких вершин не насыщаются, наклон
+ * рёбер сохраняется. Если на одной scanline больше GFX_MAX_POLYGON_NODES
+ * пересечений, строка заливается запасным путём - полигон никогда не
+ * обрывается на середине.
  */
 void gfx_fill_compound_polygon(
     gfx_context_t *ctx,
@@ -190,12 +433,14 @@ void gfx_fill_compound_polygon(
 
 
     /*
-     * Определяем вертикальный диапазон всей compound geometry.
+     * Вертикальный диапазон всей compound geometry и признак "широких"
+     * координат (см. GFX_NARROW_LIMIT).
      */
-    int16_t min_y = points[0].y;
-    int16_t max_y = points[0].y;
+    int32_t min_y = points[0].y;
+    int32_t max_y = points[0].y;
+    bool wide = false;
 
-    for (uint16_t i = 1; i < num_points; i++) {
+    for (uint16_t i = 0; i < num_points; i++) {
         if (points[i].y < min_y) {
             min_y = points[i].y;
         }
@@ -203,17 +448,24 @@ void gfx_fill_compound_polygon(
         if (points[i].y > max_y) {
             max_y = points[i].y;
         }
+
+        if (
+            points[i].x < -GFX_NARROW_LIMIT || points[i].x > GFX_NARROW_LIMIT ||
+            points[i].y < -GFX_NARROW_LIMIT || points[i].y > GFX_NARROW_LIMIT
+        ) {
+            wide = true;
+        }
     }
 
 
     /*
      * Если geometry полностью находится выше или ниже
      * framebuffer, рисовать нечего.
-     *
-     * Это также защищает от случая, когда после clipping
-     * диапазон scanline становится пустым.
      */
-    if (max_y < ctx->clip_y || min_y >= ctx->clip_y + ctx->clip_h) {
+    int32_t clip_top = ctx->clip_y;
+    int32_t clip_bottom = (int32_t)ctx->clip_y + (int32_t)ctx->clip_h - 1;
+
+    if (max_y < clip_top || min_y > clip_bottom) {
         return;
     }
 
@@ -221,170 +473,49 @@ void gfx_fill_compound_polygon(
     /*
      * Ограничиваем scanline диапазоном framebuffer.
      */
-    if (min_y < ctx->clip_y) {
-        min_y = ctx->clip_y;
+    if (min_y < clip_top) {
+        min_y = clip_top;
     }
 
-    if (max_y >= ctx->clip_y + ctx->clip_h) {
-        max_y = (int16_t)(ctx->clip_y + ctx->clip_h - 1);
-    }
-
-
-    /*
-     * После clipping диапазон может оказаться пустым.
-     */
-    if (min_y > max_y) {
-        return;
+    if (max_y > clip_bottom) {
+        max_y = clip_bottom;
     }
 
 
     /*
      * Scanline rendering.
      */
-    for (int16_t y = min_y; y <= max_y; y++) {
+    for (int32_t y = min_y; y <= max_y; y++) {
 
         /*
          * Массив пересечений находится на стеке.
-         *
-         * Размер фиксирован и известен во время компиляции.
          * malloc() в graphics/render path отсутствует.
          */
         int16_t nodeX[GFX_MAX_POLYGON_NODES];
 
         uint16_t nodes = 0;
 
+        if (!collect_nodes(
+                points,
+                num_points,
+                parts,
+                num_parts,
+                y,
+                wide,
+                nodeX,
+                GFX_MAX_POLYGON_NODES,
+                &nodes)) {
 
-        /*
-         * Обрабатываем каждое кольцо отдельно.
-         */
-        for (
-            uint16_t part_idx = 0;
-            part_idx < num_parts;
-            part_idx++
-        ) {
-            /*
-             * Эти значения уже проверены выше.
-             */
-            uint16_t start =
-                (uint16_t)parts[part_idx];
-
-            uint16_t end =
-                (
-                    part_idx + 1 < num_parts
-                )
-                    ? (uint16_t)parts[part_idx + 1]
-                    : num_points;
-
-
-            /*
-             * Теоретически эта проверка уже обеспечена
-             * валидацией parts[].
-             *
-             * Оставляем её как локальную защиту перед
-             * вычислением i + 1 и замыканием кольца.
-             */
-            if (end - start < 3) {
-                continue;
-            }
-
-
-            /*
-             * Обрабатываем рёбра текущего кольца.
-             */
-            for (uint16_t i = start; i < end; i++) {
-
-                uint16_t j =
-                    (i == end - 1)
-                        ? start
-                        : (uint16_t)(i + 1);
-
-
-                int16_t y_start = points[i].y;
-                int16_t y_end   = points[j].y;
-
-                int16_t x_start = points[i].x;
-                int16_t x_end   = points[j].x;
-
-
-                /*
-                 * Горизонтальное ребро не создаёт отдельного
-                 * пересечения scanline.
-                 */
-                if (y_start == y_end) {
-                    continue;
-                }
-
-
-                /*
-                 * Используем полуоткрытый интервал:
-                 *
-                 *     y_start <= y < y_end
-                 *
-                 * или
-                 *
-                 *     y_end <= y < y_start
-                 *
-                 * Это предотвращает двойной учёт вершины,
-                 * в которой сходятся два ребра.
-                 */
-                if (
-                    !(
-                        (y_start <= y && y_end > y) ||
-                        (y_end <= y && y_start > y)
-                    )
-                ) {
-                    continue;
-                }
-
-
-                /*
-                 * Вычисляем X пересечения.
-                 *
-                 * Все промежуточные операции выполняются
-                 * в int32_t.
-                 *
-                 * Это важно, поскольку координаты точек имеют
-                 * меньший тип, а произведение:
-                 *
-                 *     (x_end - x_start) * (y - y_start)
-                 *
-                 * не должно вычисляться в int16_t.
-                 */
-                int32_t x =
-                    (int32_t)x_start +
-                    (
-                        (int32_t)(x_end - x_start) *
-                        (int32_t)(y - y_start)
-                    ) /
-                    (int32_t)(y_end - y_start);
-
-
-                /*
-                 * Проверяем границу массива ДО записи.
-                 *
-                 * При превышении лимита немедленно прекращаем
-                 * обработку polygon.
-                 *
-                 * Это fail-fast поведение:
-                 *
-                 *   - нет buffer overflow;
-                 *   - нет повреждения stack;
-                 *   - нет тихого удаления пересечений;
-                 *
-                 * но polygon может быть отрисован частично,
-                 * поскольку предыдущие scanline уже могли быть
-                 * переданы в renderer.
-                 *
-                 * Это ограничение будет отдельно устранено,
-                 * если реальная map geometry потребует >64
-                 * пересечений на одной scanline.
-                 */
-                if (nodes >= GFX_MAX_POLYGON_NODES) {
-                    return;
-                }
-
-                nodeX[nodes++] = (int16_t)x;
-            }
+            fill_scanline_streaming(
+                ctx,
+                points,
+                num_points,
+                parts,
+                num_parts,
+                y,
+                wide
+            );
+            continue;
         }
 
 
@@ -399,11 +530,7 @@ void gfx_fill_compound_polygon(
 
 
         /*
-         * Сортируем X-координаты пересечений.
-         *
-         * Insertion sort используется вместо bubble sort для
-         * уменьшения количества перемещений данных, сохраняя
-         * работу in-place без дополнительной памяти.
+         * Сортируем X-координаты пересечений (insertion sort, in-place).
          */
         for (uint16_t i = 1; i < nodes; i++) {
             int16_t key = nodeX[i];
@@ -411,7 +538,7 @@ void gfx_fill_compound_polygon(
 
             while (j >= 0 && nodeX[j] > key) {
                 nodeX[j + 1] = nodeX[j];
-                j = j - 1;
+                j = (int16_t)(j - 1);
             }
             nodeX[j + 1] = key;
         }
@@ -435,7 +562,7 @@ void gfx_fill_compound_polygon(
                 ctx,
                 nodeX[i],
                 nodeX[i + 1],
-                y
+                (int16_t)y
             );
         }
     }

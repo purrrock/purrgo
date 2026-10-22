@@ -1,0 +1,2208 @@
+From 6c89a4f288357d0d07a213058995a170b9f81b0c Mon Sep 17 00:00:00 2001
+From: claude <a@b.c>
+Date: Thu, 22 Oct 2026 11:29:12 +0000
+Subject: [PATCH] 0023-geometry-i32-polygon-fallback-snprintf-gnss-receiver
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Раздел 2 TODO_refact: int32 вершины и отсечение линий, заливка полигонов без обрыва, purrgo_snprintf, вынос команд приёмника GNSS в ядро.
+---
+ TODO_refact.md                             |  12 +-
+ apps/stm32/PurrGO_STM32/Core/Src/gnss_io.c |  41 +-
+ include/purrgo/gfx_renderer.h              |  10 +-
+ include/purrgo/gnss_receiver.h             |  43 ++
+ include/purrgo/hardware_config.h           |  23 +
+ include/purrgo/logger.h                    |   5 +-
+ include/purrgo/purrgo_format.h             |  28 +-
+ src/core/gfx/gfx_polygon.c                 | 495 +++++++++++++--------
+ src/core/gnss_receiver.c                   |  95 ++++
+ src/core/map_projection.c                  | 144 +++++-
+ src/core/map_projection.h                  |  38 ++
+ src/core/map_render.c                      |  80 ++--
+ src/core/purrgo_format.c                   | 230 +++++++---
+ src/core/track_renderer.c                  |  29 +-
+ src/core/ui/ui_map.c                       |  16 +-
+ tests/host/test_geometry_clip.c            | 258 +++++++++++
+ tests/host/test_gnss_receiver.c            |  96 ++++
+ 17 files changed, 1301 insertions(+), 342 deletions(-)
+ create mode 100644 include/purrgo/gnss_receiver.h
+ create mode 100644 src/core/gnss_receiver.c
+ create mode 100644 tests/host/test_geometry_clip.c
+ create mode 100644 tests/host/test_gnss_receiver.c
+
+diff --git a/TODO_refact.md b/TODO_refact.md
+index abe553c..1f182c2 100644
+--- a/TODO_refact.md
++++ b/TODO_refact.md
+@@ -28,16 +28,16 @@
+ ## 2. Ошибки и недочёты средней важности
+ 
+ ### Карта (`map.c`, `map_render.c`, `gfx`)
+-- [ ] Насыщение координат в `project_to_screen`: результат клампится в `int16`, при крупном масштабе вершины далеких полигонов искажают наклон рёбер (неверная заливка водоёмов и лесов). Либо `int32` в `gfx_point_t`, либо отсечение полигона до заливки.
+-- [ ] `gfx_fill_compound_polygon`: O(строки × рёбра); при `nodes >= GFX_MAX_POLYGON_NODES` функция делает `return`, и полигон остаётся нарисованным частично.
++- [x] Насыщение координат в `project_to_screen`: результат клампится в `int16`, при крупном масштабе вершины далеких полигонов искажают наклон рёбер (неверная заливка водоёмов и лесов). Либо `int32` в `gfx_point_t`, либо отсечение полигона до заливки. **Сделано (патч 0023):** `gfx_point_t` - `int32`, `project_to_screen_i32()`, заливка без искажения наклона; отрезки линий и треков отсекаются с сохранением наклона (`map_clip_segment_to_safe`). Цена: RAM +2 КБ (буфер полигона 4 КБ), FLASH +1,5 КБ.
++- [x] `gfx_fill_compound_polygon`: O(строки × рёбра); при `nodes >= GFX_MAX_POLYGON_NODES` функция делает `return`, и полигон остаётся нарисованным частично. **Сделано (патч 0023):** при >128 пересечений строка заливается запасным путём (порциями по 64), полигон больше не обрывается. Тест `test_geometry_clip`.
+ 
+ ### GNSS (`gnss.c`, `gnss_adapter.c`)
+-- [ ] Вендорные команды `$PCAS…` (CASIC) зашиты в общий `gnss_io.c`. Вынести в отдельный платформенный/приёмник-специфичный слой.
+-- [ ] Сверить число полей `$PCAS03` с даташитом AT6558R (в строке 13 полей).
++- [x] Вендорные команды `$PCAS…` (CASIC) зашиты в общий `gnss_io.c`. Вынести в отдельный платформенный/приёмник-специфичный слой. **Сделано (патч 0023):** вынесено в `src/core/gnss_receiver.c` (`purrgo_gnss_receiver_configure()`), модель выбирается `PURRGO_HW_GNSS_RECEIVER` в `hardware_config.h`; для G10A F30 (UBX) нужна отдельная реализация.
++- [x] Сверить число полей `$PCAS03` с даташитом AT6558R (в строке 13 полей). **Сделано (патч 0023):** протокол CASIC v4.2 - 18 полей; в строке 13 (до `nUTC`), это допустимый префикс, строка не менялась. Как приёмник трактует усечённую команду - только по факту работы на железе.
+ - [ ] При UART-ошибке (`HAL_UART_ErrorCallback`) DMA перезапускается и непрочитанные данные теряются; сначала читать остаток, затем перезапускать.
+ 
+ ### Прочее
+-- [ ] `purrgo_snprintf`: нет `%f`, `%zu`, `%lld`; неизвестные спецификаторы не потребляют `va_arg`, и следующие аргументы сдвигаются. Добавить `__attribute__((format(printf, …)))`.
++- [x] `purrgo_snprintf`: нет `%f`, `%zu`, `%lld`; неизвестные спецификаторы не потребляют `va_arg`, и следующие аргументы сдвигаются. Добавить `__attribute__((format(printf, …)))`. **Сделано (патч 0023):** добавлены `%zu`, `%lld`, `hh/h/ll/j/z/t`, `%p`, `+`/пробел, `*`; `%f/%e/%g` снимают `double` и выводят `?` (поддержка с плавающей точкой сознательно не добавлена); атрибут `format(printf)` на `purrgo_snprintf` и `PURRGO_LOG`.
+ 
+ ---
+ 
+@@ -50,7 +50,7 @@
+ - [ ] Статические синглтоны: `reset()` для юнит-тестов есть у `gnss_adapter` (`purrgo_gnss_adapter_reset()`), логгера (`purrgo_logger_reset()`), UI (`purrgo_app_ui_reset()`, `ui_map_reset()`) и карты (`purrgo_map_shutdown()`). Остались `app_config` (глобальная структура, тесты обнуляют её `memset`) и состояние `map_controller` (центр, масштаб - сбрасывает `purrgo_map_controller_init()`).
+ - [ ] Иконки POI: один пиксель = один байт (`purrgo_poi_icons[256][11][11]`, ~31 КБ flash); упаковка в 3 бита дала бы ~19 КБ, но flash занят на 18 %, поэтому приоритет низкий. Данные уже вынесены из заголовка в `src/core/purrgo_poi_icons.c`.
+ - [ ] Драйвер Waveshare берётся из `STM32-F103ZET6/User/e-Paper/` (пример под другой МК): скопировать нужные файлы в `third_party/epd/` или форкнуть.
+-- [ ] Сборка: `src/core/CMakeLists.txt` и корневой `CMakeLists.txt` дублируют `purrgo_core`; `USE_MOCK_GNSS=ON` задаётся глобально; для эмулятора обязателен SDL2 (ядро нельзя собрать без него); в `third_party/CMakeLists.txt` для STM32 `timegm=mktime` (проверить, что `--gc-sections` выкидывает `minmea_gettime`).
++- [ ] Сборка (частично неактуально: дублирования `purrgo_core` уже нет, `USE_MOCK_GNSS` - только PC, SDL2 необязателен через `PURRGO_BUILD_EMULATOR`, `timegm=mktime` для STM32 есть; осталось проверить `--gc-sections` для `minmea_gettime`): `src/core/CMakeLists.txt` и корневой `CMakeLists.txt` дублируют `purrgo_core`; `USE_MOCK_GNSS=ON` задаётся глобально; для эмулятора обязателен SDL2 (ядро нельзя собрать без него); в `third_party/CMakeLists.txt` для STM32 `timegm=mktime` (проверить, что `--gc-sections` выкидывает `minmea_gettime`).
+ 
+ ---
+ 
+diff --git a/apps/stm32/PurrGO_STM32/Core/Src/gnss_io.c b/apps/stm32/PurrGO_STM32/Core/Src/gnss_io.c
+index 97aa9c0..1681891 100644
+--- a/apps/stm32/PurrGO_STM32/Core/Src/gnss_io.c
++++ b/apps/stm32/PurrGO_STM32/Core/Src/gnss_io.c
+@@ -1,5 +1,6 @@
+ #include "purrgo/gnss_io.h"
+ #include "purrgo/gnss_ring.h"
++#include "purrgo/gnss_receiver.h"
+ #include "usart.h"
+ 
+ #include <stdbool.h>
+@@ -49,32 +50,11 @@ static purrgo_gnss_ring_t gnss_ring;
+ static volatile bool gnss_rx_error_flag = false;
+ 
+ /**
+- * @brief Отправить NMEA-команду, добавив '$', контрольную сумму и CRLF.
+- *
+- * @param body Тело команды БЕЗ '$' и '*hh', например "PCAS02,1000".
++ * @brief Отправка байт приёмнику GNSS (транспорт для gnss_receiver).
+  */
+-static void gnss_send_nmea(const char *body)
++static void gnss_uart_tx(const uint8_t *data, size_t len)
+ {
+-    static const char hex[] = "0123456789ABCDEF";
+-    char frame[96];
+-    uint8_t checksum = 0U;
+-    size_t pos = 0U;
+-
+-    frame[pos++] = '$';
+-
+-    for (const char *p = body; (*p != '\0') && (pos < (sizeof(frame) - 6U)); p++)
+-    {
+-        checksum ^= (uint8_t)*p;
+-        frame[pos++] = *p;
+-    }
+-
+-    frame[pos++] = '*';
+-    frame[pos++] = hex[checksum >> 4];
+-    frame[pos++] = hex[checksum & 0x0FU];
+-    frame[pos++] = '\r';
+-    frame[pos++] = '\n';
+-
+-    (void)HAL_UART_Transmit(&huart1, (uint8_t *)frame, (uint16_t)pos, 1000U);
++    (void)HAL_UART_Transmit(&huart1, (uint8_t *)(uintptr_t)data, (uint16_t)len, 1000U);
+ }
+ 
+ /**
+@@ -106,17 +86,10 @@ void purrgo_gnss_init(void)
+      * мгновенно и без задержек будут перехвачены работающим контроллером DMA.
+      */
+     /*
+-     * AT6558R: период выдачи навигационных данных 1000 мс.
+-     * Контрольная сумма вычисляется в gnss_send_nmea(): ранее она была
+-     * записана вручную, и для PCAS03 не совпадала с вычисленной
+-     * (3A вместо 1F), поэтому модуль мог игнорировать команду.
+-     */
+-    gnss_send_nmea("PCAS02,1000");
+-
+-    /*
+-     * Выдавать только GGA + GSA + RMC.
++     * Команды настройки приёмника зависят от его модели и вынесены в ядро
++     * (gnss_receiver.c, выбор - PURRGO_HW_GNSS_RECEIVER в hardware_config.h).
+      */
+-    gnss_send_nmea("PCAS03,1,0,1,0,1,0,0,0,0,0,,,0");
++    purrgo_gnss_receiver_configure(gnss_uart_tx);
+ }
+ 
+ /**
+diff --git a/include/purrgo/gfx_renderer.h b/include/purrgo/gfx_renderer.h
+index c825a2b..a73215e 100644
+--- a/include/purrgo/gfx_renderer.h
++++ b/include/purrgo/gfx_renderer.h
+@@ -28,12 +28,14 @@ typedef uint8_t gfx_color_t;
+ /*
+  * Базовая структура точки.
+  *
+- * Знаковый int16_t позволяет координатам уходить за границы экрана (clipping),
+- * при этом занимая всего 4 байта на структуру.
++ * Координаты int32_t: вершины полигона карты при крупном масштабе лежат далеко
++ * за экраном (десятки тысяч пикселей и больше), и насыщение в int16 меняло
++ * наклон рёбер (неверная заливка). Заливка (gfx_fill_compound_polygon) принимает
++ * значения до +-2^29; контур (gfx_draw_polygon) рассчитан на точки в пределах int16.
+  */
+ typedef struct {
+-    int16_t x;
+-    int16_t y;
++    int32_t x;
++    int32_t y;
+ } gfx_point_t;
+ 
+ /*
+diff --git a/include/purrgo/gnss_receiver.h b/include/purrgo/gnss_receiver.h
+new file mode 100644
+index 0000000..0a0c705
+--- /dev/null
++++ b/include/purrgo/gnss_receiver.h
+@@ -0,0 +1,43 @@
++#ifndef PURRGO_GNSS_RECEIVER_H
++#define PURRGO_GNSS_RECEIVER_H
++
++/*
++ * Настройка приёмника GNSS: команды, специфичные для конкретной модели, отделены
++ * от транспорта (UART/DMA, purrgo/gnss_io.h) и от разбора NMEA (gnss.c).
++ *
++ * Модель выбирается в hardware_config.h (PURRGO_HW_GNSS_RECEIVER). Модуль не
++ * зависит от платформы: платформа передаёт функцию отправки байт приёмнику, поэтому
++ * формат команд и контрольные суммы проверяются host-тестами
++ * (tests/host/test_gnss_receiver.c).
++ */
++
++#include <stddef.h>
++#include <stdint.h>
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++/* Отправка байт приёмнику (блокирующая, например HAL_UART_Transmit). */
++typedef void (*purrgo_gnss_tx_fn)(const uint8_t *data, size_t len);
++
++/*
++ * Формирует NMEA-кадр "$<body>*HH\r\n" (HH - XOR всех символов body, две
++ * шестнадцатеричные цифры верхнего регистра) и '\0' в конце.
++ *
++ * body - тело команды БЕЗ '$' и '*HH', например "PCAS02,1000".
++ * Возвращает длину кадра без '\0'; 0, если кадр с '\0' не помещается в out.
++ */
++size_t purrgo_nmea_build_frame(char *out, size_t out_size, const char *body);
++
++/*
++ * Отправляет приёмнику стартовую конфигурацию выбранной модели.
++ * Вызывать после запуска приёма (DMA), чтобы не пропустить ответы приёмника.
++ */
++void purrgo_gnss_receiver_configure(purrgo_gnss_tx_fn tx);
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif /* PURRGO_GNSS_RECEIVER_H */
+diff --git a/include/purrgo/hardware_config.h b/include/purrgo/hardware_config.h
+index 2cf8ffa..63c53d0 100644
+--- a/include/purrgo/hardware_config.h
++++ b/include/purrgo/hardware_config.h
+@@ -20,6 +20,29 @@
+ // #define PURRGO_GNSS_MOCK             1
+ // #define PURRGO_HW_GNSS PURRGO_GNSS_MOCK
+ 
++/*
++ * Модель приёмника: определяет, какие настроечные команды ему отправляются при
++ * старте (см. purrgo/gnss_receiver.h).
++ *
++ *   PURRGO_GNSS_RECEIVER_NONE  - ничего не отправлять (приёмник работает с
++ *                                настройками по умолчанию);
++ *   PURRGO_GNSS_RECEIVER_CASIC - CASIC AT6558R (команды $PCAS...). Отладочный
++ *                                модуль; приёмник Release (G10A F30, u-blox M10)
++ *                                настраивается командами UBX - отдельная
++ *                                реализация в gnss_receiver.c.
++ */
++#define PURRGO_GNSS_RECEIVER_NONE   0
++#define PURRGO_GNSS_RECEIVER_CASIC  1
++
++#ifndef PURRGO_HW_GNSS_RECEIVER
++#define PURRGO_HW_GNSS_RECEIVER PURRGO_GNSS_RECEIVER_CASIC
++#endif
++
++#if (PURRGO_HW_GNSS_RECEIVER != PURRGO_GNSS_RECEIVER_NONE) && \
++    (PURRGO_HW_GNSS_RECEIVER != PURRGO_GNSS_RECEIVER_CASIC)
++#error "Invalid PURRGO_HW_GNSS_RECEIVER"
++#endif
++
+ 
+ /*
+  * Аппаратный backend дисплея. Единственный поддерживаемый - E-Ink
+diff --git a/include/purrgo/logger.h b/include/purrgo/logger.h
+index daef0af..960a72f 100644
+--- a/include/purrgo/logger.h
++++ b/include/purrgo/logger.h
+@@ -1,12 +1,15 @@
+ #ifndef PURRGO_LOGGER_H
+ #define PURRGO_LOGGER_H
+ 
++#include "purrgo/purrgo_format.h"
++
+ #ifdef __cplusplus
+ extern "C" {
+ #endif
+ 
+ void purrgo_logger_init(void);
+-void purrgo_logger_write(const char *format, ...);
++
++void purrgo_logger_write(const char *format, ...) PURRGO_PRINTF_FORMAT(1, 2);
+ 
+ #define PURRGO_LOG(...) do { purrgo_logger_write(__VA_ARGS__); } while(0)
+ 
+diff --git a/include/purrgo/purrgo_format.h b/include/purrgo/purrgo_format.h
+index f21a1c0..36f4368 100644
+--- a/include/purrgo/purrgo_format.h
++++ b/include/purrgo/purrgo_format.h
+@@ -8,8 +8,32 @@
+ extern "C" {
+ #endif
+ 
+-int purrgo_vsnprintf(char* buf, size_t size, const char* format, va_list args);
+-int purrgo_snprintf(char* buf, size_t size, const char* format, ...);
++/*
++ * Атрибут format: компилятор (-Wformat=2) проверяет соответствие спецификаторов
++ * и типов аргументов в вызовах. На MinGW (GCC) нужен gnu_printf: у ms_printf
++ * другие правила для %zu и %lld.
++ */
++#if defined(__GNUC__) || defined(__clang__)
++#  if defined(__MINGW32__) && !defined(__clang__)
++#    define PURRGO_PRINTF_FORMAT(fmt_idx, first_arg) \
++        __attribute__((format(gnu_printf, fmt_idx, first_arg)))
++#  else
++#    define PURRGO_PRINTF_FORMAT(fmt_idx, first_arg) \
++        __attribute__((format(printf, fmt_idx, first_arg)))
++#  endif
++#else
++#  define PURRGO_PRINTF_FORMAT(fmt_idx, first_arg)
++#endif
++
++/*
++ * printf без плавающей точки: см. комментарий к purrgo_vsnprintf() в purrgo_format.c.
++ * Возвращает длину полной строки без '\0' (как C99 snprintf), даже если она не
++ * поместилась в буфер.
++ */
++int purrgo_vsnprintf(char* buf, size_t size, const char* format, va_list args)
++    PURRGO_PRINTF_FORMAT(3, 0);
++int purrgo_snprintf(char* buf, size_t size, const char* format, ...)
++    PURRGO_PRINTF_FORMAT(3, 4);
+ 
+ #ifdef __cplusplus
+ }
+diff --git a/src/core/gfx/gfx_polygon.c b/src/core/gfx/gfx_polygon.c
+index 4ef2179..a72a91d 100644
+--- a/src/core/gfx/gfx_polygon.c
++++ b/src/core/gfx/gfx_polygon.c
+@@ -6,23 +6,47 @@
+ #include <stddef.h>
+ 
+ /*
+- * Максимальное количество пересечений одной scanline
+- * с рёбрами polygon.
++ * Размер буфера пересечений одной scanline (быстрый путь).
+  *
+- * nodeX[] хранит int16_t, поэтому буфер занимает:
+- *
+- *     128 * 2 = 256 байт
+- *
+- * Это приемлемо для STM32 и не требует динамического выделения памяти.
++ * nodeX[] хранит int16_t: 128 * 2 = 256 байт стека, без динамической памяти.
++ * Если пересечений больше, scanline заливается запасным путём
++ * (fill_scanline_streaming), который не ограничен этим размером.
+  */
+ #define GFX_MAX_POLYGON_NODES 128
+ 
++/*
++ * Размер порции запасного пути: 64 * 4 = 256 байт стека.
++ */
++#define GFX_STREAM_BATCH 64
++
++/*
++ * Порог "широких" координат. Пока все вершины внутри +-GFX_NARROW_LIMIT,
++ * (x_end - x_start) * (y - y_start) помещается в int32 (не больше 2^15 * 2^15 * 2),
++ * иначе произведение считается в int64.
++ */
++#define GFX_NARROW_LIMIT 16384
++
++
++static int16_t clamp_i16(int32_t v)
++{
++    if (v < INT16_MIN) {
++        return INT16_MIN;
++    }
++    if (v > INT16_MAX) {
++        return INT16_MAX;
++    }
++    return (int16_t)v;
++}
++
+ 
+ /*
+  * Рисует контур полигона.
+  *
+  * Последняя точка соединяется с первой, поэтому polygon
+  * всегда получается замкнутым.
++ *
++ * Контур рассчитан на вершины в пределах int16 (маркер, рамки): gfx_draw_line()
++ * принимает int16, поэтому большие координаты насыщаются.
+  */
+ void gfx_draw_polygon(
+     gfx_context_t *ctx,
+@@ -36,20 +60,20 @@ void gfx_draw_polygon(
+     for (uint16_t i = 0; i < count - 1; i++) {
+         gfx_draw_line(
+             ctx,
+-            points[i].x,
+-            points[i].y,
+-            points[i + 1].x,
+-            points[i + 1].y
++            clamp_i16(points[i].x),
++            clamp_i16(points[i].y),
++            clamp_i16(points[i + 1].x),
++            clamp_i16(points[i + 1].y)
+         );
+     }
+ 
+     /* Замыкаем полигон. */
+     gfx_draw_line(
+         ctx,
+-        points[count - 1].x,
+-        points[count - 1].y,
+-        points[0].x,
+-        points[0].y
++        clamp_i16(points[count - 1].x),
++        clamp_i16(points[count - 1].y),
++        clamp_i16(points[0].x),
++        clamp_i16(points[0].y)
+     );
+ }
+ 
+@@ -84,6 +108,227 @@ void gfx_fill_polygon(
+ }
+ 
+ 
++/*
++ * Пересечение ребра (i -> j) со scanline y.
++ *
++ * Используется полуоткрытый интервал:
++ *
++ *     y_start <= y < y_end   или   y_end <= y < y_start
++ *
++ * Это предотвращает двойной учёт вершины, в которой сходятся два ребра.
++ * Горизонтальное ребро пересечения не создаёт.
++ *
++ * X пересечения усекается делением к нулю и насыщается в int16: порядок
++ * пересечений при этом сохраняется, а заливаемый интервал всё равно отсекается
++ * по clip.
++ */
++static bool edge_crossing(
++    const gfx_point_t *points,
++    uint16_t i,
++    uint16_t j,
++    int32_t y,
++    bool wide,
++    int16_t *out_x
++) {
++    int32_t y_start = points[i].y;
++    int32_t y_end   = points[j].y;
++
++    if (y_start == y_end) {
++        return false;
++    }
++
++    if (
++        !(
++            (y_start <= y && y_end > y) ||
++            (y_end <= y && y_start > y)
++        )
++    ) {
++        return false;
++    }
++
++    int32_t x_start = points[i].x;
++    int32_t x_end   = points[j].x;
++    int32_t x;
++
++    if (wide) {
++        x = x_start + (int32_t)(
++            ((int64_t)(x_end - x_start) * (int64_t)(y - y_start)) /
++            (int64_t)(y_end - y_start)
++        );
++    } else {
++        x = x_start +
++            ((x_end - x_start) * (y - y_start)) /
++            (y_end - y_start);
++    }
++
++    *out_x = clamp_i16(x);
++    return true;
++}
++
++
++/*
++ * Границы кольца ring_idx в массиве points[]. false - кольцо вырожденное
++ * (меньше 3 точек), его рёбра пропускаются.
++ */
++static bool ring_bounds(
++    const uint32_t *parts,
++    uint16_t num_parts,
++    uint16_t num_points,
++    uint16_t ring_idx,
++    uint16_t *start,
++    uint16_t *end
++) {
++    *start = (uint16_t)parts[ring_idx];
++    *end = (ring_idx + 1 < num_parts)
++        ? (uint16_t)parts[ring_idx + 1]
++        : num_points;
++
++    return (uint16_t)(*end - *start) >= 3;
++}
++
++
++/*
++ * Быстрый путь: собирает все пересечения scanline в nodeX[].
++ * Возвращает false, если пересечений больше capacity (nodeX содержит
++ * неполный набор и использовать его нельзя).
++ */
++static bool collect_nodes(
++    const gfx_point_t *points,
++    uint16_t num_points,
++    const uint32_t *parts,
++    uint16_t num_parts,
++    int32_t y,
++    bool wide,
++    int16_t *nodeX,
++    uint16_t capacity,
++    uint16_t *out_nodes
++) {
++    uint16_t nodes = 0;
++
++    for (uint16_t part_idx = 0; part_idx < num_parts; part_idx++) {
++        uint16_t start;
++        uint16_t end;
++
++        if (!ring_bounds(parts, num_parts, num_points, part_idx, &start, &end)) {
++            continue;
++        }
++
++        for (uint16_t i = start; i < end; i++) {
++            uint16_t j = (i == end - 1) ? start : (uint16_t)(i + 1);
++            int16_t x;
++
++            if (!edge_crossing(points, i, j, y, wide, &x)) {
++                continue;
++            }
++
++            if (nodes >= capacity) {
++                return false;
++            }
++
++            nodeX[nodes++] = x;
++        }
++    }
++
++    *out_nodes = nodes;
++    return true;
++}
++
++
++/*
++ * Запасной путь для scanline с очень большим числом пересечений.
++ *
++ * Пересечения упорядочиваются без массива на все пересечения: каждый проход по
++ * рёбрам выбирает GFX_STREAM_BATCH наименьших ключей среди ещё не обработанных.
++ * Ключ = (x + 32768) << 16 | индекс ребра, поэтому ключи уникальны и порядок
++ * полностью определён даже при совпадающих x. Заливка идёт по чётно-нечётному
++ * правилу с сохранением состояния между порциями. Число проходов не больше
++ * ceil(рёбер / GFX_STREAM_BATCH).
++ */
++static void fill_scanline_streaming(
++    gfx_context_t *ctx,
++    const gfx_point_t *points,
++    uint16_t num_points,
++    const uint32_t *parts,
++    uint16_t num_parts,
++    int32_t y,
++    bool wide
++) {
++    uint32_t batch[GFX_STREAM_BATCH];
++    uint32_t after = 0;
++    bool have_after = false;
++    bool inside = false;
++    int16_t open_x = 0;
++
++    for (;;) {
++        uint16_t n = 0;
++
++        for (uint16_t part_idx = 0; part_idx < num_parts; part_idx++) {
++            uint16_t start;
++            uint16_t end;
++
++            if (!ring_bounds(parts, num_parts, num_points, part_idx, &start, &end)) {
++                continue;
++            }
++
++            for (uint16_t i = start; i < end; i++) {
++                uint16_t j = (i == end - 1) ? start : (uint16_t)(i + 1);
++                int16_t x;
++
++                if (!edge_crossing(points, i, j, y, wide, &x)) {
++                    continue;
++                }
++
++                uint32_t key =
++                    ((uint32_t)((int32_t)x + 32768) << 16) | (uint32_t)i;
++
++                if (have_after && key <= after) {
++                    continue;
++                }
++
++                if (n == GFX_STREAM_BATCH) {
++                    if (key >= batch[n - 1]) {
++                        continue;
++                    }
++                    n--;    /* вытесняем наибольший ключ порции */
++                }
++
++                uint16_t pos = n;
++
++                while (pos > 0 && batch[pos - 1] > key) {
++                    batch[pos] = batch[pos - 1];
++                    pos--;
++                }
++                batch[pos] = key;
++                n++;
++            }
++        }
++
++        if (n == 0) {
++            return;
++        }
++
++        for (uint16_t k = 0; k < n; k++) {
++            int16_t x = (int16_t)((int32_t)(batch[k] >> 16) - 32768);
++
++            if (!inside) {
++                open_x = x;
++                inside = true;
++            } else {
++                gfx_draw_hline(ctx, open_x, x, (int16_t)y);
++                inside = false;
++            }
++        }
++
++        after = batch[n - 1];
++        have_after = true;
++
++        if (n < GFX_STREAM_BATCH) {
++            return;
++        }
++    }
++}
++
++
+ /*
+  * Заполняет compound polygon текущим цветом foreground.
+  *
+@@ -111,12 +356,10 @@ void gfx_fill_polygon(
+  * Благодаря even-odd правилу направление обхода колец
+  * (CW / CCW) не влияет на наличие hole.
+  *
+- * ВАЖНО:
+- * nodeX имеет фиксированный размер.
+- * Если одна scanline требует более
+- * GFX_MAX_POLYGON_NODES пересечений, функция прекращает
+- * дальнейшую отрисовку polygon, чтобы гарантированно
+- * не допустить выхода за границы массива.
++ * Вершины - int32 (до +-2^29): координаты далёких вершин не насыщаются, наклон
++ * рёбер сохраняется. Если на одной scanline больше GFX_MAX_POLYGON_NODES
++ * пересечений, строка заливается запасным путём - полигон никогда не
++ * обрывается на середине.
+  */
+ void gfx_fill_compound_polygon(
+     gfx_context_t *ctx,
+@@ -190,12 +433,14 @@ void gfx_fill_compound_polygon(
+ 
+ 
+     /*
+-     * Определяем вертикальный диапазон всей compound geometry.
++     * Вертикальный диапазон всей compound geometry и признак "широких"
++     * координат (см. GFX_NARROW_LIMIT).
+      */
+-    int16_t min_y = points[0].y;
+-    int16_t max_y = points[0].y;
++    int32_t min_y = points[0].y;
++    int32_t max_y = points[0].y;
++    bool wide = false;
+ 
+-    for (uint16_t i = 1; i < num_points; i++) {
++    for (uint16_t i = 0; i < num_points; i++) {
+         if (points[i].y < min_y) {
+             min_y = points[i].y;
+         }
+@@ -203,17 +448,24 @@ void gfx_fill_compound_polygon(
+         if (points[i].y > max_y) {
+             max_y = points[i].y;
+         }
++
++        if (
++            points[i].x < -GFX_NARROW_LIMIT || points[i].x > GFX_NARROW_LIMIT ||
++            points[i].y < -GFX_NARROW_LIMIT || points[i].y > GFX_NARROW_LIMIT
++        ) {
++            wide = true;
++        }
+     }
+ 
+ 
+     /*
+      * Если geometry полностью находится выше или ниже
+      * framebuffer, рисовать нечего.
+-     *
+-     * Это также защищает от случая, когда после clipping
+-     * диапазон scanline становится пустым.
+      */
+-    if (max_y < ctx->clip_y || min_y >= ctx->clip_y + ctx->clip_h) {
++    int32_t clip_top = ctx->clip_y;
++    int32_t clip_bottom = (int32_t)ctx->clip_y + (int32_t)ctx->clip_h - 1;
++
++    if (max_y < clip_top || min_y > clip_bottom) {
+         return;
+     }
+ 
+@@ -221,170 +473,49 @@ void gfx_fill_compound_polygon(
+     /*
+      * Ограничиваем scanline диапазоном framebuffer.
+      */
+-    if (min_y < ctx->clip_y) {
+-        min_y = ctx->clip_y;
++    if (min_y < clip_top) {
++        min_y = clip_top;
+     }
+ 
+-    if (max_y >= ctx->clip_y + ctx->clip_h) {
+-        max_y = (int16_t)(ctx->clip_y + ctx->clip_h - 1);
+-    }
+-
+-
+-    /*
+-     * После clipping диапазон может оказаться пустым.
+-     */
+-    if (min_y > max_y) {
+-        return;
++    if (max_y > clip_bottom) {
++        max_y = clip_bottom;
+     }
+ 
+ 
+     /*
+      * Scanline rendering.
+      */
+-    for (int16_t y = min_y; y <= max_y; y++) {
++    for (int32_t y = min_y; y <= max_y; y++) {
+ 
+         /*
+          * Массив пересечений находится на стеке.
+-         *
+-         * Размер фиксирован и известен во время компиляции.
+          * malloc() в graphics/render path отсутствует.
+          */
+         int16_t nodeX[GFX_MAX_POLYGON_NODES];
+ 
+         uint16_t nodes = 0;
+ 
+-
+-        /*
+-         * Обрабатываем каждое кольцо отдельно.
+-         */
+-        for (
+-            uint16_t part_idx = 0;
+-            part_idx < num_parts;
+-            part_idx++
+-        ) {
+-            /*
+-             * Эти значения уже проверены выше.
+-             */
+-            uint16_t start =
+-                (uint16_t)parts[part_idx];
+-
+-            uint16_t end =
+-                (
+-                    part_idx + 1 < num_parts
+-                )
+-                    ? (uint16_t)parts[part_idx + 1]
+-                    : num_points;
+-
+-
+-            /*
+-             * Теоретически эта проверка уже обеспечена
+-             * валидацией parts[].
+-             *
+-             * Оставляем её как локальную защиту перед
+-             * вычислением i + 1 и замыканием кольца.
+-             */
+-            if (end - start < 3) {
+-                continue;
+-            }
+-
+-
+-            /*
+-             * Обрабатываем рёбра текущего кольца.
+-             */
+-            for (uint16_t i = start; i < end; i++) {
+-
+-                uint16_t j =
+-                    (i == end - 1)
+-                        ? start
+-                        : (uint16_t)(i + 1);
+-
+-
+-                int16_t y_start = points[i].y;
+-                int16_t y_end   = points[j].y;
+-
+-                int16_t x_start = points[i].x;
+-                int16_t x_end   = points[j].x;
+-
+-
+-                /*
+-                 * Горизонтальное ребро не создаёт отдельного
+-                 * пересечения scanline.
+-                 */
+-                if (y_start == y_end) {
+-                    continue;
+-                }
+-
+-
+-                /*
+-                 * Используем полуоткрытый интервал:
+-                 *
+-                 *     y_start <= y < y_end
+-                 *
+-                 * или
+-                 *
+-                 *     y_end <= y < y_start
+-                 *
+-                 * Это предотвращает двойной учёт вершины,
+-                 * в которой сходятся два ребра.
+-                 */
+-                if (
+-                    !(
+-                        (y_start <= y && y_end > y) ||
+-                        (y_end <= y && y_start > y)
+-                    )
+-                ) {
+-                    continue;
+-                }
+-
+-
+-                /*
+-                 * Вычисляем X пересечения.
+-                 *
+-                 * Все промежуточные операции выполняются
+-                 * в int32_t.
+-                 *
+-                 * Это важно, поскольку координаты точек имеют
+-                 * меньший тип, а произведение:
+-                 *
+-                 *     (x_end - x_start) * (y - y_start)
+-                 *
+-                 * не должно вычисляться в int16_t.
+-                 */
+-                int32_t x =
+-                    (int32_t)x_start +
+-                    (
+-                        (int32_t)(x_end - x_start) *
+-                        (int32_t)(y - y_start)
+-                    ) /
+-                    (int32_t)(y_end - y_start);
+-
+-
+-                /*
+-                 * Проверяем границу массива ДО записи.
+-                 *
+-                 * При превышении лимита немедленно прекращаем
+-                 * обработку polygon.
+-                 *
+-                 * Это fail-fast поведение:
+-                 *
+-                 *   - нет buffer overflow;
+-                 *   - нет повреждения stack;
+-                 *   - нет тихого удаления пересечений;
+-                 *
+-                 * но polygon может быть отрисован частично,
+-                 * поскольку предыдущие scanline уже могли быть
+-                 * переданы в renderer.
+-                 *
+-                 * Это ограничение будет отдельно устранено,
+-                 * если реальная map geometry потребует >64
+-                 * пересечений на одной scanline.
+-                 */
+-                if (nodes >= GFX_MAX_POLYGON_NODES) {
+-                    return;
+-                }
+-
+-                nodeX[nodes++] = (int16_t)x;
+-            }
++        if (!collect_nodes(
++                points,
++                num_points,
++                parts,
++                num_parts,
++                y,
++                wide,
++                nodeX,
++                GFX_MAX_POLYGON_NODES,
++                &nodes)) {
++
++            fill_scanline_streaming(
++                ctx,
++                points,
++                num_points,
++                parts,
++                num_parts,
++                y,
++                wide
++            );
++            continue;
+         }
+ 
+ 
+@@ -399,11 +530,7 @@ void gfx_fill_compound_polygon(
+ 
+ 
+         /*
+-         * Сортируем X-координаты пересечений.
+-         *
+-         * Insertion sort используется вместо bubble sort для
+-         * уменьшения количества перемещений данных, сохраняя
+-         * работу in-place без дополнительной памяти.
++         * Сортируем X-координаты пересечений (insertion sort, in-place).
+          */
+         for (uint16_t i = 1; i < nodes; i++) {
+             int16_t key = nodeX[i];
+@@ -411,7 +538,7 @@ void gfx_fill_compound_polygon(
+ 
+             while (j >= 0 && nodeX[j] > key) {
+                 nodeX[j + 1] = nodeX[j];
+-                j = j - 1;
++                j = (int16_t)(j - 1);
+             }
+             nodeX[j + 1] = key;
+         }
+@@ -435,8 +562,8 @@ void gfx_fill_compound_polygon(
+                 ctx,
+                 nodeX[i],
+                 nodeX[i + 1],
+-                y
++                (int16_t)y
+             );
+         }
+     }
+-}
+\ No newline at end of file
++}
+diff --git a/src/core/gnss_receiver.c b/src/core/gnss_receiver.c
+new file mode 100644
+index 0000000..13e42e4
+--- /dev/null
++++ b/src/core/gnss_receiver.c
+@@ -0,0 +1,95 @@
++#include "purrgo/gnss_receiver.h"
++#include "purrgo/hardware_config.h"
++#include "purrgo/logger.h"
++
++#include <string.h>
++
++size_t purrgo_nmea_build_frame(char *out, size_t out_size, const char *body)
++{
++    static const char hex[] = "0123456789ABCDEF";
++
++    if (out == NULL || body == NULL) {
++        return 0U;
++    }
++
++    size_t body_len = strlen(body);
++
++    /* '$' + body + '*' + 2 цифры + CRLF + '\0' */
++    if (body_len > out_size || out_size - body_len < 1U + 1U + 2U + 2U + 1U) {
++        return 0U;
++    }
++
++    uint8_t checksum = 0U;
++    size_t pos = 0U;
++
++    out[pos++] = '$';
++
++    for (size_t i = 0U; i < body_len; i++) {
++        checksum ^= (uint8_t)body[i];
++        out[pos++] = body[i];
++    }
++
++    out[pos++] = '*';
++    out[pos++] = hex[checksum >> 4];
++    out[pos++] = hex[checksum & 0x0FU];
++    out[pos++] = '\r';
++    out[pos++] = '\n';
++    out[pos] = '\0';
++
++    return pos;
++}
++
++#if (PURRGO_HW_GNSS_RECEIVER != PURRGO_GNSS_RECEIVER_NONE)
++
++static void send_command(purrgo_gnss_tx_fn tx, const char *body)
++{
++    char frame[96];
++    size_t len = purrgo_nmea_build_frame(frame, sizeof frame, body);
++
++    if (len == 0U) {
++        PURRGO_LOG("GNSS: command too long: %s\r\n", body);
++        return;
++    }
++
++    tx((const uint8_t *)frame, len);
++}
++
++#endif
++
++#if (PURRGO_HW_GNSS_RECEIVER == PURRGO_GNSS_RECEIVER_CASIC)
++
++/*
++ * CASIC AT6558R (протокол CASIC Multimode Satellite Navigation Receiver, v4.2).
++ *
++ * PCAS02 - период навигационных данных, мс (1000 = 1 Гц).
++ *
++ * PCAS03 - какие предложения выдавать. Формат протокола - 18 полей:
++ *   nGGA,nGLL,nGSA,nGSV,nRMC,nVTG,nZDA,nANT,nDHV,nLPS,res1,res2,nUTC,nGST,
++ *   res3,res4,res5,nTIM
++ * Значение n (0..9): выдавать каждое n-е решение, 0 - не выдавать, пустое поле -
++ * оставить как было. Здесь заданы первые 13 полей (до nUTC включительно): GGA, GSA
++ * и RMC каждое решение, остальное выключено; nGST и nTIM не затрагиваются.
++ * Контрольная сумма вычисляется в purrgo_nmea_build_frame() (раньше была записана
++ * вручную и не совпадала).
++ */
++#define GNSS_CASIC_PCAS02 "PCAS02,1000"
++#define GNSS_CASIC_PCAS03 "PCAS03,1,0,1,0,1,0,0,0,0,0,,,0"
++
++void purrgo_gnss_receiver_configure(purrgo_gnss_tx_fn tx)
++{
++    if (tx == NULL) {
++        return;
++    }
++
++    send_command(tx, GNSS_CASIC_PCAS02);
++    send_command(tx, GNSS_CASIC_PCAS03);
++}
++
++#else /* PURRGO_GNSS_RECEIVER_NONE */
++
++void purrgo_gnss_receiver_configure(purrgo_gnss_tx_fn tx)
++{
++    (void)tx;
++}
++
++#endif
+diff --git a/src/core/map_projection.c b/src/core/map_projection.c
+index 0a43f96..7a581bd 100644
+--- a/src/core/map_projection.c
++++ b/src/core/map_projection.c
+@@ -39,13 +39,17 @@ static int64_t div_trunc(int64_t num, int64_t den)
+     return num / den;
+ }
+ 
+-void project_to_screen(
++/*
++ * Проекция без насыщения в int16: результат в int64 (пиксели, возможно далеко
++ * за пределами экрана). Общая часть project_to_screen() и project_to_screen_i32().
++ */
++static void project_i64(
+     int32_t lon,
+     int32_t lat,
+     const purrgo_bbox_t *cam,
+     const purrgo_viewport_t *vp,
+-    int16_t *sx,
+-    int16_t *sy
++    int64_t *px,
++    int64_t *py
+ ) {
+     int64_t dx_raw =
+         (int64_t)lon -
+@@ -95,19 +99,133 @@ void project_to_screen(
+     projected_y +=
+         (int64_t)vp->offset_y;
+ 
+-    if (projected_x < INT16_MIN) {
+-        projected_x = INT16_MIN;
++    *px = projected_x;
++    *py = projected_y;
++}
++
++static int64_t clamp_i64(int64_t v, int64_t lo, int64_t hi)
++{
++    if (v < lo) {
++        return lo;
++    }
++    if (v > hi) {
++        return hi;
+     }
+-    if (projected_x > INT16_MAX) {
+-        projected_x = INT16_MAX;
++    return v;
++}
++
++void project_to_screen_i32(
++    int32_t lon,
++    int32_t lat,
++    const purrgo_bbox_t *cam,
++    const purrgo_viewport_t *vp,
++    int32_t *sx,
++    int32_t *sy
++) {
++    int64_t px;
++    int64_t py;
++
++    project_i64(lon, lat, cam, vp, &px, &py);
++
++    *sx = (int32_t)clamp_i64(px, -PURRGO_PROJ_LIMIT, PURRGO_PROJ_LIMIT);
++    *sy = (int32_t)clamp_i64(py, -PURRGO_PROJ_LIMIT, PURRGO_PROJ_LIMIT);
++}
++
++void project_to_screen(
++    int32_t lon,
++    int32_t lat,
++    const purrgo_bbox_t *cam,
++    const purrgo_viewport_t *vp,
++    int16_t *sx,
++    int16_t *sy
++) {
++    int64_t px;
++    int64_t py;
++
++    project_i64(lon, lat, cam, vp, &px, &py);
++
++    *sx = (int16_t)clamp_i64(px, INT16_MIN, INT16_MAX);
++    *sy = (int16_t)clamp_i64(py, INT16_MIN, INT16_MAX);
++}
++
++/*
++ * Отсечение отрезка по квадрату [-PURRGO_SAFE_COORD, PURRGO_SAFE_COORD]^2
++ * (Коэн-Сазерленд, арифметика int64). Нужно, когда конец отрезка далеко за
++ * экраном: насыщение координаты в int16 меняло наклон отрезка. Отрезок, оба
++ * конца которого уже внутри квадрата, возвращается без изменений.
++ */
++#define OC_LEFT   1
++#define OC_RIGHT  2
++#define OC_BOTTOM 4
++#define OC_TOP    8
++
++static int safe_outcode(int32_t x, int32_t y)
++{
++    int code = 0;
++
++    if (x < -PURRGO_SAFE_COORD) {
++        code |= OC_LEFT;
++    } else if (x > PURRGO_SAFE_COORD) {
++        code |= OC_RIGHT;
+     }
+-    if (projected_y < INT16_MIN) {
+-        projected_y = INT16_MIN;
++
++    if (y < -PURRGO_SAFE_COORD) {
++        code |= OC_BOTTOM;
++    } else if (y > PURRGO_SAFE_COORD) {
++        code |= OC_TOP;
+     }
+-    if (projected_y > INT16_MAX) {
+-        projected_y = INT16_MAX;
++
++    return code;
++}
++
++bool map_clip_segment_to_safe(
++    int32_t *x0,
++    int32_t *y0,
++    int32_t *x1,
++    int32_t *y1
++) {
++    int oc0 = safe_outcode(*x0, *y0);
++    int oc1 = safe_outcode(*x1, *y1);
++
++    /* Каждая итерация переносит один конец на границу: хватает 4 проходов на конец. */
++    for (int iter = 0; iter < 8; iter++) {
++        if ((oc0 | oc1) == 0) {
++            return true;
++        }
++        if ((oc0 & oc1) != 0) {
++            return false;
++        }
++
++        int out = (oc0 != 0) ? oc0 : oc1;
++        int64_t dx = (int64_t)*x1 - (int64_t)*x0;
++        int64_t dy = (int64_t)*y1 - (int64_t)*y0;
++        int64_t x = 0;
++        int64_t y = 0;
++
++        if ((out & OC_TOP) != 0) {
++            y = PURRGO_SAFE_COORD;
++            x = (int64_t)*x0 + dx * (y - (int64_t)*y0) / dy;
++        } else if ((out & OC_BOTTOM) != 0) {
++            y = -PURRGO_SAFE_COORD;
++            x = (int64_t)*x0 + dx * (y - (int64_t)*y0) / dy;
++        } else if ((out & OC_RIGHT) != 0) {
++            x = PURRGO_SAFE_COORD;
++            y = (int64_t)*y0 + dy * (x - (int64_t)*x0) / dx;
++        } else {
++            x = -PURRGO_SAFE_COORD;
++            y = (int64_t)*y0 + dy * (x - (int64_t)*x0) / dx;
++        }
++
++        if (out == oc0) {
++            *x0 = (int32_t)x;
++            *y0 = (int32_t)y;
++            oc0 = safe_outcode(*x0, *y0);
++        } else {
++            *x1 = (int32_t)x;
++            *y1 = (int32_t)y;
++            oc1 = safe_outcode(*x1, *y1);
++        }
+     }
+ 
+-    *sx = (int16_t)projected_x;
+-    *sy = (int16_t)projected_y;
++    return false;
+ }
+diff --git a/src/core/map_projection.h b/src/core/map_projection.h
+index a9ca0cb..0087764 100644
+--- a/src/core/map_projection.h
++++ b/src/core/map_projection.h
+@@ -1,11 +1,18 @@
+ #ifndef PURRGO_MAP_PROJECTION_H
+ #define PURRGO_MAP_PROJECTION_H
+ 
++#include <stdbool.h>
+ #include <stdint.h>
+ #include "purrgo/map.h"
+ 
+ int64_t camera_span_x(const purrgo_bbox_t *cam);
+ 
++/*
++ * Проекция точки на экран с насыщением результата в int16. Годится для точек,
++ * которые рисуются по одной (маркер, POI, иконки): далеко за экраном точка всё
++ * равно не видна. Для вершин рёбер (полигоны, линии) использовать
++ * project_to_screen_i32(): при насыщении менялся наклон ребра.
++ */
+ void project_to_screen(
+     int32_t lon,
+     int32_t lat,
+@@ -15,4 +22,35 @@ void project_to_screen(
+     int16_t *sy
+ );
+ 
++/* Предел координат project_to_screen_i32() (2^29): разности двух координат помещаются в int32. */
++#define PURRGO_PROJ_LIMIT ((int64_t)1 << 29)
++
++/*
++ * Безопасная область для int16-примитивов рисования линий: внутри
++ * +-PURRGO_SAFE_COORD произведения в clip_line() помещаются в int32.
++ */
++#define PURRGO_SAFE_COORD 16384
++
++/* Проекция без насыщения в int16: результат ограничен только +-PURRGO_PROJ_LIMIT. */
++void project_to_screen_i32(
++    int32_t lon,
++    int32_t lat,
++    const purrgo_bbox_t *cam,
++    const purrgo_viewport_t *vp,
++    int32_t *sx,
++    int32_t *sy
++);
++
++/*
++ * Отсечение отрезка по квадрату +-PURRGO_SAFE_COORD с сохранением наклона.
++ * true - отрезок (возможно, укороченный) надо рисовать; false - он целиком вне
++ * квадрата. Отрезок внутри квадрата не меняется.
++ */
++bool map_clip_segment_to_safe(
++    int32_t *x0,
++    int32_t *y0,
++    int32_t *x1,
++    int32_t *y1
++);
++
+ #endif // PURRGO_MAP_PROJECTION_H
+diff --git a/src/core/map_render.c b/src/core/map_render.c
+index 9ce342d..f9e7f08 100644
+--- a/src/core/map_render.c
++++ b/src/core/map_render.c
+@@ -57,7 +57,8 @@ static uint16_t s_queued_labels_count = 0;
+ 
+ 
+ /*
+- * Буфер точек полигона.
++ * Буфер точек полигона (int32: вершины далёких полигонов не насыщаются в int16,
++ * см. project_to_screen_i32()). 512 точек * 8 байт = 4 КБ.
+  */
+ static gfx_point_t s_polygon_buffer[PURRGO_MAP_MAX_POINTS];
+ 
+@@ -248,8 +249,8 @@ void map_render_feature(
+     gfx_point_t *screen_points =
+         is_polygon_layer ? s_polygon_buffer : NULL;
+ 
+-    int16_t prev_sx = 0;
+-    int16_t prev_sy = 0;
++    int32_t prev_sx = 0;
++    int32_t prev_sy = 0;
+ 
+     int32_t raw_x;
+     int32_t raw_y;
+@@ -264,10 +265,10 @@ void map_render_feature(
+ 
+         uint32_t point_index = iter.points_read - 1;
+ 
+-        int16_t sx;
+-        int16_t sy;
++        int32_t sx;
++        int32_t sy;
+ 
+-        project_to_screen(
++        project_to_screen_i32(
+             raw_x,
+             raw_y,
+             cam,
+@@ -294,6 +295,25 @@ void map_render_feature(
+ 
+             if (point_index > current_part_offset) {
+ 
++                /*
++                 * Отрезок с концом далеко за экраном отсекается по
++                 * +-PURRGO_SAFE_COORD с сохранением наклона (раньше конец
++                 * насыщался в int16, и наклон менялся). Отрезок внутри этой
++                 * области рисуется как есть.
++                 */
++                int32_t seg_x0 = prev_sx;
++                int32_t seg_y0 = prev_sy;
++                int32_t seg_x1 = sx;
++                int32_t seg_y1 = sy;
++
++                if (!map_clip_segment_to_safe(
++                        &seg_x0, &seg_y0, &seg_x1, &seg_y1)) {
++
++                    prev_sx = sx;
++                    prev_sy = sy;
++                    continue;
++                }
++
+                 gfx_color_t prev_fg = gfx->color_fg;
+ 
+ 
+@@ -309,10 +329,10 @@ void map_render_feature(
+ 
+                         gfx_draw_thick_line(
+                             gfx,
+-                            prev_sx,
+-                            prev_sy,
+-                            sx,
+-                            sy,
++                            (int16_t)seg_x0,
++                            (int16_t)seg_y0,
++                            (int16_t)seg_x1,
++                            (int16_t)seg_y1,
+                             3
+                         );
+ 
+@@ -329,10 +349,10 @@ void map_render_feature(
+ 
+                         gfx_draw_thick_line(
+                             gfx,
+-                            prev_sx,
+-                            prev_sy,
+-                            sx,
+-                            sy,
++                            (int16_t)seg_x0,
++                            (int16_t)seg_y0,
++                            (int16_t)seg_x1,
++                            (int16_t)seg_y1,
+                             2
+                         );
+ 
+@@ -349,10 +369,10 @@ void map_render_feature(
+ 
+                         gfx_draw_line(
+                             gfx,
+-                            prev_sx,
+-                            prev_sy,
+-                            sx,
+-                            sy
++                            (int16_t)seg_x0,
++                            (int16_t)seg_y0,
++                            (int16_t)seg_x1,
++                            (int16_t)seg_y1
+                         );
+ 
+                         break;
+@@ -368,10 +388,10 @@ void map_render_feature(
+ 
+                         gfx_draw_dashed_line(
+                             gfx,
+-                            prev_sx,
+-                            prev_sy,
+-                            sx,
+-                            sy
++                            (int16_t)seg_x0,
++                            (int16_t)seg_y0,
++                            (int16_t)seg_x1,
++                            (int16_t)seg_y1
+                         );
+ 
+                         break;
+@@ -387,10 +407,10 @@ void map_render_feature(
+ 
+                         gfx_draw_dotted_line(
+                             gfx,
+-                            prev_sx,
+-                            prev_sy,
+-                            sx,
+-                            sy
++                            (int16_t)seg_x0,
++                            (int16_t)seg_y0,
++                            (int16_t)seg_x1,
++                            (int16_t)seg_y1
+                         );
+ 
+                         break;
+@@ -400,10 +420,10 @@ void map_render_feature(
+ 
+                         gfx_draw_railway_line(
+                             gfx,
+-                            prev_sx,
+-                            prev_sy,
+-                            sx,
+-                            sy
++                            (int16_t)seg_x0,
++                            (int16_t)seg_y0,
++                            (int16_t)seg_x1,
++                            (int16_t)seg_y1
+                         );
+ 
+                         break;
+diff --git a/src/core/purrgo_format.c b/src/core/purrgo_format.c
+index f3c5e3d..f0eaed4 100644
+--- a/src/core/purrgo_format.c
++++ b/src/core/purrgo_format.c
+@@ -1,5 +1,8 @@
+ #include "purrgo/purrgo_format.h"
+ 
++#include <stddef.h>
++#include <stdint.h>
++
+ static void write_char(char** buf, size_t* size, size_t* count, char c) {
+     if (*size > 1) {
+         **buf = c;
+@@ -9,21 +12,25 @@ static void write_char(char** buf, size_t* size, size_t* count, char c) {
+     (*count)++;
+ }
+ 
+-static void write_int(char** buf, size_t* size, size_t* count, long long val, int base, int width, char pad_char, int uppercase, int is_signed, int left_justify) {
++/*
++ * Вывод целого числа.
++ *
++ *   uval/is_neg  - модуль и знак (модуль считается без переполнения для LLONG_MIN);
++ *   precision    - минимальное число цифр (-1 - не задано; при заданной точности
++ *                  выравнивание нулями '0' игнорируется, как в printf);
++ *   sign_char    - '+' или ' ' для неотрицательных (0 - без знака).
++ */
++static void write_int(char** buf, size_t* size, size_t* count,
++                      unsigned long long uval, int is_neg, int base, int width,
++                      int precision, char pad_char, int uppercase,
++                      char sign_char, int left_justify) {
+     char num_buf[32];
+     int pos = 0;
+-    unsigned long long uval;
+-    int is_neg = 0;
+-
+-    if (is_signed && val < 0) {
+-        is_neg = 1;
+-        uval = (unsigned long long)(-val);
+-    } else {
+-        uval = (unsigned long long)val;
+-    }
+ 
+     if (uval == 0) {
+-        num_buf[pos++] = '0';
++        if (precision != 0) {
++            num_buf[pos++] = '0';
++        }
+     } else {
+         while (uval > 0) {
+             unsigned digit = (unsigned)(uval % (unsigned long long)base);
+@@ -36,26 +43,45 @@ static void write_int(char** buf, size_t* size, size_t* count, long long val, in
+         }
+     }
+ 
+-    int num_len = pos;
+-    if (is_neg) num_len++;
++    int zeros = 0;
++    if (precision > pos) {
++        zeros = precision - pos;
++    }
++
++    char sign = 0;
++    if (is_neg) {
++        sign = '-';
++    } else if (sign_char != 0) {
++        sign = sign_char;
++    }
++
++    int num_len = pos + zeros + (sign != 0 ? 1 : 0);
+ 
+     int pad = 0;
+     if (width > num_len) {
+         pad = width - num_len;
+     }
+ 
++    if (precision >= 0) {
++        pad_char = ' ';
++    }
++
+     if (!left_justify) {
+-        if (pad_char == '0' && is_neg) {
+-            write_char(buf, size, count, '-');
+-            is_neg = 0;
++        if (pad_char == '0' && sign != 0) {
++            write_char(buf, size, count, sign);
++            sign = 0;
+         }
+         for (int i = 0; i < pad; i++) {
+             write_char(buf, size, count, pad_char);
+         }
+     }
+ 
+-    if (is_neg) {
+-        write_char(buf, size, count, '-');
++    if (sign != 0) {
++        write_char(buf, size, count, sign);
++    }
++
++    for (int i = 0; i < zeros; i++) {
++        write_char(buf, size, count, '0');
+     }
+ 
+     for (int i = pos - 1; i >= 0; i--) {
+@@ -69,8 +95,59 @@ static void write_int(char** buf, size_t* size, size_t* count, long long val, in
+     }
+ }
+ 
++/* Размер аргумента целого спецификатора. */
++typedef enum {
++    LEN_INT = 0,
++    LEN_CHAR,       /* hh */
++    LEN_SHORT,      /* h  */
++    LEN_LONG,       /* l  */
++    LEN_LLONG,      /* ll, j */
++    LEN_SIZE        /* z, t */
++} len_mod_t;
++
++static unsigned long long fetch_unsigned(va_list* args, len_mod_t len) {
++    switch (len) {
++        case LEN_LONG:  return (unsigned long long)va_arg(*args, unsigned long);
++        case LEN_LLONG: return (unsigned long long)va_arg(*args, unsigned long long);
++        case LEN_SIZE:  return (unsigned long long)va_arg(*args, size_t);
++        case LEN_CHAR:  return (unsigned char)va_arg(*args, unsigned int);
++        case LEN_SHORT: return (unsigned short)va_arg(*args, unsigned int);
++        default:        return (unsigned long long)va_arg(*args, unsigned int);
++    }
++}
++
++static long long fetch_signed(va_list* args, len_mod_t len) {
++    switch (len) {
++        case LEN_LONG:  return (long long)va_arg(*args, long);
++        case LEN_LLONG: return (long long)va_arg(*args, long long);
++        case LEN_SIZE:  return (long long)(ptrdiff_t)va_arg(*args, ptrdiff_t);
++        case LEN_CHAR:  return (signed char)va_arg(*args, int);
++        case LEN_SHORT: return (short)va_arg(*args, int);
++        default:        return (long long)va_arg(*args, int);
++    }
++}
++
++/*
++ * Подмножество printf без плавающей точки (ядро целочисленное, soft-float не
++ * подключается):
++ *
++ *   флаги       - 0 + пробел
++ *   ширина      - число или *
++ *   точность    - .число или .* (для s - максимум символов, для целых - минимум цифр)
++ *   длина       - hh h l ll j z t
++ *   конверсии   - d i u x X c s p %
++ *
++ * Плавающие конверсии (f F e E g G a A) не поддерживаются: аргумент double
++ * снимается из va_list, чтобы следующие аргументы не сдвигались, и выводится '?'.
++ * Прочие неизвестные конверсии выводятся как есть ('%' и символ), аргумент
++ * не снимается (его тип неизвестен). Включённый -Wformat (см. атрибут в
++ * purrgo_format.h) ловит такие вызовы при сборке.
++ */
+ int purrgo_vsnprintf(char* buf, size_t size, const char* format, va_list args) {
+     size_t count = 0;
++    va_list ap;
++
++    va_copy(ap, args);
+ 
+     if (size == 0) buf = NULL;
+ 
+@@ -92,31 +169,49 @@ int purrgo_vsnprintf(char* buf, size_t size, const char* format, va_list args) {
+ 
+         int left_justify = 0;
+         char pad_char = ' ';
++        char sign_char = 0;
+ 
+-        if (*format == '-') {
+-            left_justify = 1;
++        for (;;) {
++            if (*format == '-') {
++                left_justify = 1;
++            } else if (*format == '0') {
++                pad_char = '0';
++            } else if (*format == '+') {
++                sign_char = '+';
++            } else if (*format == ' ') {
++                if (sign_char == 0) sign_char = ' ';
++            } else {
++                break;
++            }
+             format++;
+         }
+ 
+-        if (*format == '0') {
+-            if (!left_justify) pad_char = '0';
+-            format++;
+-        }
++        if (left_justify) pad_char = ' ';
+ 
+         int width = 0;
+-        while (*format >= '0' && *format <= '9') {
+-            width = width * 10 + (*format - '0');
++        if (*format == '*') {
++            width = va_arg(ap, int);
++            if (width < 0) {
++                left_justify = 1;
++                pad_char = ' ';
++                width = -width;
++            }
+             format++;
++        } else {
++            while (*format >= '0' && *format <= '9') {
++                width = width * 10 + (*format - '0');
++                format++;
++            }
+         }
+ 
+         int precision = -1;
+-        int is_long = 0;
+ 
+         if (*format == '.') {
+             format++;
+             precision = 0;
+             if (*format == '*') {
+-                precision = va_arg(args, int);
++                precision = va_arg(ap, int);
++                if (precision < 0) precision = -1;
+                 format++;
+             } else {
+                 while (*format >= '0' && *format <= '9') {
+@@ -126,28 +221,42 @@ int purrgo_vsnprintf(char* buf, size_t size, const char* format, va_list args) {
+             }
+         }
+ 
+-        if (*format == 'l') {
+-            is_long = 1;
++        len_mod_t len = LEN_INT;
++        const char* spec_start = format;
++
++        if (*format == 'h') {
++            format++;
++            if (*format == 'h') { len = LEN_CHAR; format++; } else { len = LEN_SHORT; }
++        } else if (*format == 'l') {
++            format++;
++            if (*format == 'l') { len = LEN_LLONG; format++; } else { len = LEN_LONG; }
++        } else if (*format == 'j') {
++            len = LEN_LLONG;
++            format++;
++        } else if (*format == 'z' || *format == 't') {
++            len = LEN_SIZE;
+             format++;
+         }
+ 
+-        if (*format == 's') {
+-            const char* s = va_arg(args, const char*);
++        char conv = *format;
++
++        if (conv == 's') {
++            const char* s = va_arg(ap, const char*);
+             if (!s) s = "(null)";
+ 
+-            int len = 0;
+-            while (s[len] && (precision < 0 || len < precision)) len++;
++            int slen = 0;
++            while (s[slen] && (precision < 0 || slen < precision)) slen++;
+ 
+             int pad = 0;
+-            if (width > len) {
+-                pad = width - len;
++            if (width > slen) {
++                pad = width - slen;
+             }
+ 
+             if (!left_justify) {
+                 for (int i = 0; i < pad; i++) write_char(&buf, &size, &count, ' ');
+             }
+ 
+-            for (int i = 0; i < len; i++) {
++            for (int i = 0; i < slen; i++) {
+                 write_char(&buf, &size, &count, s[i]);
+             }
+ 
+@@ -155,8 +264,8 @@ int purrgo_vsnprintf(char* buf, size_t size, const char* format, va_list args) {
+                 for (int i = 0; i < pad; i++) write_char(&buf, &size, &count, ' ');
+             }
+             format++;
+-        } else if (*format == 'c') {
+-            char c = (char)va_arg(args, int);
++        } else if (conv == 'c') {
++            char c = (char)va_arg(ap, int);
+             if (!left_justify && width > 1) {
+                 for (int i = 0; i < width - 1; i++) write_char(&buf, &size, &count, ' ');
+             }
+@@ -165,26 +274,39 @@ int purrgo_vsnprintf(char* buf, size_t size, const char* format, va_list args) {
+                 for (int i = 0; i < width - 1; i++) write_char(&buf, &size, &count, ' ');
+             }
+             format++;
+-        } else if (*format == 'd' || *format == 'i') {
+-            long val = is_long ? va_arg(args, long) : va_arg(args, int);
+-            write_int(&buf, &size, &count, val, 10, width, pad_char, 0, 1, left_justify);
++        } else if (conv == 'd' || conv == 'i') {
++            long long val = fetch_signed(&ap, len);
++            int is_neg = val < 0;
++            /* Модуль через беззнаковое отрицание: корректно и для LLONG_MIN. */
++            unsigned long long uval = is_neg
++                ? (0ULL - (unsigned long long)val)
++                : (unsigned long long)val;
++            write_int(&buf, &size, &count, uval, is_neg, 10, width, precision,
++                      pad_char, 0, sign_char, left_justify);
+             format++;
+-        } else if (*format == 'u') {
+-            unsigned long val = is_long ? va_arg(args, unsigned long) : va_arg(args, unsigned int);
+-            write_int(&buf, &size, &count, (long long)val, 10, width, pad_char, 0, 0, left_justify);
++        } else if (conv == 'u' || conv == 'x' || conv == 'X') {
++            unsigned long long val = fetch_unsigned(&ap, len);
++            int base = (conv == 'u') ? 10 : 16;
++            write_int(&buf, &size, &count, val, 0, base, width, precision,
++                      pad_char, conv == 'X', 0, left_justify);
+             format++;
+-        } else if (*format == 'x') {
+-            unsigned long val = is_long ? va_arg(args, unsigned long) : va_arg(args, unsigned int);
+-            write_int(&buf, &size, &count, (long long)val, 16, width, pad_char, 0, 0, left_justify);
++        } else if (conv == 'p') {
++            unsigned long long val = (unsigned long long)(uintptr_t)va_arg(ap, void*);
++            write_char(&buf, &size, &count, '0');
++            write_char(&buf, &size, &count, 'x');
++            write_int(&buf, &size, &count, val, 0, 16, 0, 1, '0', 0, 0, 0);
+             format++;
+-        } else if (*format == 'X') {
+-            unsigned long val = is_long ? va_arg(args, unsigned long) : va_arg(args, unsigned int);
+-            write_int(&buf, &size, &count, (long long)val, 16, width, pad_char, 1, 0, left_justify);
++        } else if (conv == 'f' || conv == 'F' || conv == 'e' || conv == 'E' ||
++                   conv == 'g' || conv == 'G' || conv == 'a' || conv == 'A') {
++            /* Не поддерживается: снимаем double, чтобы не сдвигать остальные аргументы. */
++            (void)va_arg(ap, double);
++            write_char(&buf, &size, &count, '?');
+             format++;
+         } else {
++            /* Неизвестная конверсия: выводим как есть, аргумент не снимаем. */
+             write_char(&buf, &size, &count, '%');
+-            if (is_long) {
+-                write_char(&buf, &size, &count, 'l');
++            for (const char* q = spec_start; q < format; q++) {
++                write_char(&buf, &size, &count, *q);
+             }
+             if (*format) {
+                 write_char(&buf, &size, &count, *format);
+@@ -193,6 +315,8 @@ int purrgo_vsnprintf(char* buf, size_t size, const char* format, va_list args) {
+         }
+     }
+ 
++    va_end(ap);
++
+     if (size > 0 && buf != NULL) {
+         *buf = '\0';
+     }
+diff --git a/src/core/track_renderer.c b/src/core/track_renderer.c
+index 1fe7894..f471dd2 100644
+--- a/src/core/track_renderer.c
++++ b/src/core/track_renderer.c
+@@ -21,16 +21,21 @@ void purrgo_track_render(
+     gfx_set_color(gfx, BLACK, gfx->color_bg);
+ 
+     bool has_prev = false;
+-    int16_t prev_sx = 0, prev_sy = 0;
++    int32_t prev_sx = 0, prev_sy = 0;
+ 
+     for (size_t i = 0; i < num_points; i++) {
+         track_point_t point;
+         if (purrgo_logger_get_track_point(i, &point)) {
+-            int16_t sx, sy;
+-            project_to_screen(point.lon_1e7, point.lat_1e7, camera, vp, &sx, &sy);
++            int32_t sx, sy;
++            project_to_screen_i32(point.lon_1e7, point.lat_1e7, camera, vp, &sx, &sy);
+ 
+             if (has_prev) {
+-                gfx_draw_line(gfx, prev_sx, prev_sy, sx, sy);
++                /* Далёкий конец отрезка отсекается с сохранением наклона (не насыщается в int16). */
++                int32_t x0 = prev_sx, y0 = prev_sy, x1 = sx, y1 = sy;
++
++                if (map_clip_segment_to_safe(&x0, &y0, &x1, &y1)) {
++                    gfx_draw_line(gfx, (int16_t)x0, (int16_t)y0, (int16_t)x1, (int16_t)y1);
++                }
+             }
+             prev_sx = sx;
+             prev_sy = sy;
+@@ -52,9 +57,19 @@ bool purrgo_track_render_last_segment(
+         return false;
+     }
+ 
+-    int16_t prev_sx, prev_sy, sx, sy;
+-    project_to_screen(prev_point.lon_1e7, prev_point.lat_1e7, camera, vp, &prev_sx, &prev_sy);
+-    project_to_screen(last_point.lon_1e7, last_point.lat_1e7, camera, vp, &sx, &sy);
++    int32_t x0, y0, x1, y1;
++    project_to_screen_i32(prev_point.lon_1e7, prev_point.lat_1e7, camera, vp, &x0, &y0);
++    project_to_screen_i32(last_point.lon_1e7, last_point.lat_1e7, camera, vp, &x1, &y1);
++
++    /* Далёкий конец отрезка отсекается с сохранением наклона; отрезок целиком вне области не рисуется. */
++    if (!map_clip_segment_to_safe(&x0, &y0, &x1, &y1)) {
++        return false;
++    }
++
++    int16_t prev_sx = (int16_t)x0;
++    int16_t prev_sy = (int16_t)y0;
++    int16_t sx = (int16_t)x1;
++    int16_t sy = (int16_t)y1;
+ 
+     int16_t min_x = (prev_sx < sx) ? prev_sx : sx;
+     int16_t max_x = (prev_sx > sx) ? prev_sx : sx;
+diff --git a/src/core/ui/ui_map.c b/src/core/ui/ui_map.c
+index 324aa31..7da7c89 100644
+--- a/src/core/ui/ui_map.c
++++ b/src/core/ui/ui_map.c
+@@ -324,26 +324,26 @@ static void ui_calc_marker_state(
+     /*
+      * Determine the complete marker bounding box.
+      */
+-    int16_t min_x = out_state->pts[0].x;
+-    int16_t max_x = out_state->pts[0].x;
+-    int16_t min_y = out_state->pts[0].y;
+-    int16_t max_y = out_state->pts[0].y;
++    int16_t min_x = (int16_t)out_state->pts[0].x;
++    int16_t max_x = (int16_t)out_state->pts[0].x;
++    int16_t min_y = (int16_t)out_state->pts[0].y;
++    int16_t max_y = (int16_t)out_state->pts[0].y;
+ 
+     for (uint8_t i = 1; i < out_state->point_count; i++) {
+         if (out_state->pts[i].x < min_x) {
+-            min_x = out_state->pts[i].x;
++            min_x = (int16_t)out_state->pts[i].x;
+         }
+ 
+         if (out_state->pts[i].x > max_x) {
+-            max_x = out_state->pts[i].x;
++            max_x = (int16_t)out_state->pts[i].x;
+         }
+ 
+         if (out_state->pts[i].y < min_y) {
+-            min_y = out_state->pts[i].y;
++            min_y = (int16_t)out_state->pts[i].y;
+         }
+ 
+         if (out_state->pts[i].y > max_y) {
+-            max_y = out_state->pts[i].y;
++            max_y = (int16_t)out_state->pts[i].y;
+         }
+     }
+ 
+diff --git a/tests/host/test_geometry_clip.c b/tests/host/test_geometry_clip.c
+new file mode 100644
+index 0000000..5039ed3
+--- /dev/null
++++ b/tests/host/test_geometry_clip.c
+@@ -0,0 +1,258 @@
++/*
++ * Геометрия далёких вершин и заливка полигонов (патч 0023):
++ *   - project_to_screen_i32() не насыщается в int16 и совпадает с project_to_screen()
++ *     там, где результат помещается в int16;
++ *   - map_clip_segment_to_safe() сохраняет наклон отрезка;
++ *   - gfx_fill_compound_polygon() с вершинами в миллионах пикселей даёт тот же
++ *     результат, что независимый эталон (чётно-нечётное правило, int64, qsort);
++ *   - scanline с числом пересечений больше GFX_MAX_POLYGON_NODES (128) заливается
++ *     целиком, а не обрывается на середине.
++ */
++#include <stdlib.h>
++#include <string.h>
++#include "purrgo/gfx_renderer.h"
++#include "purrgo/gfx_polygon.h"
++#include "map_projection.h"
++#include "test_common.h"
++
++uint32_t purrgo_system_time_ms(void) { return 0; }
++
++#define MAX_W 1024
++#define MAX_H 64
++
++static int g_w = 64, g_h = 48;
++static uint8_t g_fb[MAX_W * MAX_H];
++
++static void cb_draw(void *fb, int16_t x, int16_t y, gfx_color_t c)
++{
++    if (x >= 0 && x < g_w && y >= 0 && y < g_h) { ((uint8_t *)fb)[y * g_w + x] = (uint8_t)c; }
++}
++static gfx_color_t cb_read(void *fb, int16_t x, int16_t y)
++{
++    if (x >= 0 && x < g_w && y >= 0 && y < g_h) { return ((uint8_t *)fb)[y * g_w + x]; }
++    return 0;
++}
++
++static gfx_context_t g_gfx;
++
++static void canvas(int w, int h)
++{
++    g_w = w; g_h = h;
++    memset(g_fb, 0, sizeof g_fb);
++    (void)gfx_init(&g_gfx, (int16_t)w, (int16_t)h, g_fb, cb_draw, cb_read);
++    gfx_set_color(&g_gfx, 1, 0);
++}
++
++/* ------------------------------------------------------------ эталон --- */
++
++static int cmp64(const void *a, const void *b)
++{
++    long long x = *(const long long *)a, y = *(const long long *)b;
++    return (x > y) - (x < y);
++}
++
++static void ref_fill(const gfx_point_t *p, int n, const uint32_t *parts, int np, uint8_t *out)
++{
++    memset(out, 0, sizeof g_fb);
++    for (int y = 0; y < g_h; y++) {
++        long long xs[2048];
++        int cnt = 0;
++        for (int r = 0; r < np; r++) {
++            int s = (int)parts[r], e = (r + 1 < np) ? (int)parts[r + 1] : n;
++            if (e - s < 3) { continue; }
++            for (int i = s; i < e; i++) {
++                int j = (i == e - 1) ? s : i + 1;
++                long long y0 = p[i].y, y1 = p[j].y;
++                if (y0 == y1) { continue; }
++                if (!((y0 <= y && y1 > y) || (y1 <= y && y0 > y))) { continue; }
++                long long x0 = p[i].x, x1 = p[j].x;
++                xs[cnt++] = x0 + (x1 - x0) * (y - y0) / (y1 - y0);
++            }
++        }
++        qsort(xs, (size_t)cnt, sizeof xs[0], cmp64);
++        for (int k = 0; k + 1 < cnt; k += 2) {
++            long long a = xs[k], b = xs[k + 1];
++            if (a > b) { long long t = a; a = b; b = t; }
++            for (long long x = a < 0 ? 0 : a; x <= b && x < g_w; x++) { out[y * g_w + x] = 1; }
++        }
++    }
++}
++
++static int diff_count(const uint8_t *a, const uint8_t *b)
++{
++    int d = 0;
++    for (int i = 0; i < g_w * g_h; i++) { d += (a[i] != b[i]); }
++    return d;
++}
++
++static uint32_t g_rng = 987654321u;
++static uint32_t rnd(void) { g_rng = g_rng * 1664525u + 1013904223u; return g_rng >> 8; }
++static int32_t rnd_range(int32_t lo, int32_t hi) { return lo + (int32_t)(rnd() % (uint32_t)(hi - lo + 1)); }
++
++static uint8_t g_ref[MAX_W * MAX_H];
++
++/* ------------------------------------------------------------- тесты --- */
++
++static void test_projection_i32(void)
++{
++    purrgo_bbox_t cam = { 0, 0, 1000, 1000 };
++    purrgo_viewport_t vp = { 176, 246, 0, 9 };
++    int32_t pts[][2] = { {0, 0}, {500, 500}, {1000, 1000}, {-300, 2000}, {7000000, -9000000} };
++
++    for (unsigned i = 0; i < sizeof pts / sizeof pts[0]; i++) {
++        int16_t a, b; int32_t c, d;
++        project_to_screen(pts[i][0], pts[i][1], &cam, &vp, &a, &b);
++        project_to_screen_i32(pts[i][0], pts[i][1], &cam, &vp, &c, &d);
++        if (c >= INT16_MIN && c <= INT16_MAX && d >= INT16_MIN && d <= INT16_MAX) {
++            CHECK(a == c && b == d);
++        }
++    }
++
++    /* Далёкая точка: int16-вариант насыщается, i32 - нет. */
++    int16_t a, b; int32_t c, d;
++    project_to_screen(7000000, -9000000, &cam, &vp, &a, &b);
++    project_to_screen_i32(7000000, -9000000, &cam, &vp, &c, &d);
++    CHECK(a == INT16_MAX && b == INT16_MAX);
++    CHECK(c == 1232000 && d == 2214255);
++
++    /* Предельный случай: узкая камера и точка на другом конце света. */
++    purrgo_bbox_t narrow = { 0, 0, 1, 1 };
++    project_to_screen_i32(1800000000, -900000000, &narrow, &vp, &c, &d);
++    CHECK(c == (int32_t)PURRGO_PROJ_LIMIT && d == (int32_t)PURRGO_PROJ_LIMIT);
++}
++
++static void test_segment_clip(void)
++{
++    int32_t x0 = 10, y0 = 20, x1 = 100, y1 = 50;
++    CHECK(map_clip_segment_to_safe(&x0, &y0, &x1, &y1));
++    CHECK(x0 == 10 && y0 == 20 && x1 == 100 && y1 == 50);   /* внутри - без изменений */
++
++    x0 = 10; y0 = 10; x1 = 1000000; y1 = 500000;
++    CHECK(map_clip_segment_to_safe(&x0, &y0, &x1, &y1));
++    CHECK(x0 == 10 && y0 == 10);
++    CHECK(x1 <= PURRGO_SAFE_COORD && y1 <= PURRGO_SAFE_COORD);
++    /* точка на исходной прямой y = 10 + (x - 10) / 2 с точностью до пикселя */
++    long long expect_y = 10 + (x1 - 10) / 2;
++    CHECK(llabs((long long)y1 - expect_y) <= 1);
++
++    x0 = 200000; y0 = 5; x1 = 300000; y1 = 9;               /* целиком вне области */
++    CHECK(!map_clip_segment_to_safe(&x0, &y0, &x1, &y1));
++
++    x0 = -2000000; y0 = 0; x1 = 2000000; y1 = 8;            /* пересекает область насквозь */
++    CHECK(map_clip_segment_to_safe(&x0, &y0, &x1, &y1));
++    CHECK(x0 == -PURRGO_SAFE_COORD && x1 == PURRGO_SAFE_COORD);
++    CHECK(llabs((long long)y0 - 4 + 0) <= 4 && y1 - y0 >= 0);
++}
++
++static void test_far_vertex_triangle(void)
++{
++    canvas(64, 48);
++    /* Вершина C далеко: настоящий наклон ребра A-C - 2 по x на 1 по y. */
++    gfx_point_t tri[3] = { {10, 10}, {10, 40}, {200000, 100000} };
++    uint32_t parts[1] = {0};
++
++    gfx_fill_compound_polygon(&g_gfx, tri, 3, parts, 1);
++    ref_fill(tri, 3, parts, 1, g_ref);
++    CHECK(diff_count(g_fb, g_ref) == 0);
++
++    /* Насыщение вершины в int16 (как было) даёт другой рисунок: тест чувствителен. */
++    gfx_point_t sat[3] = { {10, 10}, {10, 40}, {32767, 32767} };
++    uint8_t saved[MAX_W * MAX_H];
++    memcpy(saved, g_fb, sizeof saved);
++    canvas(64, 48);
++    gfx_fill_compound_polygon(&g_gfx, sat, 3, parts, 1);
++    CHECK(diff_count(g_fb, saved) > 0);
++}
++
++static void test_random_polygons(void)
++{
++    int mismatches = 0;
++
++    for (int iter = 0; iter < 400; iter++) {
++        gfx_point_t pts[48];
++        uint32_t parts[3] = {0, 0, 0};
++        int n = 3 + (int)(rnd() % 20);
++        int np = 1;
++
++        if (iter % 3 == 0) {                       /* два кольца: внешнее и дыра */
++            np = 2;
++            parts[1] = (uint32_t)(n / 2 < 3 ? 3 : n / 2);
++            if ((int)parts[1] > n - 3) { n = (int)parts[1] + 3; }
++        }
++        for (int k = 0; k < n; k++) {
++            int far = (rnd() % 4 == 0);
++            pts[k].x = far ? rnd_range(-(1 << 28), 1 << 28) : rnd_range(-20, 84);
++            pts[k].y = far ? rnd_range(-(1 << 28), 1 << 28) : rnd_range(-20, 68);
++        }
++        canvas(64, 48);
++        gfx_fill_compound_polygon(&g_gfx, pts, (uint16_t)n, parts, (uint16_t)np);
++        ref_fill(pts, n, parts, np, g_ref);
++        if (diff_count(g_fb, g_ref) != 0) { mismatches++; }
++    }
++    CHECK(mismatches == 0);
++}
++
++/* Зигзаг на 2*teeth рёбер: каждая scanline пересекает их все. */
++static void zigzag_case(int teeth)
++{
++    gfx_point_t pts[1200];
++    int n = 2 * teeth;
++    uint32_t parts[1] = {0};
++
++    CHECK(n <= 1200);
++    for (int k = 0; k < teeth; k++) {
++        pts[2 * k].x = 3 * k;        pts[2 * k].y = 5;
++        pts[2 * k + 1].x = 3 * k + 1; pts[2 * k + 1].y = 30;
++    }
++    canvas(MAX_W, MAX_H);
++    gfx_fill_compound_polygon(&g_gfx, pts, (uint16_t)n, parts, 1);
++    ref_fill(pts, n, parts, 1, g_ref);
++
++    CHECK(diff_count(g_fb, g_ref) == 0);
++
++    /* Заливка дошла до последней строки полигона и до правого края (не оборвана). */
++    int rows_with_ink = 0;
++    for (int y = 5; y < 30; y++) {
++        for (int x = 0; x < g_w; x++) { if (g_fb[y * g_w + x]) { rows_with_ink++; break; } }
++    }
++    CHECK(rows_with_ink == 25);
++}
++
++static void test_many_crossings(void)
++{
++    zigzag_case(40);    /* 80 пересечений: быстрый путь */
++    zigzag_case(70);    /* 140 > 128: запасной путь, 3 порции */
++    zigzag_case(200);   /* 400: 7 порций */
++    zigzag_case(330);   /* 660 пересечений: больше PURRGO_MAP_MAX_POINTS */
++}
++
++static void test_many_crossings_far(void)
++{
++    /* Запасной путь вместе с далёкими вершинами. */
++    gfx_point_t pts[300];
++    uint32_t parts[1] = {0};
++    int n = 300;
++
++    for (int k = 0; k < n; k++) {
++        pts[k].x = (k % 2) ? 3 * k : 3 * k;
++        pts[k].y = (k % 2) ? 40 : 3;
++    }
++    pts[150].x = 5000000; pts[150].y = 900000;
++    pts[151].x = -5000000; pts[151].y = -700000;
++
++    canvas(MAX_W, MAX_H);
++    gfx_fill_compound_polygon(&g_gfx, pts, (uint16_t)n, parts, 1);
++    ref_fill(pts, n, parts, 1, g_ref);
++    CHECK(diff_count(g_fb, g_ref) == 0);
++}
++
++int main(void)
++{
++    test_projection_i32();
++    test_segment_clip();
++    test_far_vertex_triangle();
++    test_random_polygons();
++    test_many_crossings();
++    test_many_crossings_far();
++    return test_finish("test_geometry_clip");
++}
+diff --git a/tests/host/test_gnss_receiver.c b/tests/host/test_gnss_receiver.c
+new file mode 100644
+index 0000000..63b1af6
+--- /dev/null
++++ b/tests/host/test_gnss_receiver.c
+@@ -0,0 +1,96 @@
++/*
++ * Настройка приёмника GNSS (патч 0023): формат NMEA-кадра, контрольная сумма и
++ * последовательность команд CASIC. Контрольная сумма примера из документации
++ * CASIC ($PCAS03,1,1,1,1,1,1,1,1,0,0,,,1,1,,,,1*33) - эталон.
++ */
++#include <string.h>
++#include "purrgo/gnss_receiver.h"
++#include "purrgo/hardware_config.h"
++#include "test_common.h"
++
++static char g_sent[8][128];
++static int g_sent_count;
++
++static void fake_tx(const uint8_t *data, size_t len)
++{
++    if (g_sent_count < 8 && len < sizeof g_sent[0]) {
++        memcpy(g_sent[g_sent_count], data, len);
++        g_sent[g_sent_count][len] = '\0';
++        g_sent_count++;
++    }
++}
++
++static unsigned xor_of(const char *s)
++{
++    unsigned c = 0;
++    for (; *s; s++) { c ^= (unsigned char)*s; }
++    return c;
++}
++
++static void test_frame(void)
++{
++    char out[96];
++    size_t n = purrgo_nmea_build_frame(out, sizeof out, "PCAS03,1,1,1,1,1,1,1,1,0,0,,,1,1,,,,1");
++
++    CHECK(n == strlen(out));
++    CHECK(strcmp(out, "$PCAS03,1,1,1,1,1,1,1,1,0,0,,,1,1,,,,1*33\r\n") == 0);
++
++    n = purrgo_nmea_build_frame(out, sizeof out, "PCAS02,1000");
++    char expect[64];
++    snprintf(expect, sizeof expect, "$PCAS02,1000*%02X\r\n", xor_of("PCAS02,1000"));
++    CHECK(strcmp(out, expect) == 0 && n == strlen(expect));
++
++    /* Граница размера: '$' + тело + '*HH' + CRLF + '\0'. */
++    const char *body = "ABC";
++    size_t need = 1 + 3 + 3 + 2 + 1;
++    CHECK(purrgo_nmea_build_frame(out, need, body) == need - 1);
++    CHECK(purrgo_nmea_build_frame(out, need - 1, body) == 0);
++    CHECK(purrgo_nmea_build_frame(out, 0, body) == 0);
++    CHECK(purrgo_nmea_build_frame(NULL, 16, body) == 0);
++    CHECK(purrgo_nmea_build_frame(out, sizeof out, NULL) == 0);
++
++    /* Пустое тело допустимо. */
++    CHECK(purrgo_nmea_build_frame(out, sizeof out, "") == 6);
++    CHECK(strcmp(out, "$*00\r\n") == 0);
++}
++
++static void test_configure(void)
++{
++    g_sent_count = 0;
++    purrgo_gnss_receiver_configure(fake_tx);
++    purrgo_gnss_receiver_configure(NULL);       /* без функции отправки - ничего, без падения */
++
++#if (PURRGO_HW_GNSS_RECEIVER == PURRGO_GNSS_RECEIVER_CASIC)
++    CHECK(g_sent_count == 2);
++    CHECK(strncmp(g_sent[0], "$PCAS02,1000*", 13) == 0);
++    CHECK(strncmp(g_sent[1], "$PCAS03,", 8) == 0);
++
++    /* Все кадры корректны: '$', контрольная сумма совпадает, оканчиваются CRLF. */
++    for (int i = 0; i < g_sent_count; i++) {
++        const char *f = g_sent[i];
++        size_t len = strlen(f);
++        const char *star = strchr(f, '*');
++        CHECK(f[0] == '$' && star != NULL && len >= 6 && strcmp(f + len - 2, "\r\n") == 0);
++        if (star != NULL) {
++            char body[96];
++            size_t bl = (size_t)(star - f) - 1;
++            memcpy(body, f + 1, bl);
++            body[bl] = '\0';
++            unsigned got = 0;
++            sscanf(star + 1, "%2X", &got);
++            CHECK(got == xor_of(body));
++        }
++    }
++    /* PCAS03: GGA, GSA и RMC включены, GSV выключен (как требует разбор в gnss.c). */
++    CHECK(strncmp(g_sent[1], "$PCAS03,1,0,1,0,1,0,", 20) == 0);
++#else
++    CHECK(g_sent_count == 0);
++#endif
++}
++
++int main(void)
++{
++    test_frame();
++    test_configure();
++    return test_finish("test_gnss_receiver");
++}
+-- 
+2.43.0
+

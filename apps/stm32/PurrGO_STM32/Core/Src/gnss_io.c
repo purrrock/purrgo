@@ -1,5 +1,6 @@
 #include "purrgo/gnss_io.h"
 #include "purrgo/gnss_ring.h"
+#include "purrgo/gnss_receiver.h"
 #include "usart.h"
 
 #include <stdbool.h>
@@ -49,32 +50,11 @@ static purrgo_gnss_ring_t gnss_ring;
 static volatile bool gnss_rx_error_flag = false;
 
 /**
- * @brief Отправить NMEA-команду, добавив '$', контрольную сумму и CRLF.
- *
- * @param body Тело команды БЕЗ '$' и '*hh', например "PCAS02,1000".
+ * @brief Отправка байт приёмнику GNSS (транспорт для gnss_receiver).
  */
-static void gnss_send_nmea(const char *body)
+static void gnss_uart_tx(const uint8_t *data, size_t len)
 {
-    static const char hex[] = "0123456789ABCDEF";
-    char frame[96];
-    uint8_t checksum = 0U;
-    size_t pos = 0U;
-
-    frame[pos++] = '$';
-
-    for (const char *p = body; (*p != '\0') && (pos < (sizeof(frame) - 6U)); p++)
-    {
-        checksum ^= (uint8_t)*p;
-        frame[pos++] = *p;
-    }
-
-    frame[pos++] = '*';
-    frame[pos++] = hex[checksum >> 4];
-    frame[pos++] = hex[checksum & 0x0FU];
-    frame[pos++] = '\r';
-    frame[pos++] = '\n';
-
-    (void)HAL_UART_Transmit(&huart1, (uint8_t *)frame, (uint16_t)pos, 1000U);
+    (void)HAL_UART_Transmit(&huart1, (uint8_t *)(uintptr_t)data, (uint16_t)len, 1000U);
 }
 
 /**
@@ -106,17 +86,10 @@ void purrgo_gnss_init(void)
      * мгновенно и без задержек будут перехвачены работающим контроллером DMA.
      */
     /*
-     * AT6558R: период выдачи навигационных данных 1000 мс.
-     * Контрольная сумма вычисляется в gnss_send_nmea(): ранее она была
-     * записана вручную, и для PCAS03 не совпадала с вычисленной
-     * (3A вместо 1F), поэтому модуль мог игнорировать команду.
+     * Команды настройки приёмника зависят от его модели и вынесены в ядро
+     * (gnss_receiver.c, выбор - PURRGO_HW_GNSS_RECEIVER в hardware_config.h).
      */
-    gnss_send_nmea("PCAS02,1000");
-
-    /*
-     * Выдавать только GGA + GSA + RMC.
-     */
-    gnss_send_nmea("PCAS03,1,0,1,0,1,0,0,0,0,0,,,0");
+    purrgo_gnss_receiver_configure(gnss_uart_tx);
 }
 
 /**

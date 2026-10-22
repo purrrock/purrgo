@@ -57,7 +57,8 @@ static uint16_t s_queued_labels_count = 0;
 
 
 /*
- * Буфер точек полигона.
+ * Буфер точек полигона (int32: вершины далёких полигонов не насыщаются в int16,
+ * см. project_to_screen_i32()). 512 точек * 8 байт = 4 КБ.
  */
 static gfx_point_t s_polygon_buffer[PURRGO_MAP_MAX_POINTS];
 
@@ -248,8 +249,8 @@ void map_render_feature(
     gfx_point_t *screen_points =
         is_polygon_layer ? s_polygon_buffer : NULL;
 
-    int16_t prev_sx = 0;
-    int16_t prev_sy = 0;
+    int32_t prev_sx = 0;
+    int32_t prev_sy = 0;
 
     int32_t raw_x;
     int32_t raw_y;
@@ -264,10 +265,10 @@ void map_render_feature(
 
         uint32_t point_index = iter.points_read - 1;
 
-        int16_t sx;
-        int16_t sy;
+        int32_t sx;
+        int32_t sy;
 
-        project_to_screen(
+        project_to_screen_i32(
             raw_x,
             raw_y,
             cam,
@@ -294,6 +295,25 @@ void map_render_feature(
 
             if (point_index > current_part_offset) {
 
+                /*
+                 * Отрезок с концом далеко за экраном отсекается по
+                 * +-PURRGO_SAFE_COORD с сохранением наклона (раньше конец
+                 * насыщался в int16, и наклон менялся). Отрезок внутри этой
+                 * области рисуется как есть.
+                 */
+                int32_t seg_x0 = prev_sx;
+                int32_t seg_y0 = prev_sy;
+                int32_t seg_x1 = sx;
+                int32_t seg_y1 = sy;
+
+                if (!map_clip_segment_to_safe(
+                        &seg_x0, &seg_y0, &seg_x1, &seg_y1)) {
+
+                    prev_sx = sx;
+                    prev_sy = sy;
+                    continue;
+                }
+
                 gfx_color_t prev_fg = gfx->color_fg;
 
 
@@ -309,10 +329,10 @@ void map_render_feature(
 
                         gfx_draw_thick_line(
                             gfx,
-                            prev_sx,
-                            prev_sy,
-                            sx,
-                            sy,
+                            (int16_t)seg_x0,
+                            (int16_t)seg_y0,
+                            (int16_t)seg_x1,
+                            (int16_t)seg_y1,
                             3
                         );
 
@@ -329,10 +349,10 @@ void map_render_feature(
 
                         gfx_draw_thick_line(
                             gfx,
-                            prev_sx,
-                            prev_sy,
-                            sx,
-                            sy,
+                            (int16_t)seg_x0,
+                            (int16_t)seg_y0,
+                            (int16_t)seg_x1,
+                            (int16_t)seg_y1,
                             2
                         );
 
@@ -349,10 +369,10 @@ void map_render_feature(
 
                         gfx_draw_line(
                             gfx,
-                            prev_sx,
-                            prev_sy,
-                            sx,
-                            sy
+                            (int16_t)seg_x0,
+                            (int16_t)seg_y0,
+                            (int16_t)seg_x1,
+                            (int16_t)seg_y1
                         );
 
                         break;
@@ -368,10 +388,10 @@ void map_render_feature(
 
                         gfx_draw_dashed_line(
                             gfx,
-                            prev_sx,
-                            prev_sy,
-                            sx,
-                            sy
+                            (int16_t)seg_x0,
+                            (int16_t)seg_y0,
+                            (int16_t)seg_x1,
+                            (int16_t)seg_y1
                         );
 
                         break;
@@ -387,10 +407,10 @@ void map_render_feature(
 
                         gfx_draw_dotted_line(
                             gfx,
-                            prev_sx,
-                            prev_sy,
-                            sx,
-                            sy
+                            (int16_t)seg_x0,
+                            (int16_t)seg_y0,
+                            (int16_t)seg_x1,
+                            (int16_t)seg_y1
                         );
 
                         break;
@@ -400,10 +420,10 @@ void map_render_feature(
 
                         gfx_draw_railway_line(
                             gfx,
-                            prev_sx,
-                            prev_sy,
-                            sx,
-                            sy
+                            (int16_t)seg_x0,
+                            (int16_t)seg_y0,
+                            (int16_t)seg_x1,
+                            (int16_t)seg_y1
                         );
 
                         break;
