@@ -76,6 +76,23 @@ typedef void (*gfx_clear_fn)(
 );
 
 /*
+ * Callback для быстрой заливки горизонтального отрезка одним цветом:
+ * пиксели x0..x1 (включительно, x0 <= x1) строки y, уже отсечённые по clip
+ * и лежащие внутри экрана.
+ *
+ * Callback является необязательным. Результат должен совпадать с цепочкой
+ * draw_pixel() по тем же пикселям; если он не установлен, gfx_draw_hline()
+ * и gfx_fill_rect() рисуют пиксель за пикселем.
+ */
+typedef void (*gfx_fill_span_fn)(
+    void *fb,
+    int16_t x0,
+    int16_t x1,
+    int16_t y,
+    gfx_color_t color
+);
+
+/*
  * Контекст графического ядра.
  */
 typedef struct {
@@ -94,6 +111,13 @@ typedef struct {
      * pixel-by-pixel fallback.
      */
     gfx_clear_fn clear;
+
+    /*
+     * Необязательный быстрый callback заливки горизонтального отрезка.
+     *
+     * Если NULL, gfx_draw_hline() и gfx_fill_rect() используют draw_pixel.
+     */
+    gfx_fill_span_fn fill_span;
 
     gfx_color_t color_fg;       /* Текущий цвет переднего плана */
     gfx_color_t color_bg;       /* Текущий цвет фона */
@@ -137,6 +161,16 @@ bool gfx_init(
 void gfx_set_clear_callback(
     gfx_context_t *ctx,
     gfx_clear_fn clear_cb
+);
+
+/*
+ * Установка платформенного callback быстрой заливки горизонтального отрезка.
+ *
+ * Передача NULL отключает быстрый путь (draw_pixel для каждого пикселя).
+ */
+void gfx_set_fill_span_callback(
+    gfx_context_t *ctx,
+    gfx_fill_span_fn fill_span_cb
 );
 
 /*
