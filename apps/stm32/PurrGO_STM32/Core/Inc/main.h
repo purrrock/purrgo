@@ -67,6 +67,8 @@ void Error_Handler(void);
 #define K1_GPIO_Port GPIOA
 #define K2_Pin GPIO_PIN_1
 #define K2_GPIO_Port GPIOA
+#define V_MAIN_BAT_Pin GPIO_PIN_1
+#define V_MAIN_BAT_GPIO_Port GPIOB
 #define EINK_BUSY_Pin GPIO_PIN_2
 #define EINK_BUSY_GPIO_Port GPIOB
 #define Detect_SDIO_Pin GPIO_PIN_12
