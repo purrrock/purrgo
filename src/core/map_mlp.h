@@ -17,9 +17,18 @@ typedef struct {
     uint32_t current_part_idx;
     uint32_t next_part_start;
 
-    uint8_t chunk_buf[PURRGO_MAP_READ_CHUNK_SIZE];
-    uint32_t chunk_points_read;
-    uint32_t points_in_chunk;
+    /*
+     * Буферизованный поток байт геометрии (заголовок, таблица частей, точки).
+     * Порции читаются не более чем до конца объекта и не дальше конца текущего
+     * сектора, пока размер объекта не известен, поэтому лишние сектора карты
+     * не читаются.
+     */
+    uint8_t  chunk_buf[PURRGO_MAP_READ_CHUNK_SIZE];
+    uint32_t buf_len;        /* число действительных байт в chunk_buf */
+    uint32_t buf_pos;        /* следующий непрочитанный байт в chunk_buf */
+    uint32_t file_pos;       /* абсолютная позиция файла после последнего чтения */
+    uint32_t fetched;        /* байт прочитано из файла с начала объекта */
+    uint32_t total_bytes;    /* размер объекта; UINT32_MAX, пока заголовок не разобран */
 } map_mlp_iter_t;
 
 /* Initializes iterator, reads header and parts */

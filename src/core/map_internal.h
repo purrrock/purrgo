@@ -9,8 +9,8 @@
 
 #define PURRGO_MAP_MAX_PARTS 32
 #define PURRGO_MAP_MAX_POINTS 512
-#define PURRGO_MAP_READ_CHUNK_SIZE 64
-#define PURRGO_MAP_POINTS_PER_CHUNK (PURRGO_MAP_READ_CHUNK_SIZE / 8)
+/* Размер сектора SD/FatFs; геометрия читается порциями до 512 байт. */
+#define PURRGO_MAP_READ_CHUNK_SIZE 512u
 
 typedef struct {
     uint8_t  file_type;

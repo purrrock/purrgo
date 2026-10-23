@@ -1,6 +1,7 @@
 #include "map_mlp.h"
 #include "purrgo/logger.h"
 #include <stddef.h>
+#include <string.h>
 
 static bool validate_parts(
     const uint32_t *parts,
@@ -27,6 +28,59 @@ static bool validate_parts(
     return true;
 }
 
+
+#define MLP_SIZE_UNKNOWN UINT32_MAX
+#define MLP_HEADER_SIZE  24u
+
+/* Прочитать следующую порцию из файла в chunk_buf. */
+static bool mlp_refill(map_mlp_iter_t *iter)
+{
+    uint32_t len;
+
+    if (iter->total_bytes == MLP_SIZE_UNKNOWN) {
+        /* Размер объекта неизвестен: читаем только до конца текущего сектора. */
+        len = PURRGO_MAP_READ_CHUNK_SIZE - (iter->file_pos % PURRGO_MAP_READ_CHUNK_SIZE);
+    } else if (iter->fetched >= iter->total_bytes) {
+        return false;
+    } else {
+        len = iter->total_bytes - iter->fetched;
+        if (len > PURRGO_MAP_READ_CHUNK_SIZE) {
+            len = PURRGO_MAP_READ_CHUNK_SIZE;
+        }
+    }
+
+    uint32_t got = iter->mlp_fs->read(iter->mlp_fs->handle, iter->chunk_buf, len);
+    if (got == 0 || got > len) {
+        return false;
+    }
+
+    iter->buf_len = got;
+    iter->buf_pos = 0;
+    iter->file_pos += got;
+    iter->fetched += got;
+    return true;
+}
+
+/* Взять ровно n байт из потока; false - данные кончились (файл усечён). */
+static bool mlp_take(map_mlp_iter_t *iter, uint8_t *dst, uint32_t n)
+{
+    while (n > 0) {
+        if (iter->buf_pos >= iter->buf_len && !mlp_refill(iter)) {
+            return false;
+        }
+
+        uint32_t chunk = iter->buf_len - iter->buf_pos;
+        if (chunk > n) {
+            chunk = n;
+        }
+        memcpy(dst, &iter->chunk_buf[iter->buf_pos], chunk);
+        iter->buf_pos += chunk;
+        dst += chunk;
+        n -= chunk;
+    }
+    return true;
+}
+
 bool map_mlp_iter_init(
     map_mlp_iter_t *iter,
     purrgo_fs_t *mlp_fs,
@@ -39,17 +93,20 @@ bool map_mlp_iter_init(
     iter->mlp_fs = mlp_fs;
     iter->points_read = 0;
     iter->current_part_idx = 0;
-    iter->chunk_points_read = 0;
-    iter->points_in_chunk = 0;
+    iter->buf_len = 0;
+    iter->buf_pos = 0;
+    iter->fetched = 0;
+    iter->total_bytes = MLP_SIZE_UNKNOWN;
 
     uint32_t absolute_body_offset = 32u + v1_offset;
 
     if (!mlp_fs->seek(mlp_fs->handle, absolute_body_offset)) {
         return false;
     }
+    iter->file_pos = absolute_body_offset;
 
-    uint8_t head[24];
-    if (mlp_fs->read(mlp_fs->handle, head, sizeof(head)) != sizeof(head)) {
+    uint8_t head[MLP_HEADER_SIZE];
+    if (!mlp_take(iter, head, sizeof(head))) {
         return false;
     }
 
@@ -69,6 +126,7 @@ bool map_mlp_iter_init(
 
     iter->num_parts = (uint32_t)num_parts;
     iter->num_points = (uint32_t)num_points;
+    iter->total_bytes = MLP_HEADER_SIZE + iter->num_parts * 4u + iter->num_points * 8u;
 
     for (uint32_t i = 0; i < PURRGO_MAP_MAX_PARTS; i++) {
         iter->parts[i] = 0;
@@ -78,7 +136,7 @@ bool map_mlp_iter_init(
         uint32_t bytes_to_read = iter->num_parts * 4u;
         uint8_t part_buf[PURRGO_MAP_MAX_PARTS * 4];
 
-        if (mlp_fs->read(mlp_fs->handle, part_buf, bytes_to_read) != bytes_to_read) {
+        if (!mlp_take(iter, part_buf, bytes_to_read)) {
             return false;
         }
 
@@ -112,20 +170,11 @@ bool map_mlp_iter_next(
         return false;
     }
 
-    if (iter->chunk_points_read >= iter->points_in_chunk) {
-        uint32_t points_left = iter->num_points - iter->points_read;
-        iter->points_in_chunk = (points_left > PURRGO_MAP_POINTS_PER_CHUNK)
-            ? PURRGO_MAP_POINTS_PER_CHUNK
-            : points_left;
-
-        uint32_t bytes_to_read = iter->points_in_chunk * 8u;
-        if (iter->mlp_fs->read(iter->mlp_fs->handle, iter->chunk_buf, bytes_to_read) != bytes_to_read) {
-            return false;
-        }
-        iter->chunk_points_read = 0;
+    uint8_t point_buf[8];
+    if (!mlp_take(iter, point_buf, sizeof(point_buf))) {
+        return false;
     }
 
-    uint8_t *point_buf = &iter->chunk_buf[iter->chunk_points_read * 8u];
     *raw_x = unpack_i32_le(&point_buf[0]);
     *raw_y = unpack_i32_le(&point_buf[4]);
 
@@ -139,6 +188,5 @@ bool map_mlp_iter_next(
     }
 
     iter->points_read++;
-    iter->chunk_points_read++;
     return true;
 }
