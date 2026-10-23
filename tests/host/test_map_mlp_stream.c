@@ -9,34 +9,18 @@
 #include <stdlib.h>
 #include <string.h>
 #include "map_mlp.h"
+#include "purrgo/fs_hal.h"
+#include "fake_fs.h"
 #include "test_common.h"
 
 uint32_t purrgo_system_time_ms(void) { return 0; }
 
-typedef struct {
-    const uint8_t *data;
-    uint32_t size, pos;
-    uint32_t reads;
-    uint32_t max_end;      /* наибольшая позиция, до которой дошло чтение */
-} cfile_t;
-
-static uint32_t c_read(void *h, void *buf, uint32_t n)
+/* Файл карты - файл фейковой ФС; статистику чтения ведёт fake_fs. */
+static purrgo_file_t *open_blob(const uint8_t *data, uint32_t size)
 {
-    cfile_t *f = h;
-    f->reads++;
-    if (f->pos >= f->size) { return 0; }
-    if (n > f->size - f->pos) { n = f->size - f->pos; }
-    memcpy(buf, f->data + f->pos, n);
-    f->pos += n;
-    if (f->pos > f->max_end) { f->max_end = f->pos; }
-    return n;
-}
-
-static bool c_seek(void *h, uint32_t off)
-{
-    cfile_t *f = h;
-    f->pos = off > f->size ? f->size : off;
-    return true;
+    fake_fs_reset();
+    fake_fs_put_bin("t.mlp", data, size);
+    return purrgo_fs_open("t.mlp", FS_READ);
 }
 
 static void put_i32(uint8_t *p, int32_t v)
@@ -73,11 +57,11 @@ static void run_one(uint32_t v1, int parts, int points)
     int32_t xs[PURRGO_MAP_MAX_POINTS], ys[PURRGO_MAP_MAX_POINTS];
     uint32_t objsz = build(file, v1, parts, points, xs, ys);
     uint32_t obj_end = 32u + v1 + objsz;
-    cfile_t cf = { file, 32u + v1 + objsz + 100u, 0, 0, 0 };
-    purrgo_fs_t fs = { &cf, c_read, c_seek };
+    purrgo_file_t *fs = open_blob(file, 32u + v1 + objsz + 100u);
     map_mlp_iter_t it;
 
-    CHECK(map_mlp_iter_init(&it, &fs, v1));
+    CHECK(fs != NULL);
+    CHECK(map_mlp_iter_init(&it, fs, v1));
     int n = 0, new_parts = 0;
     int32_t x, y;
     bool np;
@@ -91,9 +75,10 @@ static void run_one(uint32_t v1, int parts, int points)
 
     /* Дальше конца сектора, в котором заканчивается объект, читать нельзя. */
     uint32_t sector_end = (obj_end + 511u) / 512u * 512u;
-    CHECK(cf.max_end <= sector_end);
+    CHECK(fake_fs_max_read_end() <= sector_end);
     /* Не больше чем «один сектор за раз» + начальный остаток. */
-    CHECK(cf.reads <= objsz / 512u + 3u);
+    CHECK(fake_fs_read_calls() <= objsz / 512u + 3u);
+    (void)purrgo_fs_close(fs);
 }
 
 static void test_layouts(void)
@@ -117,19 +102,19 @@ static void test_truncated(void)
     uint32_t full = 32u + 300u + objsz;
 
     for (uint32_t cut = 32u + 300u; cut < full; cut += 13u) {
-        cfile_t cf = { file, cut, 0, 0, 0 };
-        purrgo_fs_t fs = { &cf, c_read, c_seek };
+        purrgo_file_t *fs = open_blob(file, cut);
         map_mlp_iter_t it;
         int32_t x, y; bool np;
         int n = 0;
-        if (map_mlp_iter_init(&it, &fs, 300)) {
+        if (map_mlp_iter_init(&it, fs, 300)) {
             while (map_mlp_iter_next(&it, &x, &y, &np)) {
                 CHECK(x == xs[n] && y == ys[n]);
                 n++;
             }
             CHECK(n < 100);
         }
-        CHECK(cf.max_end <= cut);
+        CHECK(fake_fs_max_read_end() <= cut);
+        (void)purrgo_fs_close(fs);
     }
 }
 

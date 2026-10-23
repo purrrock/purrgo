@@ -8,7 +8,7 @@
 #include "map_internal.h"
 
 void map_render_feature(
-    purrgo_fs_t *mlp_fs,
+    purrgo_file_t *mlp_file,
     uint32_t v1_offset,
     const purrgo_bbox_t *cam,
     const purrgo_viewport_t *vp,

@@ -49,7 +49,7 @@ static bool mlp_refill(map_mlp_iter_t *iter)
         }
     }
 
-    uint32_t got = iter->mlp_fs->read(iter->mlp_fs->handle, iter->chunk_buf, len);
+    uint32_t got = purrgo_fs_read(iter->mlp_file, iter->chunk_buf, len);
     if (got == 0 || got > len) {
         return false;
     }
@@ -83,14 +83,14 @@ static bool mlp_take(map_mlp_iter_t *iter, uint8_t *dst, uint32_t n)
 
 bool map_mlp_iter_init(
     map_mlp_iter_t *iter,
-    purrgo_fs_t *mlp_fs,
+    purrgo_file_t *mlp_file,
     uint32_t v1_offset
 ) {
-    if (iter == NULL || mlp_fs == NULL || mlp_fs->read == NULL || mlp_fs->seek == NULL) {
+    if (iter == NULL || mlp_file == NULL) {
         return false;
     }
 
-    iter->mlp_fs = mlp_fs;
+    iter->mlp_file = mlp_file;
     iter->points_read = 0;
     iter->current_part_idx = 0;
     iter->buf_len = 0;
@@ -100,7 +100,7 @@ bool map_mlp_iter_init(
 
     uint32_t absolute_body_offset = 32u + v1_offset;
 
-    if (!mlp_fs->seek(mlp_fs->handle, absolute_body_offset)) {
+    if (!purrgo_fs_seek(mlp_file, absolute_body_offset)) {
         return false;
     }
     iter->file_pos = absolute_body_offset;

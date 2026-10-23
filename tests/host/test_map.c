@@ -9,40 +9,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include "purrgo/map.h"
-#include "purrgo/config.h"
 #include "purrgo/fs_hal.h"
 #include "fake_fs.h"
 #include "test_common.h"
 
 uint32_t purrgo_system_time_ms(void) { return 0; }
-
-/* ------------------------------------------------------- память как ФС --- */
-
-typedef struct { const uint8_t *data; uint32_t size, pos; } memfile_t;
-
-static uint32_t mem_read(void *h, void *buf, uint32_t n)
-{
-    memfile_t *f = h;
-    if (f->pos >= f->size) { return 0; }
-    if (n > f->size - f->pos) { n = f->size - f->pos; }
-    memcpy(buf, f->data + f->pos, n);
-    f->pos += n;
-    return n;
-}
-
-/* Как FatFs в режиме чтения: позиция за концом файла ограничивается его размером. */
-static bool mem_seek(void *h, uint32_t off)
-{
-    memfile_t *f = h;
-    f->pos = off > f->size ? f->size : off;
-    return true;
-}
-
-static void mem_open(purrgo_fs_t *fs, memfile_t *f, const uint8_t *d, uint32_t n)
-{
-    f->data = d; f->size = n; f->pos = 0;
-    fs->handle = f; fs->read = mem_read; fs->seek = mem_seek;
-}
 
 /* ----------------------------------------------------------- графика --- */
 
@@ -64,6 +35,7 @@ static gfx_color_t cb_read(void *fb, int16_t x, int16_t y)
 }
 
 static gfx_context_t g_gfx;
+static purrgo_map_render_params_t g_params;
 static const purrgo_bbox_t CAM = { 0, 0, 1000, 1000 };
 static const purrgo_viewport_t VP = { SCR_W, SCR_H, 0, 0 };
 
@@ -165,21 +137,34 @@ static void simple_map(blob_t *idx, blob_t *mlp, uint8_t type)
 
 static long render(const blob_t *idx, const blob_t *mlp, const blob_t *db, purrgo_map_layer_t layer)
 {
-    purrgo_fs_t ifs, mfs, dfs;
-    memfile_t fi, fm, fd;
-    mem_open(&ifs, &fi, idx->d, idx->n);
-    mem_open(&mfs, &fm, mlp ? mlp->d : (const uint8_t *)"", mlp ? mlp->n : 0);
-    if (db) { mem_open(&dfs, &fd, db->d, db->n); }
+    /* Слой кладётся в фейковую ФС и открывается как обычный файл карты. */
+    fake_fs_reset();
+    fake_fs_put_bin("l.idx", idx->d, idx->n);
+    if (mlp) { fake_fs_put_bin("l.mlp", mlp->d, mlp->n); }
+    if (db)  { fake_fs_put_bin("l.db", db->d, db->n); }
+    purrgo_file_t *ifs = purrgo_fs_open("l.idx", FS_READ);
+    purrgo_file_t *mfs = mlp ? purrgo_fs_open("l.mlp", FS_READ) : NULL;
+    purrgo_file_t *dfs = db ? purrgo_fs_open("l.db", FS_READ) : NULL;
     gfx_reset();
-    purrgo_map_render_layer(&ifs, mlp ? &mfs : NULL, db ? &dfs : NULL, &g_gfx, &CAM, &VP, layer);
+    purrgo_map_render_layer(ifs, mfs, dfs, &g_gfx, &CAM, &VP, &g_params, layer);
+    if (ifs) { (void)purrgo_fs_close(ifs); }
+    if (mfs) { (void)purrgo_fs_close(mfs); }
+    if (dfs) { (void)purrgo_fs_close(dfs); }
     return g_pixels;
 }
 
 static void defaults(void)
 {
-    memset(&app_config, 0, sizeof app_config);
-    app_config.map_details = PURRGO_MAP_DETAILS_LOW;
-    app_config.poi_mode = PURRGO_POI_MODE_CIRCLES;
+    memset(&g_params, 0, sizeof g_params);
+    g_params.details = PURRGO_MAP_DETAILS_LOW;
+    g_params.poi_mode = PURRGO_POI_MODE_CIRCLES;
+}
+
+/* Рендер каталога карты с текущими g_params. */
+static bool render_dir(const char *dir)
+{
+    g_params.map_dir = dir;
+    return purrgo_map_render_viewport(&g_gfx, &VP, &CAM, &g_params);
 }
 
 /* ------------------------------------------------------------- тесты --- */
@@ -375,9 +360,9 @@ static void test_poi_layer(void)
     build_idx(&idx, node, sizeof node, 0, 1);
 
     defaults();
-    app_config.poi_mode = PURRGO_POI_MODE_NO;
+    g_params.poi_mode = PURRGO_POI_MODE_NO;
     CHECK(render(&idx, NULL, NULL, MAP_LAYER_POIS) == 0);
-    app_config.poi_mode = PURRGO_POI_MODE_CIRCLES;
+    g_params.poi_mode = PURRGO_POI_MODE_CIRCLES;
     CHECK(render(&idx, NULL, NULL, MAP_LAYER_POIS) > 5);
 }
 
@@ -395,7 +380,7 @@ static void test_fuzz_truncate_and_flip(void)
     db.n = 32u + 129u + 117u * 3u;
 
     defaults();
-    app_config.layer_poi_labels = true;
+    g_params.layer_poi_labels = true;
     long base = render(&idx, &mlp, &db, MAP_LAYER_LINES);
     CHECK(base > 0);
 
@@ -437,13 +422,13 @@ static void test_viewport_via_fs(void)
 
     fake_fs_reset();
     defaults();
-    app_config.layer_roads = true;
+    g_params.layer_roads = true;
     purrgo_map_shutdown();
     fake_fs_put_bin("maps/m1/roads.idx", idx.d, idx.n);
     fake_fs_put_bin("maps/m1/roads.mlp", mlp.d, mlp.n);
 
     gfx_reset();
-    bool ok = purrgo_map_render_viewport(&g_gfx, &VP, &CAM, "maps/m1");
+    bool ok = render_dir("maps/m1");
     CHECK(ok);
     CHECK(g_pixels > 20);
     purrgo_map_shutdown();
@@ -454,7 +439,7 @@ static void test_viewport_via_fs(void)
     fake_fs_put_bin("maps/m2/roads.idx", idx.d, idx.n);
     fake_fs_put_bin("maps/m2/roads.mlp", mlp.d, mlp.n);
     gfx_reset();
-    (void)purrgo_map_render_viewport(&g_gfx, &VP, &CAM, "maps/m2");
+    (void)render_dir("maps/m2");
     CHECK(g_pixels == 0);
     purrgo_map_shutdown();
     CHECK(fake_fs_open_handles() == 0);
@@ -468,27 +453,27 @@ static void test_viewport_failures(void)
     /* Слой включён, файлов нет: один проход открытий, дальше без обращений к ФС. */
     fake_fs_reset();
     defaults();
-    app_config.layer_landuse = true;
+    g_params.layer_landuse = true;
     purrgo_map_shutdown();
     gfx_reset();
-    bool ok = purrgo_map_render_viewport(&g_gfx, &VP, &CAM, "maps/none");
+    bool ok = render_dir("maps/none");
     CHECK(ok);                                  /* отсутствие файлов - не ошибка отрисовки */
     int after_first = fake_fs_open_calls();
     CHECK(after_first > 0);
-    (void)purrgo_map_render_viewport(&g_gfx, &VP, &CAM, "maps/none");
+    (void)render_dir("maps/none");
     CHECK(fake_fs_open_calls() == after_first);
 
     /* Выключение и включение слоя - новая попытка (файл мог появиться). */
     simple_map(&idx, &mlp, 1);
     fake_fs_put_bin("maps/none/landuse.idx", idx.d, idx.n);
     fake_fs_put_bin("maps/none/landuse.mlp", mlp.d, mlp.n);
-    (void)purrgo_map_render_viewport(&g_gfx, &VP, &CAM, "maps/none");
+    (void)render_dir("maps/none");
     CHECK(fake_fs_open_calls() == after_first);  /* память о неудаче сохраняется */
-    app_config.layer_landuse = false;
-    (void)purrgo_map_render_viewport(&g_gfx, &VP, &CAM, "maps/none");
-    app_config.layer_landuse = true;
+    g_params.layer_landuse = false;
+    (void)render_dir("maps/none");
+    g_params.layer_landuse = true;
     gfx_reset();
-    ok = purrgo_map_render_viewport(&g_gfx, &VP, &CAM, "maps/none");
+    ok = render_dir("maps/none");
     CHECK(ok);
     CHECK(fake_fs_open_calls() > after_first);     /* файлы открыты заново */
     purrgo_map_shutdown();
@@ -496,10 +481,10 @@ static void test_viewport_failures(void)
     /* Смена каталога сбрасывает память о неудаче. */
     fake_fs_reset();
     defaults();
-    app_config.layer_roads = true;
-    (void)purrgo_map_render_viewport(&g_gfx, &VP, &CAM, "maps/a");
+    g_params.layer_roads = true;
+    (void)render_dir("maps/a");
     int calls = fake_fs_open_calls();
-    (void)purrgo_map_render_viewport(&g_gfx, &VP, &CAM, "maps/b");
+    (void)render_dir("maps/b");
     CHECK(fake_fs_open_calls() > calls);
     purrgo_map_shutdown();
 
@@ -512,32 +497,32 @@ static void test_viewport_failures(void)
     idx.d[0] = 0;
     fake_fs_put_bin("maps/bad/roads.idx", idx.d, idx.n);
     fake_fs_put_bin("maps/bad/roads.mlp", mlp.d, mlp.n);
-    app_config.layer_roads = true;
+    g_params.layer_roads = true;
     purrgo_map_shutdown();
     gfx_reset();
-    CHECK(purrgo_map_render_viewport(&g_gfx, &VP, &CAM, "maps/good"));
-    CHECK(!purrgo_map_render_viewport(&g_gfx, &VP, &CAM, "maps/bad"));
+    CHECK(render_dir("maps/good"));
+    CHECK(!render_dir("maps/bad"));
     purrgo_map_shutdown();
     CHECK(fake_fs_open_handles() == 0);
 
     /* Слой POI: отсутствие pois.idx - не ошибка, битый pois.idx - ошибка. */
     fake_fs_reset();
     defaults();
-    app_config.layer_poi = true;
-    CHECK(purrgo_map_render_viewport(&g_gfx, &VP, &CAM, "maps/nopoi"));
+    g_params.layer_poi = true;
+    CHECK(render_dir("maps/nopoi"));
     fake_fs_put_bin("maps/badpoi/pois.idx", idx.d, idx.n);   /* idx.d[0] == 0 */
-    CHECK(!purrgo_map_render_viewport(&g_gfx, &VP, &CAM, "maps/badpoi"));
+    CHECK(!render_dir("maps/badpoi"));
     purrgo_map_shutdown();
 
     /* Слишком длинный map_dir: без обрезки и без открытий, кадр помечается неудачным. */
     fake_fs_reset();
     defaults();
-    app_config.layer_roads = true;
+    g_params.layer_roads = true;
     char longdir[300];
     memset(longdir, 'd', sizeof longdir - 1);
     longdir[sizeof longdir - 1] = '\0';
     purrgo_map_shutdown();
-    CHECK(!purrgo_map_render_viewport(&g_gfx, &VP, &CAM, longdir));
+    CHECK(!render_dir(longdir));
     CHECK(fake_fs_open_calls() == 0);
     CHECK(fake_fs_open_handles() == 0);
 
@@ -553,10 +538,10 @@ static void test_viewport_failures(void)
     snprintf(path, sizeof path, "%s/roads.mlp", d1);
     fake_fs_put_bin(path, mlp.d, mlp.n);
     gfx_reset();
-    CHECK(purrgo_map_render_viewport(&g_gfx, &VP, &CAM, d1));
+    CHECK(render_dir(d1));
     CHECK(g_pixels > 0);
     gfx_reset();
-    (void)purrgo_map_render_viewport(&g_gfx, &VP, &CAM, d2);   /* файлов нет -> пусто */
+    (void)render_dir(d2);   /* файлов нет -> пусто */
     CHECK(g_pixels == 0);
     purrgo_map_shutdown();
     CHECK(fake_fs_open_handles() == 0);

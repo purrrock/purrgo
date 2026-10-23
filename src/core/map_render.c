@@ -219,7 +219,7 @@ void map_render_draw_queued_labels(gfx_context_t *gfx)
 
 
 void map_render_feature(
-    purrgo_fs_t *mlp_fs,
+    purrgo_file_t *mlp_file,
     uint32_t v1_offset,
     const purrgo_bbox_t *cam,
     const purrgo_viewport_t *vp,
@@ -228,7 +228,7 @@ void map_render_feature(
     purrgo_map_style_t style
 )
 {
-    if (mlp_fs == NULL ||
+    if (mlp_file == NULL ||
         cam == NULL ||
         vp == NULL ||
         gfx == NULL) {
@@ -238,7 +238,7 @@ void map_render_feature(
 
     map_mlp_iter_t iter;
 
-    if (!map_mlp_iter_init(&iter, mlp_fs, v1_offset)) {
+    if (!map_mlp_iter_init(&iter, mlp_file, v1_offset)) {
         return;
     }
 

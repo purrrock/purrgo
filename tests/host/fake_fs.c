@@ -17,6 +17,8 @@ static int handle_used[8];
 
 fake_fs_faults_t g_fault;
 static int open_calls;
+static uint32_t read_calls;
+static uint32_t max_read_end;
 static int sync_calls;
 int fake_fs_open_calls(void) { return open_calls; }
 
@@ -27,7 +29,13 @@ void fake_fs_reset(void) {
     memset(&g_fault, 0, sizeof(g_fault));
     open_calls = 0;
     sync_calls = 0;
+    read_calls = 0;
+    max_read_end = 0;
 }
+
+uint32_t fake_fs_read_calls(void) { return read_calls; }
+uint32_t fake_fs_max_read_end(void) { return max_read_end; }
+void fake_fs_reset_read_stats(void) { read_calls = 0; max_read_end = 0; }
 
 static int find(const char* n) {
     for (int i = 0; i < 32; i++) if (files[i].used && !strcmp(files[i].name, n)) return i;
@@ -92,9 +100,12 @@ uint32_t purrgo_fs_write(purrgo_file_t* f, const uint8_t* d, uint32_t n) {
 }
 uint32_t purrgo_fs_read(purrgo_file_t* f, uint8_t* b, uint32_t n) {
     ffile_t* ff = &files[f->idx];
+    read_calls++;
     if (f->pos >= ff->size) return 0;
     if (n > ff->size - f->pos) n = ff->size - f->pos;
-    memcpy(b, ff->data + f->pos, n); f->pos += n; return n;
+    memcpy(b, ff->data + f->pos, n); f->pos += n;
+    if (f->pos > max_read_end) max_read_end = f->pos;
+    return n;
 }
 bool purrgo_fs_seek(purrgo_file_t* f, uint32_t o) { f->pos = o; return true; }
 bool purrgo_fs_sync(purrgo_file_t* f) { (void)f; sync_calls++; return !g_fault.fail_sync; }

@@ -4,7 +4,6 @@
 #include "purrgo/logger.h"
 #include "purrgo/map_style.h"
 #include "purrgo/gfx_circle.h"
-#include "purrgo/config.h"
 #include <stddef.h>
 #include <string.h>
 #include "purrgo/gfx_text.h"
@@ -46,8 +45,8 @@ static uint32_t s_tree_depth = 0u;
  * Функция учитывает различие между слоями: в обычных слоях v2=1 это dummy-запись,
  * а в слое POI dummy-записи нет.
  */
-static bool map_db_read_name(purrgo_fs_t *db_fs, uint32_t v2, bool is_poi, char *out_buffer, size_t max_len) {
-    if (!db_fs || v2 == 0 || out_buffer == NULL || max_len < 2u) return false;
+static bool map_db_read_name(purrgo_file_t *db_file, uint32_t v2, bool is_poi, char *out_buffer, size_t max_len) {
+    if (!db_file || v2 == 0 || out_buffer == NULL || max_len < 2u) return false;
     
     // В стандартных слоях v2=1 зарезервировано под dummy record, имена начинаются с 2
     if (!is_poi && v2 == 1) return false; 
@@ -57,7 +56,7 @@ static bool map_db_read_name(purrgo_fs_t *db_fs, uint32_t v2, bool is_poi, char 
     uint32_t record_idx = v2 - 1;
     uint32_t name_offset = 32 + 129 + (record_idx * 117) + 17;
 
-    if (!db_fs->seek(db_fs->handle, name_offset)) {
+    if (!purrgo_fs_seek(db_file, name_offset)) {
         return false;
     }
 
@@ -70,7 +69,7 @@ static bool map_db_read_name(purrgo_fs_t *db_fs, uint32_t v2, bool is_poi, char 
     uint32_t want = (uint32_t)(max_len - 1u);
     if (want > sizeof(raw_name)) want = (uint32_t)sizeof(raw_name);
 
-    uint32_t bytes_read = db_fs->read(db_fs->handle, raw_name, want);
+    uint32_t bytes_read = purrgo_fs_read(db_file, (uint8_t *)raw_name, want);
     if (bytes_read == 0 || bytes_read > want) return false;
 
     size_t len = 0;
@@ -85,15 +84,16 @@ static bool map_db_read_name(purrgo_fs_t *db_fs, uint32_t v2, bool is_poi, char 
 
 
 static bool map_idx_parse_node_impl(
-    purrgo_fs_t *idx_fs,
+    purrgo_file_t *idx_file,
     uint32_t *current_idx_offset,
-    purrgo_fs_t *mlp_fs,
-    purrgo_fs_t *db_fs,
+    purrgo_file_t *mlp_file,
+    purrgo_file_t *db_file,
     bool is_nav_node,
     const purrgo_bbox_t *cam,
     const purrgo_viewport_t *vp,
     gfx_context_t *gfx,
     purrgo_map_layer_t layer_type,
+    const purrgo_map_render_params_t *params,
     uint32_t lod_end
 )
 {
@@ -105,7 +105,7 @@ static bool map_idx_parse_node_impl(
         return false;
     }
 
-    if (idx_fs->read(idx_fs->handle, node_buf, node_size) != node_size) {
+    if (purrgo_fs_read(idx_file, node_buf, node_size) != node_size) {
         return false;
     }
 
@@ -149,7 +149,7 @@ static bool map_idx_parse_node_impl(
          * ============================================================
          */
         if (layer_type == MAP_LAYER_POIS) {
-            if (app_config.poi_mode == PURRGO_POI_MODE_NO) return true;
+            if (params->poi_mode == PURRGO_POI_MODE_NO) return true;
 
             int32_t poi_x = xmin;
             int32_t poi_y = ymin;
@@ -158,10 +158,10 @@ static bool map_idx_parse_node_impl(
             project_to_screen(poi_x, poi_y, cam, vp, &sx, &sy);
 
             int16_t radius = 0;
-            if (app_config.poi_mode == PURRGO_POI_MODE_ICONS) {
+            if (params->poi_mode == PURRGO_POI_MODE_ICONS) {
                 radius = PURRGO_POI_ICON_WIDTH / 2;
                 gfx_draw_icon_11x11(gfx, sx, sy, purrgo_poi_icons[obj_type]);
-            } else if (app_config.poi_mode == PURRGO_POI_MODE_CIRCLES) {
+            } else if (params->poi_mode == PURRGO_POI_MODE_CIRCLES) {
                 if (obj_type == 11) {
                     radius = PURRGO_POI_BIG_RADIUS;
                     gfx_draw_poi_circle(gfx, sx, sy, radius);
@@ -175,10 +175,10 @@ static bool map_idx_parse_node_impl(
              * Подписи POI отключены в режиме POI LABELS OFF.
              * Сам маркер POI при этом продолжает отображаться.
              */
-            if (app_config.layer_poi_labels &&
+            if (params->layer_poi_labels &&
                 v2 > 0 &&
-                db_fs != NULL) {
-                if (map_db_read_name(db_fs, v2, true, name_buf, sizeof(name_buf))) {
+                db_file != NULL) {
+                if (map_db_read_name(db_file, v2, true, name_buf, sizeof(name_buf))) {
                     int len = (int)strlen(name_buf);
                     
                     int16_t text_w = (int16_t)(len * 6); // Ширина: 5px символ + 1px промежуток
@@ -230,7 +230,7 @@ if (style == PURRGO_STYLE_NONE) {
         if (v1 > 0) {
             bool is_polygon = (layer_type == MAP_LAYER_POLYGONS);
             
-            map_render_feature(mlp_fs, v1, cam, vp, gfx, is_polygon, style);
+            map_render_feature(mlp_file, v1, cam, vp, gfx, is_polygon, style);
 
             /*
              * Подписываем только площади (Landuse/Water).
@@ -241,11 +241,11 @@ if (style == PURRGO_STYLE_NONE) {
              * продолжает отрисовываться.
              */
             if (is_polygon &&
-                app_config.layer_poi_labels &&
+                params->layer_poi_labels &&
                 v2 >= 2 &&
-                db_fs != NULL) {
+                db_file != NULL) {
 
-                if (map_db_read_name(db_fs, v2, false, name_buf, sizeof(name_buf))) {
+                if (map_db_read_name(db_file, v2, false, name_buf, sizeof(name_buf))) {
                     /*
                      * Вычисляем центр BBox, разделяя слагаемые
                      * для защиты от int32 overflow.
@@ -326,7 +326,7 @@ if (style == PURRGO_STYLE_NONE) {
                 return false;
             }
 
-            if (idx_fs->seek(idx_fs->handle, *current_idx_offset + jump_amount)) {
+            if (purrgo_fs_seek(idx_file, *current_idx_offset + jump_amount)) {
                 *current_idx_offset += jump_amount;
             } else {
                 return false;
@@ -345,8 +345,8 @@ if (style == PURRGO_STYLE_NONE) {
     s_tree_depth++;
 
     for (uint32_t i = 0; i < obj_count; i++) {
-        if (!map_idx_parse_node_impl(idx_fs, current_idx_offset, mlp_fs, db_fs,
-                                child_is_nav, cam, vp, gfx, layer_type, lod_end)) {
+        if (!map_idx_parse_node_impl(idx_file, current_idx_offset, mlp_file, db_file,
+                                child_is_nav, cam, vp, gfx, layer_type, params, lod_end)) {
             s_tree_depth--;
             return false;
         }
@@ -358,20 +358,21 @@ if (style == PURRGO_STYLE_NONE) {
 
 
 bool map_idx_parse_node(
-    purrgo_fs_t *idx_fs,
+    purrgo_file_t *idx_file,
     uint32_t *current_idx_offset,
-    purrgo_fs_t *mlp_fs,
-    purrgo_fs_t *db_fs,
+    purrgo_file_t *mlp_file,
+    purrgo_file_t *db_file,
     bool is_nav_node,
     const purrgo_bbox_t *cam,
     const purrgo_viewport_t *vp,
     gfx_context_t *gfx,
     purrgo_map_layer_t layer_type,
+    const purrgo_map_render_params_t *params,
     uint32_t lod_end
 )
 {
     /* Корневой вызов начинает новый обход. */
     s_tree_depth = 0u;
-    return map_idx_parse_node_impl(idx_fs, current_idx_offset, mlp_fs, db_fs,
-                                   is_nav_node, cam, vp, gfx, layer_type, lod_end);
+    return map_idx_parse_node_impl(idx_file, current_idx_offset, mlp_file, db_file,
+                                   is_nav_node, cam, vp, gfx, layer_type, params, lod_end);
 }

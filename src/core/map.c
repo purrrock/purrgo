@@ -1,8 +1,5 @@
 #include "purrgo/map.h"
 #include "purrgo/logger.h"
-#include "purrgo/app_fsm.h"
-#include "purrgo/map_controller.h"
-#include "purrgo/config.h"
 #include "map_internal.h"
 #include "map_idx.h"
 #include "map_render.h"
@@ -123,8 +120,10 @@ static bool map_open_pair(const char* map_dir, const char* name_a, const char* n
  * Приводит набор открытых файлов в соответствие с каталогом и конфигом.
  * Возвращает false, если путь к каталогу слишком длинный (карта не рисуется).
  */
-static bool map_sync_files(const char* map_dir)
+static bool map_sync_files(const purrgo_map_render_params_t *params)
 {
+    const char* map_dir = params->map_dir;
+
     if (strlen(map_dir) > MAP_DIR_MAX_LEN) {
         if (!s_map_context.dir_invalid) {
             map_close_all_files();
@@ -142,7 +141,7 @@ static bool map_sync_files(const char* map_dir)
     }
 
     /* Landuse */
-    if (!app_config.layer_landuse) {
+    if (!params->layer_landuse) {
         map_close_file(&s_map_context.landuse_idx_file);
         map_close_file(&s_map_context.landuse_mlp_file);
         map_close_file(&s_map_context.landuse_db_file);
@@ -160,7 +159,7 @@ static bool map_sync_files(const char* map_dir)
         }
     }
 
-    if (!app_config.layer_landuse_labels) {
+    if (!params->layer_landuse_labels) {
         map_close_file(&s_map_context.landuse_db_file);
         s_map_context.layer_landuse_labels = false;
         s_map_context.landuse_labels_missing = false;
@@ -177,7 +176,7 @@ static bool map_sync_files(const char* map_dir)
     }
 
     /* Roads */
-    if (!app_config.layer_roads) {
+    if (!params->layer_roads) {
         map_close_file(&s_map_context.roads_idx_file);
         map_close_file(&s_map_context.roads_mlp_file);
         s_map_context.layer_roads = false;
@@ -193,7 +192,7 @@ static bool map_sync_files(const char* map_dir)
     }
 
     /* POIs */
-    if (!app_config.layer_poi) {
+    if (!params->layer_poi) {
         map_close_file(&s_map_context.poi_idx_file);
         map_close_file(&s_map_context.poi_db_file);
         s_map_context.layer_poi = false;
@@ -210,7 +209,7 @@ static bool map_sync_files(const char* map_dir)
         }
     }
 
-    if (!app_config.layer_poi_labels) {
+    if (!params->layer_poi_labels) {
         map_close_file(&s_map_context.poi_db_file);
         s_map_context.layer_poi_labels = false;
         s_map_context.poi_labels_missing = false;
@@ -235,20 +234,6 @@ void purrgo_map_shutdown(void)
     PURRGO_LOG("Map files closed\r\n");
 }
 
-static uint32_t core_fs_read_wrapper(void* handle, void* buffer, uint32_t size)
-{
-    return (uint32_t)purrgo_fs_read(
-        (purrgo_file_t*)handle,
-        (uint8_t*)buffer,
-        (size_t)size
-    );
-}
-
-static bool core_fs_seek_wrapper(void* handle, uint32_t offset)
-{
-    return purrgo_fs_seek((purrgo_file_t*)handle, offset);
-}
-
 static int get_target_lod(purrgo_map_scale_t scale, purrgo_map_details_t details)
 {
     if (details == PURRGO_MAP_DETAILS_LOW) {
@@ -270,7 +255,7 @@ static int get_target_lod(purrgo_map_scale_t scale, purrgo_map_details_t details
     }
 }
 
-static bool map_parse_pgo_header(purrgo_fs_t *fs, pgo_header_info_t *info)
+static bool map_parse_pgo_header(purrgo_file_t *file, pgo_header_info_t *info)
 {
     uint8_t pgo_header[32];
 
@@ -279,11 +264,11 @@ static bool map_parse_pgo_header(purrgo_fs_t *fs, pgo_header_info_t *info)
      * we cannot assume they are at offset 0.
      * We must explicitly seek to 0 before reading the header.
      */
-    if (!fs->seek(fs->handle, 0)) {
+    if (!purrgo_fs_seek(file, 0)) {
         return false;
     }
 
-    if (fs->read(fs->handle, pgo_header, sizeof(pgo_header)) != sizeof(pgo_header)) {
+    if (purrgo_fs_read(file, pgo_header, sizeof(pgo_header)) != sizeof(pgo_header)) {
         return false;
     }
 
@@ -336,16 +321,18 @@ static bool map_parse_pgo_header(purrgo_fs_t *fs, pgo_header_info_t *info)
 }
 
 bool purrgo_map_render_layer(
-    purrgo_fs_t *idx_fs,
-    purrgo_fs_t *mlp_fs,
-    purrgo_fs_t *db_fs,
+    purrgo_file_t *idx_file,
+    purrgo_file_t *mlp_file,
+    purrgo_file_t *db_file,
     gfx_context_t *gfx,
     const purrgo_bbox_t *camera,
     const purrgo_viewport_t *viewport,
+    const purrgo_map_render_params_t *params,
     purrgo_map_layer_t layer_type
 )
 {
-    if (idx_fs == NULL ||
+    if (idx_file == NULL ||
+        params == NULL ||
         gfx == NULL ||
         camera == NULL ||
         viewport == NULL) {
@@ -356,7 +343,7 @@ bool purrgo_map_render_layer(
 
     pgo_header_info_t idx_header = {0};
 
-    if (!map_parse_pgo_header(idx_fs, &idx_header)) {
+    if (!map_parse_pgo_header(idx_file, &idx_header)) {
         return false;
     }
 
@@ -365,13 +352,13 @@ bool purrgo_map_render_layer(
     }
 
     if (layer_type != MAP_LAYER_POIS) {
-        if (mlp_fs == NULL) {
+        if (mlp_file == NULL) {
             return false;
         }
 
         pgo_header_info_t mlp_header = {0};
 
-        if (!map_parse_pgo_header(mlp_fs, &mlp_header)) {
+        if (!map_parse_pgo_header(mlp_file, &mlp_header)) {
             return false;
         }
 
@@ -380,8 +367,7 @@ bool purrgo_map_render_layer(
         }
     }
 
-    purrgo_map_scale_t current_scale = map_app_get_map_zoom_level();
-    int target_lod = get_target_lod(current_scale, app_config.map_details);
+    int target_lod = get_target_lod(params->scale, params->details);
 
     uint32_t target_lod_offset = idx_header.lod_offset[target_lod];
     uint32_t lod_end = 0;
@@ -394,7 +380,7 @@ bool purrgo_map_render_layer(
         lod_end = 32 + idx_header.payload_size;
     }
 
-    if (!idx_fs->seek(idx_fs->handle, target_lod_offset)) {
+    if (!purrgo_fs_seek(idx_file, target_lod_offset)) {
         return false;
     }
 
@@ -406,10 +392,7 @@ bool purrgo_map_render_layer(
 
     uint8_t sqt_header[16];
 
-    if (idx_fs->read(
-            idx_fs->handle,
-            sqt_header,
-            sizeof(sqt_header)) != sizeof(sqt_header)) {
+    if (purrgo_fs_read(idx_file, sqt_header, sizeof(sqt_header)) != sizeof(sqt_header)) {
         return false;
     }
 
@@ -430,15 +413,16 @@ bool purrgo_map_render_layer(
 
         for (uint32_t i = 0; i < count; i++) {
             if (!map_idx_parse_node(
-                    idx_fs,
+                    idx_file,
                     &current_idx_offset,
-                    mlp_fs,
-                    db_fs,
+                    mlp_file,
+                    db_file,
                     is_nav,
                     camera,
                     viewport,
                     gfx,
                     layer_type,
+                    params,
                     lod_end)) {
                 return false;
             }
@@ -452,9 +436,13 @@ bool purrgo_map_render_viewport(
     gfx_context_t *gfx,
     const purrgo_viewport_t *viewport,
     const purrgo_bbox_t *camera,
-    const char *map_dir
+    const purrgo_map_render_params_t *params
 )
 {
+    if (params == NULL || params->map_dir == NULL) {
+        return false;
+    }
+
     /*
      * Начинаем новый кадр.
      *
@@ -467,7 +455,7 @@ bool purrgo_map_render_viewport(
      * Sync map files context with current map directory and layer states.
      * This opens necessary files and closes unused ones.
      */
-    if (!map_sync_files(map_dir)) {
+    if (!map_sync_files(params)) {
         return false;
     }
 
@@ -483,33 +471,16 @@ bool purrgo_map_render_viewport(
 
     if (s_map_context.landuse_idx_file && s_map_context.landuse_mlp_file) {
 
-        purrgo_fs_t landuse_idx_fs = {
-            .handle = s_map_context.landuse_idx_file,
-            .read = core_fs_read_wrapper,
-            .seek = core_fs_seek_wrapper
-        };
-
-        purrgo_fs_t landuse_mlp_fs = {
-            .handle = s_map_context.landuse_mlp_file,
-            .read = core_fs_read_wrapper,
-            .seek = core_fs_seek_wrapper
-        };
-
-        purrgo_fs_t landuse_db_fs = {
-            .handle = s_map_context.landuse_db_file,
-            .read = core_fs_read_wrapper,
-            .seek = core_fs_seek_wrapper
-        };
-
         gfx_set_color(gfx, 2, 3);
 
         ok = purrgo_map_render_layer(
-            &landuse_idx_fs,
-            &landuse_mlp_fs,
-            s_map_context.landuse_db_file ? &landuse_db_fs : NULL,
+            s_map_context.landuse_idx_file,
+            s_map_context.landuse_mlp_file,
+            s_map_context.landuse_db_file,
             gfx,
             camera,
             viewport,
+            params,
             MAP_LAYER_POLYGONS
         ) && ok;
     }
@@ -518,31 +489,20 @@ bool purrgo_map_render_viewport(
 
     if (s_map_context.roads_idx_file && s_map_context.roads_mlp_file) {
 
-        purrgo_fs_t idx_fs = {
-            .handle = s_map_context.roads_idx_file,
-            .read = core_fs_read_wrapper,
-            .seek = core_fs_seek_wrapper
-        };
-
-        purrgo_fs_t mlp_fs = {
-            .handle = s_map_context.roads_mlp_file,
-            .read = core_fs_read_wrapper,
-            .seek = core_fs_seek_wrapper
-        };
-
         gfx_set_color(gfx, 1, 3);
 
         /*
          * Дороги не подписываем —
-         * передаём NULL вместо db_fs.
+         * передаём NULL вместо db_file.
          */
         ok = purrgo_map_render_layer(
-            &idx_fs,
-            &mlp_fs,
+            s_map_context.roads_idx_file,
+            s_map_context.roads_mlp_file,
             NULL,
             gfx,
             camera,
             viewport,
+            params,
             MAP_LAYER_LINES
         ) && ok;
     }
@@ -570,25 +530,14 @@ bool purrgo_map_render_viewport(
 
     if (s_map_context.poi_idx_file) {
 
-        purrgo_fs_t poi_idx_fs = {
-            .handle = s_map_context.poi_idx_file,
-            .read = core_fs_read_wrapper,
-            .seek = core_fs_seek_wrapper
-        };
-
-        purrgo_fs_t poi_db_fs = {
-            .handle = s_map_context.poi_db_file,
-            .read = core_fs_read_wrapper,
-            .seek = core_fs_seek_wrapper
-        };
-
         ok = purrgo_map_render_layer(
-            &poi_idx_fs,
+            s_map_context.poi_idx_file,
             NULL,
-            s_map_context.poi_db_file ? &poi_db_fs : NULL,
+            s_map_context.poi_db_file,
             gfx,
             camera,
             viewport,
+            params,
             MAP_LAYER_POIS
         ) && ok;
     }

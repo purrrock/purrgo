@@ -6,21 +6,8 @@
 #include <stdbool.h>
 
 #include "purrgo/gfx_renderer.h"
-
-typedef struct {
-    void* handle;
-
-    uint32_t (*read)(
-        void* handle,
-        void* buffer,
-        uint32_t size
-    );
-
-    bool (*seek)(
-        void* handle,
-        uint32_t offset
-    );
-} purrgo_fs_t;
+#include "purrgo/fs_hal.h"
+#include "purrgo/map_types.h"
 
 typedef struct {
     int32_t min_x;
@@ -43,22 +30,29 @@ typedef enum {
     MAP_LAYER_POIS
 } purrgo_map_layer_t;
 
-/* true - слой отрисован целиком; false - ошибка заголовков, чтения или разбора. */
+/*
+ * Отрисовать один слой. idx - индекс слоя (обязателен), mlp - геометрия
+ * (обязательна для линий и полигонов), db - подписи (может быть NULL).
+ * Файлы открыты вызывающим на чтение; позиция в них не важна.
+ * true - слой отрисован целиком; false - ошибка заголовков, чтения или разбора.
+ */
 bool purrgo_map_render_layer(
-    purrgo_fs_t *idx_fs,
-    purrgo_fs_t *mlp_fs,
-    purrgo_fs_t *db_fs, 
+    purrgo_file_t *idx_file,
+    purrgo_file_t *mlp_file,
+    purrgo_file_t *db_file,
     gfx_context_t *gfx,
     const purrgo_bbox_t *camera,
     const purrgo_viewport_t *viewport,
+    const purrgo_map_render_params_t *params,
     purrgo_map_layer_t layer_type
 );
 
+/* Отрисовать карту каталога params->map_dir со слоями и масштабом из params. */
 bool purrgo_map_render_viewport(
     gfx_context_t *gfx,
     const purrgo_viewport_t *viewport,
     const purrgo_bbox_t *camera,
-    const char *map_dir
+    const purrgo_map_render_params_t *params
 );
 
 void purrgo_map_shutdown(void);

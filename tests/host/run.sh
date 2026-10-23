@@ -16,7 +16,7 @@ for t in tests/host/test_*.c; do
         -Iinclude -Isrc/core -Isrc/core/ui -Ithird_party/minmea -Itests/host \
         $SRC third_party/minmea/minmea.c \
         src/platform/pc/display_hal.c src/platform/pc/purrgo_logger.c \
-        tests/host/fake_fs.c "$t" -o "$OUT/$name"
+        tests/host/fake_fs.c tests/host/fake_power.c "$t" -o "$OUT/$name"
     echo "== $name"
     "$OUT/$name" 2>&1 | grep -E "^(FAIL|XPASS)|checks," || true
     "$OUT/$name" >/dev/null 2>&1 || rc=1

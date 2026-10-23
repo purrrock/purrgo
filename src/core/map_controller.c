@@ -1,4 +1,5 @@
 #include "purrgo/map_controller.h"
+#include <string.h>
 #include "purrgo/config.h"
 #include "purrgo/geo.h"
 #include "map_projection.h"
@@ -34,6 +35,8 @@ void purrgo_map_controller_init(void) {
     map_center_lon_1e7 = app_config.last_lon_1e7;
     map_zoom_level = PURRGO_MAP_SCALE_500M;
     manual_pan_active = false;
+    track_dirty = false;
+    memset(&prev_fix_for_map, 0, sizeof prev_fix_for_map);
     purrgo_ui_map_mark_dirty();
 }
 
