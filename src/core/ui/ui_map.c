@@ -551,6 +551,19 @@ static void ui_map_setup_viewport(purrgo_viewport_t* map_vp, purrgo_bbox_t* dyna
     purrgo_geo_bbox_from_center(center_lat, center_lon, width_m, map_vp, dynamic_cam);
 }
 
+/* Параметры рендера карты из конфига и контроллера (ядро карты их не читает). */
+static void ui_map_fill_render_params(purrgo_map_render_params_t* params) {
+    params->map_dir = app_config.map_dir;
+    params->scale = map_app_get_map_zoom_level();
+    params->details = app_config.map_details;
+    params->poi_mode = app_config.poi_mode;
+    params->layer_landuse = app_config.layer_landuse;
+    params->layer_landuse_labels = app_config.layer_landuse_labels;
+    params->layer_roads = app_config.layer_roads;
+    params->layer_poi = app_config.layer_poi;
+    params->layer_poi_labels = app_config.layer_poi_labels;
+}
+
 static bool ui_map_render_base_layers(gfx_context_t* gfx, const purrgo_viewport_t* map_vp, const purrgo_bbox_t* dynamic_cam) {
     // Clear map viewport
     gfx_set_color(gfx, 0, 3);
@@ -559,7 +572,9 @@ static bool ui_map_render_base_layers(gfx_context_t* gfx, const purrgo_viewport_
     // Limit rendering strictly to the map viewport to protect the status bars
     gfx_set_clip(gfx, map_vp->offset_x, map_vp->offset_y, (int16_t)map_vp->width, (int16_t)map_vp->height);
 
-    return purrgo_map_render_viewport(gfx, map_vp, dynamic_cam, app_config.map_dir);
+    purrgo_map_render_params_t params;
+    ui_map_fill_render_params(&params);
+    return purrgo_map_render_viewport(gfx, map_vp, dynamic_cam, &params);
 }
 
 static void ui_map_render_dynamic_data(gfx_context_t* gfx, const purrgo_viewport_t* map_vp, const purrgo_bbox_t* dynamic_cam) {

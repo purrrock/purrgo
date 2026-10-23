@@ -7,15 +7,16 @@
 #include "map_internal.h"
 
 bool map_idx_parse_node(
-    purrgo_fs_t *idx_fs,
+    purrgo_file_t *idx_file,
     uint32_t *current_idx_offset,
-    purrgo_fs_t *mlp_fs,
-    purrgo_fs_t *db_fs,
+    purrgo_file_t *mlp_file,
+    purrgo_file_t *db_file,
     bool is_nav_node,
     const purrgo_bbox_t *cam,
     const purrgo_viewport_t *vp,
     gfx_context_t *gfx,
     purrgo_map_layer_t layer_type,
+    const purrgo_map_render_params_t *params,
     uint32_t lod_end
 );
 

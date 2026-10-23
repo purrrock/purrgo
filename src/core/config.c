@@ -64,6 +64,9 @@ static int32_t parse_int32(const char* str)
 
 void purrgo_config_init(void)
 {
+    /* Полный сброс: поля, которых нет в списке ниже, тоже обнуляются. */
+    memset(&app_config, 0, sizeof app_config);
+
     /*
      * Значения по умолчанию.
      */

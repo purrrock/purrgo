@@ -1,6 +1,7 @@
 # Host-тесты ядра (PC). Подключаются из корня при -DPURRGO_BUILD_TESTS=ON.
 # Каждый test_*.c - отдельный исполняемый файл и отдельный тест ctest.
 # Платформенный слой подменяется: ФС - tests/host/fake_fs.c (с внедрением сбоев),
+# хуки выключения - tests/host/fake_power.c,
 # дисплей и логгер - PC-реализации.
 
 file(GLOB PURRGO_HOST_TESTS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/test_*.c")
@@ -10,6 +11,7 @@ foreach(test_src IN LISTS PURRGO_HOST_TESTS)
     add_executable(${test_name}
         ${test_src}
         ${CMAKE_CURRENT_SOURCE_DIR}/fake_fs.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/fake_power.c
         ${PROJECT_SOURCE_DIR}/src/platform/pc/display_hal.c
         ${PROJECT_SOURCE_DIR}/src/platform/pc/purrgo_logger.c)
     target_include_directories(${test_name} PRIVATE

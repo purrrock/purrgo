@@ -3,6 +3,7 @@
 #define PURRGO_APP_FSM_H
 
 #include "purrgo/gnss_types.h"
+#include "purrgo/map_types.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -74,28 +75,7 @@ void purrgo_app_notify_marker_rendered(const purrgo_gnss_solution_t* rendered_fi
 // Получение текущего состояния для слоя диспетчеризации отрисовки (gfx_renderer)
 purrgo_state_t purrgo_app_get_state(void);
 
-typedef enum {
-    PURRGO_MAP_SCALE_10M,
-    PURRGO_MAP_SCALE_20M,
-    PURRGO_MAP_SCALE_50M,
-    PURRGO_MAP_SCALE_100M,
-    PURRGO_MAP_SCALE_200M,
-    PURRGO_MAP_SCALE_500M,
-    PURRGO_MAP_SCALE_1KM,
-    PURRGO_MAP_SCALE_2KM,
-    PURRGO_MAP_SCALE_5KM,
-    PURRGO_MAP_SCALE_10KM,
-    PURRGO_MAP_SCALE_20KM,
-    PURRGO_MAP_SCALE_50KM,
-    PURRGO_MAP_SCALE_100KM,
-    PURRGO_MAP_SCALE_200KM,
-    PURRGO_MAP_SCALE_500KM,
-    PURRGO_MAP_SCALE_1000KM,
-    PURRGO_MAP_SCALE_2000KM,
-    PURRGO_MAP_SCALE_5000KM,
-    PURRGO_MAP_SCALE_10000KM,
-    PURRGO_MAP_SCALE_COUNT
-} purrgo_map_scale_t;
+/* purrgo_map_scale_t определён в map_types.h */
 
 /*
  * Перерисовка UI.

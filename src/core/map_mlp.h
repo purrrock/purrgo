@@ -7,7 +7,7 @@
 #include "map_internal.h"
 
 typedef struct {
-    purrgo_fs_t *mlp_fs;
+    purrgo_file_t *mlp_file;
     uint32_t num_parts;
     uint32_t num_points;
     uint32_t parts[PURRGO_MAP_MAX_PARTS];
@@ -34,7 +34,7 @@ typedef struct {
 /* Initializes iterator, reads header and parts */
 bool map_mlp_iter_init(
     map_mlp_iter_t *iter,
-    purrgo_fs_t *mlp_fs,
+    purrgo_file_t *mlp_file,
     uint32_t v1_offset
 );
 

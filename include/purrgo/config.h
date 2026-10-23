@@ -4,25 +4,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "purrgo/track_logger.h"
+#include "purrgo/map_types.h"
 
 
-/*
- * Режим отображения POI.
- */
-typedef enum {
-    PURRGO_POI_MODE_NO = 0,
-    PURRGO_POI_MODE_CIRCLES,
-    PURRGO_POI_MODE_ICONS
-} purrgo_poi_mode_t;
-
-
-/*
- * Детализация карты.
- */
-typedef enum {
-    PURRGO_MAP_DETAILS_LOW = 0,
-    PURRGO_MAP_DETAILS_HIGH
-} purrgo_map_details_t;
+/* purrgo_poi_mode_t и purrgo_map_details_t определены в map_types.h */
 
 
 /*

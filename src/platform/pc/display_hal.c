@@ -56,3 +56,7 @@ void display_flush(void) {
         pending_has_region = 0;
     }
 }
+
+void display_sleep(void) {
+    /* Эмулятору и host-тестам усыплять нечего. */
+}
