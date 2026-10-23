@@ -38,13 +38,16 @@ static char name_buf[64];
 
 static uint32_t s_tree_depth = 0u;
 
+/* Размер поля имени в записи DBF (спецификация PurrGO V3). */
+#define PURRGO_MAP_NAME_FIELD_SIZE 100u
+
 /*
  * Чтение имени из DBF файла.
  * Функция учитывает различие между слоями: в обычных слоях v2=1 это dummy-запись,
  * а в слое POI dummy-записи нет.
  */
 static bool map_db_read_name(purrgo_fs_t *db_fs, uint32_t v2, bool is_poi, char *out_buffer, size_t max_len) {
-    if (!db_fs || v2 == 0) return false;
+    if (!db_fs || v2 == 0 || out_buffer == NULL || max_len < 2u) return false;
     
     // В стандартных слоях v2=1 зарезервировано под dummy record, имена начинаются с 2
     if (!is_poi && v2 == 1) return false; 
@@ -58,9 +61,17 @@ static bool map_db_read_name(purrgo_fs_t *db_fs, uint32_t v2, bool is_poi, char 
         return false;
     }
 
-    char raw_name[100];
-    uint32_t bytes_read = db_fs->read(db_fs->handle, raw_name, 100);
-    if (bytes_read == 0) return false;
+    /*
+     * Поле имени в записи - 100 байт, но в out_buffer помещается не больше
+     * max_len - 1 символов, остальное всё равно отбрасывается. Читаем только
+     * нужную часть: меньше обмен с SD и реже чтение переходит в следующий сектор.
+     */
+    char raw_name[PURRGO_MAP_NAME_FIELD_SIZE];
+    uint32_t want = (uint32_t)(max_len - 1u);
+    if (want > sizeof(raw_name)) want = (uint32_t)sizeof(raw_name);
+
+    uint32_t bytes_read = db_fs->read(db_fs->handle, raw_name, want);
+    if (bytes_read == 0 || bytes_read > want) return false;
 
     size_t len = 0;
     while (len < bytes_read && raw_name[len] != '\0' && len < max_len - 1) {
