@@ -18,6 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "adc.h"
 #include "dma.h"
 #include "fatfs.h"
 #include "sdio.h"
@@ -101,6 +102,7 @@ int main(void)
   MX_SPI1_Init();
   MX_FATFS_Init();
   MX_SDIO_SD_Init();
+  MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
   
   /* E-Ink hardware test */
