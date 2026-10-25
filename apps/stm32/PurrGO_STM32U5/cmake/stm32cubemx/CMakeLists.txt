@@ -11,17 +11,19 @@ set(MX_Defines_Syms
 # STM32CubeMX generated include paths
 set(MX_Include_Dirs
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Inc
-    C:/Users/veska/STM32Cube/Repository/STM32Cube_FW_U5_V1.9.0/Drivers/STM32U5xx_HAL_Driver/Inc
-    C:/Users/veska/STM32Cube/Repository/STM32Cube_FW_U5_V1.9.0/Drivers/STM32U5xx_HAL_Driver/Inc/Legacy
-    C:/Users/veska/STM32Cube/Repository/STM32Cube_FW_U5_V1.9.0/Drivers/CMSIS/Device/ST/STM32U5xx/Include
-    C:/Users/veska/STM32Cube/Repository/STM32Cube_FW_U5_V1.9.0/Drivers/CMSIS/Include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32U5xx_HAL_Driver/Inc
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32U5xx_HAL_Driver/Inc/Legacy
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/CMSIS/Device/ST/STM32U5xx/Include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/CMSIS/Include
 )
 
 # STM32CubeMX generated application sources
 set(MX_Application_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/main.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/gpio.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/gpdma.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/icache.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/linked_list.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/spi.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/usart.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/stm32u5xx_it.c
@@ -34,26 +36,26 @@ set(MX_Application_Src
 # STM32 HAL/LL Drivers
 set(STM32_Drivers_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/system_stm32u5xx.c
-    C:/Users/veska/STM32Cube/Repository/STM32Cube_FW_U5_V1.9.0/Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_cortex.c
-    C:/Users/veska/STM32Cube/Repository/STM32Cube_FW_U5_V1.9.0/Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal.c
-    C:/Users/veska/STM32Cube/Repository/STM32Cube_FW_U5_V1.9.0/Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_i2c.c
-    C:/Users/veska/STM32Cube/Repository/STM32Cube_FW_U5_V1.9.0/Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_i2c_ex.c
-    C:/Users/veska/STM32Cube/Repository/STM32Cube_FW_U5_V1.9.0/Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_rcc.c
-    C:/Users/veska/STM32Cube/Repository/STM32Cube_FW_U5_V1.9.0/Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_rcc_ex.c
-    C:/Users/veska/STM32Cube/Repository/STM32Cube_FW_U5_V1.9.0/Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_flash.c
-    C:/Users/veska/STM32Cube/Repository/STM32Cube_FW_U5_V1.9.0/Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_flash_ex.c
-    C:/Users/veska/STM32Cube/Repository/STM32Cube_FW_U5_V1.9.0/Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_gpio.c
-    C:/Users/veska/STM32Cube/Repository/STM32Cube_FW_U5_V1.9.0/Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_dma.c
-    C:/Users/veska/STM32Cube/Repository/STM32Cube_FW_U5_V1.9.0/Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_dma_ex.c
-    C:/Users/veska/STM32Cube/Repository/STM32Cube_FW_U5_V1.9.0/Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_exti.c
-    C:/Users/veska/STM32Cube/Repository/STM32Cube_FW_U5_V1.9.0/Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_pwr.c
-    C:/Users/veska/STM32Cube/Repository/STM32Cube_FW_U5_V1.9.0/Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_pwr_ex.c
-    C:/Users/veska/STM32Cube/Repository/STM32Cube_FW_U5_V1.9.0/Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_gtzc.c
-    C:/Users/veska/STM32Cube/Repository/STM32Cube_FW_U5_V1.9.0/Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_icache.c
-    C:/Users/veska/STM32Cube/Repository/STM32Cube_FW_U5_V1.9.0/Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_spi.c
-    C:/Users/veska/STM32Cube/Repository/STM32Cube_FW_U5_V1.9.0/Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_spi_ex.c
-    C:/Users/veska/STM32Cube/Repository/STM32Cube_FW_U5_V1.9.0/Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_uart.c
-    C:/Users/veska/STM32Cube/Repository/STM32Cube_FW_U5_V1.9.0/Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_uart_ex.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_cortex.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_i2c.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_i2c_ex.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_rcc.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_rcc_ex.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_flash.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_flash_ex.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_gpio.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_dma.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_dma_ex.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_exti.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_pwr.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_pwr_ex.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_gtzc.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_icache.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_spi.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_spi_ex.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_uart.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_uart_ex.c
 )
 
 # Drivers Midllewares
