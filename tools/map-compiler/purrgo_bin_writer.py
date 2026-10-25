@@ -4,7 +4,7 @@
 import json
 import math
 import struct
-from typing import List, Tuple, Any
+from typing import Dict, List, Tuple, Any
 
 from purrgo_models import MapFeature, RTreeNode, HWConfig, pgo_encode
 from purrgo_lookup import LookupTables
@@ -59,20 +59,32 @@ class MapCompiler:
     @classmethod
     def build_spatial_order(cls, features: List[MapFeature]) -> None:
         """
-        Sorts features in-place according to the STR spatial clustering.
-        This ensures that adjacent map objects are physically close in .mlp and .db,
-        optimizing file caching.
+        Orders features for .mlp/.db: first by LOD class (objects visible at
+        LOD2, then LOD1-only, then LOD0-only), inside each class by STR
+        spatial clustering.
+
+        Grouping by LOD makes the geometry needed for zoomed-out views lie in
+        one compact region of the file, so the viewer reads neighbouring
+        sectors instead of one random sector per object.
         """
         if not features:
             return
 
-        # Perform one pass of STR bulk loading for level 0 to determine physical order
-        nodes = cls._build_str_layer(features, level=0)
+        groups: Dict[int, List[MapFeature]] = {0: [], 1: [], 2: []}
+        for feature in features:
+            groups[min(2, max(0, feature.lod))].append(feature)
 
-        # Flatten the clusters back into the features list in the new spatial order
+        ordered: List[MapFeature] = []
+        for lod in (2, 1, 0):
+            group = groups[lod]
+            if not group:
+                continue
+            # One pass of STR bulk loading for level 0 gives the physical order.
+            for node in cls._build_str_layer(group, level=0):
+                ordered.extend(node.children)
+
         features.clear()
-        for node in nodes:
-            features.extend(node.children)
+        features.extend(ordered)
 
     @classmethod
     def compile_mlp(cls, features: List[MapFeature], filepath: str) -> None:
