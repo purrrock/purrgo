@@ -28,8 +28,6 @@
 ---
 
 ## 3. Архитектура
-
-- [ ] Иконки POI: один пиксель = один байт (`purrgo_poi_icons[256][11][11]`, ~31 КБ flash); упаковка в 3 бита дала бы ~19 КБ, но flash занят на 18 %, поэтому не нужно. Данные уже вынесены из заголовка в `src/core/purrgo_poi_icons.c`.
 - [ ] Сборка (частично неактуально: дублирования `purrgo_core` уже нет, `USE_MOCK_GNSS` - только PC, SDL2 необязателен через `PURRGO_BUILD_EMULATOR`, `timegm=mktime` для STM32 есть; осталось проверить `--gc-sections` для `minmea_gettime`): `src/core/CMakeLists.txt` и корневой `CMakeLists.txt` дублируют `purrgo_core`; `USE_MOCK_GNSS=ON` задаётся глобально; для эмулятора обязателен SDL2 (ядро нельзя собрать без него); в `third_party/CMakeLists.txt` для STM32 `timegm=mktime` (проверить, что `--gc-sections` выкидывает `minmea_gettime`).
 
 ---
