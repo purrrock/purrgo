@@ -1,0 +1,138 @@
+name: Build map (Belarus)
+
+# Запуск вручную: Actions -> Build map -> Run workflow.
+# Результат: zip с готовой структурой PURRGO/MAPS/<имя>/ — его достаточно
+# распаковать в корень microSD. Лежит в artifacts запуска и (опционально)
+# в GitHub Release "maps-<имя>".
+on:
+  workflow_dispatch:
+    inputs:
+      pbf_url:
+        description: "URL .osm.pbf (Geofabrik)"
+        required: true
+        default: "https://download.geofabrik.de/europe/belarus-latest.osm.pbf"
+      map_name:
+        description: "Имя карты = имя папки на SD (латиница, строчные, без пробелов)"
+        required: true
+        default: "belarus"
+      publish_release:
+        description: "Выложить zip в GitHub Release (публичная ссылка без входа в GitHub)"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write   # нужно только для шага Release
+
+concurrency:
+  group: build-map-${{ inputs.map_name }}
+  cancel-in-progress: true
+
+jobs:
+  build-map:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    env:
+      MAP_NAME: ${{ inputs.map_name }}
+      PBF_URL: ${{ inputs.pbf_url }}
+      WORK: ${{ github.workspace }}/work
+      TOOLS: ${{ github.workspace }}/tools/map-compiler
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Validate inputs
+        run: |
+          if ! [[ "$MAP_NAME" =~ ^[a-z0-9_-]{1,32}$ ]]; then
+            echo "::error::map_name must match ^[a-z0-9_-]{1,32}$ (got '$MAP_NAME')"
+            exit 1
+          fi
+
+      # .osm (XML) из PBF весит в ~10-15 раз больше самого PBF, место на
+      # раннере ограничено - освобождаем то, что нам не нужно.
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      - name: Install osmium-tool
+        run: sudo apt-get update && sudo apt-get install -y osmium-tool
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: tools/map-compiler/requirements.txt
+
+      - name: Install Python dependencies
+        run: pip install -r tools/map-compiler/requirements.txt
+
+      - name: Download PBF
+        run: |
+          mkdir -p "$WORK"
+          curl -fL --retry 5 --retry-delay 10 -o "$WORK/source.osm.pbf" "$PBF_URL"
+          ls -lh "$WORK/source.osm.pbf"
+
+      - name: PBF -> OSM XML
+        run: |
+          osmium cat "$WORK/source.osm.pbf" -o "$WORK/raw.osm" --overwrite
+          rm -f "$WORK/source.osm.pbf"
+          ls -lh "$WORK/raw.osm"
+          df -h /
+
+      # Выход оптимизатора называем <map_name>.osm: компилятор берёт имя карты
+      # (и имя выходной папки, и mapName в map.name) из имени входного файла.
+      - name: Optimize OSM
+        working-directory: tools/map-compiler
+        run: |
+          python purrgo_osm_optimizer.py "$WORK/raw.osm" "$WORK/$MAP_NAME.osm"
+          rm -f "$WORK/raw.osm"
+          ls -lh "$WORK/$MAP_NAME.osm"
+          df -h /
+
+      - name: Compile map
+        working-directory: tools/map-compiler
+        run: |
+          python purrgo_map_compiler.py "$WORK/$MAP_NAME.osm"
+          ls -lh "$TOOLS/$MAP_NAME"
+
+      # Компилятор при ошибке (нет входного файла) завершается с кодом 0,
+      # поэтому результат проверяем явно.
+      - name: Verify output
+        run: |
+          out="$TOOLS/$MAP_NAME"
+          for f in map.name roads.idx roads.mlp; do
+            [ -s "$out/$f" ] || { echo "::error::missing or empty $f"; exit 1; }
+          done
+          cat "$out/map.name"; echo
+
+      - name: Make ZIP
+        run: |
+          zip_name="purrgo-map-$MAP_NAME-$(date -u +%Y-%m-%d).zip"
+          mkdir -p "$WORK/stage/PURRGO/MAPS"
+          cp -r "$TOOLS/$MAP_NAME" "$WORK/stage/PURRGO/MAPS/$MAP_NAME"
+          (cd "$WORK/stage" && zip -r -9 -q "$WORK/$zip_name" PURRGO)
+          echo "ZIP_NAME=$zip_name" >> "$GITHUB_ENV"
+          ls -lh "$WORK/$zip_name"
+          unzip -l "$WORK/$zip_name"
+
+      # zip уже содержит сжатые бинарники - повторно сжимать нет смысла.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ZIP_NAME }}
+          path: ${{ env.WORK }}/${{ env.ZIP_NAME }}
+          compression-level: 0
+          retention-days: 30
+
+      - name: Publish to Release
+        if: ${{ inputs.publish_release }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="maps-$MAP_NAME"
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" --title "Map: $MAP_NAME" \
+              --notes "Распаковать архив в корень microSD (создаст PURRGO/MAPS/$MAP_NAME)."
+          fi
+          gh release upload "$tag" "$WORK/$ZIP_NAME" --clobber
+          echo "### Скачать: ${{ github.server_url }}/${{ github.repository }}/releases/tag/$tag" >> "$GITHUB_STEP_SUMMARY"
