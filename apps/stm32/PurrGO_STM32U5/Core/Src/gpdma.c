@@ -24,7 +24,7 @@
 
 /* USER CODE END 0 */
 
-DMA_HandleTypeDef handle_GPDMA1_Channel15;
+DMA_HandleTypeDef handle_GPDMA1_Channel0;
 
 /* GPDMA1 init function */
 void MX_GPDMA1_Init(void)
@@ -38,23 +38,23 @@ void MX_GPDMA1_Init(void)
   __HAL_RCC_GPDMA1_CLK_ENABLE();
 
   /* GPDMA1 interrupt Init */
-    HAL_NVIC_SetPriority(GPDMA1_Channel15_IRQn, 0, 0);
-    HAL_NVIC_EnableIRQ(GPDMA1_Channel15_IRQn);
+    HAL_NVIC_SetPriority(GPDMA1_Channel0_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(GPDMA1_Channel0_IRQn);
 
   /* USER CODE BEGIN GPDMA1_Init 1 */
 
   /* USER CODE END GPDMA1_Init 1 */
-  handle_GPDMA1_Channel15.Instance = GPDMA1_Channel15;
-  handle_GPDMA1_Channel15.InitLinkedList.Priority = DMA_LOW_PRIORITY_LOW_WEIGHT;
-  handle_GPDMA1_Channel15.InitLinkedList.LinkStepMode = DMA_LSM_FULL_EXECUTION;
-  handle_GPDMA1_Channel15.InitLinkedList.LinkAllocatedPort = DMA_LINK_ALLOCATED_PORT0;
-  handle_GPDMA1_Channel15.InitLinkedList.TransferEventMode = DMA_TCEM_LAST_LL_ITEM_TRANSFER;
-  handle_GPDMA1_Channel15.InitLinkedList.LinkedListMode = DMA_LINKEDLIST_NORMAL;
-  if (HAL_DMAEx_List_Init(&handle_GPDMA1_Channel15) != HAL_OK)
+  handle_GPDMA1_Channel0.Instance = GPDMA1_Channel0;
+  handle_GPDMA1_Channel0.InitLinkedList.Priority = DMA_LOW_PRIORITY_LOW_WEIGHT;
+  handle_GPDMA1_Channel0.InitLinkedList.LinkStepMode = DMA_LSM_FULL_EXECUTION;
+  handle_GPDMA1_Channel0.InitLinkedList.LinkAllocatedPort = DMA_LINK_ALLOCATED_PORT0;
+  handle_GPDMA1_Channel0.InitLinkedList.TransferEventMode = DMA_TCEM_LAST_LL_ITEM_TRANSFER;
+  handle_GPDMA1_Channel0.InitLinkedList.LinkedListMode = DMA_LINKEDLIST_NORMAL;
+  if (HAL_DMAEx_List_Init(&handle_GPDMA1_Channel0) != HAL_OK)
   {
     Error_Handler();
   }
-  if (HAL_DMA_ConfigChannelAttributes(&handle_GPDMA1_Channel15, DMA_CHANNEL_NPRIV) != HAL_OK)
+  if (HAL_DMA_ConfigChannelAttributes(&handle_GPDMA1_Channel0, DMA_CHANNEL_NPRIV) != HAL_OK)
   {
     Error_Handler();
   }
