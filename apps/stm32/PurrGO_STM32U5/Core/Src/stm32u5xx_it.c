@@ -55,7 +55,6 @@
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
-extern DMA_HandleTypeDef handle_GPDMA1_Channel15;
 extern UART_HandleTypeDef huart1;
 /* USER CODE BEGIN EV */
 
@@ -211,20 +210,6 @@ void USART1_IRQHandler(void)
   /* USER CODE BEGIN USART1_IRQn 1 */
 
   /* USER CODE END USART1_IRQn 1 */
-}
-
-/**
-  * @brief This function handles GPDMA1 Channel 15 global interrupt.
-  */
-void GPDMA1_Channel15_IRQHandler(void)
-{
-  /* USER CODE BEGIN GPDMA1_Channel15_IRQn 0 */
-
-  /* USER CODE END GPDMA1_Channel15_IRQn 0 */
-  HAL_DMA_IRQHandler(&handle_GPDMA1_Channel15);
-  /* USER CODE BEGIN GPDMA1_Channel15_IRQn 1 */
-
-  /* USER CODE END GPDMA1_Channel15_IRQn 1 */
 }
 
 /* USER CODE BEGIN 1 */
