@@ -36,6 +36,8 @@ static int64_t div_trunc(int64_t num, int64_t den)
             return -(int64_t)((uint32_t)(-num) / (uint32_t)den);
         }
     }
+    /* den > 0 - контракт функции; cppcheck не видит его из вызывающего кода. */
+    // cppcheck-suppress zerodivcond
     return num / den;
 }
 
