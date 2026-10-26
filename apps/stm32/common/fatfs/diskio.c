@@ -1,10 +1,11 @@
 /*-----------------------------------------------------------------------*/
-/* Низкоуровневый ввод-вывод диска для FatFs R0.12c (PurrGO, U585).      */
+/* Низкоуровневый ввод-вывод диска для FatFs R0.16 (PurrGO, U585).       */
 /*                                                                       */
 /* Диск один (pdrv = 0). Вызовы передаются платформенным функциям        */
 /* purrgo_disk_*() (см. purrgo_disk.h), которые реализует sd_card.c.     */
 /*-----------------------------------------------------------------------*/
 
+#include "ff.h"
 #include "diskio.h"
 #include "purrgo_disk.h"
 
@@ -18,12 +19,12 @@ DSTATUS disk_initialize(BYTE pdrv)
     return (pdrv == 0U) ? purrgo_disk_initialize() : (DSTATUS)STA_NOINIT;
 }
 
-DRESULT disk_read(BYTE pdrv, BYTE *buff, DWORD sector, UINT count)
+DRESULT disk_read(BYTE pdrv, BYTE *buff, LBA_t sector, UINT count)
 {
     return (pdrv == 0U) ? purrgo_disk_read(buff, sector, count) : RES_PARERR;
 }
 
-DRESULT disk_write(BYTE pdrv, const BYTE *buff, DWORD sector, UINT count)
+DRESULT disk_write(BYTE pdrv, const BYTE *buff, LBA_t sector, UINT count)
 {
     return (pdrv == 0U) ? purrgo_disk_write(buff, sector, count) : RES_PARERR;
 }
