@@ -437,7 +437,7 @@ void gfx_fill_compound_polygon(
      * координат (см. GFX_NARROW_LIMIT).
      */
     int32_t min_y = points[0].y;
-    int32_t max_y = points[0].y;
+    int32_t max_y = min_y;
     bool wide = false;
 
     for (uint16_t i = 0; i < num_points; i++) {
