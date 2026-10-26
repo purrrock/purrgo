@@ -27,6 +27,10 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
+#include "stm32_app.h"
+#include "purrgo/logger.h"
+#include "eink_test.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -98,6 +102,20 @@ int main(void)
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
 
+#if defined(PURRGO_EINK_SELFTEST_4GRAY)
+  /* Самотест 4-gray через путь приложения (см. eink_test.h). */
+  EinkTest_Run4Gray();
+  while (1) {}
+#endif
+
+#if defined(PURRGO_EINK_SELFTEST_PARTIAL)
+  /* Самотест частичного обновления (режим 1-bit). */
+  EinkTest_RunPartial();
+  while (1) {}
+#endif
+
+  purrgo_stm32_init();
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -107,6 +125,8 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+
+    purrgo_stm32_process();
   }
   /* USER CODE END 3 */
 }
@@ -196,6 +216,9 @@ void assert_failed(uint8_t *file, uint32_t line)
   /* USER CODE BEGIN 6 */
   /* User can add his own implementation to report the file name and line number,
      ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
+
+  PURRGO_LOG("Wrong parameters value: file %s on line %d\r\n", file, line);
+
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */

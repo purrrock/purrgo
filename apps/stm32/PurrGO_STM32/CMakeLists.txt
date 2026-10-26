@@ -23,6 +23,9 @@ endif()
 # в области видимости этой папки (и дочерних) имя переопределяется.
 set(CMAKE_PROJECT_NAME PurrGO_STM32)
 
+# Код, общий для F411 и U585 (D10): apps/stm32/common/{Src,Inc}.
+get_filename_component(PURRGO_STM32_COMMON "${CMAKE_CURRENT_SOURCE_DIR}/../common" ABSOLUTE)
+
 message(STATUS "Firmware target: ${CMAKE_PROJECT_NAME}")
 
 # Create an executable object type
@@ -39,7 +42,7 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 # Add sources to executable
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Platform-dependent PurrGO logger.
-    Core/Src/purrgo_logger.c
+    ${PURRGO_STM32_COMMON}/Src/purrgo_logger.c
 
     # SD-карта: SDIO (4 бита) + FatFs. Низкоуровневый диск FatFs и BSP
     # генерирует CubeMX (FATFS/Target), здесь - монтирование, Detect,
@@ -51,56 +54,57 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Core/Src/gnss_io.c
 
     # STM32 system time implementation.
-    Core/Src/system_time.c
+    ${PURRGO_STM32_COMMON}/Src/system_time.c
 
     # STM32 button driver (кнопки E-Ink HAT: K1 PA0, K2 PA1, K3 PC14, K4 PC15).
-    Core/Src/buttons.c
+    ${PURRGO_STM32_COMMON}/Src/buttons.c
 
     # STM32 stub implementation of the filesystem HAL.
-    Core/Src/fs_hal_stm32.c
+    ${PURRGO_STM32_COMMON}/Src/fs_hal_stm32.c
 
     # STM32 display implementation.
-    Core/Src/display_stm32.c
+    ${PURRGO_STM32_COMMON}/Src/display_stm32.c
 
     # Debug button emulator via UART
-    Core/Src/debug_buttons.c
+    ${PURRGO_STM32_COMMON}/Src/debug_buttons.c
 
     # STM32 Power logic
     Core/Src/power_stm32.c
 
     # Application wrapper
-    Core/Src/stm32_app.c
+    ${PURRGO_STM32_COMMON}/Src/stm32_app.c
 
     # Waveshare STM32 E-Ink 2.7" V2 driver.
     ${PROJECT_SOURCE_DIR}/third_party/e-Paper/STM32/STM32-F103ZET6/User/e-Paper/EPD_2in7_V2.c
-    Core/Src/DEV_Config.c
-    Core/Src/display_eink.c
+    ${PURRGO_STM32_COMMON}/Src/DEV_Config.c
+    ${PURRGO_STM32_COMMON}/Src/display_eink.c
 
     # Display test
-    Core/Src/eink_test.c
+    ${PURRGO_STM32_COMMON}/Src/eink_test.c
 )
 
 # Предупреждения только для пользовательских файлов (не для CubeMX/HAL/драйвера Waveshare).
 # -ffunction-sections -fdata-sections -fstack-usage, --gc-sections и
 # --print-memory-usage уже заданы CubeMX-тулчейном (cmake/gcc-arm-none-eabi.cmake).
 purrgo_sources_warnings(
-    Core/Src/purrgo_logger.c
+    ${PURRGO_STM32_COMMON}/Src/purrgo_logger.c
     Core/Src/gnss_io.c
-    Core/Src/system_time.c
-    Core/Src/buttons.c
+    ${PURRGO_STM32_COMMON}/Src/system_time.c
+    ${PURRGO_STM32_COMMON}/Src/buttons.c
     Core/Src/sd_card.c
-    Core/Src/fs_hal_stm32.c
-    Core/Src/display_stm32.c
-    Core/Src/debug_buttons.c
+    ${PURRGO_STM32_COMMON}/Src/fs_hal_stm32.c
+    ${PURRGO_STM32_COMMON}/Src/display_stm32.c
+    ${PURRGO_STM32_COMMON}/Src/debug_buttons.c
     Core/Src/power_stm32.c
-    Core/Src/stm32_app.c
-    Core/Src/display_eink.c
-    Core/Src/eink_test.c
+    ${PURRGO_STM32_COMMON}/Src/stm32_app.c
+    ${PURRGO_STM32_COMMON}/Src/display_eink.c
+    ${PURRGO_STM32_COMMON}/Src/eink_test.c
 )
 
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${PROJECT_SOURCE_DIR}/include
+    ${PURRGO_STM32_COMMON}/Inc
     # Add user defined include paths
 
     # Waveshare STM32 E-Paper V2 driver.

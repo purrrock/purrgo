@@ -8,16 +8,17 @@ cmake_minimum_required(VERSION 3.22)
 #
 #   win-mingw-debug / win-mingw-release  — PC-эмулятор, Windows (MSYS2 ucrt64)
 #   linux-gcc-debug / linux-gcc-release  — PC-эмулятор, Linux
-#   stm32-debug     / stm32-release      — прошивка STM32 (arm-none-eabi-gcc)
+#   stm32-debug     / stm32-release      — прошивка STM32F411 (arm-none-eabi-gcc)
+#   stm32u5-debug   / stm32u5-release    — прошивка STM32U585 (arm-none-eabi-gcc)
 #
-# Платформу задаёт кэш-переменная PURRGO_PLATFORM (pc | stm32), которую
+# Платформу задаёт кэш-переменная PURRGO_PLATFORM (pc | stm32 | stm32u5), которую
 # выставляет пресет. Без пресета по умолчанию собирается PC-эмулятор.
 # ==============================================================================
 
-set(PURRGO_PLATFORM "pc" CACHE STRING "Target platform: pc | stm32")
-set_property(CACHE PURRGO_PLATFORM PROPERTY STRINGS pc stm32)
-if(NOT PURRGO_PLATFORM MATCHES "^(pc|stm32)$")
-    message(FATAL_ERROR "PURRGO_PLATFORM must be 'pc' or 'stm32' (got '${PURRGO_PLATFORM}')")
+set(PURRGO_PLATFORM "pc" CACHE STRING "Target platform: pc | stm32 (F411) | stm32u5 (U585)")
+set_property(CACHE PURRGO_PLATFORM PROPERTY STRINGS pc stm32 stm32u5)
+if(NOT PURRGO_PLATFORM MATCHES "^(pc|stm32|stm32u5)$")
+    message(FATAL_ERROR "PURRGO_PLATFORM must be 'pc', 'stm32' or 'stm32u5' (got '${PURRGO_PLATFORM}')")
 endif()
 
 # Тип сборки по умолчанию для одноконфигурационных генераторов.
@@ -28,7 +29,7 @@ endif()
 # compile_commands.json для clangd / IntelliSense.
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-if(PURRGO_PLATFORM STREQUAL "stm32")
+if(PURRGO_PLATFORM MATCHES "^stm32")
     project(purrgo LANGUAGES C ASM)
 else()
     project(purrgo LANGUAGES C)
@@ -99,7 +100,10 @@ if(PURRGO_PLATFORM STREQUAL "pc")
         enable_testing()
         add_subdirectory(tests/host)
     endif()
+elseif(PURRGO_PLATFORM STREQUAL "stm32u5")
+    message(STATUS "--- Target: STM32U585 firmware ---")
+    add_subdirectory(apps/stm32/PurrGO_STM32U5)
 else()
-    message(STATUS "--- Target: STM32 firmware ---")
+    message(STATUS "--- Target: STM32F411 firmware ---")
     add_subdirectory(apps/stm32/PurrGO_STM32)
 endif()

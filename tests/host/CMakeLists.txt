@@ -26,3 +26,12 @@ foreach(test_src IN LISTS PURRGO_HOST_TESTS)
     add_test(NAME ${test_name} COMMAND ${test_name}
              WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 endforeach()
+
+# test_sd_spi проверяет протокол microSD в SPI-режиме (HAL-независимый модуль
+# прошивки U585) на программной модели карты.
+if(TARGET test_sd_spi)
+    target_sources(test_sd_spi PRIVATE
+        ${PROJECT_SOURCE_DIR}/apps/stm32/common/sd_spi/sd_spi.c)
+    target_include_directories(test_sd_spi PRIVATE
+        ${PROJECT_SOURCE_DIR}/apps/stm32/common/sd_spi)
+endif()
