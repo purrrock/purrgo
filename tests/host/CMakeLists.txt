@@ -35,3 +35,12 @@ if(TARGET test_sd_spi)
     target_include_directories(test_sd_spi PRIVATE
         ${PROJECT_SOURCE_DIR}/apps/stm32/common/sd_spi)
 endif()
+
+# test_gnss_diag проверяет разбор NMEA и определение состояния связи с GNSS
+# (HAL-независимый модуль прошивки STM32).
+if(TARGET test_gnss_diag)
+    target_sources(test_gnss_diag PRIVATE
+        ${PROJECT_SOURCE_DIR}/apps/stm32/common/gnss_diag/gnss_diag.c)
+    target_include_directories(test_gnss_diag PRIVATE
+        ${PROJECT_SOURCE_DIR}/apps/stm32/common/gnss_diag)
+endif()

@@ -8,6 +8,7 @@
 #include <stdint.h>
 
 #include "purrgo/logger.h"
+#include "gnss_monitor.h"
 
 /*
  * Размер кольцевого DMA-буфера GNSS.
@@ -95,6 +96,19 @@ void purrgo_gnss_init(void)
 }
 
 /**
+ * @brief Забрать байт из кольцевого буфера и показать его монитору связи.
+ */
+static bool gnss_pop(uint16_t head, uint8_t *byte)
+{
+    if (purrgo_gnss_ring_pop(&gnss_ring, head, byte))
+    {
+        purrgo_gnss_monitor_feed(*byte);
+        return true;
+    }
+    return false;
+}
+
+/**
  * @brief Прочитать один байт из входного GNSS-потока.
  */
 bool purrgo_gnss_read_byte(uint8_t *byte)
@@ -131,7 +145,7 @@ bool purrgo_gnss_read_byte(uint8_t *byte)
      */
     if (gnss_rx_error_flag)
     {
-        if (purrgo_gnss_ring_pop(&gnss_ring, head, byte))
+        if (gnss_pop(head, byte))
         {
             return true;
         }
@@ -150,7 +164,7 @@ bool purrgo_gnss_read_byte(uint8_t *byte)
     }
 
     /* false - новых данных нет. */
-    return purrgo_gnss_ring_pop(&gnss_ring, head, byte);
+    return gnss_pop(head, byte);
 }
 
 /**
@@ -201,6 +215,9 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
      * его счётчик NDTR остаётся на достигнутом значении, по нему основной цикл
      * определит, сколько байт ещё нужно вычитать.
      */
+    /* Код ошибки - для монитора связи (до того, как Abort его сбросит). */
+    purrgo_gnss_monitor_uart_error(huart->ErrorCode);
+
     (void)HAL_UART_AbortReceive(huart);
 
     /*
