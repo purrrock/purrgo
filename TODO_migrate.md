@@ -296,7 +296,7 @@ SDIO-выводы (PA6, PA8, PA9, PB4, PB5, PB15) освобождаются.
 | PB10 | Input | `Detect_SD` | Pull-up |
 
 - [X] **[CubeMX]** Выставить выводы и метки по таблице (PB1 не трогать). PA0 (K1): pull-up обязателен, на плате его нет.
-- [ X] **[CubeMX]** Скорость выводов SPI1/SPI2 (SCK, MOSI, MISO): **Very high**.
+- [X] **[CubeMX]** Скорость выводов SPI1/SPI2 (SCK, MOSI, MISO): **Very high**.
 
 ### 2.4 Периферия
 
@@ -530,7 +530,7 @@ git (`git show 1d06694^:путь` и `git show 39ee4a3^:путь`), драйве
   на U585 (нет SDMMC в корпусе 48 pin).
 - [x] **[patch]** `apps/stm32/README.md`, `purrgo_file_descriptions.md`: два STM32-проекта, раздельные pinout.
 - [x] **[patch]** `README.md`, `docs/architecture.md`: новые каталоги и пресеты (`Сборка.md` - личные заметки о закупке компонентов, не трогаю).
-- [ ] **[patch]** `TODO.md`: отметить выполненное в разделах 5, 7; обновить пункты по микро SD.
+- [X] **[patch]** `TODO.md`: отметить выполненное в разделах 5, 7; обновить пункты по микро SD.
 - [X] Добавить схему платы и фото в `docs/STM32U585CIU6/`.
 
 ## Этап 9. Завершение
