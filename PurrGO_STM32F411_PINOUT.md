@@ -56,7 +56,7 @@ MicroSD подключена по SDIO, шина 4 бита.
 - Частоты: идентификация карты ≈ 350 кГц (42 МГц / 120), рабочая шина 21 МГц (42 МГц / 2).
 - FatFs: драйвер диска «SD» (`FATFS/Target/sd_diskio.c`, `bsp_driver_sd.c`), обмен в режиме опроса. DMA SDIO (DMA2 Stream3 — RX, Stream6 — TX) настроен в CubeMX, но в этом режиме не используется.
 - Подтяжки Pull-up включены в CubeMX на CMD, D0–D3 и Detect_SDIO; на CK подтяжки нет.
-- Detect_SDIO: вход. По умолчанию прошивка считает, что карта вставлена, если на выводе **низкий** уровень (контакт гнезда замыкается на GND), как в коде CubeMX. Подтяжка к 3.3 В включена в CubeMX (Pull-up). Полярность и отключение Detect задаются макросом `PURRGO_SD_DETECT_MODE` (см. `Core/Inc/sd_card.h`).
+- Detect_SDIO: вход. По умолчанию (`PURRGO_SD_DETECT_ACTIVE_HIGH`) прошивка считает, что карта вставлена, если на выводе **высокий** уровень; тот же картридер и та же полярность на U585. Подтяжка к 3.3 В включена в CubeMX (Pull-up). Полярность и отключение Detect задаются макросом `PURRGO_SD_DETECT_MODE` (см. `Core/Inc/sd_card.h`).
 - Пины SDIO нельзя использовать как GPIO.
 
 Код: `Core/Src/sd_card.c` (монтирование, Detect, защита от зависаний), `Core/Src/fs_hal_stm32.c` (файловый HAL PurrGO поверх FatFs).

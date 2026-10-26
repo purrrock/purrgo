@@ -21,6 +21,7 @@
 // #include "debug_buttons.h"
 
 #include "sd_card.h"
+#include "gnss_monitor.h"
 
 /*
  * Интервал обновления логики GNSS/FSM.
@@ -127,6 +128,7 @@ void purrgo_stm32_init(void)
    */
   purrgo_gnss_init();
   PURRGO_LOG("GNSS USART1 INIT FINISHED\r\n");
+  purrgo_gnss_monitor_init();
 
   /*
    * -------------------------------------------------------------------------
@@ -212,6 +214,9 @@ void purrgo_stm32_init(void)
 void purrgo_stm32_process(void)
 {
   uint32_t current_time_ms = purrgo_system_time_ms();
+
+  /* Отчёт о связи с GNSS (отладочный лог). */
+  purrgo_gnss_monitor_process();
 
   /*
    * -----------------------------------------------------------------------

@@ -61,6 +61,10 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Core/Src/gnss_io.c
 
     # STM32 system time implementation.
+    # Монитор связи с GNSS (отладочный лог): разбор NMEA + отчёт.
+    ${PURRGO_STM32_COMMON}/gnss_diag/gnss_diag.c
+    ${PURRGO_STM32_COMMON}/Src/gnss_monitor.c
+
     ${PURRGO_STM32_COMMON}/Src/system_time.c
 
     # STM32 button driver (кнопки E-Ink HAT: K1 PA0, K2 PA1, K3 PC14, K4 PC15).
@@ -96,6 +100,8 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
 purrgo_sources_warnings(
     ${PURRGO_STM32_COMMON}/Src/purrgo_logger.c
     Core/Src/gnss_io.c
+    ${PURRGO_STM32_COMMON}/gnss_diag/gnss_diag.c
+    ${PURRGO_STM32_COMMON}/Src/gnss_monitor.c
     ${PURRGO_STM32_COMMON}/Src/system_time.c
     ${PURRGO_STM32_COMMON}/Src/buttons.c
     Core/Src/sd_card.c
@@ -115,6 +121,7 @@ purrgo_sources_warnings(
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${PROJECT_SOURCE_DIR}/include
     ${PURRGO_STM32_COMMON}/Inc
+    ${PURRGO_STM32_COMMON}/gnss_diag
     ${PURRGO_STM32_COMMON}/sd_spi
     ${PURRGO_STM32_COMMON}/fatfs
 
