@@ -254,7 +254,7 @@ SDIO-выводы (PA6, PA8, PA9, PB4, PB5, PB15) освобождаются.
 - [ ] **[HW][проверить]** Опционные байты через STM32CubeProgrammer: `TZEN = 0` (TrustZone выключен),
   `nBOOT0`/`nSWBOOT0` дают загрузку из flash, `RDP = 0xAA`. Если `TZEN = 1`, прошивка без
   поддержки TrustZone не стартует, нужно снять защиту.
-- [ ] **[HW]** Проверить прошивку и отладку голой платы любой готовой демкой (мигание PC13 из
+- [X] **[HW]** Проверить прошивку и отладку голой платы любой готовой демкой (мигание PC13 из
   CubeMX). Запасной способ прошивки: BOOT0 + сброс, системный DFU по USB-C.
 - [X] **[HW]** Не распаивать flash W25Qxx на плате: её посадочное место подключено к PA4/PA5/PA6/PA7
   (SPI1), тем же линиям, что у E-Ink.
@@ -265,22 +265,22 @@ SDIO-выводы (PA6, PA8, PA9, PB4, PB5, PB15) освобождаются.
 
 ### 2.1 Создание и общие настройки
 
-- [ ] **[CubeMX]** New Project → MCU **STM32U585CIUx**, корпус UFQFPN48.
-- [ ] **[CubeMX]** Project Manager: имя `PurrGO_STM32U5`, каталог `apps/stm32/PurrGO_STM32U5`,
+- [X] **[CubeMX]** New Project → MCU **STM32U585CIUx**, корпус UFQFPN48.
+- [X] **[CubeMX]** Project Manager: имя `PurrGO_STM32U5`, каталог `apps/stm32/PurrGO_STM32U5`,
   Toolchain **CMake**, Firmware package: последний STM32Cube FW_U5, код генерировать парами
   `.c/.h` (как сейчас), «Keep user code» включён, HAL вынести по D7.
-- [ ] **[CubeMX]** Stack size `0x2000`, Heap `0x200` (как сейчас; повышать после этапа 7).
-- [ ] **[CubeMX]** Security: **TrustZone выключен** (non-secure проект без TZ).
-- [ ] **[CubeMX]** SYS: Debug **Serial Wire**, Timebase Source **SysTick**.
+- [X] **[CubeMX]** Stack size `0x2000`, Heap `0x200` (как сейчас; повышать после этапа 7).
+- [X] **[CubeMX]** Security: **TrustZone выключен** (non-secure проект без TZ).
+- [X] **[CubeMX]** SYS: Debug **Serial Wire**, Timebase Source **SysTick**.
 
 ### 2.2 Тактирование и питание
 
-- [ ] **[CubeMX]** RCC: HSE и LSE **выключены** (как сейчас, на HSI). SYSCLK из PLL1 (источник HSI16).
-- [ ] **[CubeMX]** Частота по D4: 80 МГц (M=1, N=10, R=2). HCLK = 80 МГц, PCLK1/2/3 = 80 МГц.
-- [ ] **[CubeMX]** PWR: Voltage Scaling **Range 2** при ≤ 110 МГц (Range 1 при 160 МГц).
+- [X] **[CubeMX]** RCC: HSE и LSE **выключены** (как сейчас, на HSI). SYSCLK из PLL1 (источник HSI16).
+- [X] **[CubeMX]** Частота по D4: 80 МГц (M=1, N=10, R=2). HCLK = 80 МГц, PCLK1/2/3 = 80 МГц.
+- [X] **[CubeMX]** PWR: Voltage Scaling **Range 2** при ≤ 110 МГц (Range 1 при 160 МГц).
   Регулятор LDO (SMPS на этом варианте корпуса нет).
-- [ ] **[CubeMX]** ICACHE: включить (2-way). Prefetch Flash по умолчанию.
-- [ ] **[CubeMX]** Проверить в Clock Configuration, какой источник тактирования у SPI1, SPI2,
+- [X] **[CubeMX]** ICACHE: включить (2-way). Prefetch Flash по умолчанию.
+- [X] **[CubeMX]** Проверить в Clock Configuration, какой источник тактирования у SPI1, SPI2,
   USART1/2, ADC1 (ядерные частоты, селекторы `CCIPRx`).
 
 ### 2.3 GPIO (метки сохранить как в F411-проекте, чтобы `main.h`-макросы остались прежними)
@@ -299,34 +299,34 @@ SDIO-выводы (PA6, PA8, PA9, PB4, PB5, PB15) освобождаются.
 | PB12 | Output PP | `SD_CS` | **High**, скорость Very high |
 | PB10 | Input | `Detect_SD` | Pull-up |
 
-- [ ] **[CubeMX]** Выставить выводы и метки по таблице (PB1 не трогать). PA0 (K1): pull-up обязателен, на плате его нет.
-- [ ] **[CubeMX]** Скорость выводов SPI1/SPI2 (SCK, MOSI, MISO): **Very high**.
+- [X] **[CubeMX]** Выставить выводы и метки по таблице (PB1 не трогать). PA0 (K1): pull-up обязателен, на плате его нет.
+- [ X] **[CubeMX]** Скорость выводов SPI1/SPI2 (SCK, MOSI, MISO): **Very high**.
 
 ### 2.4 Периферия
 
-- [ ] **[CubeMX] SPI1 (E-Ink):** Transmit Only Master, PA5 SCK, PA7 MOSI, 8 бит, Mode 0
+- [X] **[CubeMX] SPI1 (E-Ink):** Transmit Only Master, PA5 SCK, PA7 MOSI, 8 бит, Mode 0
   (CPOL Low, CPHA 1 Edge), NSS Software, MSB first. Делитель выбрать так, чтобы SCK
   ≈ 40 МГц как на F411 сейчас (там 84 МГц / 2 = 42 МГц); при 80 МГц это `/2`.
   Если появятся артефакты на панели, снижать до 10…20 МГц. **Включить**
   `Master Keep IO State` (иначе SCK/MOSI «плавают» при выключенном SPI).
-- [ ] **[CubeMX] SPI2 (microSD):** Full-Duplex Master, PB13 SCK, PB14 MISO, PB15 MOSI, 8 бит,
+- [X] **[CubeMX] SPI2 (microSD):** Full-Duplex Master, PB13 SCK, PB14 MISO, PB15 MOSI, 8 бит,
   Mode 0, NSS Software, MSB first, `Master Keep IO State`. Стартовый делитель такой, чтобы
   частота инициализации карты была **≤ 400 кГц**: при PCLK1 = 80 МГц это `/256` ≈ 312 кГц
   (при PCLK1 > 102.4 МГц `/256` уже слишком быстро). Рабочая частота выставляется
   программно после инициализации карты (12.5…25 МГц).
-- [ ] **[CubeMX] USART1 (GNSS):** Asynchronous, 9600 8N1, TX **PA9**, RX PA10, FIFO выключен,
+- [X] **[CubeMX] USART1 (GNSS):** Asynchronous, 9600 8N1, TX **PA9**, RX PA10, FIFO выключен,
   oversampling 16. DMA: GPDMA1, канал на USART1_RX, **Circular** (linked-list), приоритет Low,
   data width byte, memory increment. Включить прерывание USART1 и канала GPDMA.
-- [ ] **[CubeMX] USART2 (лог):** Asynchronous, 115200 8N1, PA2/PA3, без DMA.
+- [X] **[CubeMX] USART2 (лог):** Asynchronous, 115200 8N1, PA2/PA3, без DMA.
 - [ ] **[CubeMX] ADC1 (батарея): ОТЛОЖЕНО.** Не включать ADC1, PB1 оставить неиспользуемым (`RESERVED`).
   Когда вернёмся: PB1 = `ADC1_IN16`, метка `V_MAIN_BAT`, 12 бит, программный старт, тактирование ADC1
   в 5…55 МГц, калибровка `HAL_ADCEx_Calibration_Start` из кода.
 - [x] **[CubeMX] FATFS:** в CubeMX для U5 его нет (только FileX), **ничего не включать**. FatFs добавляется вручную
-  (D11, этап 4.3). Параметры `ffconf.h` прежние: `_USE_LFN = 1`, `_CODE_PAGE = 855`, `_FS_LOCK = 14`,
+  (D11, этап 4.3). Параметры `ffconf.h` прежние: `_USE_LFN = 1`, `_CODE_PAGE = 866`, `_FS_LOCK = 14`,
   `_USE_MKFS = 0`, `_MAX_SS = 512`.
-- [ ] **[CubeMX] NVIC:** Priority group 4 (как сейчас). Приоритеты: SysTick 15, USART1 и канал
+- [X] **[CubeMX] NVIC:** Priority group 4 (как сейчас). Приоритеты: SysTick 15, USART1 и канал
   GPDMA1 для GNSS 0 (как на F411), остальное по умолчанию.
-- [ ] **[CubeMX]** Сгенерировать код и закоммитить в ветку «как есть», без правок пользовательского
+- [X] **[CubeMX]** Сгенерировать код и закоммитить в ветку «как есть», без правок пользовательского
   кода, чтобы дифф был чистым.
 
 ## Этап 3. Система сборки
@@ -477,9 +477,9 @@ git (`git show 1d06694^:путь` и `git show 39ee4a3^:путь`), драйве
 
 Каждый шаг проходит до перехода к следующему; фиксировать лог.
 
-- [ ] 1. Прошивка и отладка по SWD: `main()` достигнут, LED PC13 мигает (проверка полярности).
-- [ ] 2. UART2 лог 115200: строка при старте и периодический вывод.
-- [ ] 3. Проверка тактирования: период мигания LED/`HAL_GetTick` против секундомера
+- [X] 1. Прошивка и отладка по SWD: `main()` достигнут, LED PC13 мигает (проверка полярности).
+- [X] 2. UART2 лог 115200: строка при старте и периодический вывод.
+- [X] 3. Проверка тактирования: период мигания LED/`HAL_GetTick` против секундомера
   (подтверждает выбранную частоту и PLL).
 - [ ] 4. E-Ink: полное обновление, затем частичное. SPI1 стартовать на низкой частоте, затем
   поднять до целевой (≈ 40 МГц по 2.4); проверить артефакты.
