@@ -2,7 +2,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Cortex Debug: OpenOCD (PurrGO)",
+            "name": "Cortex Debug: OpenOCD (PurrGO F411)",
             "type": "cortex-debug",
             "request": "launch",
             "servertype": "openocd",
@@ -15,6 +15,26 @@
                 "target/stm32f4x.cfg"
             ],
             "svdFile": "${workspaceFolder}/apps/stm32/PurrGO_STM32/STM32F411.svd",
+            "runToEntryPoint": "main"
+        },
+        {
+            "name": "Cortex Debug: OpenOCD (PurrGO U585)",
+            "type": "cortex-debug",
+            "request": "launch",
+            "servertype": "openocd",
+            // Пресет CMake должен быть stm32u5-debug / stm32u5-release.
+            "executable": "${workspaceFolder}/out/build/${command:cmake.activeConfigurePresetName}/PurrGO_STM32U5.elf",
+            "cwd": "${workspaceFolder}",
+            "device": "STM32U585CI",
+            // Нужен OpenOCD с поддержкой STM32U5 (target/stm32u5x.cfg, версия 0.12 и новее).
+            // Если его нет, использовать ST-Link GDB server из STM32CubeIDE / CubeProgrammer.
+            "configFiles": [
+                "interface/stlink.cfg",
+                "target/stm32u5x.cfg"
+            ],
+            // SVD (просмотр регистров периферии): положите STM32U585.svd рядом с проектом и
+            // раскомментируйте строку. Без неё отладка работает, нет только окна периферии.
+            // "svdFile": "${workspaceFolder}/apps/stm32/PurrGO_STM32U5/STM32U585.svd",
             "runToEntryPoint": "main"
         }
     ]

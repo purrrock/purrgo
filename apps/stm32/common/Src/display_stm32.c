@@ -384,8 +384,8 @@ void display_refresh_region(
     {
         pending_x1 = x;
         pending_y1 = y;
-        pending_x2 = x + w - 1;
-        pending_y2 = y + h - 1;
+        pending_x2 = (int16_t)(x + w - 1);
+        pending_y2 = (int16_t)(y + h - 1);
 
         pending_has_region = 1;
 
@@ -409,12 +409,12 @@ void display_refresh_region(
 
     if (x + w - 1 > pending_x2)
     {
-        pending_x2 = x + w - 1;
+        pending_x2 = (int16_t)(x + w - 1);
     }
 
     if (y + h - 1 > pending_y2)
     {
-        pending_y2 = y + h - 1;
+        pending_y2 = (int16_t)(y + h - 1);
     }
 }
 

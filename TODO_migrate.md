@@ -345,11 +345,11 @@ SDIO-выводы (PA6, PA8, PA9, PB4, PB5, PB15) освобождаются.
   `stm32u5-debug` и `stm32u5-release` в `CMakePresets.json`. Существующие пресеты `stm32-debug` /
   `stm32-release` и `PURRGO_PLATFORM=stm32` для F411 **не переименовываются** (F411 поддерживается).
 - [x] **[patch]** Определение `STM32U585xx` (CubeMX создаёт в `cmake/stm32cubemx/CMakeLists.txt`).
-- [ ] **[patch]** `.vscode/launch.json`: вторая конфигурация Cortex-Debug,
+- [x] **[patch]** `.vscode/launch.json`: вторая конфигурация Cortex-Debug, Сделано: вторая конфигурация `Cortex Debug: OpenOCD (PurrGO U585)`; SVD пока не добавлен (строка закомментирована).
   `device: STM32U585CI`, `configFiles: [interface/stlink.cfg, target/stm32u5x.cfg]`,
   SVD `STM32U585.svd` (положить в каталог проекта). **[проверить]** версию OpenOCD с
   поддержкой STM32U5, иначе использовать ST-Link GDB server из CubeIDE/CubeProgrammer.
-- [ ] **[patch]** `.vscode/c_cpp_properties.json`, `.clangd` под пути U5.
+- [x] **[patch]** `.vscode/c_cpp_properties.json`, `.clangd` под пути U5.
 - [x] **[patch]** `.github/workflows/ci.yml`: отдельное задание `build-stm32u5` (задание F411 остаётся); вывод
   `arm-none-eabi-size` и проверка отсутствия `__aeabi_d*` (на M33 одинарная точность
   аппаратная, двойная программная, как на M4F). Проверить, что `tools/check_softfloat.sh`
@@ -394,6 +394,13 @@ SDIO-выводы (PA6, PA8, PA9, PB4, PB5, PB15) освобождаются.
 - [ ] Перепроверить обработку ошибок UART: `HAL_UART_ErrorCallback`,
   `HAL_UART_AbortReceive`, перезапуск DMA (имена в HAL U5 те же), поведение ORE и
   расширенных флагов (`DMADisableonRxError`, `OverrunDisable`).
+  Разбор по первому логу U585 (2026-10-26, GNSS не подключён, RX плавает): `GNSS RX RESTART ERROR!`.
+  Причины и исправления в `gnss_io.c`: (1) при втором событии ошибки до завершения suspend канал остаётся
+  в состоянии ABORT, `HAL_DMAEx_List_Start_IT` возвращает ошибку: добавлен `gnss_rx_restart()` с принудительным
+  сбросом канала (`gnss_dma_force_ready`) и одной повторной попыткой, в лог выводятся коды ошибок UART/DMA;
+  (2) после abort HAL обнуляет `CBR1`, поэтому положение producer после ошибки берётся из `gnss_last_head`,
+  а не из счётчика. Нужно проверить на плате с подключённым GNSS; в CubeMX для PA10 (USART1_RX) включить
+  Pull-up, чтобы неподключённый вход не давал шума.
 - [ ] Тест переполнения: заморозить основной цикл на > 1.07 с и убедиться, что восстановление
   работает (логика `gnss_rx_error_flag`).
 - [x] Callback-и `HAL_UART_RxHalfCpltCallback` / `RxCpltCallback`: сигнатуры в HAL U5 те же.
@@ -431,7 +438,7 @@ git (`git show 1d06694^:путь` и `git show 39ee4a3^:путь`), драйве
   (`f_mount(NULL, "0:", 1)`), синхронизация треков/конфига.
 - [ ] Опционально позже: SPI2 RX/TX через GPDMA для разгрузки CPU при чтении карт
   (после замеров, начинать с опроса).
-- [ ] Положить в `docs/` заметку про отличия SPI-режима SD: CRC, ограничение скорости,
+- [x] Положить в `docs/` заметку про отличия SPI-режима SD: CRC, ограничение скорости, Сделано: `docs/SD_SPI_MODE.md`.
   подтяжки.
 
 ### 4.4 `power_stm32.c`: standby и пробуждение
@@ -468,7 +475,7 @@ git (`git show 1d06694^:путь` и `git show 39ee4a3^:путь`), драйве
   оставить; проверить по `.map` итоговые размеры `.bss`.
 - [ ] `HAL_UART_Transmit` / `HAL_SPI_Transmit` таймауты (`1000 мс`) оставить; перепроверить
   при 80 МГц.
-- [ ] `-Wconversion -Werror` для пользовательских файлов: исправить новые предупреждения
+- [x] `-Wconversion -Werror` для пользовательских файлов: исправить новые предупреждения Сделано: предупреждений в пользовательских файлах нет (исправлены `display_stm32.c`, `display_eink.c`, `debug_buttons.c`, в последнем и логическая ошибка в `default`-ветке).
   из-за изменившихся типов HAL.
 - [ ] Просмотреть зависимость библиотеки `epd4g` (`eink_part_refresh`) от HAL/МК, если её
   решено подключать к U5 (`HowToMigrateTo_epd4g_lib.md`).
@@ -496,11 +503,11 @@ git (`git show 1d06694^:путь` и `git show 39ee4a3^:путь`), драйве
 
 ## Этап 6. Регрессия и CI
 
-- [ ] Host-тесты и эмулятор (`tests/`, `apps/emulator`) проходят без изменений.
+- [x] Host-тесты и эмулятор (`tests/`, `apps/emulator`) проходят без изменений.
 - [ ] CI: обе сборки (F411 и U585) зелёные.
-- [ ] Проверка отсутствия программной double-арифметики (`__aeabi_d*`) в production-пути.
-- [ ] Сравнить размеры `.text/.data/.bss` с базой F411.
-- [ ] Запас стека: измерить в худшем кадре (пункты «stack usage» из `TODO.md`, раздел 7).
+- [x] Проверка отсутствия программной double-арифметики (`__aeabi_d*`) в production-пути. Результат: чисто для F411 и U585 (`tools/check_softfloat.sh`).
+- [x] Сравнить размеры `.text/.data/.bss` с базой F411. Таблица в `docs/STM32_F411_vs_U585.md`.
+- [ ] Запас стека (статические кадры самых тяжёлых функций собраны в `docs/STM32_F411_vs_U585.md`, остаётся замер на плате): измерить в худшем кадре (пункты «stack usage» из `TODO.md`, раздел 7).
 
 ## Этап 7. Использование новых ресурсов и измерения (раздел 7 `TODO.md`)
 
@@ -522,7 +529,7 @@ git (`git show 1d06694^:путь` и `git show 39ee4a3^:путь`), драйве
 - [x] **[patch]** `HARDWARE.md`: два Development-профиля (F411/SDIO, U585/SPI), обоснование отказа от SDIO
   на U585 (нет SDMMC в корпусе 48 pin).
 - [x] **[patch]** `apps/stm32/README.md`, `purrgo_file_descriptions.md`: два STM32-проекта, раздельные pinout.
-- [ ] **[patch]** `README.md`, `Сборка.md`, `docs/architecture.md`: новые каталоги и пресеты (после этапа 3).
+- [x] **[patch]** `README.md`, `docs/architecture.md`: новые каталоги и пресеты (`Сборка.md` - личные заметки о закупке компонентов, не трогаю).
 - [ ] **[patch]** `TODO.md`: отметить выполненное в разделах 5, 7; обновить пункты по микро SD.
 - [ ] Добавить схему платы и фото в `docs/STM32U585CIU6/`.
 
@@ -554,12 +561,12 @@ git (`git show 1d06694^:путь` и `git show 39ee4a3^:путь`), драйве
 | `PurrGO_STM32F411_PINOUT.md`, `PurrGO_STM32U585_PINOUT.md` | раздельная распиновка по платам |
 | `Core/Src/main.c`, `gpio.c`, `spi.c`, `usart.c`, `adc.c`, `dma.c`, `stm32f4xx_it.c`, `stm32f4xx_hal_msp.c`, `system_stm32f4xx.c` | генерирует CubeMX заново (`GPDMA1`, `stm32u5xx_*`) |
 | `Core/Src/sdio.c`, `Core/Inc/sdio.h`, `FATFS/Target/bsp_driver_sd.*`, `sd_diskio.*` | не нужны на U585 |
-| `Core/Src/sd_card.c`, `Core/Inc/sd_card.h` | переписать на SPI (4.3) |
-| `Core/Src/fs_hal_stm32.c` | проверить, без структурных правок |
-| `Core/Src/gnss_io.c` | правка чтения позиции DMA (4.2) |
-| `Core/Src/power_stm32.c` | переписать standby (4.4) |
-| `Core/Src/purrgo_logger.c` | макросы LED вместо `GPIOC/GPIO_PIN_13` |
-| `Core/Src/buttons.c`, `debug_buttons.c`, `system_time.c`, `display_stm32.c`, `stm32_app.c`, `DEV_Config.c`, `display_eink.c`, `eink_test.c` | проверка и косметика |
+| `Core/Src/sd_card.c` (F411), `common/Inc/sd_card.h` | F411: SDIO без изменений; U585: новый `PurrGO_STM32U5/Core/Src/sd_card.c` на SPI (сделано), заголовок общий |
+| `common/Src/fs_hal_stm32.c` | общий, `fatfs.h` заменён на `ff.h` (сделано) |
+| `Core/Src/gnss_io.c` | F411 без изменений; U585: свой файл (GPDMA, `gnss_last_head`, перезапуск) |
+| `Core/Src/power_stm32.c` | F411 без изменений; U585: свой файл (Standby, WKUP1) |
+| `common/Src/purrgo_logger.c` | общий, `Alive_LED_*` вместо `GPIOC/GPIO_PIN_13` (сделано) |
+| `common/Src/buttons.c`, `debug_buttons.c`, `system_time.c`, `display_stm32.c`, `stm32_app.c`, `DEV_Config.c`, `display_eink.c`, `eink_test.c` | общие для F411 и U585 (D10) |
 | `startup_stm32f411xe.s`, `STM32F411xx_FLASH.ld`, `STM32F411.svd` | заменяются U5-аналогами |
 | `cmake/stm32cubemx/CMakeLists.txt` | генерируется CubeMX |
 | `cmake/toolchains/stm32-gcc-arm-none-eabi.cmake`, `CMakePresets.json`, корневой `CMakeLists.txt`, `.github/workflows/ci.yml`, `.vscode/*` | этап 3 |
