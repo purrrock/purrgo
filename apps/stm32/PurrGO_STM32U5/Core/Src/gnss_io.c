@@ -67,6 +67,17 @@ static purrgo_gnss_ring_t gnss_ring;
  */
 static volatile bool gnss_rx_error_flag = false;
 
+/*
+ * Последнее достоверное положение producer (индекс следующего байта,
+ * который запишет DMA). На F411 после остановки DMA счётчик NDTR заморожен и
+ * по нему можно дочитать остаток. На U585 HAL при завершении abort обнуляет
+ * CBR1 (чтобы следующий старт загрузил узел из памяти), поэтому после ошибки
+ * положение берётся из этой переменной: она обновляется при каждом чтении
+ * счётчика в штатной работе. Байты, пришедшие между последним чтением и
+ * ошибкой, теряются; разбор NMEA после этого пересинхронизируется сам.
+ */
+static volatile uint16_t gnss_last_head = 0U;
+
 /* Узел и очередь linked-list: узел обязан быть выровнен по 4 байтам. */
 static DMA_NodeTypeDef gnss_rx_node __attribute__((aligned(32)));
 static DMA_QListTypeDef gnss_rx_queue;
@@ -172,6 +183,54 @@ void purrgo_gnss_init(void)
 }
 
 /**
+ * @brief Принудительно вернуть канал GPDMA в состояние READY.
+ *
+ * Нужен, если DMA застрял в ABORT/SUSPEND/ERROR (например, вторая ошибка UART
+ * пришла до завершения suspend, и HAL_DMA_Abort_IT вернул ошибку). Повторяет то,
+ * что HAL делает при штатном завершении abort.
+ */
+static void gnss_dma_force_ready(void)
+{
+    DMA_HandleTypeDef *const h = &handle_GPDMA1_Channel0;
+
+    h->Instance->CCR |= DMA_CCR_RESET;
+    __HAL_DMA_CLEAR_FLAG(h, (DMA_FLAG_TC | DMA_FLAG_HT | DMA_FLAG_DTE | DMA_FLAG_ULE |
+                             DMA_FLAG_USE | DMA_FLAG_SUSP | DMA_FLAG_TO));
+    h->Instance->CBR1 = 0U;
+    h->ErrorCode = HAL_DMA_ERROR_NONE;
+    h->State = HAL_DMA_STATE_READY;
+    if (h->LinkedListQueue != NULL)
+    {
+        h->LinkedListQueue->State = HAL_DMA_QUEUE_STATE_READY;
+    }
+    __HAL_UNLOCK(h);
+    huart1.RxState = HAL_UART_STATE_READY;
+}
+
+/**
+ * @brief Перезапустить кольцевой приём после ошибки UART.
+ *
+ * @return true при успехе.
+ */
+static bool gnss_rx_restart(void)
+{
+    if (HAL_UART_Receive_DMA(&huart1, gnss_rx_buffer, GNSS_RX_BUFFER_SIZE) == HAL_OK)
+    {
+        return true;
+    }
+
+    /* Канал мог остаться не в READY: сбросить и повторить один раз. */
+    PURRGO_LOG("GNSS RX restart: retry (uart err 0x%lX, dma err 0x%lX, dma state %d)\r\n",
+               (unsigned long)huart1.ErrorCode,
+               (unsigned long)handle_GPDMA1_Channel0.ErrorCode,
+               (int)handle_GPDMA1_Channel0.State);
+
+    gnss_dma_force_ready();
+
+    return (HAL_UART_Receive_DMA(&huart1, gnss_rx_buffer, GNSS_RX_BUFFER_SIZE) == HAL_OK);
+}
+
+/**
  * @brief Прочитать один байт из входного GNSS-потока.
  */
 bool purrgo_gnss_read_byte(uint8_t *byte)
@@ -190,11 +249,20 @@ bool purrgo_gnss_read_byte(uint8_t *byte)
     }
 
     /*
-     * Положение producer по NDTR. При остановленном DMA (ошибка UART) NDTR
-     * заморожен, поэтому остаток данных определяется так же, как в штатной работе.
+     * Положение producer по счётчику CBR1 (в штатной работе). После ошибки UART
+     * DMA остановлен и HAL обнулил CBR1, поэтому используется gnss_last_head.
      */
-    head = purrgo_gnss_ring_head_from_ndtr(&gnss_ring,
-                                           __HAL_DMA_GET_COUNTER(huart1.hdmarx));
+    if (gnss_rx_error_flag)
+    {
+        /* DMA остановлен, CBR1 обнулён HAL: берём последнее известное положение. */
+        head = gnss_last_head;
+    }
+    else
+    {
+        head = purrgo_gnss_ring_head_from_ndtr(&gnss_ring,
+                                               __HAL_DMA_GET_COUNTER(huart1.hdmarx));
+        gnss_last_head = head;
+    }
 
     /*
      * Если произошла аппаратная ошибка UART (ORE, FE и т.д.),
@@ -216,12 +284,14 @@ bool purrgo_gnss_read_byte(uint8_t *byte)
         gnss_rx_error_flag = false;
         purrgo_gnss_ring_reset(&gnss_ring);
 
-        if (HAL_UART_Receive_DMA(
-                &huart1,
-                gnss_rx_buffer,
-                GNSS_RX_BUFFER_SIZE) != HAL_OK)
+        gnss_last_head = 0U;
+
+        if (!gnss_rx_restart())
         {
-            PURRGO_LOG("GNSS RX RESTART ERROR!\r\n");
+            PURRGO_LOG("GNSS RX RESTART ERROR! (uart err 0x%lX, dma err 0x%lX, dma state %d)\r\n",
+                       (unsigned long)huart1.ErrorCode,
+                       (unsigned long)handle_GPDMA1_Channel0.ErrorCode,
+                       (int)handle_GPDMA1_Channel0.State);
         }
         return false;
     }

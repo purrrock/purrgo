@@ -49,7 +49,7 @@ void purrgo_debug_buttons_process(void)
                (rx_char >= 32U && rx_char <= 126U) ? rx_char : '.');
 
             bytes_processed++;
-            purrgo_btn_t btn;
+            purrgo_btn_t btn = PURRGO_BTN_KEY1_SHORT;   /* значение по умолчанию не используется */
             const char *log_msg = NULL;
 
             switch (rx_char)
@@ -88,6 +88,13 @@ void purrgo_debug_buttons_process(void)
                     break;
                 default:
                     /* Ignore CR/LF, spaces, and other unsupported characters */
+                    break;
+            }
+
+            if (log_msg == NULL)
+            {
+                /* Нераспознанный символ: событие кнопки не формируется. */
+                return;
             }
 
             /* Log recognized button event */

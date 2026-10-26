@@ -223,7 +223,7 @@ void display_eink_refresh_region(
      * Область по X выравнивается до границ 8 пикселей: панель
      * адресуется байтами по 8 пикселей.
      */
-    uint16_t xs = (uint16_t)x & ~7U;
+    uint16_t xs = (uint16_t)((uint16_t)x & 0xFFF8U);
     uint16_t xe = ((uint16_t)(x + w) + 7U) & ~7U;
     uint16_t ys = (uint16_t)y;
     uint16_t ye = (uint16_t)(y + h);
