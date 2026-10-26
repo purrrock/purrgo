@@ -21,6 +21,7 @@ sim_map_io.py - оценка нагрузки на SD-карту при отри
 
 import argparse
 import math
+import mmap
 import os
 import struct
 import sys
@@ -115,8 +116,11 @@ class SimFile:
     def __init__(self, path, world):
         self.path = path
         self.name = os.path.basename(path)
-        self.data = open(path, "rb").read()
-        self.size = len(self.data)
+        # mmap вместо read(): файлы карты Беларуси ~250 МБ, а World создаётся на каждый кадр
+        self._fh = open(path, "rb")
+        self.size = os.path.getsize(path)
+        self.data = (mmap.mmap(self._fh.fileno(), 0, access=mmap.ACCESS_READ)
+                     if self.size else b"")
         self.w = world
         self.logical = 0
         self.fatfs_pos = 0

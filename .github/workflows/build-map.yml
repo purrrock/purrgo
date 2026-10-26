@@ -1,9 +1,13 @@
 name: Build map (Belarus)
 
 # Запуск вручную: Actions -> Build map -> Run workflow.
-# Результат: zip с готовой структурой PURRGO/MAPS/<имя>/ — его достаточно
-# распаковать в корень microSD. Лежит в artifacts запуска и (опционально)
-# в GitHub Release "maps-<имя>".
+# Результат: готовая структура PURRGO/MAPS/<имя>/ - её достаточно распаковать
+# в корень microSD. Два способа забрать:
+#   * artifact запуска: GitHub сам упаковывает его в один zip (внутри уже
+#     PURRGO/MAPS/<имя>/..., без вложенного архива);
+#   * GitHub Release "maps-<имя>" (опционально): zip + sim_report.txt.
+# Дополнительно (run_sim) прогоняется sim_map_io.py - отчёт в Summary запуска
+# и в artifact sim-report-<имя>.
 on:
   workflow_dispatch:
     inputs:
@@ -19,6 +23,14 @@ on:
         description: "Выложить zip в GitHub Release (публичная ссылка без входа в GitHub)"
         type: boolean
         default: true
+      run_sim:
+        description: "После сборки прогнать sim_map_io.py (оценка времени загрузки экрана карты)"
+        type: boolean
+        default: true
+      sim_points:
+        description: "Точки для анализа: имя:lat:lon через запятую (должны лежать внутри карты)"
+        required: false
+        default: "Minsk:53.9006:27.5590,Gomel:52.4345:30.9754,Brest:52.0976:23.7341"
 
 permissions:
   contents: write   # нужно только для шага Release
@@ -106,23 +118,96 @@ jobs:
           done
           cat "$out/map.name"; echo
 
-      - name: Make ZIP
+      # Каталог stage/PURRGO/MAPS/<имя> - то, что распаковывается в корень SD.
+      # Artifact ниже грузится из каталога (GitHub упакует его один раз),
+      # а отдельный zip нужен только для Release.
+      - name: Stage files and make ZIP
         run: |
-          zip_name="purrgo-map-$MAP_NAME-$(date -u +%Y-%m-%d).zip"
+          build_date="$(date -u +%Y-%m-%d)"
+          zip_name="purrgo-map-$MAP_NAME-$build_date.zip"
           mkdir -p "$WORK/stage/PURRGO/MAPS"
           cp -r "$TOOLS/$MAP_NAME" "$WORK/stage/PURRGO/MAPS/$MAP_NAME"
           (cd "$WORK/stage" && zip -r -9 -q "$WORK/$zip_name" PURRGO)
+          echo "BUILD_DATE=$build_date" >> "$GITHUB_ENV"
           echo "ZIP_NAME=$zip_name" >> "$GITHUB_ENV"
           ls -lh "$WORK/$zip_name"
           unzip -l "$WORK/$zip_name"
 
-      # zip уже содержит сжатые бинарники - повторно сжимать нет смысла.
-      - uses: actions/upload-artifact@v4
+      - name: Upload map (artifact)
+        uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.ZIP_NAME }}
-          path: ${{ env.WORK }}/${{ env.ZIP_NAME }}
-          compression-level: 0
+          name: purrgo-map-${{ env.MAP_NAME }}-${{ env.BUILD_DATE }}
+          path: ${{ env.WORK }}/stage
           retention-days: 30
+          if-no-files-found: error
+
+      # Анализ не должен ронять сборку: карта уже готова и выложена выше.
+      - name: Analyze load time (sim_map_io.py)
+        id: sim
+        if: ${{ inputs.run_sim }}
+        continue-on-error: true
+        timeout-minutes: 45
+        working-directory: tools/map-compiler
+        env:
+          SIM_POINTS: ${{ inputs.sim_points }}
+        run: |
+          set -uo pipefail
+          out="$WORK/sim_report.txt"
+          map="$TOOLS/$MAP_NAME"
+          : > "$out"
+
+          # run <заголовок> <lat> <lon> <аргументы sim_map_io.py...>
+          run() {
+            local title="$1" lat="$2" lon="$3"; shift 3
+            { echo; echo "### $title"
+              python sim_map_io.py "$map" "$lat" "$lon" "$@"; } >> "$out"
+          }
+
+          S_MAIN="100,500,2000,5000,20000"
+          S_JUMP="500,2000,5000"
+          first=1
+          IFS=',' read -ra PTS <<< "$SIM_POINTS"
+          for pt in "${PTS[@]}"; do
+            IFS=':' read -r name lat lon <<< "$pt"
+            echo "## $name ($lat, $lon)" >> "$out"
+            # U585 (SPI SD, 160 МГц) - целевая плата
+            run "U585, SPI: как сейчас"                          "$lat" "$lon" --scales "$S_MAIN"
+            run "U585, SPI: + CLMT (fast seek)"                  "$lat" "$lon" --scales "$S_MAIN" --fastseek
+            run "U585, SPI: + CLMT + min-px 2"                   "$lat" "$lon" --scales "$S_MAIN" --fastseek --min-px 2
+            run "U585, SPI: + CLMT + min-px 2 + кэш 256"         "$lat" "$lon" --scales "$S_MAIN" --fastseek --min-px 2 --cache 256
+            run "U585, SPI: то же + чтение блоками 2 КБ"         "$lat" "$lon" --scales "$S_MAIN" --fastseek --min-px 2 --cache 256 --line 4
+            # прыжок follow (~81% экрана): второй кадр со сдвигом, кэш 32 против 256
+            run "Follow-прыжок, кэш 32"                          "$lat" "$lon" --scales "$S_JUMP" --fastseek --min-px 2 --pan 0.81
+            run "Follow-прыжок, кэш 256 (кадр уже в кэше)"       "$lat" "$lon" --scales "$S_JUMP" --fastseek --min-px 2 --pan 0.81 --cache 256
+            # POI с иконками и подписями
+            run "POI иконки + подписи"                           "$lat" "$lon" --scales "$S_JUMP" --fastseek --min-px 2 --poi-mode icons --labels 1
+            # dev-плата для сравнения
+            run "F411 SDIO (dev-плата), как сейчас"              "$lat" "$lon" --scales "$S_MAIN" --bus sdio --cpu 84
+            # дальние масштабы - один раз, по первой точке
+            if [ "$first" = 1 ]; then
+              first=0
+              run "Дальние масштабы, как сейчас"                 "$lat" "$lon" --scales "50000,200000,500000"
+              run "Дальние масштабы, CLMT + min-px 2 + кэш 256"  "$lat" "$lon" --scales "50000,200000,500000" --fastseek --min-px 2 --cache 256
+            fi
+          done
+
+          {
+            echo "## Оценка времени загрузки экрана карты (sim_map_io.py)"
+            echo
+            echo "Модель, а не замер на железе. Время: I/O и CPU, секунды, low/mid/high."
+            echo '```'
+            cat "$out"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload sim report
+        if: ${{ always() && inputs.run_sim }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: sim-report-${{ env.MAP_NAME }}
+          path: ${{ env.WORK }}/sim_report.txt
+          retention-days: 30
+          if-no-files-found: ignore
 
       - name: Publish to Release
         if: ${{ inputs.publish_release }}
@@ -135,4 +220,7 @@ jobs:
               --notes "Распаковать архив в корень microSD (создаст PURRGO/MAPS/$MAP_NAME)."
           fi
           gh release upload "$tag" "$WORK/$ZIP_NAME" --clobber
+          if [ -s "$WORK/sim_report.txt" ]; then
+            gh release upload "$tag" "$WORK/sim_report.txt" --clobber
+          fi
           echo "### Скачать: ${{ github.server_url }}/${{ github.repository }}/releases/tag/$tag" >> "$GITHUB_STEP_SUMMARY"
