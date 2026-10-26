@@ -127,25 +127,14 @@ DAT1 и DAT2 модуля не подключаются (подтяжки на �
 |---|---|---|
 | PA0 | K1 (кнопка E-Ink HAT), WKUP1 | **PLANNED** |
 | PA1 | K2 (кнопка E-Ink HAT) | **PLANNED** |
-| PA2 | USART2_TX / Debug | **PLANNED** |
-| PA3 | USART2_RX / Debug | **PLANNED** |
-| PA4 | свободен (посадочное место flash W25Qxx, не распаивать) | **FREE** |
+| PA2 | USART2_TX / Debug | **PLANNED** | (зеленый)
+| PA3 | USART2_RX / Debug | **PLANNED** | (белый)
 | PA5 | SPI1_SCK / E-Ink | **PLANNED** |
-| PA6 | свободен (посадочное место flash W25Qxx) | **FREE** |
 | PA7 | SPI1_MOSI / E-Ink | **PLANNED** |
-| PA8 | свободен | **FREE** |
 | PA9 | USART1_TX / GNSS | **PLANNED** |
 | PA10 | USART1_RX / GNSS | **PLANNED** |
-| PA13 | SWDIO | **FIXED** |
-| PA14 | SWCLK | **FIXED** |
-| PA15 | свободен (на U5 нет USART1_TX) | **FREE** |
-| PB0 | свободен | **FREE** |
 | PB1 | V_MAIN_BAT, ADC1_IN16: мониторинг батареи отложен, в CubeMX не настраивать | **RESERVED** |
 | PB2 | E-Ink BUSY | **PLANNED** |
-| PB3 | SWO (не использовать) | **RESERVED** |
-| PB4 | свободен | **FREE** |
-| PB5 | свободен | **FREE** |
-| PB6 | свободен | **FREE** |
 | PB7 | E-Ink CS | **PLANNED** |
 | PB8 | E-Ink DC | **PLANNED** |
 | PB9 | E-Ink RST | **PLANNED** |
@@ -157,6 +146,7 @@ DAT1 и DAT2 модуля не подключаются (подтяжки на �
 | PC13 | Alive_LED | **PLANNED** |
 | PC14 | K3 (кнопка E-Ink HAT), LSE-вывод | **PLANNED** |
 | PC15 | K4 (кнопка E-Ink HAT), LSE-вывод | **PLANNED** |
+
 | SPI1 | E-Ink (TX only) | **PLANNED** |
 | SPI2 | MicroSD | **PLANNED** |
 | USART1 | GNSS | **PLANNED** |
