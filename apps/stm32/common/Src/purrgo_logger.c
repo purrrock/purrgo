@@ -12,7 +12,7 @@
 #include "purrgo/logger.h"
 
 #include "usart.h"
-#include "stm32f4xx_hal.h"
+#include "main.h"
 
 #include <stdarg.h>
 #include "purrgo/purrgo_format.h"
@@ -119,9 +119,9 @@ void purrgo_logger_write(const char *format, ...)
     );
         /*
      * Индикация активности.
-       * PC13 на Blue/Black Pill подключён к встроенному
-     * светодиоду. После каждого сообщения логгера
+       * Alive_LED (PC13 на F411 и U585) подключён к встроенному
+     * светодиоду платы. После каждого сообщения логгера
      * состояние светодиода переключается.
      */
-    HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+    HAL_GPIO_TogglePin(Alive_LED_GPIO_Port, Alive_LED_Pin);
 }

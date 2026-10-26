@@ -200,9 +200,10 @@ SDIO-выводы (PA6, PA8, PA9, PB4, PB5, PB15) освобождаются.
 - [ ] **[решение] D6. Батарейный мониторинг. ОТЛОЖЕНО.** На период разработки питание от USB 5 В, батареи и
   TPS63802 не подключаются, PB1 остаётся `RESERVED`, ADC1 в CubeMX не настраивается. Когда вернёмся:
   писать драйвер сразу под U5 (в текущем репозитории `hadc1` используется только в сгенерированном `adc.c`).
-- [x] **[решение] D7. Вынос vendored HAL.** **Принято:** для нового U5-проекта выбрать «Add necessary library files
-  as reference» вместо «Copy only the necessary library files». Существующий F411-проект переводится на
-  тот же режим отдельно (ранее принятое решение).
+- [x] **[решение] D7. Вынос vendored HAL.** **Пересмотрено:** для U5-проекта выбрано «Copy only the necessary
+  library files» (HAL и CMSIS лежат в `apps/stm32/PurrGO_STM32U5/Drivers`, как в F411-проекте). Вариант
+  «as reference» давал абсолютные пути (`C:/Users/.../STM32Cube/Repository`) в `cmake/stm32cubemx/CMakeLists.txt`,
+  которые не работают в CI.
 - [x] **[решение] D8. Детектор карты.** Вывод CD у модуля есть, берём PB10 (`Detect_SD`, pull-up).
   Полярность: `PURRGO_SD_DETECT_ACTIVE_LOW`, как на F411.
 - [x] **[решение] D9. HSE 25 МГц.** На плате установлен кварц 25 МГц (Y2). Сейчас проект работает от HSI16.
@@ -213,7 +214,7 @@ SDIO-выводы (PA6, PA8, PA9, PB4, PB5, PB15) освобождаются.
   `apps/stm32/common/{Src,Inc}`, подключать из обоих CMake-проектов, платформенные отличия через `main.h`
   и `#if defined(STM32F411xE)` / `#if defined(STM32U585xx)` только там, где нельзя иначе; (б) копия файлов
   в каждом проекте (проще, но правки придётся дублировать). Реализуется на этапе 4.
-- [ ] **[решение] D11. FatFs на U585.** В CubeMX для STM32U5 нет middleware FATFS: ST заменил его на FileX
+- [x] **[решение] D11. FatFs на U585. Принято (FatFs скопирован из F411-проекта).** В CubeMX для STM32U5 нет middleware FATFS: ST заменил его на FileX
   (Azure RTOS), который нам не нужен. FatFs (ChaN) не привязан к МК. Рекомендация: **FatFs подключается вручную,
   без CubeMX**: исходники R0.12c (`ff.c`, `ff.h`, `integer.h`, `diskio.h`, `option/ccsbcs.c`, как в F411-проекте
   `Middlewares/Third_Party/FatFs/src`) кладутся в `apps/stm32/common/fatfs/` вместе с нашим `ffconf.h`;
@@ -330,62 +331,72 @@ SDIO-выводы (PA6, PA8, PA9, PB4, PB5, PB15) освобождаются.
 
 ## Этап 3. Система сборки
 
-Выполняю я патчем после этапа 2.
+Выполнено патчем (2026-10-26): корневой `CMakeLists.txt` знает `PURRGO_PLATFORM=stm32u5`, пресеты
+`stm32u5-debug` / `stm32u5-release`, обёртка тулчейна, CMake проекта U5, задание CI. Проверено сборкой
+`arm-none-eabi-gcc 13.2.1`: оба пресета U5 и F411 собираются, host-тесты проходят. Остаётся `.vscode`/`.clangd`.
 
-- [ ] **[patch]** Тулчейн `cmake/toolchains/stm32u5-gcc-arm-none-eabi.cmake`:
+- [x] **[patch]** Тулчейн `cmake/toolchains/stm32u5-gcc-arm-none-eabi.cmake`:
   `-mcpu=cortex-m33 -mfpu=fpv5-sp-d16 -mfloat-abi=hard`, linker script U585 (CubeMX создаёт
   `STM32U585xx_FLASH.ld`), `--specs=nano.specs` и остальные флаги как сейчас.
-- [ ] **[patch]** `apps/stm32/PurrGO_STM32U5/CMakeLists.txt`: список пользовательских исходников
+- [x] **[patch]** `apps/stm32/PurrGO_STM32U5/CMakeLists.txt`: список пользовательских исходников
   (см. приложение A), включить `-Wconversion`/`-Werror`-проверки для пользовательских файлов,
   путь к драйверу Waveshare не меняется.
-- [ ] **[patch]** `PURRGO_PLATFORM` и корневой `CMakeLists.txt`: выбор подпроекта F4/U5, новые пресеты
+- [x] **[patch]** `PURRGO_PLATFORM` и корневой `CMakeLists.txt`: выбор подпроекта F4/U5, новые пресеты
   `stm32u5-debug` и `stm32u5-release` в `CMakePresets.json`. Существующие пресеты `stm32-debug` /
   `stm32-release` и `PURRGO_PLATFORM=stm32` для F411 **не переименовываются** (F411 поддерживается).
-- [ ] **[patch]** Определение `STM32U585xx` (CubeMX создаёт в `cmake/stm32cubemx/CMakeLists.txt`).
+- [x] **[patch]** Определение `STM32U585xx` (CubeMX создаёт в `cmake/stm32cubemx/CMakeLists.txt`).
 - [ ] **[patch]** `.vscode/launch.json`: вторая конфигурация Cortex-Debug,
   `device: STM32U585CI`, `configFiles: [interface/stlink.cfg, target/stm32u5x.cfg]`,
   SVD `STM32U585.svd` (положить в каталог проекта). **[проверить]** версию OpenOCD с
   поддержкой STM32U5, иначе использовать ST-Link GDB server из CubeIDE/CubeProgrammer.
 - [ ] **[patch]** `.vscode/c_cpp_properties.json`, `.clangd` под пути U5.
-- [ ] **[patch]** `.github/workflows/ci.yml`: отдельное задание `build-stm32u5` (задание F411 остаётся); вывод
+- [x] **[patch]** `.github/workflows/ci.yml`: отдельное задание `build-stm32u5` (задание F411 остаётся); вывод
   `arm-none-eabi-size` и проверка отсутствия `__aeabi_d*` (на M33 одинарная точность
   аппаратная, двойная программная, как на M4F). Проверить, что `tools/check_softfloat.sh`
   корректен для M33.
-- [ ] Холодная сборка пресета `stm32u5-debug` до внесения платформенных правок: должна
+- [x] Холодная сборка пресета `stm32u5-debug` до внесения платформенных правок: должна
   собираться пустая «заготовка» CubeMX.
 
 ## Этап 4. Перенос платформенного кода (порядок по риску)
+
+Выполнено патчем (2026-10-26): общий код вынесен в `apps/stm32/common` (D10), пп. 4.1, 4.3, часть 4.2 и 4.4.
+Не проверено на железе: всё, что отмечено «на плате» в этапе 5. Не сделано: п. 4.5 (отложен), 4.6.
 
 Основа: все файлы из `Core/Src` и `Core/Inc`, помеченные как пользовательские.
 Каждый пункт: **[patch]**.
 
 ### 4.1 Файлы, переходящие без изменений или с косметикой
 
-- [ ] `buttons.c`, `system_time.c`, `debug_buttons.c`, `display_stm32.c`, `stm32_app.c`: на
+- [x] `buttons.c`, `system_time.c`, `debug_buttons.c`, `display_stm32.c`, `stm32_app.c`: на
   `HAL_GPIO_*`, `HAL_GetTick`, `HAL_UART_*`. Проверить компиляцию с HAL U5. В
   `debug_buttons.c` флаг `UART_FLAG_RXNE` на U5 сохраняется (при выключенном FIFO).
-- [ ] `DEV_Config.c`, `display_eink.c`, `eink_test.c`: работают через `hspi1` и метки
+- [x] `DEV_Config.c`, `display_eink.c`, `eink_test.c`: работают через `hspi1` и метки
   `EINK_*`. Проверить: `HAL_SPI_Transmit` принимает `uint16_t` размер (буфер кадра
   5808 байт помещается). Заменить в комментариях/заголовках упоминания F4.
-- [ ] `purrgo_logger.c`: заменить жёстко заданные `GPIOC, GPIO_PIN_13` на
+- [x] `purrgo_logger.c`: заменить жёстко заданные `GPIOC, GPIO_PIN_13` на
   `Alive_LED_GPIO_Port` / `Alive_LED_Pin`; учесть активный уровень LED (этап 1).
-- [ ] `power_stm32.c`: заменить `#include "stm32f4xx_hal.h"` / `stm32f4xx_hal_pwr.h` на `main.h`.
+- [x] `power_stm32.c`: заменить `#include "stm32f4xx_hal.h"` / `stm32f4xx_hal_pwr.h` на `main.h`.
 
 ### 4.2 `gnss_io.c` и USART1
 
-- [ ] Заменить `__HAL_DMA_GET_COUNTER(huart1.hdmarx)` на чтение остатка GPDMA
+- [x] Заменить `__HAL_DMA_GET_COUNTER(huart1.hdmarx)` на чтение остатка GPDMA
   (`hdma->Instance->CBR1 & DMA_CBR1_BNDT`; **[проверить]** наличие готового макроса в
   `stm32u5xx_hal_dma.h`). Семантика остатка байт та же, что у `NDTR`, поэтому
   `purrgo_gnss_ring_head_from_ndtr()` и host-тесты (`tests/host/test_gnss.c`) остаются
   без изменений.
-- [ ] Проверить сгенерированный CubeMX код linked-list для кольцевого DMA (`MX_GPDMA1_Init`,
+- [x] Проверить сгенерированный CubeMX код linked-list для кольцевого DMA (`MX_GPDMA1_Init`,
   `HAL_DMAEx_List_*`) и что `HAL_UART_Receive_DMA` запускает именно циклический режим.
+  **Итог проверки:** CubeMX создал узел `DMA_GPDMA_2D_NODE`, а канал 0 линейный: `HAL_DMAEx_List_LinkQ` вернул бы
+  `HAL_ERROR`; кроме того, `MX_GPDMA1_Init` инициализирует канал в режиме `LINKEDLIST_NORMAL`, а круговая очередь
+  требует `LINKEDLIST_CIRCULAR`. Очередь поэтому собирается в `Core/Src/gnss_io.c` (`gnss_dma_setup`), сгенерированный
+  `linked_list.c` не используется и может остаться как есть. `HAL_UART_Receive_DMA` для linked-list сам пишет в узел
+  размер, адрес RDR и адрес буфера; завершение блока в круговом режиме приём не останавливает.
 - [ ] Перепроверить обработку ошибок UART: `HAL_UART_ErrorCallback`,
   `HAL_UART_AbortReceive`, перезапуск DMA (имена в HAL U5 те же), поведение ORE и
   расширенных флагов (`DMADisableonRxError`, `OverrunDisable`).
 - [ ] Тест переполнения: заморозить основной цикл на > 1.07 с и убедиться, что восстановление
   работает (логика `gnss_rx_error_flag`).
-- [ ] Callback-и `HAL_UART_RxHalfCpltCallback` / `RxCpltCallback`: сигнатуры в HAL U5 те же.
+- [x] Callback-и `HAL_UART_RxHalfCpltCallback` / `RxCpltCallback`: сигнатуры в HAL U5 те же.
 
 ### 4.3 microSD: из SDIO обратно в SPI
 
@@ -394,24 +405,29 @@ SDIO-выводы (PA6, PA8, PA9, PB4, PB5, PB15) освобождаются.
 git (`git show 1d06694^:путь` и `git show 39ee4a3^:путь`), драйвер уже
 был проверен на железе (SPI2, CS на PB12, смена делителя через `HAL_SPI_DeInit` + `HAL_SPI_Init`).
 
-- [ ] Все правки 4.3 делаются **только в `PurrGO_STM32U5`**; `sd_card.c` и SDIO-код F411 не трогаются.
-- [ ] Добавить FatFs R0.12c в `apps/stm32/common/fatfs/` (D11) и `ffconf.h`; `fatfs.h` из CubeMX-проекта F411 на U5
+- [x] Все правки 4.3 делаются **только в `PurrGO_STM32U5`**; `sd_card.c` и SDIO-код F411 не трогаются.
+- [x] Добавить FatFs R0.12c в `apps/stm32/common/fatfs/` (D11) и `ffconf.h`; `fatfs.h` из CubeMX-проекта F411 на U5
   не существует, `fs_hal_stm32.c` и `sd_card.c` должны включать `ff.h`/`diskio.h` напрямую.
-- [ ] Восстановить SPI-драйвер диска FatFs из истории и адаптировать под HAL U5:
+- [x] Восстановить SPI-драйвер диска FatFs из истории и адаптировать под HAL U5:
   `hspi2`, `SD_CS_Pin`/`SD_CS_GPIO_Port` из `main.h`, `#include "main.h"` вместо
   `stm32f4xx_hal.h`.
-- [ ] Реализовать двухступенчатую частоту: инициализация карты ≤ 400 кГц, после неё
+  Вместо старого `fatfs_sd.c` написан новый драйвер: протокол карты в `apps/stm32/common/sd_spi` (без HAL,
+  проверен host-тестом `tests/host/test_sd_spi.c` на программной модели SDHC/SDSC v2/SDSC v1 со сбоями), привязка
+  к HAL SPI2/GPIO и диск FatFs (`purrgo_disk_*`) в `PurrGO_STM32U5/Core/Src/sd_card.c`, `diskio.c` в `common/fatfs`.
+- [x] Реализовать двухступенчатую частоту: инициализация карты ≤ 400 кГц, после неё
   переключение на рабочую 12.5…25 МГц; подобрать по устойчивости на реальных проводах.
-- [ ] Перенести защитные механизмы текущего `sd_card.c` (они были сделаны для SDIO BSP):
+  Сделано: `/256` (312.5 кГц) для инициализации, затем `PURRGO_SD_SPI_RUN_PRESCALER` = `/8` (10 МГц); `/4` и выше
+  подбирать на плате (этап 5, п. 7).
+- [x] Перенести защитные механизмы текущего `sd_card.c` (они были сделаны для SDIO BSP):
   ограничение по времени для чтения/записи/ожидания готовности, состояния
   `NO_CARD / MOUNT_ERROR / READY`, повторное монтирование раз в
   `PURRGO_SD_RETRY_PERIOD_MS`, переоткрытие при извлечении карты.
-- [ ] Удалить из `sd_card.c` код, привязанный к SDIO: слабые `BSP_SD_*`, `SDIO->CLKCR`,
+- [x] Удалить из `sd_card.c` код, привязанный к SDIO: слабые `BSP_SD_*`, `SDIO->CLKCR`,
   буфер-посредник для 4-байтного выравнивания (в SPI-режиме не нужен).
-- [ ] Обновить `sd_card.h` (описание SPI вместо SDIO, макросы `PURRGO_SD_*`:
+- [x] Обновить `sd_card.h` (описание SPI вместо SDIO, макросы `PURRGO_SD_*`:
   убрать `PURRGO_SD_CLOCK_DIV`, добавить стартовый/рабочий делитель SPI).
-- [ ] `fs_hal_stm32.c` (файловый HAL): API `purrgo_*_path` и `f_open/f_read/...` не меняются.
-- [ ] Сохранить поведение при выключении: `purrgo_platform_storage_unmount()`
+- [x] `fs_hal_stm32.c` (файловый HAL): API `purrgo_*_path` и `f_open/f_read/...` не меняются.
+- [x] Сохранить поведение при выключении: `purrgo_platform_storage_unmount()`
   (`f_mount(NULL, "0:", 1)`), синхронизация треков/конфига.
 - [ ] Опционально позже: SPI2 RX/TX через GPDMA для разгрузки CPU при чтении карт
   (после замеров, начинать с опроса).
@@ -420,13 +436,16 @@ git (`git show 1d06694^:путь` и `git show 39ee4a3^:путь`), драйве
 
 ### 4.4 `power_stm32.c`: standby и пробуждение
 
-- [ ] Переписать `purrgo_platform_enter_standby()` под API PWR U5:
+- [x] Переписать `purrgo_platform_enter_standby()` под API PWR U5:
   - пробуждение по `WKUP1` (PA0); кнопка K1 замыкает на GND, значит срабатывание по
     **низкому** уровню (на F4 WKUP срабатывал по фронту вверх);
   - очистка флагов пробуждения средствами U5 (`HAL_PWR_ClearWakeupFlag` или аналог,
     **[проверить]** точное имя в HAL), `__HAL_PWR_CLEAR_FLAG(PWR_FLAG_WU)` из F4 не подойдёт;
   - учесть сохранение подтяжек выводов в standby (регистры `PWR_PUCRx`/`PWR_PDCRx`,
     бит APC) для линий дисплея и SD;
+  Сделано: `PWR_WAKEUP_PIN1_LOW_0` (PA0, низкий уровень), `__HAL_PWR_CLEAR_FLAG(PWR_WAKEUP_FLAG1)`, подтяжка PA0
+  сохраняется в Standby (`HAL_PWREx_EnableGPIOPullUp` + `EnablePullUpPullDownConfig`). **Не проверено на плате.**
+  Если K1 удерживается при входе в Standby, МК проснётся сразу.
 - [ ] **[решение]** Standby или Shutdown (минимальный ток, но сбрасывается SRAM и backup).
 - [ ] *(при питании от USB отладка standby возможна, но замеры тока и автономность отложены с батареями)*
 - [ ] Перед входом в режим: E-Ink в deep sleep (уже в core `power.c`), SD размонтирована,

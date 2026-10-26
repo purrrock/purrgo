@@ -200,6 +200,7 @@ git submodule update --init --recursive
 | `linux-gcc-debug`, `linux-gcc-release` | PC-эмулятор (SDL2) | Linux, GCC, Ninja, `libsdl2-dev` |
 | `linux-gcc-test` | Только ядро + host-тесты, ASan/UBSan (без SDL2) | Linux, GCC, Ninja |
 | `stm32-debug`, `stm32-release` | Прошивка STM32F411 | `arm-none-eabi-gcc` в `PATH`, Ninja |
+| `stm32u5-debug`, `stm32u5-release` | Прошивка STM32U585 | `arm-none-eabi-gcc` в `PATH`, Ninja |
 
 Пресеты, неподходящие для текущей ОС, в списке не показываются.
 
@@ -218,7 +219,8 @@ cmake --preset stm32-debug
 cmake --build --preset stm32-debug
 ```
 
-Результат сборки: `out/build/<пресет>/`. Прошивка — `out/build/stm32-*/PurrGO_STM32.elf`,
+Результат сборки: `out/build/<пресет>/`. Прошивка — `out/build/stm32-*/PurrGO_STM32.elf` (F411) и
+`out/build/stm32u5-*/PurrGO_STM32U5.elf` (U585),
 эмулятор — `out/build/<пресет>/apps/emulator/purrgo_emulator`.
 
 Платформу выбирает переменная `PURRGO_PLATFORM` (`pc` | `stm32`), которую задаёт

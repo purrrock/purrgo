@@ -118,6 +118,32 @@
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release"
             }
+        },
+        {
+            "name": "stm32u5-base",
+            "hidden": true,
+            "inherits": "base",
+            "generator": "Ninja",
+            "toolchainFile": "${sourceDir}/cmake/toolchains/stm32u5-gcc-arm-none-eabi.cmake",
+            "cacheVariables": {
+                "PURRGO_PLATFORM": "stm32u5"
+            }
+        },
+        {
+            "name": "stm32u5-debug",
+            "displayName": "STM32U585 firmware - Debug",
+            "inherits": "stm32u5-base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "stm32u5-release",
+            "displayName": "STM32U585 firmware - Release",
+            "inherits": "stm32u5-base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
         }
     ],
     "buildPresets": [
@@ -173,6 +199,14 @@
         {
             "name": "stm32-release",
             "configurePreset": "stm32-release"
+        },
+        {
+            "name": "stm32u5-debug",
+            "configurePreset": "stm32u5-debug"
+        },
+        {
+            "name": "stm32u5-release",
+            "configurePreset": "stm32u5-release"
         }
     ],
     "testPresets": [
