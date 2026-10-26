@@ -238,7 +238,7 @@ DSTATUS purrgo_disk_initialize(void)
     return s_stat;
 }
 
-DRESULT purrgo_disk_read(BYTE *buff, DWORD sector, UINT count)
+DRESULT purrgo_disk_read(BYTE *buff, LBA_t sector, UINT count)
 {
     if ((buff == NULL) || (count == 0U))
     {
@@ -249,12 +249,12 @@ DRESULT purrgo_disk_read(BYTE *buff, DWORD sector, UINT count)
         return RES_NOTRDY;
     }
 
-    const sd_spi_res_t res = sd_spi_read(&s_card, buff, sector, count);
+    const sd_spi_res_t res = sd_spi_read(&s_card, buff, (uint32_t)sector, count);
 
     return (res == SD_SPI_OK) ? RES_OK : io_failed(res);
 }
 
-DRESULT purrgo_disk_write(const BYTE *buff, DWORD sector, UINT count)
+DRESULT purrgo_disk_write(const BYTE *buff, LBA_t sector, UINT count)
 {
     if ((buff == NULL) || (count == 0U))
     {
@@ -265,7 +265,7 @@ DRESULT purrgo_disk_write(const BYTE *buff, DWORD sector, UINT count)
         return RES_NOTRDY;
     }
 
-    const sd_spi_res_t res = sd_spi_write(&s_card, buff, sector, count);
+    const sd_spi_res_t res = sd_spi_write(&s_card, buff, (uint32_t)sector, count);
 
     return (res == SD_SPI_OK) ? RES_OK : io_failed(res);
 }

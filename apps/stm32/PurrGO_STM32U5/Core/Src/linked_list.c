@@ -55,7 +55,7 @@ HAL_StatusTypeDef MX_USART1_RX_Queue_Config(void)
   DMA_NodeConfTypeDef pNodeConfig;
 
   /* Set node configuration ################################################*/
-  pNodeConfig.NodeType = DMA_GPDMA_2D_NODE;
+  pNodeConfig.NodeType = DMA_GPDMA_LINEAR_NODE;
   pNodeConfig.Init.Request = GPDMA1_REQUEST_USART1_RX;
   pNodeConfig.Init.BlkHWRequest = DMA_BREQ_SINGLE_BURST;
   pNodeConfig.Init.Direction = DMA_PERIPH_TO_MEMORY;
@@ -68,11 +68,6 @@ HAL_StatusTypeDef MX_USART1_RX_Queue_Config(void)
   pNodeConfig.Init.TransferAllocatedPort = DMA_SRC_ALLOCATED_PORT0|DMA_DEST_ALLOCATED_PORT0;
   pNodeConfig.Init.TransferEventMode = DMA_TCEM_BLOCK_TRANSFER;
   pNodeConfig.Init.Mode = DMA_NORMAL;
-  pNodeConfig.RepeatBlockConfig.RepeatCount = 1;
-  pNodeConfig.RepeatBlockConfig.SrcAddrOffset = 0;
-  pNodeConfig.RepeatBlockConfig.DestAddrOffset = 0;
-  pNodeConfig.RepeatBlockConfig.BlkSrcAddrOffset = 0;
-  pNodeConfig.RepeatBlockConfig.BlkDestAddrOffset = 0;
   pNodeConfig.TriggerConfig.TriggerPolarity = DMA_TRIG_POLARITY_MASKED;
   pNodeConfig.DataHandlingConfig.DataExchange = DMA_EXCHANGE_NONE;
   pNodeConfig.DataHandlingConfig.DataAlignment = DMA_DATA_RIGHTALIGN_ZEROPADDED;

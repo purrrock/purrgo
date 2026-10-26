@@ -11,7 +11,7 @@ Targets (both are supported, each is a separate CubeMX project):
 
 The migration plan and accepted decisions are in [`TODO_migrate.md`](../../TODO_migrate.md). F411 support is kept after the migration.
 
-Keep MCU startup code, HAL initialization, interrupt handlers and board wiring in each CubeMX project (`PurrGO_STM32/Core/Src/`, `PurrGO_STM32U5/Core/Src/`). STM32 platform adapters that do not depend on the MCU family live in `common/` (`common/Src`, `common/Inc`) and are built into both firmwares; what differs per board stays in the project: `sd_card.c` (SDIO vs SPI), `gnss_io.c`, `power_stm32.c`. `common/sd_spi` is the HAL-free SD-card SPI protocol (host-tested), `common/fatfs` is FatFs R0.12c for U585 (CubeMX has no FATFS middleware for STM32U5). Do not move any of those dependencies into `src/core/`.
+Keep MCU startup code, HAL initialization, interrupt handlers and board wiring in each CubeMX project (`PurrGO_STM32/Core/Src/`, `PurrGO_STM32U5/Core/Src/`). STM32 platform adapters that do not depend on the MCU family live in `common/` (`common/Src`, `common/Inc`) and are built into both firmwares; what differs per board stays in the project: `sd_card.c` (SDIO vs SPI), `gnss_io.c`, `power_stm32.c`. `common/sd_spi` is the HAL-free SD-card SPI protocol (host-tested), `common/fatfs` is FatFs R0.16 for U585 (CubeMX has no FATFS middleware for STM32U5). Do not move any of those dependencies into `src/core/`.
 
 ## Build
 

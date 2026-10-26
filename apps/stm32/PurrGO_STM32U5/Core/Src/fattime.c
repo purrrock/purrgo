@@ -6,6 +6,7 @@
  * FATFS/App/fatfs.c проекта F411.
  */
 
+#include "ff.h"
 #include "diskio.h"
 
 #include "purrgo/app_fsm.h"
