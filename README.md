@@ -143,7 +143,7 @@ purrgo/
 ├── tests/
 │   ├── host/               # Host-тесты ядра (ctest, ASan/UBSan) и тестовые данные
 │   └── audit_maps.py       # Аудит бинарных файлов карт
-├── third_party/            # External dependencies (сабмодули: minmea, e-Paper)
+├── third_party/            # External dependencies (сабмодули: minmea, eink_part_refresh (драйвер E-Ink epd4g))
 ├── tools/                  # Development/build tools
 │
 ├── cmake/

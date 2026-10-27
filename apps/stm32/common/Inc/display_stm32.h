@@ -1,6 +1,7 @@
 #ifndef DISPLAY_STM32_H
 #define DISPLAY_STM32_H
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #include "purrgo/hardware_config.h"
@@ -37,6 +38,19 @@
 #define COLOR_WHITE         0x03
 
 void display_init(void);
+
+/*
+ * Продвинуть неблокирующий драйвер E-Ink. Вызывать из главного цикла
+ * на каждом проходе.
+ */
+void display_stm32_poll(void);
+
+/*
+ * false, пока драйвер читает framebuffer (идёт передача данных на панель):
+ * рисовать в framebuffer в это время нельзя. Сама волна обновления панели
+ * (секунды) на это не влияет.
+ */
+bool display_stm32_ready_for_render(void);
 
 void display_clear(uint8_t color);
 

@@ -28,6 +28,15 @@ static purrgo_state_t prev_state = APP_STATE_MAP;
 
 #define POWER_OFF_TEXT "POWER OFF"
 
+/*
+ * Режим дисплея по экрану: карта - 4 уровня серого, меню и маршрутный
+ * компьютер - 1 бит (быстрое частичное обновление).
+ */
+static display_mode_t ui_display_mode(purrgo_state_t state)
+{
+    return (state == APP_STATE_MAP) ? DISPLAY_MODE_GRAY4 : DISPLAY_MODE_MONO;
+}
+
 bool purrgo_app_ui_is_power_off(void)
 {
     return s_power_off_screen;
@@ -145,6 +154,12 @@ void purrgo_app_ui_render(
      */
     purrgo_app_ui_consume_dirty();
 
+    /*
+     * Режим дисплея выбирается до отрисовки и до refresh/flush: при смене
+     * режима платформа сама сделает полное обновление.
+     */
+    display_set_mode(ui_display_mode(current_state));
+
     switch (current_state) {
         case APP_STATE_MENU_CONFIG:
             if (prev_state != APP_STATE_MENU_CONFIG) {
@@ -157,6 +172,13 @@ void purrgo_app_ui_render(
                 ui_trip_render_grid(gfx);
             }
             ui_trip_render_values(gfx, gnss, sun);
+            /*
+             * Экран не регистрирует изменённые области сам: значения
+             * меняются по всей площади, поэтому обновляется весь экран.
+             * В 1-bit режиме это частичное обновление без мигания.
+             */
+            display_refresh_region(0, 0, PURRGO_HW_DISPLAY_WIDTH_PX,
+                                   PURRGO_HW_DISPLAY_HEIGHT_PX);
             break;
         case APP_STATE_MAP:
             ui_render_map(gfx, gnss, sun);
@@ -199,6 +221,9 @@ bool purrgo_app_ui_render_power_off(void)
     }
 
     s_power_off_screen = true;
+
+    /* Экран выключения - это карта: режим 4 gray (не зависит от текущего экрана). */
+    display_set_mode(DISPLAY_MODE_GRAY4);
 
     /*
      * Показываем карту независимо от текущего экрана (выключение из меню):

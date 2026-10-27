@@ -44,3 +44,25 @@ if(TARGET test_gnss_diag)
     target_include_directories(test_gnss_diag PRIVATE
         ${PROJECT_SOURCE_DIR}/apps/stm32/common/gnss_diag)
 endif()
+
+# test_display_eink проверяет очередь обновлений E-Ink (display_eink.c) поверх
+# настоящей библиотеки epd4g и модели панели; HAL подменяют заглушки stm32_shim.
+# Нужен сабмодуль third_party/eink_part_refresh.
+if(TARGET test_display_eink)
+    set(EPD4G_DIR ${PROJECT_SOURCE_DIR}/third_party/eink_part_refresh/epd4g)
+    if(EXISTS ${EPD4G_DIR}/src/epd4g.c)
+        target_sources(test_display_eink PRIVATE
+            ${PROJECT_SOURCE_DIR}/apps/stm32/common/Src/display_eink.c
+            ${EPD4G_DIR}/src/epd4g.c
+            ${EPD4G_DIR}/src/epd4g_fb.c)
+        target_include_directories(test_display_eink PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/stm32_shim
+            ${PROJECT_SOURCE_DIR}/apps/stm32/common/Inc
+            ${EPD4G_DIR}/include)
+        target_compile_definitions(test_display_eink PRIVATE EPD4G_BW_THRESHOLD=3)
+    else()
+        message(WARNING "third_party/eink_part_refresh не загружен: test_display_eink пропущен")
+        set_target_properties(test_display_eink PROPERTIES EXCLUDE_FROM_ALL TRUE)
+        set_tests_properties(test_display_eink PROPERTIES DISABLED TRUE)
+    endif()
+endif()

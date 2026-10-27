@@ -85,16 +85,15 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Application wrapper
     ${PURRGO_STM32_COMMON}/Src/stm32_app.c
 
-    # Waveshare STM32 E-Ink 2.7" V2 driver.
-    ${PROJECT_SOURCE_DIR}/third_party/e-Paper/STM32/STM32-F103ZET6/User/e-Paper/EPD_2in7_V2.c
-    ${PURRGO_STM32_COMMON}/Src/DEV_Config.c
+    # E-Ink 2.7" V2: слой очереди обновлений над библиотекой epd4g
+    # (сама библиотека подключается ниже через add_subdirectory + target_link_libraries).
     ${PURRGO_STM32_COMMON}/Src/display_eink.c
 
     # Display test
     ${PURRGO_STM32_COMMON}/Src/eink_test.c
 )
 
-# Предупреждения только для пользовательских файлов (не для CubeMX/HAL/FatFs/драйвера Waveshare).
+# Предупреждения только для пользовательских файлов (не для CubeMX/HAL/FatFs/библиотеки epd4g).
 # -ffunction-sections -fdata-sections -fstack-usage, --gc-sections и
 # --print-memory-usage уже заданы CubeMX-тулчейном (cmake/gcc-arm-none-eabi.cmake).
 purrgo_sources_warnings(
@@ -124,14 +123,23 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${PURRGO_STM32_COMMON}/gnss_diag
     ${PURRGO_STM32_COMMON}/sd_spi
     ${PURRGO_STM32_COMMON}/fatfs
-
-    # Waveshare STM32 E-Paper V2 driver.
-    ${PROJECT_SOURCE_DIR}/third_party/e-Paper/STM32/STM32-F103ZET6/User/e-Paper
 )
+
+# E-Ink: библиотека epd4g (сабмодуль third_party/eink_part_refresh). INTERFACE-
+# библиотека: её исходники компилируются в этом таргете, поэтому видят main.h,
+# HAL, hspi1 и метки EINK_* из CubeMX. Порт STM32 HAL (epd4g_port_stm32_hal.c)
+# использует hspi1 и порты EINK_CS/DC/RST/BUSY.
+set(EPD4G_PORT_STM32_HAL ON)
+add_subdirectory(${PROJECT_SOURCE_DIR}/third_party/eink_part_refresh/epd4g
+                 ${CMAKE_BINARY_DIR}/epd4g)
 
 # Add project symbols (macros)
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined symbols
+
+    # 1-bit режим: только белый (3) -> белый, любой серый -> чёрный. Как в
+    # прежнем драйвере Waveshare (меню и экран выключения рисуются двумя цветами).
+    EPD4G_BW_THRESHOLD=3
 )
 
 # Remove wrong libob.a library dependency when using cpp files.
@@ -141,6 +149,7 @@ list(REMOVE_ITEM CMAKE_C_IMPLICIT_LINK_LIBRARIES ob)
 target_link_libraries(${CMAKE_PROJECT_NAME}
     stm32cubemx
     purrgo_core
+    epd4g
     # Add user defined libraries
 )
 

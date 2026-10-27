@@ -202,11 +202,12 @@ void purrgo_stm32_init(void)
 
   PURRGO_LOG("Splash Screen\r\n");
   /* Splash: PurrGO! */
+  display_set_mode(DISPLAY_MODE_MONO);
   gfx_set_color(&global_gfx_ctx, COLOR_WHITE, COLOR_BLACK);
   gfx_clear(&global_gfx_ctx);
   gfx_draw_string(&global_gfx_ctx, DISPLAY_WIDTH / 2 - 23, DISPLAY_HEIGHT / 2, "PurrGO!");
+  /* Неблокирующе: первый кадр карты встанет в очередь за заставкой. */
   display_refresh();
-  HAL_Delay(300);
 
   last_button_poll_ms = purrgo_system_time_ms();
 }
@@ -214,6 +215,12 @@ void purrgo_stm32_init(void)
 void purrgo_stm32_process(void)
 {
   uint32_t current_time_ms = purrgo_system_time_ms();
+
+  /*
+   * E-Ink: продвинуть неблокирующий драйвер (запуск обновления из очереди,
+   * завершение, засыпание панели в простое).
+   */
+  display_stm32_poll();
 
   /* Отчёт о связи с GNSS (отладочный лог). */
   purrgo_gnss_monitor_process();
@@ -270,14 +277,21 @@ void purrgo_stm32_process(void)
    * purrgo_app_ui_needs_render() учитывает флаги и паузу после неудачного
    * рендера карты, purrgo_app_ui_render() сам забирает/сбрасывает флаги.
    * Платформа флаги не трогает.
+   *
+   * Пока драйвер E-Ink передаёт данные кадра на панель, рисовать в
+   * framebuffer нельзя: рендер откладывается (флаги остаются взведёнными).
+   * Саму волну обновления (секунды) ждать не нужно: запрос на новое
+   * обновление встаёт в очередь display_eink.c.
    */
-  if (purrgo_app_ui_needs_render(current_time_ms))
+  if (display_stm32_ready_for_render() &&
+      purrgo_app_ui_needs_render(current_time_ms))
   {
     purrgo_app_ui_render(
         &global_gfx_ctx,
         purrgo_app_get_gnss_solution(),
         purrgo_app_get_sun_info()
     );
+    display_stm32_poll();   /* сразу запустить поставленное обновление */
   }
   /*
    * -----------------------------------------------------------------------

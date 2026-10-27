@@ -10,6 +10,11 @@ static int16_t pending_x2 = -1;
 static int16_t pending_y2 = -1;
 static int pending_has_region = 0;
 
+void display_set_mode(display_mode_t mode) {
+    /* Эмулятору и host-тестам режим панели не нужен. */
+    (void)mode;
+}
+
 void display_refresh(void) {
     PURRGO_LOG("FULL REFRESH\r\n");
     partial_refresh_count = 0;

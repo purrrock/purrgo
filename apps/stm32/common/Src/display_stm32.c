@@ -4,6 +4,7 @@
 #include "purrgo/logger.h"
 #include "purrgo/gfx_fb2bpp.h"
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
@@ -50,7 +51,22 @@ void display_init(void)
      */
     display_clear(COLOR_WHITE);
 
-    display_eink_init();
+    display_eink_init(framebuffer);
+}
+
+void display_set_mode(display_mode_t mode)
+{
+    display_eink_set_mode(mode);
+}
+
+void display_stm32_poll(void)
+{
+    display_eink_poll();
+}
+
+bool display_stm32_ready_for_render(void)
+{
+    return !display_eink_data_busy();
 }
 
 /*
@@ -287,14 +303,11 @@ void stm32_fill_span_cb(
  * Dirty-region накапливается в display_refresh_region() и выводится в
  * display_flush().
  *
- * Для E-Ink 4-gray backend каждый refresh является полным:
- *
- *   EPD_2IN7_V2_Init_4GRAY()
- *   EPD_2IN7_V2_4GrayDisplay()
- *   EPD_2IN7_V2_Sleep()
- *
- * Поэтому координаты dirty-region для E-Ink не передаются
- * непосредственно в драйвер.
+ * Все обновления неблокирующие: display_refresh() и display_flush() только
+ * ставят запрос в очередь display_eink.c, физическое обновление идёт в фоне
+ * (display_stm32_poll() вызывается из главного цикла). В режиме 4 gray
+ * обновляются пиксели, изменившиеся относительно предыдущего кадра, в
+ * режиме 1 bit - накопленная область.
  */
 
 static int16_t pending_x1 = -1;
@@ -305,31 +318,15 @@ static int16_t pending_y2 = -1;
 static int pending_has_region = 0;
 
 
-static void do_refresh_region(
-    int16_t x,
-    int16_t y,
-    int16_t w,
-    int16_t h
-)
-{
-    /*
-     * 1-bit: частичное обновление указанной области
-     *        (display_eink сам переходит на полное, когда нужно).
-     * 4-gray: частичного обновления нет, физически обновляется весь экран.
-     */
-    display_eink_refresh_region(framebuffer, x, y, w, h);
-}
-
-
 /*
- * Полное обновление дисплея.
+ * Полное обновление дисплея (мигает весь экран, сбрасывает остаточное
+ * изображение). Не блокирует.
  */
 void display_refresh(void)
 {
     pending_has_region = 0;
 
-    /* Явное ПОЛНОЕ обновление (сброс остаточного изображения). */
-    display_eink_refresh(framebuffer);
+    display_eink_request_full();
 }
 
 
@@ -430,13 +427,10 @@ void display_flush(void)
     }
 
     /*
-     * E-Ink 1-bit: обновляем только накопленную область. Переход на
-     * полное обновление (первое обновление, лимит частичных подряд)
-     * выполняет display_eink_refresh_region().
-     *
-     * E-Ink 4-gray: display_eink_refresh_region() обновляет весь экран.
+     * Переход на полное обновление (первое обновление, смена режима, лимит
+     * частичных подряд) выполняет display_eink.c.
      */
-    do_refresh_region(
+    display_eink_request_region(
         pending_x1,
         pending_y1,
         (int16_t)(pending_x2 - pending_x1 + 1),
