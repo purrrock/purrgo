@@ -106,7 +106,8 @@ class Stats:
         self.jumps = 0
         self.depth = {}
         self.pass_nav = 0            # навигационных узлов, вошедших в камеру
-        self.by_file = {}            # имя файла -> передач
+        self.by_file = {}            # слой:тип -> передач (roads:idx ...)
+        self.by_kind = {}            # тип (idx/mlp/db) -> передач
 
     def copy_counts(self):
         return dict(self.__dict__)
@@ -136,7 +137,7 @@ class SimFile:
         if w.cache.hit(key):
             st.hits += 1
             return
-        L = w.line
+        L = w.line_for(self.name)
         base = (s // L) * L
         nsec = (self.size + SECTOR - 1) // SECTOR
         n = min(L, nsec - base)
@@ -160,7 +161,9 @@ class SimFile:
         else:
             st.x_rand += 1
         st.sectors += n
-        st.by_file[self.name.split('.')[1]+':'+self.name.split('.')[0]] = st.by_file.get(self.name.split('.')[1]+':'+self.name.split('.')[0], 0) + 1
+        layer, kind = self.name.rsplit('.', 1)
+        st.by_file[layer + ':' + kind] = st.by_file.get(layer + ':' + kind, 0) + 1
+        st.by_kind[kind] = st.by_kind.get(kind, 0) + 1
         self.last_end = base + n
         w.card_last = self.name
         for k in range(base, base + n):
@@ -187,11 +190,17 @@ class World:
     def __init__(self, map_dir, cache_entries=LRU_ENTRIES, line=1, cluster=32768):
         self.map_dir = map_dir
         self.cache = Cache(cache_entries)
+        # line: int (для всех файлов) или dict {"idx": n, "mlp": n, "db": n}
         self.line = line
         self.cluster = cluster
         self.card_last = None
         self.stats = Stats()
         self.files = {}
+
+    def line_for(self, name):
+        if isinstance(self.line, dict):
+            return self.line.get(name.rsplit('.', 1)[1], 1)
+        return self.line
 
     def F(self, name):
         if name not in self.files:
@@ -411,21 +420,29 @@ def main():
     ap.add_argument("--fastseek", action="store_true",
                     help="модель с включённой CLMT (f_lseek(CREATE_LINKMAP))")
     ap.add_argument("--cache", type=int, default=LRU_ENTRIES, help="секторов в LRU")
-    ap.add_argument("--line", type=int, default=1, help="секторов за одну передачу (read-ahead)")
+    ap.add_argument("--line", type=int, default=1, help="секторов за одну передачу (read-ahead), для всех файлов")
+    ap.add_argument("--line-idx", type=int, default=0, help="read-ahead только для .idx (перекрывает --line)")
+    ap.add_argument("--line-mlp", type=int, default=0, help="read-ahead только для .mlp (перекрывает --line)")
+    ap.add_argument("--line-db", type=int, default=0, help="read-ahead только для .db (перекрывает --line)")
+    ap.add_argument("--breakdown", action="store_true",
+                    help="печатать разбивку передач по idx/mlp/db, пройденные узлы дерева и пропуски")
     ap.add_argument("--min-px", type=float, default=0, help="не рисовать объекты мельче P пикселей")
     ap.add_argument("--pan", type=float, default=0,
                     help="после кадра сдвинуть камеру на долю ширины и считать второй кадр")
     a = ap.parse_args()
     CPU = a.cpu
     params = {"poi_mode": a.poi_mode, "labels": bool(a.labels), "min_px": a.min_px}
+    line = a.line
+    if a.line_idx or a.line_mlp or a.line_db:
+        line = {"idx": a.line_idx or a.line, "mlp": a.line_mlp or a.line, "db": a.line_db or a.line}
 
     print(f"map={a.map_dir} center=({a.lat},{a.lon}) bus={a.bus} cpu={a.cpu}MHz "
-          f"fastseek={a.fastseek} cache={a.cache} line={a.line} min_px={a.min_px} pan={a.pan}")
+          f"fastseek={a.fastseek} cache={a.cache} line={line} min_px={a.min_px} pan={a.pan}")
     print(f"{'scale':>8} {'LOD':>3} {'xfers':>6} {'sect':>5} {'KB':>6} {'verts':>7} "
           f"{'skip':>5} {'bk-seek':>7} | {'I/O ms lo/mid/hi':>20} | {'CPU ms lo/mid/hi':>20} | "
           f"{'total s lo/mid/hi':>20}")
     for sc in [int(x) for x in a.scales.split(",")]:
-        w = World(a.map_dir, a.cache, a.line, MODEL["cluster_kb"][1] * 1024)
+        w = World(a.map_dir, a.cache, line, MODEL["cluster_kb"][1] * 1024)
         st, lod = run_frame(w, a.lat, a.lon, sc, params)
         if a.pan:
             dlon = a.pan * (make_camera(a.lat, a.lon, sc)["max_x"] -
@@ -440,6 +457,11 @@ def main():
               f"{io[0]:>6.0f}/{io[1]:>6.0f}/{io[2]:>6.0f} | "
               f"{cpu[0]:>6.0f}/{cpu[1]:>6.0f}/{cpu[2]:>6.0f} | "
               f"{tot[0]:>6.2f}/{tot[1]:>6.2f}/{tot[2]:>6.2f}")
+        if a.breakdown:
+            k = st.by_kind
+            print(f"{'':>8}   idx={k.get('idx', 0)} mlp={k.get('mlp', 0)} db={k.get('db', 0)} "
+                  f"nav_passed={st.pass_nav} jumps={st.jumps} features={st.features} "
+                  f"hits={st.hits} fsreads={st.fsreads}")
 
 
 if __name__ == "__main__":
