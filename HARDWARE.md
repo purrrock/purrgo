@@ -16,23 +16,21 @@ PurrGO — автономный GNSS-навигатор и трекер без �
 
 ---
 
-## Профили аппаратной разработки
+## Аппаратная платформа
 
-В проекте используются две платы. Обе платформы поддерживаются: F411 сохраняется после миграции на U585.
+Поддерживаемая плата — **WeAct STM32U585CIU6**. Поддержка STM32F411CEU6 удалена; её код сохранён в архивном релизе на GitHub.
 
-| Назначение | Development (F411) | Release (U585) |
-|---|---|---|
-| MCU | STM32F411CEU6 (128 Kbytes RAM) | STM32U585CIU6 (784 Kbytes RAM) |
-| GNSS | GY-NEO6MV2 | GY-NEO6MV2 (после отладки замена на G10A F30) |
-| Дисплей | Waveshare 2.7inch e-Paper HAT | Waveshare 2.7inch e-Paper HAT |
-| Разрешение | 176 × 264 px | 176 × 264 px |
-| Градации | 4 уровня серого | 4 уровня серого |
-| Хранилище | microSD по SDIO (4 бита) | microSD по SPI2 (в 48-выводном корпусе U585CI нет SDMMC) |
-| Питание | отладочная плата / USB | USB 5 В (питание от батарей и мониторинг батареи отложены) |
-| Ввод | кнопки | кнопки |
-| Распиновка | [`PurrGO_STM32F411_PINOUT.md`](PurrGO_STM32F411_PINOUT.md) | [`PurrGO_STM32U585_PINOUT.md`](PurrGO_STM32U585_PINOUT.md) |
-
-STM32F411CEU6 не является частью финального устройства. План миграции: [`TODO_migrate.md`](TODO_migrate.md).
+| Параметр | Значение |
+|---|---|
+| MCU | STM32U585CIU6 (784 Kbytes RAM, 2 Mbytes Flash) |
+| GNSS | GY-NEO6MV2 (после отладки замена на G10A F30) |
+| Дисплей | Waveshare 2.7inch e-Paper HAT |
+| Разрешение | 176 × 264 px |
+| Градации | 4 уровня серого |
+| Хранилище | microSD по SPI2 (в 48-выводном корпусе U585CI нет SDMMC) |
+| Питание | USB 5 В (питание от батарей и мониторинг батареи отложены) |
+| Ввод | кнопки |
+| Распиновка | [`PurrGO_STM32U585_PINOUT.md`](PurrGO_STM32U585_PINOUT.md) |
 
 ### GNSS
 
@@ -79,7 +77,7 @@ Release-дисплей:
 
 ## Кнопки
 
-Используются четыре встроенные кнопки Waveshare 2.7inch e-Paper HAT (K1…K4). На платах STM32F411 и STM32U585 они подключены к PA0, PA1, PC14, PC15 (см. `PurrGO_STM32F411_PINOUT.md`, `PurrGO_STM32U585_PINOUT.md`)
+Используются четыре встроенные кнопки Waveshare 2.7inch e-Paper HAT (K1…K4). На плате STM32U585 они подключены к PA0, PA1, PC14, PC15 (см. `PurrGO_STM32U585_PINOUT.md`)
 
 ---
 
@@ -158,7 +156,7 @@ microSD используется как основное внешнее хран
                     +----------------+
 ```
 
-Распиновка отладочных плат ведётся в `PurrGO_STM32F411_PINOUT.md` и `PurrGO_STM32U585_PINOUT.md`.
+Распиновка платы ведётся в `PurrGO_STM32U585_PINOUT.md`.
 
 ---
 

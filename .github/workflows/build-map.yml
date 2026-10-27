@@ -189,8 +189,6 @@ jobs:
             run "Follow-прыжок, кэш 256 (кадр уже в кэше)"       "$lat" "$lon" --scales "$S_JUMP" --fastseek --min-px 2 --pan 0.81 --cache 256
             # POI с иконками и подписями
             run "POI иконки + подписи"                           "$lat" "$lon" --scales "$S_JUMP" --fastseek --min-px 2 --poi-mode icons --labels 1
-            # dev-плата для сравнения
-            run "F411 SDIO (dev-плата), как сейчас"              "$lat" "$lon" --scales "$S_MAIN" --bus sdio --cpu 84
             # дальние масштабы - один раз, по первой точке
             if [ "$first" = 1 ]; then
               first=0

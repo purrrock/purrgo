@@ -2,23 +2,13 @@
 #define PURRGO_STM32_SD_CARD_H
 
 /*
- * microSD-карта PurrGO + FatFs. Общий для F411 и U585 интерфейс; реализация
- * (sd_card.c) у каждой платы своя, в каталоге её проекта.
+ * microSD-карта PurrGO + FatFs (STM32U585, apps/stm32/PurrGO_STM32U5).
  *
- * F411 (apps/stm32/PurrGO_STM32): SDIO, 4 бита.
- *   Низкоуровневую часть (HAL SD, FatFs-драйвер "SD") генерирует CubeMX:
- *     Core/Src/sdio.c                 - SDIO, DMA, пины
- *     FATFS/Target/bsp_driver_sd.c    - BSP поверх HAL SD
- *     FATFS/Target/sd_diskio.c        - диск FatFs
- *   sd_card.c подменяет слабые (__weak) функции BSP версиями, ограниченными по
- *   времени, и даёт буфер-посредник для невыровненных буферов FatFs.
- *   Detect: вывод Detect_SDIO (PB12).
- *
- * U585 (apps/stm32/PurrGO_STM32U5): SPI2, режим SPI карты (в корпусе
- *   UFQFPN48 у STM32U585CI нет SDMMC). Протокол карты - в
- *   apps/stm32/common/sd_spi (без HAL, проверяется host-тестом), диск FatFs -
- *   apps/stm32/common/fatfs/diskio.c, привязка к HAL - sd_card.c проекта.
- *   Detect: вывод Detect_SD (PB10), CS: SD_CS (PB12).
+ * Карта подключена по SPI2 и работает в SPI-режиме (в корпусе UFQFPN48 у
+ * STM32U585CI нет SDMMC). Протокол карты - в apps/stm32/common/sd_spi (без HAL,
+ * проверяется host-тестом), диск FatFs - apps/stm32/common/fatfs/diskio.c,
+ * привязка к HAL - Core/Src/sd_card.c проекта.
+ * Detect: вывод Detect_SD (PB10), CS: SD_CS (PB12).
  *
  * Модуль sd_card.c (пользовательский, CubeMX его не перезаписывает) отвечает за:
  *   - монтирование файловой системы и создание дерева каталогов PURRGO;
@@ -30,10 +20,10 @@
 #include <stdint.h>
 
 /*
- * Полярность вывода Detect (F411: Detect_SDIO PB12, U585: Detect_SD PB10).
+ * Полярность вывода Detect (Detect_SD, PB10).
  *
  *   PURRGO_SD_DETECT_ACTIVE_HIGH  - карта вставлена: вывод = 1. По умолчанию:
- *                                   так работает картридер на F411 и на U585
+ *                                   так работает используемый картридер
  *                                   (проверено на плате U585).
  *   PURRGO_SD_DETECT_ACTIVE_LOW   - карта вставлена: вывод = 0 (контакт
  *                                   гнезда замыкается на GND). Нужна подтяжка
@@ -60,7 +50,7 @@
 
 typedef enum
 {
-    /* Карты нет (по выводу Detect_SDIO). */
+    /* Карты нет (по выводу Detect_SD). */
     PURRGO_SD_NO_CARD = 0,
 
     /* Карта есть, но смонтировать не удалось (нет FAT, сбой обмена и т.д.). */
@@ -74,7 +64,7 @@ typedef enum
  * @brief Определить наличие карты, смонтировать FatFs, создать каталоги.
  *
  * Вызывается один раз при старте, после инициализации периферии CubeMX
- * (F411: MX_FATFS_Init() и MX_SDIO_SD_Init(); U585: MX_SPI2_Init()).
+ * (MX_SPI2_Init()).
  *
  * @return true, если файловая система смонтирована.
  */

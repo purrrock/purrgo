@@ -7,9 +7,8 @@
 
 KEY1 | KEY2 | KEY3 | KEY4
 
-На платах разработки STM32F411 и STM32U585 это кнопки E-Ink HAT K1…K4 на выводах
-PA0, PA1, PC14, PC15 соответственно (см. `PurrGO_STM32F411_PINOUT.md` и
-`PurrGO_STM32U585_PINOUT.md`).
+На плате STM32U585 это кнопки E-Ink HAT K1…K4 на выводах
+PA0, PA1, PC14, PC15 соответственно (см. `PurrGO_STM32U585_PINOUT.md`).
 
 Функции кнопок зависят от текущего режима работы.
 

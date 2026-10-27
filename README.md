@@ -22,28 +22,7 @@ PurrGO **не выполняет turn-by-turn route calculation**. Это нав
 ## Статус проекта
 
 Проект находится в активной разработке.
-
-Текущий переход:
-
-```text
-PC
- │
- ├── GNSS
- ├── navigation
- ├── track
- ├── maps
- └── renderer
- │
- ▼
-STM32
- │
- ▼
-Release hardware
-```
-
-Portable C core разрабатывается и тестируется на PC перед переносом на STM32.
-
-Следующий основной этап — реализация и интеграция firmware для **STM32U585CIU6**.
+Текущий этап — реализация firmware для **STM32U585CIU6**.
 
 Текущий список работ находится в [`TODO.md`](TODO.md).
 
@@ -88,10 +67,8 @@ Portable C core разрабатывается и тестируется на PC
 | Display resolution | 176 × 264 |
 | Display | 4 gray levels, SPI |
 | Storage | microSD |
-| Battery | 1 × 18650 Li-ion |
+| Battery | 3 × AAA |
 | Controls | физические кнопки |
-
-Для разработки STM32 используются **STM32F411CEU6**.
 
 Для разработки GNSS используется **GY-NEO6MV2**.
 
@@ -150,8 +127,9 @@ map.name
 purrgo/
 ├── apps/
 │   ├── emulator/           # PC-эмулятор (SDL2)
-│   └── stm32/              # Прошивка STM32 (CubeMX-проект + пользовательский код)
-│       └── PurrGO_STM32/Core/Src/   # STM32-адаптеры: GNSS (UART+DMA), SD, дисплеи, кнопки, питание
+│   └── stm32/              # Прошивка STM32U585
+│       ├── common/         # STM32-адаптеры: дисплей, кнопки, ФС, логгер, SD по SPI, FatFs
+│       └── PurrGO_STM32U5/ # CubeMX-проект; Core/Src: GNSS (UART+DMA), SD, питание
 │
 ├── docs/                   # Project documentation
 ├── include/
@@ -169,12 +147,12 @@ purrgo/
 ├── tools/                  # Development/build tools
 │
 ├── cmake/
-│   ├── toolchains/         # CMake toolchain files (STM32)
+│   ├── toolchains/         # CMake toolchain file (STM32U5)
 │   └── PurrgoWarnings.cmake# Флаги предупреждений проекта
 │
 ├── .github/workflows/      # CI (GitHub Actions)
 ├── CMakeLists.txt          # Единая точка входа сборки
-├── CMakePresets.json       # Пресеты: win-mingw-*, linux-gcc-*, stm32-*
+├── CMakePresets.json       # Пресеты: win-mingw-*, linux-gcc-*, stm32u5-*
 ├── HARDWARE.md
 ├── TODO.md
 └── README.md
@@ -199,7 +177,6 @@ git submodule update --init --recursive
 | `win-mingw-debug`, `win-mingw-release` | PC-эмулятор (SDL2) | Windows, MSYS2 ucrt64 (`C:/msys64/ucrt64`) |
 | `linux-gcc-debug`, `linux-gcc-release` | PC-эмулятор (SDL2) | Linux, GCC, Ninja, `libsdl2-dev` |
 | `linux-gcc-test` | Только ядро + host-тесты, ASan/UBSan (без SDL2) | Linux, GCC, Ninja |
-| `stm32-debug`, `stm32-release` | Прошивка STM32F411 | `arm-none-eabi-gcc` в `PATH`, Ninja |
 | `stm32u5-debug`, `stm32u5-release` | Прошивка STM32U585 | `arm-none-eabi-gcc` в `PATH`, Ninja |
 
 Пресеты, неподходящие для текущей ОС, в списке не показываются.
@@ -215,23 +192,22 @@ STM32Cube for VS Code предоставляет `cube-cmake` (см. `.vscode/se
 ### Командная строка
 
 ```sh
-cmake --preset stm32-debug
-cmake --build --preset stm32-debug
+cmake --preset stm32u5-debug
+cmake --build --preset stm32u5-debug
 ```
 
-Результат сборки: `out/build/<пресет>/`. Прошивка — `out/build/stm32-*/PurrGO_STM32.elf` (F411) и
-`out/build/stm32u5-*/PurrGO_STM32U5.elf` (U585),
+Результат сборки: `out/build/<пресет>/`. Прошивка — `out/build/stm32u5-*/PurrGO_STM32U5.elf`,
 эмулятор — `out/build/<пресет>/apps/emulator/purrgo_emulator`.
 
-Платформу выбирает переменная `PURRGO_PLATFORM` (`pc` | `stm32`), которую задаёт
+Платформу выбирает переменная `PURRGO_PLATFORM` (`pc` | `stm32u5`), которую задаёт
 пресет. Без пресета `cmake -S . -B build` собирает PC-эмулятор.
 
 ### STM32CubeMX
 
-CubeMX-проект находится в `apps/stm32/PurrGO_STM32/` (`.ioc`, `Core/`, `Drivers/`, ...).
+CubeMX-проект находится в `apps/stm32/PurrGO_STM32U5/` (`PurrGO_STM32U5.ioc`, `Core/`, `Drivers/`, ...).
 Перегенерация кода обновляет `cmake/stm32cubemx/CMakeLists.txt` и
 `cmake/gcc-arm-none-eabi.cmake` в этой папке — они подхватываются автоматически.
-`apps/stm32/PurrGO_STM32/CMakeLists.txt` (пользовательский, CubeMX его не перезаписывает)
+`apps/stm32/PurrGO_STM32U5/CMakeLists.txt` (пользовательский, CubeMX его не перезаписывает)
 подключается из корневого `CMakeLists.txt` и самостоятельно не конфигурируется.
 
 ---

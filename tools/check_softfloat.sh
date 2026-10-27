@@ -1,6 +1,6 @@
 #!/bin/sh
 # Проверка итогового .elf на программные (soft-float) помощники ARM EABI.
-# Использование: tools/check_softfloat.sh path/to/PurrGO_STM32.elf
+# Использование: tools/check_softfloat.sh path/to/PurrGO_STM32U5.elf
 # Ядро целочисленное; __aeabi_f* / __aeabi_d* означают, что где-то осталась
 # арифметика с float/double (например, inline-функции minmea.h) - см. вывод
 # с -Wl,-Map или `arm-none-eabi-nm -S --size-sort`, откуда они подтянуты.

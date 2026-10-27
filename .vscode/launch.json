@@ -2,23 +2,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Cortex Debug: OpenOCD (PurrGO F411)",
-            "type": "cortex-debug",
-            "request": "launch",
-            "servertype": "openocd",
-            // Активный пресет CMake (stm32-debug / stm32-release) определяет, какой .elf отлаживается.
-            "executable": "${workspaceFolder}/out/build/${command:cmake.activeConfigurePresetName}/PurrGO_STM32.elf",
-            "cwd": "${workspaceFolder}",
-            "device": "STM32F411CE",
-            "configFiles": [
-                "interface/stlink.cfg",
-                "target/stm32f4x.cfg"
-            ],
-            "svdFile": "${workspaceFolder}/apps/stm32/PurrGO_STM32/STM32F411.svd",
-            "runToEntryPoint": "main"
-        },
-        {
-            "name": "Cortex Debug: OpenOCD (PurrGO U585)",
+            "name": "Cortex Debug: OpenOCD (PurrGO)",
             "type": "cortex-debug",
             "request": "launch",
             "servertype": "openocd",

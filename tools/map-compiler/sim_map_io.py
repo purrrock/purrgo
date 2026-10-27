@@ -14,7 +14,7 @@ sim_map_io.py - оценка нагрузки на SD-карту при отри
 Использование:
     python sim_map_io.py <папка_карты> <lat> <lon> [--scales 500,2000,...]
                          [--poi-mode no|icons] [--labels 0|1]
-                         [--bus sdio|spi] [--fastseek] [--cache N] [--line L]
+                         [--bus spi] [--fastseek] [--cache N] [--line L]
                          [--min-px P] [--pan FRAC]
 Это ОЦЕНКА по модели, а не замер на железе. Параметры модели - в блоке MODEL.
 """
@@ -49,12 +49,10 @@ MODEL = {
     "lat_rand_ms":  (0.3,  0.6,  1.2),
     "lat_seq_ms":   (0.05, 0.12, 0.3),
     # передача одного сектора 512 Б по шине (без задержки карты)
-    #   sdio: 4 бита, 10.5 МГц, polling
     #   spi : ~20 МГц (160 МГц / 8), DMA (low) ... HAL polling (high)
-    "xfer_sdio_ms": (0.12, 0.15, 0.25),
     "xfer_spi_ms":  (0.21, 0.25, 0.45),
     # CPU на одну вершину (проекция: 2 деления int64 + отрезок) и на один purrgo_fs_read
-    "us_per_vertex_84":  (6.0, 10.0, 16.0),   # Cortex-M4 @ 84 МГц (F411)
+    "us_per_vertex_84":  (6.0, 10.0, 16.0),   # ~84 МГц (калибровка по Cortex-M4; близко к текущим 80 МГц U585)
     "us_per_vertex_160": (3.0,  5.0,  8.0),   # Cortex-M33 @ 160 МГц (U585)
     "us_per_fsread_84":  (2.0, 3.0, 5.0),
     "us_per_fsread_160": (1.0, 1.5, 2.5),
@@ -414,9 +412,9 @@ def main():
     ap.add_argument("--scales", default=",".join(map(str, SCALES)))
     ap.add_argument("--poi-mode", default="no", choices=["no", "icons"])
     ap.add_argument("--labels", type=int, default=1)
-    ap.add_argument("--bus", default="spi", choices=["sdio", "spi"])
+    ap.add_argument("--bus", default="spi", choices=["spi"])
     ap.add_argument("--cpu", default="160", choices=["84", "160"],
-                    help="F411 @84 МГц или U585 @160 МГц")
+                    help="~84 МГц (близко к текущим 80 МГц U585) или 160 МГц")
     ap.add_argument("--fastseek", action="store_true",
                     help="модель с включённой CLMT (f_lseek(CREATE_LINKMAP))")
     ap.add_argument("--cache", type=int, default=LRU_ENTRIES, help="секторов в LRU")
