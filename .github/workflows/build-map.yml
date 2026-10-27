@@ -171,11 +171,19 @@ jobs:
             IFS=':' read -r name lat lon <<< "$pt"
             echo "## $name ($lat, $lon)" >> "$out"
             # U585 (SPI SD, 160 МГц) - целевая плата
-            run "U585, SPI: как сейчас"                          "$lat" "$lon" --scales "$S_MAIN"
+            run "U585, SPI: как сейчас (с разбивкой idx/mlp/db)"  "$lat" "$lon" --scales "$S_MAIN" --breakdown
             run "U585, SPI: + CLMT (fast seek)"                  "$lat" "$lon" --scales "$S_MAIN" --fastseek
             run "U585, SPI: + CLMT + min-px 2"                   "$lat" "$lon" --scales "$S_MAIN" --fastseek --min-px 2
-            run "U585, SPI: + CLMT + min-px 2 + кэш 256"         "$lat" "$lon" --scales "$S_MAIN" --fastseek --min-px 2 --cache 256
+            run "U585, SPI: + CLMT + min-px 2 + кэш 256 (разбивка)" "$lat" "$lon" --scales "$S_MAIN" --fastseek --min-px 2 --cache 256 --breakdown
             run "U585, SPI: то же + чтение блоками 2 КБ"         "$lat" "$lon" --scales "$S_MAIN" --fastseek --min-px 2 --cache 256 --line 4
+            # read-ahead по типам файлов: на малых масштабах блоки вредят (случайные сектора),
+            # на больших помогают (последовательная геометрия)
+            run "read-ahead: idx 1 / mlp 4 / db 1"               "$lat" "$lon" --scales "$S_MAIN" --fastseek --min-px 2 --cache 256 --line-mlp 4 --breakdown
+            run "read-ahead: idx 1 / mlp 8 / db 1"               "$lat" "$lon" --scales "$S_MAIN" --fastseek --min-px 2 --cache 256 --line-mlp 8
+            run "read-ahead: idx 4 / mlp 1 / db 1"               "$lat" "$lon" --scales "$S_MAIN" --fastseek --min-px 2 --cache 256 --line-idx 4
+            # порог пропуска мелких объектов
+            run "min-px 3 + read-ahead mlp 4"                    "$lat" "$lon" --scales "$S_MAIN" --fastseek --min-px 3 --cache 256 --line-mlp 4
+            run "min-px 4 + read-ahead mlp 4"                    "$lat" "$lon" --scales "$S_MAIN" --fastseek --min-px 4 --cache 256 --line-mlp 4
             # прыжок follow (~81% экрана): второй кадр со сдвигом, кэш 32 против 256
             run "Follow-прыжок, кэш 32"                          "$lat" "$lon" --scales "$S_JUMP" --fastseek --min-px 2 --pan 0.81
             run "Follow-прыжок, кэш 256 (кадр уже в кэше)"       "$lat" "$lon" --scales "$S_JUMP" --fastseek --min-px 2 --pan 0.81 --cache 256
@@ -188,6 +196,7 @@ jobs:
               first=0
               run "Дальние масштабы, как сейчас"                 "$lat" "$lon" --scales "50000,200000,500000"
               run "Дальние масштабы, CLMT + min-px 2 + кэш 256"  "$lat" "$lon" --scales "50000,200000,500000" --fastseek --min-px 2 --cache 256
+              run "Дальние масштабы, min-px 3 + read-ahead mlp 4"  "$lat" "$lon" --scales "50000,200000,500000" --fastseek --min-px 3 --cache 256 --line-mlp 4
             fi
           done
 
