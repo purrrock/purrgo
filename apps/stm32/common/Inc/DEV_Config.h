@@ -12,7 +12,7 @@
 #define UDOUBLE uint32_t
 
 /*
- * E-Ink подключён к STM32F411 и STM32U585 одинаково:
+ * Подключение E-Ink к STM32U585:
  *
  * PA7 -> DIN  (SPI1 MOSI)
  * PA5 -> CLK  (SPI1 SCK)

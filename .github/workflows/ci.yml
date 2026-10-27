@@ -42,34 +42,10 @@ jobs:
       - name: Build
         run: cmake --build --preset linux-gcc-release
 
-  # Прошивка STM32F411 (arm-none-eabi-gcc). В логе - использование RAM/FLASH
-  # (-Wl,--print-memory-usage), .su-файлы со стеком лежат рядом с объектами.
-  build-stm32:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-      - name: Submodules
-        run: git submodule update --init --depth 1
-      - name: Install
-        run: sudo apt-get update && sudo apt-get install -y ninja-build gcc-arm-none-eabi
-      - name: Configure
-        run: cmake --preset stm32-release
-      - name: Build
-        run: cmake --build --preset stm32-release
-      - name: Size and soft-float check
-        run: |
-          arm-none-eabi-size out/build/stm32-release/PurrGO_STM32.elf
-          echo "--- soft-float helpers (__aeabi_[fd]*), информативно ---"
-          arm-none-eabi-nm out/build/stm32-release/PurrGO_STM32.elf | grep -E "__aeabi_[fd]" || true
-      - uses: actions/upload-artifact@v4
-        with:
-          name: PurrGO_STM32-release
-          path: |
-            out/build/stm32-release/PurrGO_STM32.elf
-            out/build/stm32-release/PurrGO_STM32.map
-
   # Прошивка STM32U585 (arm-none-eabi-gcc). HAL лежит в репозитории
   # (Copy only the necessary library files), абсолютных путей CubeMX нет.
+  # В логе - использование RAM/FLASH (-Wl,--print-memory-usage), .su-файлы
+  # со стеком лежат рядом с объектами.
   build-stm32u5:
     runs-on: ubuntu-24.04
     steps:

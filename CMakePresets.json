@@ -94,32 +94,6 @@
             }
         },
         {
-            "name": "stm32-base",
-            "hidden": true,
-            "inherits": "base",
-            "generator": "Ninja",
-            "toolchainFile": "${sourceDir}/cmake/toolchains/stm32-gcc-arm-none-eabi.cmake",
-            "cacheVariables": {
-                "PURRGO_PLATFORM": "stm32"
-            }
-        },
-        {
-            "name": "stm32-debug",
-            "displayName": "STM32F411 firmware - Debug",
-            "inherits": "stm32-base",
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Debug"
-            }
-        },
-        {
-            "name": "stm32-release",
-            "displayName": "STM32F411 firmware - Release",
-            "inherits": "stm32-base",
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Release"
-            }
-        },
-        {
             "name": "stm32u5-base",
             "hidden": true,
             "inherits": "base",
@@ -191,14 +165,6 @@
                 "lhs": "${hostSystemName}",
                 "rhs": "Linux"
             }
-        },
-        {
-            "name": "stm32-debug",
-            "configurePreset": "stm32-debug"
-        },
-        {
-            "name": "stm32-release",
-            "configurePreset": "stm32-release"
         },
         {
             "name": "stm32u5-debug",

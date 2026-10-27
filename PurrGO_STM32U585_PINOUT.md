@@ -1,10 +1,10 @@
-# PurrGO — STM32U585CIU6 Development Board Pinout
+# PurrGO — STM32U585CIU6 Board Pinout
 
-> Рабочий документ проекта. Здесь фиксируется назначение выводов платы **WeAct STM32U585CIU6** (проект `apps/stm32/PurrGO_STM32U5`, microSD по SPI). Для платы WeAct STM32F411CEU6 (microSD по SDIO) см. [`PurrGO_STM32F411_PINOUT.md`](PurrGO_STM32F411_PINOUT.md). Поддержка обеих плат сохраняется.
+> Рабочий документ проекта. Здесь фиксируется назначение выводов платы **WeAct STM32U585CIU6** (проект `apps/stm32/PurrGO_STM32U5`, microSD по SPI). Это единственная поддерживаемая плата: поддержка STM32F411CEU6 удалена, её код и распиновка сохранены в архивном релизе на GitHub.
 >
 > **Правило:** если подключение ещё не подтверждено или не решено, оно явно помечается как `PLANNED` / `TBD`. Не следует считать такое назначение установленным.
 >
-> **Состояние на 2026-10-24:** проект CubeMX для U585 ещё не создан, ни одно назначение не настроено в CubeMX и не проверено на железе U585. Решения по распиновке приняты (`TODO_migrate.md`, раздел 2), поэтому все назначения имеют статус `PLANNED`. Выводы E-Ink, UART2 и кнопок совпадают с F411 и проверены на F411, но на U585 их нужно проверить заново.
+> **Состояние на 2026-10-27:** проект CubeMX `PurrGO_STM32U5.ioc` создан и настроен; на железе подтверждена работа E-Ink, microSD (SPI2), кнопок K1…K4 и GNSS (USART1 + GPDMA1), поэтому эти назначения имеют статус `FIXED`. Мониторинг батареи (PB1, ADC1) отложен и остаётся `RESERVED`.
 
 ## 1. Контроллер и плата
 
@@ -19,11 +19,11 @@
 
 | Интерфейс STM32 | Назначение | Статус |
 |---|---|---|
-| SPI1 | E-Ink дисплей (только передача) | **PLANNED** |
-| SPI2 | MicroSD-карта (SPI-режим) | **PLANNED** |
-| GPIO | Кнопки E-Ink HAT K1…K4 | **PLANNED** |
-| USART1 | GNSS-приёмник (RX через GPDMA1, кольцевой) | **PLANNED** |
-| USART2 | Отладочный лог | **PLANNED** |
+| SPI1 | E-Ink дисплей (только передача) | **FIXED** |
+| SPI2 | MicroSD-карта (SPI-режим) | **FIXED** |
+| GPIO | Кнопки E-Ink HAT K1…K4 | **FIXED** |
+| USART1 | GNSS-приёмник (RX через GPDMA1, кольцевой) | **FIXED** |
+| USART2 | Отладочный лог | **FIXED** |
 | ADC1 | Мониторинг батареи (PB1, ADC1_IN16) | **RESERVED**, отложено |
 
 ### SPI1 — E-Ink
@@ -43,11 +43,11 @@ MicroSD подключена по SPI (решение D1). SDMMC в UFQFPN48 у 
 
 | Сигнал SPI | Пин STM32U585 | AF | Вывод microSD-модуля | Статус |
 |---|---|---|---|---|
-| SPI2_SCK | PB13 | AF5 | CLK | **PLANNED** |
-| SPI2_MISO | PB14 | AF5 | DAT0 (DO) | **PLANNED** |
-| SPI2_MOSI | PB15 | AF5 | CMD (DI) | **PLANNED** |
-| SD_CS | PB12 | GPIO_Output | DAT3 (CS) | **PLANNED** |
-| Detect_SD | PB10 | GPIO_Input | CD | **PLANNED** |
+| SPI2_SCK | PB13 | AF5 | CLK | **FIXED** |
+| SPI2_MISO | PB14 | AF5 | DAT0 (DO) | **FIXED** |
+| SPI2_MOSI | PB15 | AF5 | CMD (DI) | **FIXED** |
+| SD_CS | PB12 | GPIO_Output | DAT3 (CS) | **FIXED** |
+| Detect_SD | PB10 | GPIO_Input | CD | **FIXED** |
 
 DAT1 и DAT2 модуля не подключаются (подтяжки на модуле есть).
 
@@ -62,9 +62,9 @@ DAT1 и DAT2 модуля не подключаются (подтяжки на �
 
 | STM32U585 | GNSS | Назначение | Статус |
 |---|---|---|---|
-| PA9 / USART1_TX (AF7) | RX | STM32 → GNSS (решение D2) | **PLANNED** |
-| PA10 / USART1_RX (AF7) | TX | GNSS → STM32 | **PLANNED** |
-| GND | GND | Общая земля | **PLANNED** |
+| PA9 / USART1_TX (AF7) | RX | STM32 → GNSS (решение D2) | **FIXED** |
+| PA10 / USART1_RX (AF7) | TX | GNSS → STM32 | **FIXED** |
+| GND | GND | Общая земля | **FIXED** |
 
 9600 8N1, приём через GPDMA1 в кольцевом режиме (linked-list circular, решение D5). Резерв: приём по прерыванию в кольцевой буфер.
 
@@ -85,14 +85,14 @@ DAT1 и DAT2 модуля не подключаются (подтяжки на �
 
 | Контакт дисплея | Пин STM32U585CIU6 | Описание и настройка в CubeMX | Статус |
 |---|---|---|---|
-| VCC | 3V3 | Питание | **PLANNED** |
-| GND | GND | Общая земля | **PLANNED** |
-| DIN | PA7 | SPI1_MOSI | **PLANNED** |
-| CLK | PA5 | SPI1_SCK | **PLANNED** |
-| CS | PB7 | GPIO_Output, `EINK_CS`, High | **PLANNED** |
-| DC | PB8 | GPIO_Output, `EINK_DC`, Low | **PLANNED** |
-| RST | PB9 | GPIO_Output, `EINK_RST`, High | **PLANNED** |
-| BUSY | PB2 | GPIO_Input, `EINK_BUSY`, без подтяжки | **PLANNED** |
+| VCC | 3V3 | Питание | **FIXED** |
+| GND | GND | Общая земля | **FIXED** |
+| DIN | PA7 | SPI1_MOSI | **FIXED** |
+| CLK | PA5 | SPI1_SCK | **FIXED** |
+| CS | PB7 | GPIO_Output, `EINK_CS`, High | **FIXED** |
+| DC | PB8 | GPIO_Output, `EINK_DC`, Low | **FIXED** |
+| RST | PB9 | GPIO_Output, `EINK_RST`, High | **FIXED** |
+| BUSY | PB2 | GPIO_Input, `EINK_BUSY`, без подтяжки | **FIXED** |
 
 Для E-Ink не используется SPI1_MISO. PB2 на плате подтянут к GND резистором 10 кОм (R3); для BUSY это не мешает, дисплей управляет линией активно.
 
@@ -102,20 +102,20 @@ DAT1 и DAT2 модуля не подключаются (подтяжки на �
 
 | Кнопка | Вывод HAT (нумерация Raspberry Pi) | Пин STM32 | Метка CubeMX | Статус |
 |---|---|---|---|---|
-| K1 (KEY1) | GPIO5 | PA0 | `K1` | **PLANNED** |
-| K2 (KEY2) | GPIO6 | PA1 | `K2` | **PLANNED** |
-| K3 (KEY3) | GPIO13 | PC14 | `K3` | **PLANNED** |
-| K4 (KEY4) | GPIO19 | PC15 | `K4` | **PLANNED** |
+| K1 (KEY1) | GPIO5 | PA0 | `K1` | **FIXED** |
+| K2 (KEY2) | GPIO6 | PA1 | `K2` | **FIXED** |
+| K3 (KEY3) | GPIO13 | PC14 | `K3` | **FIXED** |
+| K4 (KEY4) | GPIO19 | PC15 | `K4` | **FIXED** |
 
 - PA0: на плате встроенная кнопка KEY через 330 Ом на GND, **подтяжки к питанию на плате нет**, внутренний Pull-up в CubeMX обязателен. PA0 = `WKUP1` (пробуждение по низкому уровню).
-- PC14/PC15 — выводы LSE (OSC32), на плате установлен кварц Y1 32.768 кГц; LSE в проекте выключен. На F411 кварц не мешал, **на U585 проверить заново** (этап 5, п. 5 `TODO_migrate.md`). Если K3/K4 не читаются, кандидаты для переноса: PA8, PB0, PB6.
-- Код: `Core/Src/buttons.c`, выводы берутся из меток CubeMX `K1_Pin`…`K4_Pin` (`main.h`). Назначение функций — `docs/PURRGO_KEYS.md`.
+- PC14/PC15 — выводы LSE (OSC32), на плате установлен кварц Y1 32.768 кГц; LSE в проекте выключен. Кварц не мешает: K3 и K4 читаются (проверено на U585).
+- Код: `apps/stm32/common/Src/buttons.c`, выводы берутся из меток CubeMX `K1_Pin`…`K4_Pin` (`main.h`). Назначение функций — `docs/PURRGO_KEYS.md`.
 
 ## 5. Светодиод
 
 | GPIO | Назначение | Статус |
 |---|---|---|
-| PC13 | `Alive_LED`, GPIO_Output; анод через 1.5 кОм к 3.3 В, **включается низким уровнем** (как на F411) | **PLANNED** |
+| PC13 | `Alive_LED`, GPIO_Output; анод через 1.5 кОм к 3.3 В, **включается низким уровнем** | **FIXED** |
 
 Красный светодиод PWR (D3, 5.1 кОм) горит постоянно. Светодиоды платы отпаиваются после отладки устройства.
 
@@ -125,33 +125,33 @@ DAT1 и DAT2 модуля не подключаются (подтяжки на �
 
 | GPIO / ресурс | Назначение | Статус |
 |---|---|---|
-| PA0 | K1 (кнопка E-Ink HAT), WKUP1 | **PLANNED** |
-| PA1 | K2 (кнопка E-Ink HAT) | **PLANNED** |
-| PA2 | USART2_TX / Debug | **PLANNED** | (зеленый)
-| PA3 | USART2_RX / Debug | **PLANNED** | (белый)
-| PA5 | SPI1_SCK / E-Ink | **PLANNED** |
-| PA7 | SPI1_MOSI / E-Ink | **PLANNED** |
-| PA9 | USART1_TX / GNSS | **PLANNED** |
-| PA10 | USART1_RX / GNSS | **PLANNED** |
+| PA0 | K1 (кнопка E-Ink HAT), WKUP1 | **FIXED** |
+| PA1 | K2 (кнопка E-Ink HAT) | **FIXED** |
+| PA2 | USART2_TX / Debug | **FIXED** |
+| PA3 | USART2_RX / Debug | **FIXED** |
+| PA5 | SPI1_SCK / E-Ink | **FIXED** |
+| PA7 | SPI1_MOSI / E-Ink | **FIXED** |
+| PA9 | USART1_TX / GNSS | **FIXED** |
+| PA10 | USART1_RX / GNSS | **FIXED** |
 | PB1 | V_MAIN_BAT, ADC1_IN16: мониторинг батареи отложен, в CubeMX не настраивать | **RESERVED** |
-| PB2 | E-Ink BUSY | **PLANNED** |
-| PB7 | E-Ink CS | **PLANNED** |
-| PB8 | E-Ink DC | **PLANNED** |
-| PB9 | E-Ink RST | **PLANNED** |
-| PB10 | Detect_SD / MicroSD CD | **PLANNED** |
-| PB12 | SD_CS / MicroSD | **PLANNED** |
-| PB13 | SPI2_SCK / MicroSD | **PLANNED** |
-| PB14 | SPI2_MISO / MicroSD | **PLANNED** |
-| PB15 | SPI2_MOSI / MicroSD | **PLANNED** |
-| PC13 | Alive_LED | **PLANNED** |
-| PC14 | K3 (кнопка E-Ink HAT), LSE-вывод | **PLANNED** |
-| PC15 | K4 (кнопка E-Ink HAT), LSE-вывод | **PLANNED** |
+| PB2 | E-Ink BUSY | **FIXED** |
+| PB7 | E-Ink CS | **FIXED** |
+| PB8 | E-Ink DC | **FIXED** |
+| PB9 | E-Ink RST | **FIXED** |
+| PB10 | Detect_SD / MicroSD CD | **FIXED** |
+| PB12 | SD_CS / MicroSD | **FIXED** |
+| PB13 | SPI2_SCK / MicroSD | **FIXED** |
+| PB14 | SPI2_MISO / MicroSD | **FIXED** |
+| PB15 | SPI2_MOSI / MicroSD | **FIXED** |
+| PC13 | Alive_LED | **FIXED** |
+| PC14 | K3 (кнопка E-Ink HAT), LSE-вывод | **FIXED** |
+| PC15 | K4 (кнопка E-Ink HAT), LSE-вывод | **FIXED** |
 
-| SPI1 | E-Ink (TX only) | **PLANNED** |
-| SPI2 | MicroSD | **PLANNED** |
-| USART1 | GNSS | **PLANNED** |
-| USART2 | Debug log | **PLANNED** |
-| GPDMA1 | USART1_RX (GNSS, linked-list circular) | **PLANNED** |
+| SPI1 | E-Ink (TX only) | **FIXED** |
+| SPI2 | MicroSD | **FIXED** |
+| USART1 | GNSS | **FIXED** |
+| USART2 | Debug log | **FIXED** |
+| GPDMA1 | USART1_RX (GNSS, linked-list circular) | **FIXED** |
 | ADC1 | мониторинг батареи, отложен | **RESERVED** |
 
 ## 7. Правила ведения pinout
@@ -164,26 +164,12 @@ DAT1 и DAT2 модуля не подключаются (подтяжки на �
 6. Конфликты GPIO между периферийными устройствами должны быть устранены до реализации драйверов.
 7. SPI1 используется только E-Ink, SPI2 только microSD. Если на шину будут добавлены другие устройства, у каждого должен быть собственный CS, и CS разных устройств не должны быть активны одновременно.
 8. Выводы SPI2 (PB12…PB15) закреплены за microSD и не должны использоваться как GPIO.
-9. Распиновка F411 и U585 ведётся в отдельных документах и не должна смешиваться.
 
-## 8. Отличия от F411
-
-| Что | F411 | U585 |
-|---|---|---|
-| microSD | SDIO 4 бита: PB15 CK, PA6 CMD, PB4 D0, PA8 D1, PA9 D2, PB5 D3, PB12 Detect | SPI2: PB13 SCK, PB14 MISO, PB15 MOSI, PB12 CS, PB10 Detect |
-| GNSS TX (STM32 → GNSS RX) | PA15 | PA9 |
-| DMA для GNSS | DMA2 Stream2 (NDTR) | GPDMA1, linked-list circular |
-| Тактирование | HSI → PLL, 84 МГц | HSI16 → PLL1, 80 МГц, Range 2 |
-| Батарейный АЦП | PB1 = ADC1_IN9 (не настроен) | PB1 = ADC1_IN16, отложено |
-| PB2 | BOOT1 | обычный GPIO |
-
-Остальная проводка (E-Ink, UART2, кнопки K1…K4, LED) одинакова на обеих платах.
-
-## 9. Статусы
+## 8. Статусы
 
 - **FIXED** — назначение принято и подтверждено на железе U585 (или задано платой).
 - **CONFIGURED** — назначение настроено в CubeMX, но физически ещё не подтверждено.
-- **PLANNED** — решение принято, в CubeMX ещё не настроено.
+- **FIXED** — решение принято, в CubeMX ещё не настроено.
 - **RESERVED** — ресурс зарезервирован.
 - **TBD** — назначение ещё не решено.
 - **FREE** — GPIO свободен.
@@ -194,4 +180,5 @@ DAT1 и DAT2 модуля не подключаются (подтяжки на �
 
 | Дата | Изменение |
 |---|---|
+| 2026-10-27 | Поддержка F411 удалена: убраны сравнение с F411 и ссылки на `PurrGO_STM32F411_PINOUT.md`; статусы назначений обновлены `PLANNED` → `FIXED` по результатам проверки на плате U585 (E-Ink, SD, кнопки, GNSS). |
 | 2026-10-24 | Создан документ распиновки U585 по принятым решениям D1…D5, D7, D9 (`TODO_migrate.md`): microSD на SPI2 (PB12…PB15, Detect PB10), GNSS TX на PA9, USART1_RX через GPDMA1, HSI16 → 80 МГц. Мониторинг батареи (PB1) отложен, питание на период разработки от USB 5 В. |
