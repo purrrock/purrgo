@@ -59,33 +59,10 @@
 #endif
 
 /*
- * --------------------------------------------------------------------------
- * E-Ink: режим передачи на панель (действует только для backend E-Ink)
- * --------------------------------------------------------------------------
- *
- * PURRGO_EINK_MODE_4GRAY
- *   4 уровня серого. Панель не поддерживает частичное обновление в этом
- *   режиме, каждое обновление - полное (секунды, мерцание).
- *
- * PURRGO_EINK_MODE_1BIT
- *   Чёрно-белый режим: белый остаётся белым, любой другой цвет PurrGO
- *   выводится чёрным. Поддерживается частичное обновление.
- *
- * Внутренний framebuffer PurrGO в обоих режимах остаётся 2-битным, поэтому
- * ядро (gfx, карта, UI) от выбора режима не зависит.
+ * Режим передачи на панель E-Ink (4 gray / 1 bit) выбирается не при сборке, а
+ * по экрану: ядро вызывает display_set_mode() (purrgo/display_hal.h). Внутренний
+ * framebuffer PurrGO в обоих режимах остаётся 2-битным.
  */
-#define PURRGO_EINK_MODE_4GRAY 0
-#define PURRGO_EINK_MODE_1BIT  1
-
-#ifndef PURRGO_HW_EINK_MODE
-#define PURRGO_HW_EINK_MODE PURRGO_EINK_MODE_1BIT
-// #define PURRGO_HW_EINK_MODE PURRGO_EINK_MODE_4GRAY
-#endif
-
-#if (PURRGO_HW_EINK_MODE != PURRGO_EINK_MODE_4GRAY) && \
-    (PURRGO_HW_EINK_MODE != PURRGO_EINK_MODE_1BIT)
-#error "Invalid PURRGO_HW_EINK_MODE"
-#endif
 
 /*
  * ============================================================================

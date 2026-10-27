@@ -1,293 +1,358 @@
+/*
+ * display_eink.c - E-Ink Waveshare 2.7" V2 (176 x 264) на библиотеке epd4g.
+ *
+ * Слой между display_stm32.c (framebuffer, накопление областей) и epd4g:
+ * очередь запросов (одно обновление в работе, остальное сливается), выбор
+ * полное/частичное обновление, смена режима панели 4 gray <-> 1 bit,
+ * учёт числа частичных обновлений подряд, засыпание панели в простое,
+ * восстановление после ошибки. Подробности: HowToMigrateTo_epd4g_lib.md.
+ */
 #include "display_eink.h"
 
-#include "DEV_Config.h"
-#include "EPD_2in7_V2.h"
+#include <string.h>
 
 #include "main.h"
 #include "spi.h"
+#include "epd4g.h"
+#include "epd4g_bw.h"
+#include "purrgo/logger.h"
 
-#include "purrgo/hardware_config.h"
-
-#include <stdbool.h>
-#include <stddef.h>
+/* ---------------------------- настройки ---------------------------------- */
 
 /*
- * Делитель SPI1 для E-Ink.
- *
- * CubeMX настраивает SPI1 с делителем 2: при SYSCLK = 80 МГц это ~40 МГц.
- * Контроллер панели рассчитан на существенно меньшую частоту (в
- * референсных проектах Waveshare - единицы МГц). Простые команды и константные
- * данные проходят и на 40 МГц, а данные с плотными переходами (LUT
- * 4-gray, реальное изображение) искажаются: на экране остаётся мусор.
- *
- * Делитель 8 -> 10 МГц. Можно переопределить в
- * compile definitions.
+ * Делитель SPI1 для панели. Ядро SPI1 у U585 - 80 МГц, делитель 2 даёт
+ * ~40 МГц: панель при такой скорости искажает данные. /8 = 10 МГц.
  */
 #ifndef PURRGO_EINK_SPI_PRESCALER
 #define PURRGO_EINK_SPI_PRESCALER SPI_BAUDRATEPRESCALER_8
 #endif
 
-/*
- * Сколько частичных обновлений подряд допускается до принудительного
- * полного обновления.
- *
- * Спецификация панели рекомендует полное обновление после 5 подряд
- * идущих fast/partial обновлений, чтобы не накапливать остаточное
- * изображение (ghosting). Значение можно увеличить, если ghosting
- * на вашем экземпляре приемлем.
- */
-#ifndef PURRGO_EINK_PARTIALS_BEFORE_FULL
-#define PURRGO_EINK_PARTIALS_BEFORE_FULL 5U
+/* Частичных обновлений подряд до принудительного полного (сброс «шлейфов»). */
+#ifndef PURRGO_EINK_GRAY_PARTIALS_BEFORE_FULL
+#define PURRGO_EINK_GRAY_PARTIALS_BEFORE_FULL 8
+#endif
+#ifndef PURRGO_EINK_MONO_PARTIALS_BEFORE_FULL
+#define PURRGO_EINK_MONO_PARTIALS_BEFORE_FULL 5
 #endif
 
-#define EINK_WIDTH          EPD_2IN7_V2_WIDTH
-#define EINK_HEIGHT         EPD_2IN7_V2_HEIGHT
-
-/* Строка 2-битного framebuffer PurrGO: 4 пикселя в байте. */
-#define EINK_FB2_ROW_BYTES  (EINK_WIDTH / 4U)
-
-/* Размер 2-битного framebuffer PurrGO. */
-#define EINK_FRAMEBUFFER_SIZE ((EINK_WIDTH * EINK_HEIGHT * 2U) / 8U)
-
-#if (EINK_FRAMEBUFFER_SIZE != 11616U)
-#error "Unexpected E-Ink framebuffer size"
+/* Полное обновление: 4 gray (FAST ~3 с, DEEP ~5 с) и 1 bit (NORMAL ~2 с, FAST ~1 с). */
+#ifndef PURRGO_EINK_GRAY_FULL_MODE
+#define PURRGO_EINK_GRAY_FULL_MODE EPD4G_FULL_FAST
+#endif
+#ifndef PURRGO_EINK_MONO_FULL_MODE
+#define PURRGO_EINK_MONO_FULL_MODE EPD4G_BW_NORMAL
 #endif
 
-#if (EINK_WIDTH % 8U) != 0U
-#error "E-Ink width must be a multiple of 8"
+/* Сколько панель простаивает до deep sleep, мс. */
+#ifndef PURRGO_EINK_SLEEP_AFTER_MS
+#define PURRGO_EINK_SLEEP_AFTER_MS 1000U
 #endif
 
+/* Пауза перед повтором после ошибки и предел блокирующего ожидания, мс. */
+#define EINK_RETRY_DELAY_MS 2000U
+#define EINK_WAIT_LIMIT_MS  30000U
 
-void display_eink_init(void)
+/* ------------------------------ состояние -------------------------------- */
+
+typedef enum { OP_NONE, OP_INIT, OP_FULL, OP_PARTIAL, OP_SLEEP } eink_op_t;
+typedef enum { HW_OFF, HW_GRAY, HW_MONO } eink_hw_t;
+
+static const uint8_t *s_fb;
+static uint8_t s_prev[EPD4G_FB_BYTES];   /* что сейчас на панели (только 4 gray) */
+
+static display_mode_t s_target_mode = DISPLAY_MODE_GRAY4;
+
+/* Запрос. */
+static bool    s_req_full;
+static bool    s_req_region;
+static int16_t s_rx0, s_ry0, s_rx1, s_ry1;
+
+/* Панель. */
+static eink_hw_t s_hw = HW_OFF;                /* в каком режиме инициализирована */
+static bool      s_mono_asleep;                /* 1 bit: в deep sleep, partial разбудит сам */
+static bool      s_img_valid;                  /* на панели известная картинка режима s_img_mode */
+static display_mode_t s_img_mode;
+static uint8_t   s_partials;                   /* частичных подряд после последнего полного */
+
+/* Выполняемая операция. */
+static eink_op_t     s_op = OP_NONE;
+static display_mode_t s_op_mode;
+static uint32_t      s_idle_since;
+static uint32_t      s_retry_at;
+static bool          s_have_retry;
+
+/* ------------------------------- helpers --------------------------------- */
+
+static bool time_reached(uint32_t now, uint32_t t)
 {
-    /*
-     * Переключаем SPI1 на тактовую частоту, допустимую для панели.
-     * HAL_SPI_DeInit/Init вызывает MspDeInit/MspInit, GPIO PA5/PA7
-     * настраиваются заново тем же кодом CubeMX.
-     */
-    (void)HAL_SPI_DeInit(&hspi1);
-    hspi1.Init.BaudRatePrescaler = PURRGO_EINK_SPI_PRESCALER;
-    if (HAL_SPI_Init(&hspi1) != HAL_OK)
-    {
-        Error_Handler();
-    }
-
-    /*
-     * DEV_Module_Init() устанавливает начальные уровни управляющих
-     * линий E-Ink: CS = HIGH, DC = LOW, RST = HIGH.
-     */
-    (void)DEV_Module_Init();
+    return (int32_t)(now - t) >= 0;
 }
 
+static unsigned partial_limit(display_mode_t m)
+{
+    return (m == DISPLAY_MODE_GRAY4) ? PURRGO_EINK_GRAY_PARTIALS_BEFORE_FULL
+                                     : PURRGO_EINK_MONO_PARTIALS_BEFORE_FULL;
+}
+
+static void invalidate_panel(void)
+{
+    s_hw = HW_OFF;
+    s_mono_asleep = false;
+    s_img_valid = false;
+    s_partials = 0;
+}
+
+static bool request_pending(void)
+{
+    return s_req_full || s_req_region;
+}
+
+static void op_done(int rc, uint32_t now)
+{
+    const eink_op_t op = s_op;
+    s_op = OP_NONE;
+    s_idle_since = now;
+
+    if (rc != EPD4G_OK) {
+        PURRGO_LOG("E-Ink: op %d failed, rc=%d, panel will be re-initialised\n\r", (int)op, rc);
+        epd4g_abort();
+        invalidate_panel();
+        if (op == OP_FULL || op == OP_PARTIAL) {
+            /* Кадр на панель не попал (флаги запроса сняты при старте): повторить полным. */
+            s_req_full = true;
+        }
+        s_retry_at = now + EINK_RETRY_DELAY_MS;
+        s_have_retry = true;
+        return;
+    }
+
+    switch (op) {
+        case OP_INIT:
+            s_hw = (s_op_mode == DISPLAY_MODE_GRAY4) ? HW_GRAY : HW_MONO;
+            s_mono_asleep = false;
+            break;
+        case OP_SLEEP:
+            if (s_hw == HW_GRAY) {
+                s_hw = HW_OFF;           /* после sleep 4 gray нужен init, картинка остаётся */
+            } else if (s_hw == HW_MONO) {
+                s_mono_asleep = true;    /* partial разбудит сам (аппаратный reset) */
+            }
+            break;
+        default:
+            break;
+    }
+}
+
+/* Запуск операции; rc != OK - сразу ошибка, !busy после OK - завершилась мгновенно. */
+static void op_started(eink_op_t op, display_mode_t mode, int rc, uint32_t now)
+{
+    s_op = op;
+    s_op_mode = mode;
+    if (rc != EPD4G_OK || !epd4g_is_busy()) {
+        op_done(rc, now);
+    }
+}
+
+static bool awake_for(display_mode_t mode)
+{
+    return (mode == DISPLAY_MODE_GRAY4) ? (s_hw == HW_GRAY)
+                                        : (s_hw == HW_MONO && !s_mono_asleep);
+}
+
+/* Взять из очереди следующий шаг и запустить его. Библиотека свободна. */
+static void start_next(uint32_t now)
+{
+    if (!request_pending()) {
+        return;
+    }
+    if (s_have_retry && !time_reached(now, s_retry_at)) {
+        return;
+    }
+    s_have_retry = false;
+
+    const display_mode_t mode = s_target_mode;
+    const bool need_full = s_req_full || !s_img_valid || s_img_mode != mode ||
+                           s_partials >= partial_limit(mode);
+
+    if (need_full) {
+        if (!awake_for(mode)) {
+            op_started(OP_INIT, mode,
+                       (mode == DISPLAY_MODE_GRAY4) ? epd4g_start_init()
+                                                    : epd4g_start_bw_init(PURRGO_EINK_MONO_FULL_MODE),
+                       now);
+            return;
+        }
+        const int rc = (mode == DISPLAY_MODE_GRAY4)
+                     ? epd4g_start_full(s_fb, PURRGO_EINK_GRAY_FULL_MODE)
+                     : epd4g_start_bw_full(s_fb, EPD4G_SRC_2BPP, PURRGO_EINK_MONO_FULL_MODE);
+        if (rc == EPD4G_OK) {
+            /* Кадр уже зафиксирован: данные берутся из s_fb, пока data_busy. */
+            if (mode == DISPLAY_MODE_GRAY4) {
+                memcpy(s_prev, s_fb, sizeof(s_prev));
+            }
+            s_req_full = false;
+            s_req_region = false;
+            s_img_valid = true;
+            s_img_mode = mode;
+            s_partials = 0;
+        }
+        op_started(OP_FULL, mode, rc, now);
+        return;
+    }
+
+    /* Частичное обновление: картинка этого режима на панели известна. */
+    if (mode == DISPLAY_MODE_GRAY4) {
+        if (!awake_for(mode)) {
+            op_started(OP_INIT, mode, epd4g_start_init(), now);
+            return;
+        }
+        uint32_t changed = 0;
+        const int rc = epd4g_start_partial_diff(s_prev, s_fb, NULL, &changed);
+        if (rc == EPD4G_OK) {
+            s_req_region = false;
+            if (changed == 0U) {
+                s_idle_since = now;           /* ничего не изменилось, задания нет */
+                return;
+            }
+            memcpy(s_prev, s_fb, sizeof(s_prev));
+            s_partials++;
+        }
+        op_started(OP_PARTIAL, mode, rc, now);
+    } else {
+        const epd4g_rect_t r = { s_rx0, s_ry0, s_rx1, s_ry1 };
+        const int rc = epd4g_start_bw_partial(s_fb, EPD4G_SRC_2BPP, &r);
+        if (rc == EPD4G_OK) {
+            s_req_region = false;
+            s_mono_asleep = false;
+            s_partials++;
+        }
+        op_started(OP_PARTIAL, mode, rc, now);
+    }
+}
+
+static void poll_core(bool allow_sleep)
+{
+    const uint32_t now = HAL_GetTick();
+
+    if (s_op != OP_NONE) {
+        epd4g_poll();
+        if (epd4g_is_busy()) {
+            return;
+        }
+        op_done(epd4g_result(), now);
+    }
+
+    start_next(now);
+    if (s_op != OP_NONE) {
+        return;
+    }
+
+    /* Простой: усыпляем панель (в 4 gray это ещё и выключает питание аналоговой части). */
+    if (allow_sleep && !request_pending() && (s_hw != HW_OFF) && !s_mono_asleep &&
+        time_reached(now, s_idle_since + PURRGO_EINK_SLEEP_AFTER_MS)) {
+        op_started(OP_SLEEP, s_img_mode, epd4g_start_sleep(), now);
+    }
+}
+
+/* -------------------------------- API ------------------------------------ */
+
+void display_eink_init(const uint8_t *framebuffer)
+{
+    s_fb = framebuffer;
+
+    /* Панель не принимает SPI на скорости, выбранной CubeMX для SPI1. */
+    hspi1.Init.BaudRatePrescaler = PURRGO_EINK_SPI_PRESCALER;
+    (void)HAL_SPI_DeInit(&hspi1);
+    (void)HAL_SPI_Init(&hspi1);
+
+    memset(s_prev, 0, sizeof(s_prev));
+    s_req_full = false;
+    s_req_region = false;
+    s_op = OP_NONE;
+    s_have_retry = false;
+    s_idle_since = HAL_GetTick();
+    invalidate_panel();
+}
+
+void display_eink_set_mode(display_mode_t mode)
+{
+    if (mode != s_target_mode) {
+        s_target_mode = mode;
+        s_req_full = true;     /* смена режима панели - только полным обновлением */
+    }
+}
+
+void display_eink_request_full(void)
+{
+    s_req_full = true;
+}
+
+void display_eink_request_region(int16_t x, int16_t y, int16_t w, int16_t h)
+{
+    if (w <= 0 || h <= 0) {
+        return;
+    }
+    const int16_t x1 = (int16_t)(x + w - 1);
+    const int16_t y1 = (int16_t)(y + h - 1);
+    if (!s_req_region) {
+        s_rx0 = x;  s_ry0 = y;  s_rx1 = x1;  s_ry1 = y1;
+        s_req_region = true;
+        return;
+    }
+    if (x < s_rx0)  { s_rx0 = x; }
+    if (y < s_ry0)  { s_ry0 = y; }
+    if (x1 > s_rx1) { s_rx1 = x1; }
+    if (y1 > s_ry1) { s_ry1 = y1; }
+}
+
+void display_eink_poll(void)
+{
+    poll_core(true);
+}
+
+bool display_eink_data_busy(void)
+{
+    return epd4g_data_busy() != 0;
+}
+
+bool display_eink_is_busy(void)
+{
+    return s_op != OP_NONE || request_pending();
+}
+
+uint8_t display_eink_partial_count(void)
+{
+    return s_partials;
+}
+
+void display_eink_wait(void)
+{
+    const uint32_t start = HAL_GetTick();
+
+    while (display_eink_is_busy()) {
+        if (HAL_GetTick() - start > EINK_WAIT_LIMIT_MS) {
+            PURRGO_LOG("E-Ink: wait timeout, dropping pending update\n\r");
+            epd4g_abort();
+            s_op = OP_NONE;
+            s_req_full = false;
+            s_req_region = false;
+            invalidate_panel();
+            break;
+        }
+        poll_core(false);
+        HAL_Delay(1);
+    }
+}
 
 void display_eink_sleep(void)
 {
-    EPD_2IN7_V2_Sleep();
-}
-
-
-#if PURRGO_HW_EINK_MODE == PURRGO_EINK_MODE_1BIT
-
-/*
- * ===========================================================================
- * Режим 1-bit (чёрно-белый) с частичным обновлением
- * ===========================================================================
- *
- * Формат буфера панели Waveshare в 1-bit режиме:
- *   1 бит на пиксель, старший бит = левый пиксель,
- *   1 = белый, 0 = чёрный, 22 байта на строку.
- *
- * Преобразование из 2-битного буфера PurrGO:
- *   пиксель белый (значение 3) -> 1, любое другое значение -> 0.
- */
-
-#define EINK_MONO_ROW_BYTES (EINK_WIDTH / 8U)
-#define EINK_MONO_SIZE      (EINK_MONO_ROW_BYTES * EINK_HEIGHT)
-
-/*
- * Рабочий буфер преобразования. Источником истины остаётся 2-битный
- * framebuffer PurrGO, поэтому буфер хранит только то, что сейчас
- * передаётся на панель.
- */
-static uint8_t s_mono[EINK_MONO_SIZE];
-
-/* В RAM панели загружено базовое изображение (требуется для partial). */
-static bool s_base_valid = false;
-
-/* Частичных обновлений с момента последнего полного. */
-static uint8_t s_partial_count = 0U;
-
-
-/*
- * Один 2-битный байт (4 пикселя) -> 4 бита (1 = белый).
- * Пиксель k лежит в битах [2*(3-k)+1 : 2*(3-k)].
- */
-static inline uint8_t eink_white_nibble(uint8_t v)
-{
-    uint8_t t = (uint8_t)((v >> 1) & v & 0x55U);
-
-    return (uint8_t)(((t >> 3) & 0x8U) |
-                     ((t >> 2) & 0x4U) |
-                     ((t >> 1) & 0x2U) |
-                     ( t       & 0x1U));
-}
-
-/*
- * Преобразует прямоугольник из 2-битного буфера PurrGO в плотно
- * упакованный 1-bit буфер (ширина области = (xb1 - xb0) байт).
- *
- *   xb0, xb1 - границы по X в байтах 1-bit буфера (xb1 не включается);
- *   y0,  y1  - границы по Y в строках (y1 не включается).
- */
-static void eink_convert_rect(
-    const uint8_t *fb2,
-    uint16_t xb0,
-    uint16_t xb1,
-    uint16_t y0,
-    uint16_t y1,
-    uint8_t *out)
-{
-    for (uint16_t y = y0; y < y1; y++)
-    {
-        const uint8_t *src = &fb2[(uint32_t)y * EINK_FB2_ROW_BYTES + (uint32_t)xb0 * 2U];
-
-        for (uint16_t xb = xb0; xb < xb1; xb++)
-        {
-            *out++ = (uint8_t)((eink_white_nibble(src[0]) << 4) |
-                                eink_white_nibble(src[1]));
-            src += 2;
+    display_eink_wait();
+    if (s_hw != HW_OFF && !s_mono_asleep) {
+        (void)epd4g_sleep();   /* блокирующий, ошибка не критична: питание всё равно снимается */
+        if (s_hw == HW_GRAY) {
+            s_hw = HW_OFF;
+        } else {
+            s_mono_asleep = true;
         }
     }
 }
-
-
-void display_eink_refresh(const uint8_t *framebuffer)
-{
-    if (framebuffer == NULL)
-    {
-        return;
-    }
-
-    eink_convert_rect(framebuffer, 0U, EINK_MONO_ROW_BYTES, 0U, EINK_HEIGHT, s_mono);
-
-    /*
-     * Полное обновление по референсу Waveshare для partial-режима:
-     * Init() + Display_Base(). Display_Base() записывает изображение в
-     * ОБЕ RAM-плоскости контроллера (0x24 и 0x26), после чего
-     * Display_Partial() корректно сравнивает новое и старое состояние.
-     */
-    EPD_2IN7_V2_Init();
-    EPD_2IN7_V2_Display_Base(s_mono);
-    EPD_2IN7_V2_Sleep();
-
-    s_base_valid = true;
-    s_partial_count = 0U;
-}
-
-
-void display_eink_refresh_region(
-    const uint8_t *framebuffer,
-    int16_t x,
-    int16_t y,
-    int16_t w,
-    int16_t h)
-{
-    if (framebuffer == NULL)
-    {
-        return;
-    }
-
-    /* Clip к границам панели. */
-    if (x < 0) { w = (int16_t)(w + x); x = 0; }
-    if (y < 0) { h = (int16_t)(h + y); y = 0; }
-    if (x + w > (int16_t)EINK_WIDTH)  { w = (int16_t)(EINK_WIDTH - x); }
-    if (y + h > (int16_t)EINK_HEIGHT) { h = (int16_t)(EINK_HEIGHT - y); }
-
-    if (w <= 0 || h <= 0)
-    {
-        return;
-    }
-
-    /*
-     * Нет базового изображения или накопилось много частичных
-     * обновлений - делаем полное.
-     */
-    if (!s_base_valid || s_partial_count >= PURRGO_EINK_PARTIALS_BEFORE_FULL)
-    {
-        display_eink_refresh(framebuffer);
-        return;
-    }
-
-    /*
-     * Область по X выравнивается до границ 8 пикселей: панель
-     * адресуется байтами по 8 пикселей.
-     */
-    uint16_t xs = (uint16_t)((uint16_t)x & 0xFFF8U);
-    uint16_t xe = ((uint16_t)(x + w) + 7U) & ~7U;
-    uint16_t ys = (uint16_t)y;
-    uint16_t ye = (uint16_t)(y + h);
-
-    if (xe > EINK_WIDTH)
-    {
-        xe = EINK_WIDTH;
-    }
-
-    eink_convert_rect(framebuffer, xs / 8U, xe / 8U, ys, ye, s_mono);
-
-    /*
-     * Display_Partial принимает плотно упакованную область, конец
-     * диапазона не включается. При выровненных xs/xe драйвер
-     * использует ветку (Xend - Xstart) % 8 == 0.
-     */
-    EPD_2IN7_V2_Display_Partial(s_mono, xs, ys, xe, ye);
-    EPD_2IN7_V2_Sleep();
-
-    s_partial_count++;
-}
-
-
-#elif PURRGO_HW_EINK_MODE == PURRGO_EINK_MODE_4GRAY
-
-/*
- * ===========================================================================
- * Режим 4-gray (только полное обновление)
- * ===========================================================================
- *
- * Двухбитный framebuffer PurrGO напрямую соответствует формату
- * EPD_2IN7_V2_4GrayDisplay(), преобразование не требуется.
- */
-
-void display_eink_refresh(const uint8_t *framebuffer)
-{
-    if (framebuffer == NULL)
-    {
-        return;
-    }
-
-    /*
-     * После EPD_2IN7_V2_Sleep() дисплей необходимо повторно
-     * инициализировать, поэтому Init_4GRAY() выполняется перед каждым
-     * физическим обновлением.
-     */
-    EPD_2IN7_V2_Init_4GRAY();
-    EPD_2IN7_V2_4GrayDisplay((UBYTE *)framebuffer);
-    EPD_2IN7_V2_Sleep();
-}
-
-void display_eink_refresh_region(
-    const uint8_t *framebuffer,
-    int16_t x,
-    int16_t y,
-    int16_t w,
-    int16_t h)
-{
-    /* В 4-gray частичного обновления нет: всегда весь экран. */
-    (void)x;
-    (void)y;
-    (void)w;
-    (void)h;
-
-    display_eink_refresh(framebuffer);
-}
-
-#endif /* PURRGO_HW_EINK_MODE */

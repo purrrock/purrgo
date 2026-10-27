@@ -19,6 +19,8 @@ jobs:
           submodules: false
       - name: Submodule minmea
         run: git submodule update --init --depth 1 third_party/minmea
+      - name: Submodule eink_part_refresh (epd4g, host-тест E-Ink)
+        run: git submodule update --init --depth 1 third_party/eink_part_refresh
       - name: Install
         run: sudo apt-get update && sudo apt-get install -y ninja-build
       - name: Configure
@@ -78,6 +80,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Submodule minmea
         run: git submodule update --init --depth 1 third_party/minmea
+      - name: Submodule eink_part_refresh (epd4g, host-тест E-Ink)
+        run: git submodule update --init --depth 1 third_party/eink_part_refresh
       - name: Install
         run: sudo apt-get update && sudo apt-get install -y ninja-build cppcheck clang-tidy
       - name: cppcheck
