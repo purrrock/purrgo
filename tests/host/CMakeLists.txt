@@ -90,4 +90,8 @@ if(EXISTS ${EPD4G_DIR}/src/epd4g.c)
     target_link_libraries(eink_selftest_host PRIVATE purrgo_core m)
     add_test(NAME eink_selftest_host COMMAND eink_selftest_host 1
              WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+    # Реальная панель меняет плоскости RAM ролями после обновления (модель 2): нужна версия
+    # epd4g с EPD4G_BW_RESYNC, иначе в сценах 1-bit остаются следы предыдущих кадров.
+    add_test(NAME eink_selftest_host_swap COMMAND eink_selftest_host 2
+             WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 endif()

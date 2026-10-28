@@ -6,8 +6,12 @@
  * сравнивается с тем, что должно быть по framebuffer'у. Расхождение = область обновления
  * не покрывает изменения (ошибка приложения, а не панели).
  *
- * Аргумент: autocopy=1 (по умолчанию) - идеальный контроллер копирует new -> old после
- * обновления; autocopy=0 - не копирует (пессимистичная модель, ожидаются расхождения).
+ * Аргумент - что контроллер делает с двумя плоскостями RAM после обновления:
+ *   1 (по умолчанию) - копирует new -> old (идеальный контроллер);
+ *   0 - ничего не делает;
+ *   2 - меняет плоскости ролями (swap). Так ведёт себя реальная панель: измерено самотестом на
+ *       железе, сцены S1/S2/S5 дают след через кадр (1+3+5...), S3 (окно во весь экран) чисто.
+ *       Для режима 2 нужна epd4g с EPD4G_BW_RESYNC (повторная запись окна в 0x24 после волны).
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -26,10 +30,11 @@
 
 static uint32_t now_ms;
 static int dc, last_cmd = -1, args[8], nargs, wx0 = 0, wx1 = 21, wy0 = 0, wy1 = 263, cx, cy, last_ctrl;
-static int cur_mode_gray, glass_known, updates, checked_updates, autocopy = 1;
+static int cur_mode_gray, glass_known, updates, checked_updates, ram_model = 1;
 static long mismatches, checks;
 static uint32_t busy_until;
-static uint8_t bwn[BWB], bwo[BWB], glass[BWB];
+static uint8_t bwp[2][BWB], glass[BWB];
+static int bw_n;               /* плоскость, в которую пишет команда 0x24 (она же «новая» в режиме 2) */
 
 /* Текущий режим сцены (линкер подменяет display_set_mode, см. CMakeLists.txt): модель
  * 1-bit RAM сверяется с framebuffer'ом только в режиме 1 bit. */
@@ -70,8 +75,9 @@ static void check_glass(void)
 
 void HAL_Delay(uint32_t ms) { now_ms += ms; check_glass(); }
 
-static void ram_write(uint8_t *ram, uint8_t v)
+static void ram_write(int plane, uint8_t v)
 {
+    uint8_t *ram = bwp[plane ? 1 - bw_n : bw_n];
     if (cx >= 0 && cx < STRIDE && cy >= 0 && cy < 264) { ram[cy * STRIDE + cx] = v; }
     if (++cx > wx1) { cx = wx0; if (++cy > wy1) { cy = wy0; } }
 }
@@ -80,6 +86,7 @@ static void update(void)
 {
     /* power off (0x83) и загрузка температуры/LUT (0xB1, 0x91): картинка не меняется */
     if (last_ctrl == 0x83 || last_ctrl == 0xB1 || last_ctrl == 0x91) { return; }
+    const uint8_t *bwn = bwp[bw_n], *bwo = bwp[1 - bw_n];
     if (last_ctrl & 0x08) {
         for (int i = 0; i < BWB; i++) {
             const uint8_t d = (uint8_t)(bwn[i] ^ bwo[i]);
@@ -89,7 +96,8 @@ static void update(void)
         memcpy(glass, bwn, sizeof glass);
         glass_known = 1;
     }
-    if (autocopy) { memcpy(bwo, bwn, sizeof bwo); }
+    if (ram_model == 1) { memcpy(bwp[1 - bw_n], bwp[bw_n], BWB); }
+    else if (ram_model == 2) { bw_n = 1 - bw_n; }
     updates++;
 }
 
@@ -113,8 +121,8 @@ int epd4g_port_spi_write(const uint8_t *d, size_t n)
             last_cmd = v; nargs = 0;
             if (v == 0x20) { update(); busy_until = now_ms + 800U; }
             if (v == 0x12) { busy_until = now_ms + 5U; }
-        } else if (last_cmd == 0x24) { ram_write(bwn, (uint8_t)v);
-        } else if (last_cmd == 0x26) { ram_write(bwo, (uint8_t)v);
+        } else if (last_cmd == 0x24) { ram_write(0, (uint8_t)v);
+        } else if (last_cmd == 0x26) { ram_write(1, (uint8_t)v);
         } else if (last_cmd == 0x22) { last_ctrl = v;
         } else if (last_cmd == 0x44 || last_cmd == 0x45 || last_cmd == 0x4E || last_cmd == 0x4F) {
             args[nargs < 8 ? nargs : 7] = v; nargs++;
@@ -129,8 +137,9 @@ int epd4g_port_spi_write(const uint8_t *d, size_t n)
 
 int main(int argc, char **argv)
 {
-    if (argc > 1) { autocopy = atoi(argv[1]); }
-    printf("eink selftest on host, controller copies new->old after update: %d\n", autocopy);
+    setvbuf(stdout, NULL, _IONBF, 0);
+    if (argc > 1) { ram_model = atoi(argv[1]); }
+    printf("eink selftest on host, RAM model after update (0 nothing, 1 copy, 2 swap): %d\n", ram_model);
     EinkTest_RunPartial();
     printf("1-bit glass checks: %ld, mismatches: %ld\n", checks, mismatches);
     return mismatches ? 1 : 0;
