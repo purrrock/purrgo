@@ -200,14 +200,14 @@ void purrgo_stm32_init(void)
 
   PURRGO_LOG("GFX OK\r\n");
 
-  PURRGO_LOG("Splash Screen\r\n");
+  // PURRGO_LOG("Splash Screen\r\n");
   /* Splash: PurrGO! */
-  display_set_mode(DISPLAY_MODE_MONO);
-  gfx_set_color(&global_gfx_ctx, COLOR_WHITE, COLOR_BLACK);
-  gfx_clear(&global_gfx_ctx);
-  gfx_draw_string(&global_gfx_ctx, DISPLAY_WIDTH / 2 - 23, DISPLAY_HEIGHT / 2, "PurrGO!");
+  // display_set_mode(DISPLAY_MODE_MONO);
+  // gfx_set_color(&global_gfx_ctx, COLOR_WHITE, COLOR_BLACK);
+  // gfx_clear(&global_gfx_ctx);
+  // gfx_draw_string(&global_gfx_ctx, DISPLAY_WIDTH / 2 - 23, DISPLAY_HEIGHT / 2, "PurrGO!");
   /* Неблокирующе: первый кадр карты встанет в очередь за заставкой. */
-  display_refresh();
+  // display_refresh();
 
   last_button_poll_ms = purrgo_system_time_ms();
 }
