@@ -294,6 +294,7 @@ static void et_scene_begin(int scene, display_mode_t mode)
 
 static void et_scene_full(void)
 {
+    PURRGO_LOG("EINKTEST full refresh requested\r\n");
     display_refresh();                 /* полное обновление: на панель уходит кадр из framebuffer */
     display_eink_wait();
 }
@@ -364,6 +365,7 @@ void EinkTest_RunPartial(void)
     display_init();
     et_gfx_init();
     display_eink_set_partial_limits(250U, 250U);
+    display_eink_set_log(true);             /* строки "EINK t=..." рядом с "EINKTEST ..." */
 
     const unsigned mask = PURRGO_EINK_TEST_SCENES;
 
