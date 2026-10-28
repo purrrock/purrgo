@@ -66,3 +66,28 @@ if(TARGET test_display_eink)
         set_tests_properties(test_display_eink PROPERTIES DISABLED TRUE)
     endif()
 endif()
+
+# eink_selftest_host прогоняет встроенный самотест частичного обновления
+# (apps/stm32/common/Src/eink_test.c) на модели 1-bit контроллера панели и сверяет
+# картинку на «стекле» с framebuffer'ом. Нужен сабмодуль third_party/eink_part_refresh.
+if(EXISTS ${EPD4G_DIR}/src/epd4g.c)
+    add_executable(eink_selftest_host
+        ${CMAKE_CURRENT_SOURCE_DIR}/eink_selftest_host.c
+        ${PROJECT_SOURCE_DIR}/apps/stm32/common/Src/eink_test.c
+        ${PROJECT_SOURCE_DIR}/apps/stm32/common/Src/display_stm32.c
+        ${PROJECT_SOURCE_DIR}/apps/stm32/common/Src/display_eink.c
+        ${EPD4G_DIR}/src/epd4g.c
+        ${EPD4G_DIR}/src/epd4g_fb.c
+        ${PROJECT_SOURCE_DIR}/src/platform/pc/purrgo_logger.c)
+    target_include_directories(eink_selftest_host PRIVATE
+        ${PROJECT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/stm32_shim
+        ${PROJECT_SOURCE_DIR}/apps/stm32/common/Inc
+        ${EPD4G_DIR}/include)
+    target_compile_definitions(eink_selftest_host PRIVATE EPD4G_BW_THRESHOLD=3)
+    target_link_options(eink_selftest_host PRIVATE -Wl,--wrap=display_set_mode)
+    purrgo_target_warnings(eink_selftest_host)
+    target_link_libraries(eink_selftest_host PRIVATE purrgo_core m)
+    add_test(NAME eink_selftest_host COMMAND eink_selftest_host 1
+             WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+endif()

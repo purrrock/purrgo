@@ -101,13 +101,15 @@ int main(void)
   MX_USART2_UART_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
-
+  
+// #define PURRGO_EINK_SELFTEST_4GRAY
 #if defined(PURRGO_EINK_SELFTEST_4GRAY)
   /* Самотест 4-gray через путь приложения (см. eink_test.h). */
   EinkTest_Run4Gray();
   while (1) {}
 #endif
 
+#define PURRGO_EINK_SELFTEST_PARTIAL
 #if defined(PURRGO_EINK_SELFTEST_PARTIAL)
   /* Самотест частичного обновления (режим 1-bit). */
   EinkTest_RunPartial();
