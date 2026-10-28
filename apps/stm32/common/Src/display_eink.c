@@ -88,10 +88,12 @@ static bool time_reached(uint32_t now, uint32_t t)
     return (int32_t)(now - t) >= 0;
 }
 
+static unsigned s_limit_gray = PURRGO_EINK_GRAY_PARTIALS_BEFORE_FULL;
+static unsigned s_limit_mono = PURRGO_EINK_MONO_PARTIALS_BEFORE_FULL;
+
 static unsigned partial_limit(display_mode_t m)
 {
-    return (m == DISPLAY_MODE_GRAY4) ? PURRGO_EINK_GRAY_PARTIALS_BEFORE_FULL
-                                     : PURRGO_EINK_MONO_PARTIALS_BEFORE_FULL;
+    return (m == DISPLAY_MODE_GRAY4) ? s_limit_gray : s_limit_mono;
 }
 
 static void invalidate_panel(void)
@@ -318,6 +320,12 @@ bool display_eink_data_busy(void)
 bool display_eink_is_busy(void)
 {
     return s_op != OP_NONE || request_pending();
+}
+
+void display_eink_set_partial_limits(unsigned gray, unsigned mono)
+{
+    s_limit_gray = (gray != 0U) ? gray : PURRGO_EINK_GRAY_PARTIALS_BEFORE_FULL;
+    s_limit_mono = (mono != 0U) ? mono : PURRGO_EINK_MONO_PARTIALS_BEFORE_FULL;
 }
 
 uint8_t display_eink_partial_count(void)
