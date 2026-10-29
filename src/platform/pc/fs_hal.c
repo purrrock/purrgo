@@ -84,6 +84,16 @@ uint32_t purrgo_fs_write(
 }
 
 
+/* На PC чтение уже буферизуется libc: подсказка read-ahead не нужна. */
+void purrgo_fs_set_read_ahead(
+    purrgo_file_t* file,
+    uint8_t sectors
+) {
+    (void)file;
+    (void)sectors;
+}
+
+
 bool purrgo_fs_seek(
     purrgo_file_t* file,
     uint32_t offset

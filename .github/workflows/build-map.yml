@@ -170,7 +170,13 @@ jobs:
           for pt in "${PTS[@]}"; do
             IFS=':' read -r name lat lon <<< "$pt"
             echo "## $name ($lat, $lon)" >> "$out"
-            # U585 (SPI SD, 160 МГц) - целевая плата
+            # Текущая конфигурация U585: SPI2 /8 = 10 МГц, ядро 80 МГц.
+            # "После патча" = то, что сейчас в прошивке: CLMT, min-px 2 (линии) / 3 (полигоны),
+            # read-ahead .mlp 4, LRU 64.
+            run "U585 СЕЙЧАС (SPI 10 МГц, 80 МГц): без правок"            "$lat" "$lon" --scales "$S_MAIN" --spi-mhz 10 --cpu 84 --breakdown
+            run "U585 СЕЙЧАС (SPI 10 МГц, 80 МГц): с правками прошивки"   "$lat" "$lon" --scales "$S_MAIN" --spi-mhz 10 --cpu 84 --fastseek --min-px 2 --min-px-poly 3 --cache 64 --line-mlp 4
+            run "U585 после SPI /4 (20 МГц), 80 МГц: с правками прошивки" "$lat" "$lon" --scales "$S_MAIN" --spi-mhz 20 --cpu 84 --fastseek --min-px 2 --min-px-poly 3 --cache 64 --line-mlp 4
+            # U585 при 160 МГц и SPI 20 МГц - верхняя оценка (дальше сравнения по шагам)
             run "U585, SPI: как сейчас (с разбивкой idx/mlp/db)"  "$lat" "$lon" --scales "$S_MAIN" --breakdown
             run "U585, SPI: + CLMT (fast seek)"                  "$lat" "$lon" --scales "$S_MAIN" --fastseek
             run "U585, SPI: + CLMT + min-px 2"                   "$lat" "$lon" --scales "$S_MAIN" --fastseek --min-px 2

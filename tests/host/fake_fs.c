@@ -10,7 +10,7 @@
 struct purrgo_file_s { int idx; uint32_t pos; };
 struct purrgo_dir_s  { int unused; };
 
-typedef struct { char name[320]; uint8_t* data; uint32_t size; int used; } ffile_t;
+typedef struct { char name[320]; uint8_t* data; uint32_t size; int used; uint8_t read_ahead; } ffile_t;
 static ffile_t files[32];
 static struct purrgo_file_s handles[8];
 static int handle_used[8];
@@ -55,7 +55,7 @@ void fake_fs_put(const char* n, const char* text) {
     files[i].size = (uint32_t)strlen(text);
     files[i].data = malloc(files[i].size + 1);
     memcpy(files[i].data, text, files[i].size + 1);
-    files[i].used = 1;
+    files[i].used = 1; files[i].read_ahead = 0;
 }
 
 void fake_fs_put_bin(const char* n, const uint8_t* d, uint32_t size) {
@@ -67,7 +67,7 @@ void fake_fs_put_bin(const char* n, const uint8_t* d, uint32_t size) {
     files[i].data = malloc(size + 1u);
     if (size) { memcpy(files[i].data, d, size); }
     files[i].data[size] = 0;
-    files[i].used = 1;
+    files[i].used = 1; files[i].read_ahead = 0;
 }
 
 purrgo_file_t* purrgo_fs_open(const char* p, fs_mode_t m) {
@@ -108,6 +108,8 @@ uint32_t purrgo_fs_read(purrgo_file_t* f, uint8_t* b, uint32_t n) {
     return n;
 }
 bool purrgo_fs_seek(purrgo_file_t* f, uint32_t o) { f->pos = o; return true; }
+void purrgo_fs_set_read_ahead(purrgo_file_t* f, uint8_t sectors) { files[f->idx].read_ahead = sectors; }
+uint8_t fake_fs_read_ahead(const char* name) { int i = find(name); return i < 0 ? 0 : files[i].read_ahead; }
 bool purrgo_fs_sync(purrgo_file_t* f) { (void)f; sync_calls++; return !g_fault.fail_sync; }
 int fake_fs_sync_calls(void) { return sync_calls; }
 bool purrgo_fs_close(purrgo_file_t* f) { handle_used[f - handles] = 0; return !g_fault.fail_close; }

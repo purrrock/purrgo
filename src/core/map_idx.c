@@ -229,7 +229,17 @@ if (style == PURRGO_STYLE_NONE) {
 		 
         if (v1 > 0) {
             bool is_polygon = (layer_type == MAP_LAYER_POLYGONS);
-            
+
+            /*
+             * Слишком мелкий для экрана объект не рисуем и, главное, не читаем
+             * его геометрию с SD (подпись такого полигона тоже не нужна).
+             */
+            if (map_feature_too_small(xmin, ymin, xmax, ymax, cam, vp,
+                                      is_polygon ? PURRGO_MAP_MIN_PX_POLYGON
+                                                 : PURRGO_MAP_MIN_PX_LINE)) {
+                return true;
+            }
+
             map_render_feature(mlp_file, v1, cam, vp, gfx, is_polygon, style);
 
             /*
