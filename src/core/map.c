@@ -106,6 +106,8 @@ static bool map_open_pair(const char* map_dir, const char* name_a, const char* n
     purrgo_file_t* b = map_open_file(map_dir, name_b);
 
     if (a && b) {
+        /* b - всегда .mlp (геометрия читается подряд): включаем read-ahead. */
+        purrgo_fs_set_read_ahead(b, (uint8_t)PURRGO_MAP_MLP_READ_AHEAD_SECTORS);
         *out_a = a;
         *out_b = b;
         return true;
@@ -528,7 +530,11 @@ bool purrgo_map_render_viewport(
 
     /* ------------------- POIS ------------------- */
 
-    if (s_map_context.poi_idx_file) {
+    /*
+     * При poi_mode == NO обход pois.idx ничего не рисует, но читает с SD индекс
+     * (около пятой части передач кадра на 500 м): слой пропускаем целиком.
+     */
+    if (s_map_context.poi_idx_file && params->poi_mode != PURRGO_POI_MODE_NO) {
 
         ok = purrgo_map_render_layer(
             s_map_context.poi_idx_file,

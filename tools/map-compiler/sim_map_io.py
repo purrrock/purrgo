@@ -14,8 +14,8 @@ sim_map_io.py - оценка нагрузки на SD-карту при отри
 Использование:
     python sim_map_io.py <папка_карты> <lat> <lon> [--scales 500,2000,...]
                          [--poi-mode no|icons] [--labels 0|1]
-                         [--bus spi] [--fastseek] [--cache N] [--line L]
-                         [--min-px P] [--pan FRAC]
+                         [--bus spi] [--spi-mhz MHZ] [--fastseek] [--cache N] [--line L]
+                         [--min-px P] [--min-px-poly P] [--pan FRAC]
 Это ОЦЕНКА по модели, а не замер на железе. Параметры модели - в блоке MODEL.
 """
 
@@ -286,8 +286,10 @@ class Renderer:
         st.features += 1
         st.vertices += num_points
 
-    def too_small(self, xmin, ymin, xmax, ymax, cam):
+    def too_small(self, xmin, ymin, xmax, ymax, cam, layer):
         mp = self.p.get("min_px", 0)
+        if layer == "landuse" and self.p.get("min_px_poly") is not None:
+            mp = self.p["min_px_poly"]          # полигоны: свой порог (в прошивке 3, у линий 2)
         if not mp:
             return False
         sx = max(1, cam["max_x"] - cam["min_x"])
@@ -318,7 +320,7 @@ class Renderer:
             if obj_type == 0 or obj_type > 12:
                 return True
             if v1 > 0:
-                if self.too_small(xmin, ymin, xmax, ymax, cam):
+                if self.too_small(xmin, ymin, xmax, ymax, cam, layer):
                     self.st.skipped_small += 1
                     return True
                 self.render_feature(mlp, v1)
@@ -415,6 +417,9 @@ def main():
     ap.add_argument("--bus", default="spi", choices=["spi"])
     ap.add_argument("--cpu", default="160", choices=["84", "160"],
                     help="~84 МГц (близко к текущим 80 МГц U585) или 160 МГц")
+    ap.add_argument("--spi-mhz", type=float, default=0,
+                    help="частота SPI SD (U585 сейчас SPI2 /8 = 10 МГц, после /4 = 20 МГц); "
+                         "0 - значения MODEL (~20 МГц)")
     ap.add_argument("--fastseek", action="store_true",
                     help="модель с включённой CLMT (f_lseek(CREATE_LINKMAP))")
     ap.add_argument("--cache", type=int, default=LRU_ENTRIES, help="секторов в LRU")
@@ -425,17 +430,24 @@ def main():
     ap.add_argument("--breakdown", action="store_true",
                     help="печатать разбивку передач по idx/mlp/db, пройденные узлы дерева и пропуски")
     ap.add_argument("--min-px", type=float, default=0, help="не рисовать объекты мельче P пикселей")
+    ap.add_argument("--min-px-poly", type=float, default=None,
+                    help="порог пропуска для полигонов (landuse), по умолчанию как --min-px")
     ap.add_argument("--pan", type=float, default=0,
                     help="после кадра сдвинуть камеру на долю ширины и считать второй кадр")
     a = ap.parse_args()
     CPU = a.cpu
-    params = {"poi_mode": a.poi_mode, "labels": bool(a.labels), "min_px": a.min_px}
+    if a.spi_mhz > 0:
+        # 512 Б = 4096 бит; плюс ~0.04 мс на команду, токен и CRC
+        mid = 4.096 / a.spi_mhz + 0.04
+        MODEL["xfer_spi_ms"] = (mid * 0.85, mid, mid * 1.8)
+    params = {"poi_mode": a.poi_mode, "labels": bool(a.labels), "min_px": a.min_px,
+              "min_px_poly": a.min_px_poly}
     line = a.line
     if a.line_idx or a.line_mlp or a.line_db:
         line = {"idx": a.line_idx or a.line, "mlp": a.line_mlp or a.line, "db": a.line_db or a.line}
 
     print(f"map={a.map_dir} center=({a.lat},{a.lon}) bus={a.bus} cpu={a.cpu}MHz "
-          f"fastseek={a.fastseek} cache={a.cache} line={line} min_px={a.min_px} pan={a.pan}")
+          f"spi_mhz={a.spi_mhz or 'модель'} fastseek={a.fastseek} cache={a.cache} line={line} min_px={a.min_px} pan={a.pan}")
     print(f"{'scale':>8} {'LOD':>3} {'xfers':>6} {'sect':>5} {'KB':>6} {'verts':>7} "
           f"{'skip':>5} {'bk-seek':>7} | {'I/O ms lo/mid/hi':>20} | {'CPU ms lo/mid/hi':>20} | "
           f"{'total s lo/mid/hi':>20}")

@@ -160,7 +160,11 @@ to the CubeMX project (`apps/stm32/PurrGO_STM32U5/Core/Src/`):
 * microSD + FatFs (`fs_hal_stm32.c` in `common`, `sd_card.c` in the project):
   the card is on SPI2 (the 48-pin package has no SDMMC) with the HAL-free card
   protocol in `common/sd_spi` (host-tested) and FatFs R0.16 in `common/fatfs`
-  (see `docs/SD_SPI_MODE.md`);
+  (see `docs/SD_SPI_MODE.md`). `fs_hal_stm32.c` keeps a 64-sector LRU cache,
+  builds a FatFs cluster link map (CLMT, fast seek) for read-only files of 256 KB and
+  more (map files), and supports an optional per-file read-ahead
+  (`purrgo_fs_set_read_ahead`, a single multi-sector SD request per cache miss; the map
+  enables it for `.mlp` only);
 * display drivers (`display_eink.c`, `display_stm32.c`);
 * buttons (`buttons.c`, `debug_buttons.c`);
 * system time and logger (`system_time.c`, `purrgo_logger.c`);

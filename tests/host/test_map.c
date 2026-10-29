@@ -10,6 +10,8 @@
 #include <string.h>
 #include "purrgo/map.h"
 #include "purrgo/fs_hal.h"
+#include "map_internal.h"
+#include "map_culling.h"
 #include "fake_fs.h"
 #include "test_common.h"
 
@@ -445,6 +447,123 @@ static void test_viewport_via_fs(void)
     CHECK(fake_fs_open_handles() == 0);
 }
 
+/*
+ * Пропуск мелких объектов: камера 1000x1000 на вьюпорте 64x64 даёт 15.6 единицы
+ * на пиксель. Порог линий 2 px (31.2 единицы), полигонов 3 px (46.9).
+ */
+static void test_feature_too_small(void)
+{
+    const purrgo_bbox_t cam = { 0, 0, 1000, 1000 };
+    const purrgo_viewport_t vp = { 64, 64, 0, 0 };
+
+    CHECK(map_feature_too_small(500, 500, 505, 505, &cam, &vp, 2));      /* 0.3 px */
+    CHECK(!map_feature_too_small(500, 500, 540, 540, &cam, &vp, 2));     /* 2.6 px */
+    CHECK(map_feature_too_small(500, 500, 540, 540, &cam, &vp, 3));      /* 2.6 px < 3 */
+    /* Тонкий, но длинный объект рисуется: одна сторона больше порога. */
+    CHECK(!map_feature_too_small(100, 500, 900, 501, &cam, &vp, 2));
+    CHECK(!map_feature_too_small(500, 100, 501, 900, &cam, &vp, 2));
+    /* Ровно порог (2 px = 31.25 единицы) не пропускается: 32 * 64 = 2048 >= 2 * 1000. */
+    CHECK(!map_feature_too_small(0, 0, 32, 32, &cam, &vp, 2));
+    CHECK(map_feature_too_small(0, 0, 31, 31, &cam, &vp, 2));
+    /* Выключено или некорректные параметры: не пропускаем. */
+    CHECK(!map_feature_too_small(500, 500, 501, 501, &cam, &vp, 0));
+    CHECK(!map_feature_too_small(500, 500, 501, 501, NULL, &vp, 2));
+    CHECK(!map_feature_too_small(500, 500, 501, 501, &cam, NULL, 2));
+    const purrgo_viewport_t empty = { 0, 0, 0, 0 };
+    CHECK(!map_feature_too_small(500, 500, 501, 501, &cam, &empty, 2));
+    const purrgo_bbox_t wrap = { 900, 0, 100, 1000 };                    /* через антимеридиан */
+    CHECK(!map_feature_too_small(500, 500, 501, 501, &wrap, &vp, 2));
+    const purrgo_bbox_t flat = { 0, 5, 1000, 5 };
+    CHECK(!map_feature_too_small(500, 500, 501, 501, &flat, &vp, 2));
+    /* Крайние координаты: произведения не переполняют int64. */
+    const purrgo_bbox_t huge = { INT32_MIN, INT32_MIN, INT32_MAX, INT32_MAX };
+    const purrgo_viewport_t big = { 65535, 65535, 0, 0 };
+    CHECK(!map_feature_too_small(INT32_MIN, INT32_MIN, INT32_MAX, INT32_MAX, &huge, &big, 3));
+    CHECK(map_feature_too_small(0, 0, 1, 1, &huge, &vp, 3));
+}
+
+static void test_small_features_skipped(void)
+{
+    static blob_t idx, mlp;
+    uint32_t parts[1] = { 0 };
+
+    defaults();
+
+    /* Линия: 0.3 px пропускается, 2.6 px рисуется. */
+    uint8_t node[25];
+    int32_t tiny_line[4] = { 500, 500, 505, 505 };
+    data_node(node, 500, 500, 505, 505, 1, GEOM_V1, 0);
+    build_idx(&idx, node, sizeof node, 0, 1);
+    build_mlp(&mlp, 1, parts, 2, tiny_line);
+    CHECK(render(&idx, &mlp, NULL, MAP_LAYER_LINES) == 0);
+
+    int32_t line[4] = { 500, 500, 540, 540 };
+    data_node(node, 500, 500, 540, 540, 1, GEOM_V1, 0);
+    build_idx(&idx, node, sizeof node, 0, 1);
+    build_mlp(&mlp, 1, parts, 2, line);
+    CHECK(render(&idx, &mlp, NULL, MAP_LAYER_LINES) > 0);
+
+    /* Полигон 2.6 px (< 3) пропускается, 3.8 px рисуется. */
+    int32_t small_poly[8] = { 500, 500, 540, 500, 540, 540, 500, 540 };
+    data_node(node, 500, 500, 540, 540, 10 /* WATER */, GEOM_V1, 0);
+    build_idx(&idx, node, sizeof node, 0, 1);
+    build_mlp(&mlp, 1, parts, 4, small_poly);
+    CHECK(render(&idx, &mlp, NULL, MAP_LAYER_POLYGONS) == 0);
+
+    int32_t poly[8] = { 500, 500, 560, 500, 560, 560, 500, 560 };
+    data_node(node, 500, 500, 560, 560, 10, GEOM_V1, 0);
+    build_idx(&idx, node, sizeof node, 0, 1);
+    build_mlp(&mlp, 1, parts, 4, poly);
+    CHECK(render(&idx, &mlp, NULL, MAP_LAYER_POLYGONS) > 0);
+}
+
+/*
+ * Через purrgo_map_render_viewport: read-ahead включается только у .mlp, а слой
+ * POI при poi_mode == NO не читается с носителя вовсе.
+ */
+static void test_viewport_read_ahead_and_poi_skip(void)
+{
+    static blob_t idx, mlp, poi;
+    simple_map(&idx, &mlp, 1);
+
+    fake_fs_reset();
+    defaults();
+    g_params.layer_roads = true;
+    purrgo_map_shutdown();
+    fake_fs_put_bin("maps/ra/roads.idx", idx.d, idx.n);
+    fake_fs_put_bin("maps/ra/roads.mlp", mlp.d, mlp.n);
+    gfx_reset();
+    CHECK(render_dir("maps/ra"));
+    CHECK(fake_fs_read_ahead("maps/ra/roads.mlp") == PURRGO_MAP_MLP_READ_AHEAD_SECTORS);
+    CHECK(fake_fs_read_ahead("maps/ra/roads.idx") == 0);                /* для .idx не задаётся */
+    purrgo_map_shutdown();
+
+    uint8_t node[25];
+    data_node(node, 500, 500, 500, 500, 11 /* POI_BIG */, 0, 0);
+    build_idx(&poi, node, sizeof node, 0, 1);
+
+    fake_fs_reset();
+    defaults();
+    g_params.layer_poi = true;
+    g_params.poi_mode = PURRGO_POI_MODE_NO;
+    purrgo_map_shutdown();
+    fake_fs_put_bin("maps/poi/pois.idx", poi.d, poi.n);
+    fake_fs_reset_read_stats();
+    gfx_reset();
+    (void)render_dir("maps/poi");
+    CHECK(fake_fs_read_calls() == 0);                                   /* pois.idx не читался */
+    CHECK(g_pixels == 0);
+    purrgo_map_shutdown();
+
+    g_params.poi_mode = PURRGO_POI_MODE_CIRCLES;
+    fake_fs_reset_read_stats();
+    gfx_reset();
+    (void)render_dir("maps/poi");
+    CHECK(fake_fs_read_calls() > 0);
+    CHECK(g_pixels > 5);
+    purrgo_map_shutdown();
+}
+
 /* Раздел 2 (карта): повторные открытия, признак успеха кадра, длинный map_dir. */
 static void test_viewport_failures(void)
 {
@@ -561,5 +680,8 @@ int main(void)
     test_fuzz_truncate_and_flip();
     test_viewport_via_fs();
     test_viewport_failures();
+    test_feature_too_small();
+    test_small_features_skipped();
+    test_viewport_read_ahead_and_poi_skip();
     return test_finish("test_map");
 }
