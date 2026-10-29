@@ -1,3 +1,6 @@
 [submodule "third_party/minmea"]
 	path = third_party/minmea
 	url = https://github.com/kosma/minmea.git
+[submodule "third_party/eink_part_refresh"]
+	path = third_party/eink_part_refresh
+	url = https://github.com/purrrock/eink_part_refresh
