@@ -6,8 +6,8 @@
  *
  * Карта подключена по SPI2 и работает в SPI-режиме (в корпусе UFQFPN48 у
  * STM32U585CI нет SDMMC). Протокол карты - в apps/stm32/common/sd_spi (без HAL,
- * проверяется host-тестом), диск FatFs - apps/stm32/common/fatfs/diskio.c,
- * привязка к HAL - Core/Src/sd_card.c проекта.
+ * проверяется host-тестом), диск FatFs (disk_*) и привязка к HAL -
+ * Core/Src/sd_card.c проекта.
  * Detect: вывод Detect_SD (PB10), CS: SD_CS (PB12).
  *
  * Модуль sd_card.c (пользовательский, CubeMX его не перезаписывает) отвечает за:

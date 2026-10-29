@@ -50,11 +50,10 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Core/Src/fattime.c
 
     # FatFs R0.16 (в CubeMX для STM32U5 middleware FATFS нет, D11).
-    # diskio.c - прямой диспетчер на purrgo_disk_*() из sd_card.c.
+    # Интерфейс диска FatFs (disk_*) реализует Core/Src/sd_card.c.
     ${PURRGO_STM32_COMMON}/fatfs/ff.c
     ${PURRGO_STM32_COMMON}/fatfs/ffunicode.c
     ${PURRGO_STM32_COMMON}/fatfs/ffsystem.c
-    ${PURRGO_STM32_COMMON}/fatfs/diskio.c
 
     # STM32 implementation of the common GNSS byte-stream interface
     # (USART1_RX + GPDMA1 linked-list circular).
@@ -106,7 +105,6 @@ purrgo_sources_warnings(
     Core/Src/sd_card.c
     ${PURRGO_STM32_COMMON}/sd_spi/sd_spi.c
     Core/Src/fattime.c
-    ${PURRGO_STM32_COMMON}/fatfs/diskio.c
     ${PURRGO_STM32_COMMON}/Src/fs_hal_stm32.c
     ${PURRGO_STM32_COMMON}/Src/display_stm32.c
     ${PURRGO_STM32_COMMON}/Src/debug_buttons.c
