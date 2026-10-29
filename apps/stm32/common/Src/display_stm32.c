@@ -80,102 +80,21 @@ void display_sleep(void)
 
 void display_clear(uint8_t color)
 {
-    /*
-     * Используем только младшие два бита цвета.
-     */
-    color &= 0x03;
-
-    /*
-     * В одном байте находятся четыре 2-битных пикселя.
-     *
-     * Поэтому один и тот же цвет записывается
-     * во все четыре позиции:
-     *
-     *   [color][color][color][color]
-     */
-    uint8_t byte_value =
-        (uint8_t)(
-            (color << 6) |
-            (color << 4) |
-            (color << 2) |
-            color
-        );
-
-    memset(
-        framebuffer,
-        byte_value,
-        DISPLAY_FB_SIZE
-    );
+    gfx_fb2bpp_clear(framebuffer, DISPLAY_WIDTH, DISPLAY_HEIGHT, color);
 }
 
 
+/*
+ * Раскладка пикселей (4 пикселя на байт, первый - в старших битах) описана
+ * в purrgo/gfx_fb2bpp.h; координаты вне экрана игнорируются.
+ */
 void display_set_pixel(
     int16_t x,
     int16_t y,
     uint8_t color
 )
 {
-    /*
-     * Проверяем координаты до выполнения арифметики
-     * индекса framebuffer.
-     */
-    if (x < 0 ||
-        x >= DISPLAY_WIDTH ||
-        y < 0 ||
-        y >= DISPLAY_HEIGHT)
-    {
-        return;
-    }
-
-    /*
-     * Используются только четыре логических цвета.
-     */
-    color &= 0x03;
-
-    /*
-     * Каждый байт содержит четыре пикселя по 2 бита.
-     *
-     * pixel_index:
-     *   линейный номер пикселя.
-     *
-     * byte_index:
-     *   номер байта framebuffer.
-     *
-     * bit_shift:
-     *   положение двух бит нужного пикселя.
-     *
-     * Для первого пикселя:
-     *   bit_shift = 6
-     *
-     * Для второго:
-     *   bit_shift = 4
-     *
-     * Для третьего:
-     *   bit_shift = 2
-     *
-     * Для четвёртого:
-     *   bit_shift = 0
-     */
-    int pixel_index =
-        y * DISPLAY_WIDTH + x;
-
-    int byte_index =
-        pixel_index >> 2;
-
-    int bit_shift =
-        (3 - (pixel_index & 3)) << 1;
-
-    /*
-     * Сначала удаляем старое значение пикселя.
-     */
-    framebuffer[byte_index] &=
-        (uint8_t)~(0x03 << bit_shift);
-
-    /*
-     * Затем записываем новое значение.
-     */
-    framebuffer[byte_index] |=
-        (uint8_t)(color << bit_shift);
+    gfx_fb2bpp_set_pixel(framebuffer, DISPLAY_WIDTH, DISPLAY_HEIGHT, x, y, color);
 }
 
 
@@ -184,31 +103,8 @@ uint8_t display_get_pixel(
     int16_t y
 )
 {
-    /*
-     * Выход за границы дисплея.
-     */
-    if (x < 0 ||
-        x >= DISPLAY_WIDTH ||
-        y < 0 ||
-        y >= DISPLAY_HEIGHT)
-    {
-        return COLOR_BLACK;
-    }
-
-    int pixel_index =
-        y * DISPLAY_WIDTH + x;
-
-    int byte_index =
-        pixel_index >> 2;
-
-    int bit_shift =
-        (3 - (pixel_index & 3)) << 1;
-
-    return
-        (uint8_t)(
-            (framebuffer[byte_index] >> bit_shift) &
-            0x03
-        );
+    /* За границами дисплея - COLOR_BLACK (0). */
+    return gfx_fb2bpp_get_pixel(framebuffer, DISPLAY_WIDTH, DISPLAY_HEIGHT, x, y);
 }
 
 
@@ -300,23 +196,16 @@ void stm32_fill_span_cb(
  * Refresh management
  * --------------------------------------------------------------------------
  *
- * Dirty-region накапливается в display_refresh_region() и выводится в
- * display_flush().
+ * Все обновления неблокирующие и только ставят запрос в очередь
+ * display_eink.c; физическое обновление идёт в фоне (display_stm32_poll()
+ * вызывается из главного цикла). Области объединяет сам display_eink.c, поэтому
+ * здесь они не накапливаются: между display_refresh_region() и display_flush()
+ * poll() не вызывается (отрисовка кадра идёт одним проходом главного цикла),
+ * значит запрос уходит в панель не раньше конца отрисовки.
  *
- * Все обновления неблокирующие: display_refresh() и display_flush() только
- * ставят запрос в очередь display_eink.c, физическое обновление идёт в фоне
- * (display_stm32_poll() вызывается из главного цикла). В режиме 4 gray
- * обновляются пиксели, изменившиеся относительно предыдущего кадра, в
- * режиме 1 bit - накопленная область.
+ * В режиме 4 gray обновляются пиксели, изменившиеся относительно предыдущего
+ * кадра, в режиме 1 bit - накопленная область.
  */
-
-static int16_t pending_x1 = -1;
-static int16_t pending_y1 = -1;
-static int16_t pending_x2 = -1;
-static int16_t pending_y2 = -1;
-
-static int pending_has_region = 0;
-
 
 /*
  * Полное обновление дисплея (мигает весь экран, сбрасывает остаточное
@@ -324,17 +213,13 @@ static int pending_has_region = 0;
  */
 void display_refresh(void)
 {
-    pending_has_region = 0;
-
     display_eink_request_full();
 }
 
 
 /*
- * Помечает область как изменённую.
- *
+ * Помечает область как изменённую (с обрезкой по границам дисплея).
  * Реального обновления дисплея здесь не происходит.
- * Оно выполняется display_flush().
  */
 void display_refresh_region(
     int16_t x,
@@ -343,85 +228,12 @@ void display_refresh_region(
     int16_t h
 )
 {
-    /*
-     * Clip области к границам дисплея.
-     */
-    if (x < 0)
-    {
-        w += x;
-        x = 0;
-    }
-
-    if (y < 0)
-    {
-        h += y;
-        y = 0;
-    }
-
-    if (x + w > DISPLAY_WIDTH)
-    {
-        w = DISPLAY_WIDTH - x;
-    }
-
-    if (y + h > DISPLAY_HEIGHT)
-    {
-        h = DISPLAY_HEIGHT - y;
-    }
+    if (x < 0) { w += x; x = 0; }
+    if (y < 0) { h += y; y = 0; }
+    if (x + w > DISPLAY_WIDTH)  { w = DISPLAY_WIDTH - x; }
+    if (y + h > DISPLAY_HEIGHT) { h = DISPLAY_HEIGHT - y; }
 
     if (w <= 0 || h <= 0)
-    {
-        return;
-    }
-
-    /*
-     * Если это первая dirty-region,
-     * просто сохраняем её.
-     */
-    if (!pending_has_region)
-    {
-        pending_x1 = x;
-        pending_y1 = y;
-        pending_x2 = (int16_t)(x + w - 1);
-        pending_y2 = (int16_t)(y + h - 1);
-
-        pending_has_region = 1;
-
-        return;
-    }
-
-    /*
-     * Если область уже существует,
-     * расширяем её так, чтобы она включала
-     * новую область.
-     */
-    if (x < pending_x1)
-    {
-        pending_x1 = x;
-    }
-
-    if (y < pending_y1)
-    {
-        pending_y1 = y;
-    }
-
-    if (x + w - 1 > pending_x2)
-    {
-        pending_x2 = (int16_t)(x + w - 1);
-    }
-
-    if (y + h - 1 > pending_y2)
-    {
-        pending_y2 = (int16_t)(y + h - 1);
-    }
-}
-
-
-/*
- * Выполняет накопленное обновление дисплея.
- */
-void display_flush(void)
-{
-    if (!pending_has_region)
     {
         return;
     }
@@ -430,12 +242,14 @@ void display_flush(void)
      * Переход на полное обновление (первое обновление, смена режима, лимит
      * частичных подряд) выполняет display_eink.c.
      */
-    display_eink_request_region(
-        pending_x1,
-        pending_y1,
-        (int16_t)(pending_x2 - pending_x1 + 1),
-        (int16_t)(pending_y2 - pending_y1 + 1)
-    );
+    display_eink_request_region(x, y, w, h);
+}
 
-    pending_has_region = 0;
+
+/*
+ * Контракт display_hal.h сохранён, но запрос уже поставлен в
+ * display_refresh_region(): здесь делать нечего.
+ */
+void display_flush(void)
+{
 }

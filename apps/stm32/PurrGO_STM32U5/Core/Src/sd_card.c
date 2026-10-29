@@ -8,7 +8,7 @@
  *
  * Слои:
  *   sd_spi (apps/stm32/common/sd_spi) - протокол карты, без HAL;
- *   этот файл - привязка к HAL SPI2/GPIO, диск FatFs (purrgo_disk_*),
+ *   этот файл - привязка к HAL SPI2/GPIO, диск FatFs (disk_*, интерфейс diskio.h),
  *     монтирование, горячая замена, защита от зависаний.
  */
 
@@ -17,7 +17,7 @@
 #include "main.h"
 #include "spi.h"
 #include "ff.h"
-#include "purrgo_disk.h"
+#include "diskio.h"
 #include "sd_spi.h"
 #include "purrgo/logger.h"
 
@@ -188,7 +188,7 @@ static const sd_spi_port_t s_port = {
 
 /*
  * --------------------------------------------------------------------------
- * Диск FatFs (вызывается из diskio.c)
+ * Диск FatFs (disk_*, вызываются из FatFs; диск один, pdrv = 0)
  * --------------------------------------------------------------------------
  */
 
@@ -208,13 +208,21 @@ static DRESULT io_failed(sd_spi_res_t res)
     return RES_ERROR;
 }
 
-DSTATUS purrgo_disk_status(void)
+DSTATUS disk_status(BYTE pdrv)
 {
+    if (pdrv != 0U)
+    {
+        return (DSTATUS)STA_NOINIT;
+    }
     return s_card_lost ? (DSTATUS)(STA_NOINIT) : s_stat;
 }
 
-DSTATUS purrgo_disk_initialize(void)
+DSTATUS disk_initialize(BYTE pdrv)
 {
+    if (pdrv != 0U)
+    {
+        return (DSTATUS)STA_NOINIT;
+    }
     if (!card_inserted())
     {
         s_stat = (DSTATUS)(STA_NOINIT | STA_NODISK);
@@ -238,8 +246,12 @@ DSTATUS purrgo_disk_initialize(void)
     return s_stat;
 }
 
-DRESULT purrgo_disk_read(BYTE *buff, LBA_t sector, UINT count)
+DRESULT disk_read(BYTE pdrv, BYTE *buff, LBA_t sector, UINT count)
 {
+    if (pdrv != 0U)
+    {
+        return RES_PARERR;
+    }
     if ((buff == NULL) || (count == 0U))
     {
         return RES_PARERR;
@@ -254,8 +266,12 @@ DRESULT purrgo_disk_read(BYTE *buff, LBA_t sector, UINT count)
     return (res == SD_SPI_OK) ? RES_OK : io_failed(res);
 }
 
-DRESULT purrgo_disk_write(const BYTE *buff, LBA_t sector, UINT count)
+DRESULT disk_write(BYTE pdrv, const BYTE *buff, LBA_t sector, UINT count)
 {
+    if (pdrv != 0U)
+    {
+        return RES_PARERR;
+    }
     if ((buff == NULL) || (count == 0U))
     {
         return RES_PARERR;
@@ -270,8 +286,12 @@ DRESULT purrgo_disk_write(const BYTE *buff, LBA_t sector, UINT count)
     return (res == SD_SPI_OK) ? RES_OK : io_failed(res);
 }
 
-DRESULT purrgo_disk_ioctl(BYTE cmd, void *buff)
+DRESULT disk_ioctl(BYTE pdrv, BYTE cmd, void *buff)
 {
+    if (pdrv != 0U)
+    {
+        return RES_PARERR;
+    }
     if (s_card_lost || ((s_stat & STA_NOINIT) != 0))
     {
         return RES_NOTRDY;

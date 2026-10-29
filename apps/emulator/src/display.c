@@ -1,5 +1,5 @@
 #include "display.h"
-#include <string.h>
+#include "purrgo/gfx_fb2bpp.h"
 
 static uint8_t framebuffer[DISPLAY_FB_SIZE];
 
@@ -8,25 +8,11 @@ void display_init(void) {
 }
 
 void display_clear(uint8_t color) {
-    color &= 0x03;
-    uint8_t byte_val = (color << 6) | (color << 4) | (color << 2) | color;
-    for (int i = 0; i < DISPLAY_FB_SIZE; ++i) {
-        framebuffer[i] = byte_val;
-    }
+    gfx_fb2bpp_clear(framebuffer, DISPLAY_WIDTH, DISPLAY_HEIGHT, color);
 }
 
-void  display_set_pixel(int16_t x, int16_t y, uint8_t color) {
-    if (x < 0 || x >= DISPLAY_WIDTH || y < 0 || y >= DISPLAY_HEIGHT) {
-        return;
-    }
-
-    color &= 0x03;
-    int pixel_idx = y * DISPLAY_WIDTH + x;
-    int byte_idx = pixel_idx / 4;
-    int bit_shift = (3 - (pixel_idx % 4)) * 2; // MSB first for pixels
-
-    framebuffer[byte_idx] &= ~(0x03 << bit_shift); // Clear existing
-    framebuffer[byte_idx] |= (color << bit_shift); // Set new
+void display_set_pixel(int16_t x, int16_t y, uint8_t color) {
+    gfx_fb2bpp_set_pixel(framebuffer, DISPLAY_WIDTH, DISPLAY_HEIGHT, x, y, color);
 }
 
 const uint8_t* display_get_framebuffer(void) {
@@ -34,13 +20,5 @@ const uint8_t* display_get_framebuffer(void) {
 }
 
 uint8_t display_get_pixel(int16_t x, int16_t y) {
-    if (x < 0 || x >= DISPLAY_WIDTH || y < 0 || y >= DISPLAY_HEIGHT) {
-        return 0; // COLOR_BLACK
-    }
-
-    int pixel_idx = y * DISPLAY_WIDTH + x;
-    int byte_idx = pixel_idx / 4;
-    int bit_shift = (3 - (pixel_idx % 4)) * 2;
-
-    return (framebuffer[byte_idx] >> bit_shift) & 0x03;
+    return gfx_fb2bpp_get_pixel(framebuffer, DISPLAY_WIDTH, DISPLAY_HEIGHT, x, y);
 }

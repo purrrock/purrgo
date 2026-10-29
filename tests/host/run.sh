@@ -6,7 +6,7 @@ set -e
 OUT=${OUT:-/tmp/purrgo_host_tests}
 CC=${CC:-gcc}
 mkdir -p "$OUT"
-SRC=$(ls src/core/*.c src/core/*/*.c | grep -v gnss_mock.c)
+SRC=$(ls src/core/*.c src/core/*/*.c)
 rc=0
 for t in tests/host/test_*.c; do
     name=$(basename "$t" .c)
