@@ -557,11 +557,11 @@ static void ui_map_fill_render_params(purrgo_map_render_params_t* params) {
     params->scale = map_app_get_map_zoom_level();
     params->details = app_config.map_details;
     params->poi_mode = app_config.poi_mode;
-    params->layer_landuse = app_config.layer_landuse;
-    params->layer_landuse_labels = app_config.layer_landuse_labels;
-    params->layer_roads = app_config.layer_roads;
-    params->layer_poi = app_config.layer_poi;
-    params->layer_poi_labels = app_config.layer_poi_labels;
+    params->layer_landuse = purrgo_layer_on(app_config.layers, PURRGO_LAYER_LANDUSE);
+    params->layer_landuse_labels = purrgo_layer_on(app_config.layers, PURRGO_LAYER_LANDUSE_LABELS);
+    params->layer_roads = purrgo_layer_on(app_config.layers, PURRGO_LAYER_ROADS);
+    params->layer_poi = purrgo_layer_on(app_config.layers, PURRGO_LAYER_POI);
+    params->layer_poi_labels = purrgo_layer_on(app_config.layers, PURRGO_LAYER_POI_LABELS);
 }
 
 static bool ui_map_render_base_layers(gfx_context_t* gfx, const purrgo_viewport_t* map_vp, const purrgo_bbox_t* dynamic_cam) {
@@ -579,7 +579,7 @@ static bool ui_map_render_base_layers(gfx_context_t* gfx, const purrgo_viewport_
 
 static void ui_map_render_dynamic_data(gfx_context_t* gfx, const purrgo_viewport_t* map_vp, const purrgo_bbox_t* dynamic_cam) {
     const char* active_track_filename = purrgo_logger_get_active_filename();
-    if (active_track_filename != NULL && app_config.layer_track) {
+    if (active_track_filename != NULL && purrgo_layer_on(app_config.layers, PURRGO_LAYER_TRACK)) {
         purrgo_track_render(gfx, dynamic_cam, map_vp, active_track_filename);
     }
 }

@@ -11,6 +11,7 @@
 #include "purrgo/app_fsm.h"
 #include "purrgo/track_logger.h"
 #include "purrgo/config.h"
+#include "purrgo/config_controller.h"
 #include "purrgo/ui/ui_map_dirty.h"
 #include "fake_fs.h"
 
@@ -170,7 +171,7 @@ static void test_config_recovery(void) {
     fake_fs_put("PURRGO.CFG.TMP", "TZ_MIN=420\nLAYER_ROADS=0\n");
     CHECK(purrgo_config_load());
     CHECK(app_config.tz_offset_minutes == 420);
-    CHECK(app_config.layer_roads == false);
+    CHECK(!purrgo_layer_on(app_config.layers, PURRGO_LAYER_ROADS));
 
     /* .TMP оборван посреди строки: не используем */
     fake_fs_reset();
@@ -184,6 +185,65 @@ static void test_config_recovery(void) {
     fake_fs_put("PURRGO.CFG.TMP", "TZ_MIN=999\n");
     CHECK(purrgo_config_load());
     CHECK(app_config.tz_offset_minutes == 100);
+}
+
+/* --- слои карты: маска в памяти, текстовые строки LAYER_<ИМЯ>=0|1 в файле --- */
+
+static bool layer(purrgo_layer_t id) { return purrgo_layer_on(app_config.layers, id); }
+
+static void test_config_layers(void) {
+    uint32_t n; const uint8_t* d;
+
+    /* значения по умолчанию */
+    fake_fs_reset();
+    purrgo_config_init();
+    CHECK(layer(PURRGO_LAYER_ROADS) && layer(PURRGO_LAYER_TRACK) && layer(PURRGO_LAYER_POI_LABELS));
+    CHECK(!layer(PURRGO_LAYER_WATER) && !layer(PURRGO_LAYER_ROUTE));
+
+    /* файл, отредактированный вручную: пробелы/CRLF допустимы, неизвестный ключ и
+     * отсутствующие ключи не мешают, слои из файла имеют приоритет над умолчаниями */
+    fake_fs_reset();
+    fake_fs_put(CFG, "TZ_MIN=60\r\nLAYER_WATER=1\r\nLAYER_ROADS=0\r\nLAYER_BOGUS=1\r\nLAYER_=1\r\n");
+    CHECK(purrgo_config_load());
+    CHECK(layer(PURRGO_LAYER_WATER));
+    CHECK(!layer(PURRGO_LAYER_ROADS));
+    CHECK(layer(PURRGO_LAYER_LANDUSE) && layer(PURRGO_LAYER_TRACK));   /* по умолчанию */
+    CHECK(!layer(PURRGO_LAYER_ROUTE));
+
+    /* сохранение: по строке на слой, текстом */
+    CHECK(purrgo_config_save());
+    d = fake_fs_data(CFG, &n);
+    CHECK(d != NULL);
+    if (d) {
+        const char* t = (const char*)d;
+        CHECK(strstr(t, "LAYER_LANDUSE=1\n") && strstr(t, "LAYER_WATER=1\n"));
+        CHECK(strstr(t, "LAYER_LANDUSE_LABELS=1\n") && strstr(t, "LAYER_WATER_LABELS=0\n"));
+        CHECK(strstr(t, "LAYER_ROADS=0\n") && strstr(t, "LAYER_POI=1\n"));
+        CHECK(strstr(t, "LAYER_POI_LABELS=1\n") && strstr(t, "LAYER_ROUTE=0\n"));
+        CHECK(strstr(t, "LAYER_TRACK=1\n"));
+    }
+
+    /* круговая загрузка даёт ту же маску */
+    const uint16_t saved = app_config.layers;
+    app_config.layers = 0;
+    CHECK(purrgo_config_load());
+    CHECK(app_config.layers == saved);
+
+    /* меню MAP LAYERS: OK переключает пункт под курсором, MENU применяет и сохраняет */
+    purrgo_state_t next = APP_STATE_MENU_MAP_LAYERS;
+    purrgo_config_controller_on_enter(APP_STATE_MENU_MAP_LAYERS);
+    CHECK(config_app_get_draft_layers() == saved);
+    CHECK(purrgo_config_controller_handle_button(APP_STATE_MENU_MAP_LAYERS, PURRGO_ACTION_OK, &next));   /* Landuse */
+    CHECK(purrgo_config_controller_handle_button(APP_STATE_MENU_MAP_LAYERS, PURRGO_ACTION_UP, &next));   /* перенос на последний: Track */
+    CHECK(config_app_get_map_layers_cursor() == PURRGO_LAYER_COUNT - 1);
+    CHECK(purrgo_config_controller_handle_button(APP_STATE_MENU_MAP_LAYERS, PURRGO_ACTION_OK, &next));
+    CHECK(app_config.layers == saved);                                    /* до MENU конфиг не меняется */
+    CHECK(purrgo_config_controller_handle_button(APP_STATE_MENU_MAP_LAYERS, PURRGO_ACTION_MENU, &next));
+    CHECK(next == APP_STATE_MENU_CONFIG);
+    CHECK(!layer(PURRGO_LAYER_LANDUSE) && !layer(PURRGO_LAYER_TRACK));
+    CHECK(layer(PURRGO_LAYER_WATER) && !layer(PURRGO_LAYER_ROADS));
+    d = fake_fs_data(CFG, &n);
+    CHECK(d && strstr((const char*)d, "LAYER_LANDUSE=0\n") && strstr((const char*)d, "LAYER_TRACK=0\n"));
 }
 
 /* --- GNSS timeout + redraw policy --- */
@@ -296,6 +356,7 @@ int main(void) {
     test_logger_stop_in_error_is_clean();
     test_config_atomic_save();
     test_config_recovery();
+    test_config_layers();
     test_gnss_timeout();
     test_gnss_stall_grace();
     test_redraw_policy();
