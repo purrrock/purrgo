@@ -6,6 +6,9 @@
 #include "purrgo/display_hal.h"
 #include "purrgo/hardware_config.h"
 
+#define LAYER_LIST_Y0 30
+#define LAYER_ROW_H   15
+
 static int prev_map_layers_cursor = -1;
 
 void ui_menu_map_layers_reset(void) {
@@ -39,26 +42,24 @@ void ui_render_menu_map_layers(gfx_context_t* gfx) {
 
     gfx_draw_string(gfx, 10, 10, "MAP LAYERS");
 
-    draw_layer_item(gfx, 30, 0, cursor, config_app_get_draft_layer_landuse(), "Landuse");
-    draw_layer_item(gfx, 45, 1, cursor, config_app_get_draft_layer_water(), "Water");
-    draw_layer_item(gfx, 60, 2, cursor, config_app_get_draft_layer_landuse_labels(), "Landuse labels");
-    draw_layer_item(gfx, 75, 3, cursor, config_app_get_draft_layer_water_labels(), "Water labels");
-    draw_layer_item(gfx, 90, 4, cursor, config_app_get_draft_layer_roads(), "Roads");
-    draw_layer_item(gfx, 105, 5, cursor, config_app_get_draft_layer_poi(), "POI");
-    draw_layer_item(gfx, 120, 6, cursor, config_app_get_draft_layer_poi_labels(), "POI labels");
-    draw_layer_item(gfx, 135, 7, cursor, config_app_get_draft_layer_route(), "Route");
-    draw_layer_item(gfx, 150, 8, cursor, config_app_get_draft_layer_track(), "Track");
+    const uint16_t layers = config_app_get_draft_layers();
+
+    for (int i = 0; i < PURRGO_LAYER_COUNT; i++) {
+        draw_layer_item(gfx, LAYER_LIST_Y0 + i * LAYER_ROW_H, i, cursor,
+                        purrgo_layer_on(layers, (purrgo_layer_t)i),
+                        purrgo_layer_title((purrgo_layer_t)i));
+    }
 
     if (prev_map_layers_cursor == -1) {
         prev_map_layers_cursor = cursor;
     } else if (cursor != prev_map_layers_cursor) {
-        if (prev_map_layers_cursor >= 0 && prev_map_layers_cursor <= 8) {
-            int16_t prev_y = (int16_t)(30 + prev_map_layers_cursor * 15);
-            display_refresh_region(0, prev_y, PURRGO_HW_DISPLAY_WIDTH_PX, 15);
+        if (prev_map_layers_cursor >= 0 && prev_map_layers_cursor < PURRGO_LAYER_COUNT) {
+            int16_t prev_y = (int16_t)(LAYER_LIST_Y0 + prev_map_layers_cursor * LAYER_ROW_H);
+            display_refresh_region(0, prev_y, PURRGO_HW_DISPLAY_WIDTH_PX, LAYER_ROW_H);
         }
-        if (cursor >= 0 && cursor <= 8) {
-            int16_t curr_y = (int16_t)(30 + cursor * 15);
-            display_refresh_region(0, curr_y, PURRGO_HW_DISPLAY_WIDTH_PX, 15);
+        if (cursor >= 0 && cursor < PURRGO_LAYER_COUNT) {
+            int16_t curr_y = (int16_t)(LAYER_LIST_Y0 + cursor * LAYER_ROW_H);
+            display_refresh_region(0, curr_y, PURRGO_HW_DISPLAY_WIDTH_PX, LAYER_ROW_H);
         }
         prev_map_layers_cursor = cursor;
     }

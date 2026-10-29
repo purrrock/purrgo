@@ -12,6 +12,54 @@ purrgo_config_t app_config;
 
 
 /*
+ * Слои карты: единственная таблица для файла PURRGO.CFG, меню MAP LAYERS и
+ * значений по умолчанию. Индекс в таблице = purrgo_layer_t.
+ */
+static const struct {
+    const char* key;      /* LAYER_<key>=0|1 в PURRGO.CFG */
+    const char* title;    /* пункт меню */
+    bool        on;       /* по умолчанию */
+} s_layers[PURRGO_LAYER_COUNT] = {
+    [PURRGO_LAYER_LANDUSE]        = { "LANDUSE",        "Landuse",        true  },
+    [PURRGO_LAYER_WATER]          = { "WATER",          "Water",          false },
+    [PURRGO_LAYER_LANDUSE_LABELS] = { "LANDUSE_LABELS", "Landuse labels", true  },
+    [PURRGO_LAYER_WATER_LABELS]   = { "WATER_LABELS",   "Water labels",   false },
+    [PURRGO_LAYER_ROADS]          = { "ROADS",          "Roads",          true  },
+    [PURRGO_LAYER_POI]            = { "POI",            "POI",            true  },
+    [PURRGO_LAYER_POI_LABELS]     = { "POI_LABELS",     "POI labels",     true  },
+    [PURRGO_LAYER_ROUTE]          = { "ROUTE",          "Route",          false },
+    [PURRGO_LAYER_TRACK]          = { "TRACK",          "Track",          true  },
+};
+
+const char* purrgo_layer_title(purrgo_layer_t id)
+{
+    return ((unsigned)id < PURRGO_LAYER_COUNT) ? s_layers[id].title : "";
+}
+
+uint16_t purrgo_layers_default(void)
+{
+    uint16_t mask = 0;
+    for (unsigned i = 0; i < PURRGO_LAYER_COUNT; i++) {
+        if (s_layers[i].on) {
+            mask = (uint16_t)(mask | (1u << i));
+        }
+    }
+    return mask;
+}
+
+/* Слой по ключу из PURRGO.CFG (без префикса LAYER_); -1 - неизвестный ключ. */
+static int layer_find(const char* key)
+{
+    for (int i = 0; i < PURRGO_LAYER_COUNT; i++) {
+        if (strcmp(key, s_layers[i].key) == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+
+/*
  * Внутренний парсер целочисленных значений.
  *
  * Реализован вместо atoi(), чтобы контролировать тип результата
@@ -97,15 +145,7 @@ void purrgo_config_init(void)
     /*
      * Видимость слоев карты.
      */
-    app_config.layer_landuse = true;
-    app_config.layer_water = false;
-    app_config.layer_landuse_labels = true;
-    app_config.layer_water_labels = false;
-    app_config.layer_roads = true;
-    app_config.layer_poi = true;
-    app_config.layer_poi_labels = true;
-    app_config.layer_route = false;
-    app_config.layer_track = true;
+    app_config.layers = purrgo_layers_default();
 
     /*
      * Базовый путь к картам для PC-эмулятора.
@@ -378,32 +418,19 @@ bool purrgo_config_load(void)
             /*
              * Видимость слоев карты.
              */
-            else if (strcmp(key, "LAYER_LANDUSE") == 0) {
-                app_config.layer_landuse = (parse_int32(val) != 0);
-            }
-            else if (strcmp(key, "LAYER_WATER") == 0) {
-                app_config.layer_water = (parse_int32(val) != 0);
-            }
-            else if (strcmp(key, "LAYER_LANDUSE_LABELS") == 0) {
-                app_config.layer_landuse_labels = (parse_int32(val) != 0);
-            }
-            else if (strcmp(key, "LAYER_WATER_LABELS") == 0) {
-                app_config.layer_water_labels = (parse_int32(val) != 0);
-            }
-            else if (strcmp(key, "LAYER_ROADS") == 0) {
-                app_config.layer_roads = (parse_int32(val) != 0);
-            }
-            else if (strcmp(key, "LAYER_POI") == 0) {
-                app_config.layer_poi = (parse_int32(val) != 0);
-            }
-            else if (strcmp(key, "LAYER_POI_LABELS") == 0) {
-                app_config.layer_poi_labels = (parse_int32(val) != 0);
-            }
-            else if (strcmp(key, "LAYER_ROUTE") == 0) {
-                app_config.layer_route = (parse_int32(val) != 0);
-            }
-            else if (strcmp(key, "LAYER_TRACK") == 0) {
-                app_config.layer_track = (parse_int32(val) != 0);
+            else if (strncmp(key, "LAYER_", 6) == 0) {
+                const int id = layer_find(key + 6);
+
+                if (id >= 0) {
+                    const uint16_t bit = (uint16_t)(1u << id);
+
+                    if (parse_int32(val) != 0) {
+                        app_config.layers = (uint16_t)(app_config.layers | bit);
+                    }
+                    else {
+                        app_config.layers = (uint16_t)(app_config.layers & ~bit);
+                    }
+                }
             }
         }
 
@@ -468,16 +495,7 @@ bool purrgo_config_save(void)
         "POI_MODE=%d\n"
 
         "LOG_MODE=%d\n"
-        "MAP_DETAILS=%d\n"
-        "LAYER_LANDUSE=%d\n"
-        "LAYER_WATER=%d\n"
-        "LAYER_LANDUSE_LABELS=%d\n"
-        "LAYER_WATER_LABELS=%d\n"
-        "LAYER_ROADS=%d\n"
-        "LAYER_POI=%d\n"
-        "LAYER_POI_LABELS=%d\n"
-        "LAYER_ROUTE=%d\n"
-        "LAYER_TRACK=%d\n",
+        "MAP_DETAILS=%d\n",
 
         (int)app_config.tz_offset_minutes,
 
@@ -494,18 +512,25 @@ bool purrgo_config_save(void)
 
         (int)app_config.log_mode,
 
-        (int)app_config.map_details,
-
-        app_config.layer_landuse ? 1 : 0,
-        app_config.layer_water ? 1 : 0,
-        app_config.layer_landuse_labels ? 1 : 0,
-        app_config.layer_water_labels ? 1 : 0,
-        app_config.layer_roads ? 1 : 0,
-        app_config.layer_poi ? 1 : 0,
-        app_config.layer_poi_labels ? 1 : 0,
-        app_config.layer_route ? 1 : 0,
-        app_config.layer_track ? 1 : 0
+        (int)app_config.map_details
     );
+
+    /*
+     * Слои карты: по строке LAYER_<ИМЯ>=0|1 на слой (текст для ручной правки).
+     */
+    for (int i = 0; len >= 0 && i < PURRGO_LAYER_COUNT; i++) {
+        if ((size_t)len >= sizeof(buf)) {
+            break;
+        }
+        const int n = purrgo_snprintf(
+            buf + len,
+            sizeof(buf) - (size_t)len,
+            "LAYER_%s=%d\n",
+            s_layers[i].key,
+            purrgo_layer_on(app_config.layers, (purrgo_layer_t)i) ? 1 : 0
+        );
+        len = (n < 0) ? -1 : len + n;
+    }
 
     /*
      * purrgo_snprintf() возвращает количество символов,

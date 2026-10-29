@@ -89,7 +89,7 @@ static purrgo_map_details_t draft_map_details;
 #define CONFIG_CURSOR_MAP_LAYERS    5
 #define CONFIG_CURSOR_POWER_OFF     6
 
-#define MAP_LAYERS_COUNT 9
+#define MAP_LAYERS_COUNT PURRGO_LAYER_COUNT
 
 /* Timezone Configuration Boundaries */
 #define CONFIG_TZ_STEP_MINS         15
@@ -102,15 +102,7 @@ static int config_cursor_idx = CONFIG_CURSOR_TZ;
  * Состояние редактирования слоев карты.
  */
 static int map_layers_cursor_idx = 0;
-static bool draft_layer_landuse;
-static bool draft_layer_water;
-static bool draft_layer_landuse_labels;
-static bool draft_layer_water_labels;
-static bool draft_layer_roads;
-static bool draft_layer_poi;
-static bool draft_layer_poi_labels;
-static bool draft_layer_route;
-static bool draft_layer_track;
+static uint16_t draft_layers;
 
 /*
  * Возвращает максимальный индекс курсора меню.
@@ -375,15 +367,7 @@ void purrgo_config_controller_on_enter(
         config_cursor_idx = CONFIG_CURSOR_TZ;
     }
     else if (state == APP_STATE_MENU_MAP_LAYERS) {
-        draft_layer_landuse = app_config.layer_landuse;
-        draft_layer_water = app_config.layer_water;
-        draft_layer_landuse_labels = app_config.layer_landuse_labels;
-        draft_layer_water_labels = app_config.layer_water_labels;
-        draft_layer_roads = app_config.layer_roads;
-        draft_layer_poi = app_config.layer_poi;
-        draft_layer_poi_labels = app_config.layer_poi_labels;
-        draft_layer_route = app_config.layer_route;
-        draft_layer_track = app_config.layer_track;
+        draft_layers = app_config.layers;
         map_layers_cursor_idx = 0;
     }
     else if (state == APP_STATE_MENU_DIR_SELECT) {
@@ -634,27 +618,11 @@ bool purrgo_config_controller_handle_button(
                 return true;
 
             case PURRGO_ACTION_OK:
-                if (map_layers_cursor_idx == 0) draft_layer_landuse = !draft_layer_landuse;
-                else if (map_layers_cursor_idx == 1) draft_layer_water = !draft_layer_water;
-                else if (map_layers_cursor_idx == 2) draft_layer_landuse_labels = !draft_layer_landuse_labels;
-                else if (map_layers_cursor_idx == 3) draft_layer_water_labels = !draft_layer_water_labels;
-                else if (map_layers_cursor_idx == 4) draft_layer_roads = !draft_layer_roads;
-                else if (map_layers_cursor_idx == 5) draft_layer_poi = !draft_layer_poi;
-                else if (map_layers_cursor_idx == 6) draft_layer_poi_labels = !draft_layer_poi_labels;
-                else if (map_layers_cursor_idx == 7) draft_layer_route = !draft_layer_route;
-                else if (map_layers_cursor_idx == 8) draft_layer_track = !draft_layer_track;
+                draft_layers = (uint16_t)(draft_layers ^ (1u << map_layers_cursor_idx));
                 return true;
 
             case PURRGO_ACTION_MENU:
-                app_config.layer_landuse = draft_layer_landuse;
-                app_config.layer_water = draft_layer_water;
-                app_config.layer_landuse_labels = draft_layer_landuse_labels;
-                app_config.layer_water_labels = draft_layer_water_labels;
-                app_config.layer_roads = draft_layer_roads;
-                app_config.layer_poi = draft_layer_poi;
-                app_config.layer_poi_labels = draft_layer_poi_labels;
-                app_config.layer_route = draft_layer_route;
-                app_config.layer_track = draft_layer_track;
+                app_config.layers = draft_layers;
 
                 purrgo_config_save();
                 *next_state_out = APP_STATE_MENU_CONFIG;
@@ -860,12 +828,4 @@ int config_app_get_map_layers_cursor(void)
     return map_layers_cursor_idx;
 }
 
-bool config_app_get_draft_layer_landuse(void) { return draft_layer_landuse; }
-bool config_app_get_draft_layer_water(void) { return draft_layer_water; }
-bool config_app_get_draft_layer_landuse_labels(void) { return draft_layer_landuse_labels; }
-bool config_app_get_draft_layer_water_labels(void) { return draft_layer_water_labels; }
-bool config_app_get_draft_layer_roads(void) { return draft_layer_roads; }
-bool config_app_get_draft_layer_poi(void) { return draft_layer_poi; }
-bool config_app_get_draft_layer_poi_labels(void) { return draft_layer_poi_labels; }
-bool config_app_get_draft_layer_route(void) { return draft_layer_route; }
-bool config_app_get_draft_layer_track(void) { return draft_layer_track; }
+uint16_t config_app_get_draft_layers(void) { return draft_layers; }
