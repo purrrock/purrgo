@@ -1,4 +1,4 @@
-#include "purrgo/ui/ui_map_dirty.h"
+#include "purrgo/ui/ui_dirty.h"
 #include "stm32_app.h"
 #include "main.h"
 
@@ -312,7 +312,7 @@ void purrgo_stm32_process(void)
     if (sd_state == PURRGO_SD_READY && s_prev_sd_state != PURRGO_SD_READY)
     {
       purrgo_map_shutdown();
-      purrgo_ui_map_mark_dirty();
+      purrgo_ui_dirty_mark(UI_DIRTY_MAP);
     }
     s_prev_sd_state = sd_state;
   }

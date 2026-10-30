@@ -83,16 +83,13 @@ purrgo_state_t purrgo_app_get_state(void);
  * Единственный владелец флагов - ядро; платформенный цикл только спрашивает
  * purrgo_app_ui_needs_render() и вызывает purrgo_app_ui_render(), ничего
  * не сбрасывая сам:
- *   - ui_dirty (общий флаг) забирает purrgo_app_ui_render() в начале прохода;
- *   - map_dirty (полная перерисовка карты) сбрасывает ui_render_map() только
+ *   - UI_DIRTY_SCREEN (общий флаг, purrgo/ui/ui_dirty.h) забирает
+ *     purrgo_app_ui_render() в начале прохода;
+ *   - UI_DIRTY_MAP (полная перерисовка карты) сбрасывает ui_render_map() только
  *     после успешной отрисовки; при неудаче проход повторяется через
  *     purrgo_app_ui_defer_render() ограниченное число раз.
  */
-void purrgo_app_ui_mark_dirty(void);
 bool purrgo_app_ui_needs_render(uint32_t now_ms);
-
-// Вызывается из purrgo_app_ui_render(): забрать общий флаг перед отрисовкой.
-void purrgo_app_ui_consume_dirty(void);
 
 // Не начинать новый проход отрисовки раньше, чем через delay_ms (повтор после неудачи).
 void purrgo_app_ui_defer_render(uint32_t delay_ms);

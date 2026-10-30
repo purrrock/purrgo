@@ -12,7 +12,7 @@
 #include "purrgo/track_logger.h"
 #include "purrgo/config.h"
 #include "purrgo/config_controller.h"
-#include "purrgo/ui/ui_map_dirty.h"
+#include "purrgo/ui/ui_dirty.h"
 #include "fake_fs.h"
 
 static uint32_t g_now;
@@ -246,6 +246,42 @@ static void test_config_layers(void) {
     CHECK(d && strstr((const char*)d, "LAYER_LANDUSE=0\n") && strstr((const char*)d, "LAYER_TRACK=0\n"));
 }
 
+/* --- PURRGO.CFG: длинный MAP_DIR и файл с комментариями при ручной правке --- */
+static void test_config_size_limits(void) {
+    uint32_t n; const uint8_t* d;
+
+    /* MAP_DIR максимальной допустимой длины (240) + все слои сохраняются и читаются */
+    char dir[260];
+    memset(dir, 'a', 240); dir[0] = '/'; dir[240] = '\0';
+    fake_fs_reset();
+    purrgo_config_init();
+    strcpy(app_config.map_dir, dir);
+    app_config.tz_offset_minutes = -720;
+    app_config.last_lat_1e7 = -2147483647 - 1;
+    app_config.last_lon_1e7 = -2147483647 - 1;
+    CHECK(purrgo_config_save());
+    d = fake_fs_data(CFG, &n);
+    CHECK(d != NULL && n > 480);
+    CHECK(d && strstr((const char*)d, "LAYER_TRACK=1\n") != NULL);   /* хвост не обрезан */
+    app_config.map_dir[0] = '\0';
+    app_config.layers = 0;
+    CHECK(purrgo_config_load());
+    CHECK(strcmp(app_config.map_dir, dir) == 0);
+    CHECK(layer(PURRGO_LAYER_TRACK) && layer(PURRGO_LAYER_ROADS));
+
+    /* файл с комментариями и пустыми строками (~800 байт): слои в конце читаются */
+    char txt[1100]; size_t k = 0;
+    for (int i = 0; i < 12; i++) {
+        k += (size_t)snprintf(txt + k, sizeof(txt) - k, "; comment line number %02d ................................\n\n", i);
+    }
+    k += (size_t)snprintf(txt + k, sizeof(txt) - k, "LAYER_ROADS=0\nLAYER_ROUTE=1\n");
+    CHECK(k > 600 && k < 1000);
+    fake_fs_reset();
+    fake_fs_put(CFG, txt);
+    CHECK(purrgo_config_load());
+    CHECK(!layer(PURRGO_LAYER_ROADS) && layer(PURRGO_LAYER_ROUTE));
+}
+
 /* --- GNSS timeout + redraw policy --- */
 
 static const char* RMC_A = "$GPRMC,120000.00,A,5342.0000,N,02825.0000,E,0.50,90.00,191026,,,A*";
@@ -312,7 +348,7 @@ static void test_redraw_policy(void) {
     feed_sentence(RMC_A);
     run_ticks(1000);
     /* дождаться первой отрисовки и забрать флаги */
-    while (purrgo_app_ui_needs_render(g_now)) { purrgo_app_ui_consume_dirty(); purrgo_ui_map_clear_dirty(); }
+    while (purrgo_app_ui_needs_render(g_now)) { purrgo_ui_dirty_clear(UI_DIRTY_SCREEN); purrgo_ui_dirty_clear(UI_DIRTY_MAP); }
 
     /* нераспознанная кнопка перерисовки не вызывает */
     purrgo_app_handle_button((purrgo_btn_t)99);
@@ -322,27 +358,27 @@ static void test_redraw_policy(void) {
     purrgo_app_handle_button(PURRGO_BTN_KEY4_SHORT);          /* MAP -> next screen? (долгая = MENU) */
     purrgo_app_handle_button(PURRGO_BTN_KEY4_LONG);
     CHECK(purrgo_app_ui_needs_render(g_now));
-    purrgo_app_ui_consume_dirty();
+    purrgo_ui_dirty_clear(UI_DIRTY_SCREEN);
     CHECK(purrgo_app_get_state() == APP_STATE_TRIP_COMPUTER);
 
     /* шум спутников/высоты внутри порога и без смены цифр: перерисовки нет */
     for (int i = 0; i < 20; i++) {
         run_ticks(1000);
         feed_sentence(RMC_A);
-        while (purrgo_app_ui_needs_render(g_now)) { purrgo_app_ui_consume_dirty(); }
+        while (purrgo_app_ui_needs_render(g_now)) { purrgo_ui_dirty_clear(UI_DIRTY_SCREEN); }
     }
     int redraws = 0;
     for (int i = 0; i < 20; i++) {
         run_ticks(1000);
         feed_sentence(RMC_A);
-        if (purrgo_app_ui_needs_render(g_now)) { redraws++; purrgo_app_ui_consume_dirty(); }
+        if (purrgo_app_ui_needs_render(g_now)) { redraws++; purrgo_ui_dirty_clear(UI_DIRTY_SCREEN); }
     }
     CHECK(redraws == 0);
 
     /* неудачный рендер: пауза до повтора */
-    purrgo_app_ui_mark_dirty();
-    purrgo_app_ui_consume_dirty();
-    purrgo_app_ui_mark_dirty();
+    purrgo_ui_dirty_mark(UI_DIRTY_SCREEN);
+    purrgo_ui_dirty_clear(UI_DIRTY_SCREEN);
+    purrgo_ui_dirty_mark(UI_DIRTY_SCREEN);
     purrgo_app_ui_defer_render(3000);
     CHECK(!purrgo_app_ui_needs_render(g_now));
     g_now += 3000;
@@ -357,6 +393,7 @@ int main(void) {
     test_config_atomic_save();
     test_config_recovery();
     test_config_layers();
+    test_config_size_limits();
     test_gnss_timeout();
     test_gnss_stall_grace();
     test_redraw_policy();

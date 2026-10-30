@@ -1,5 +1,4 @@
-#include "purrgo/ui/ui_map_dirty.h"
-#include "purrgo/ui/ui_status_bar.h"
+#include "purrgo/ui/ui_dirty.h"
 #include "purrgo/app_fsm.h"
 #include "purrgo/map_controller.h"
 #include "purrgo/config.h"
@@ -45,7 +44,6 @@
 
 // Текущее состояние конечного автомата
 static purrgo_state_t current_state;
-static bool ui_dirty = true;
 static purrgo_gnss_solution_t prev_fix = {0};
 
 static purrgo_gnss_solution_t internal_gnss_solution = {0};
@@ -136,14 +134,6 @@ purrgo_state_t purrgo_app_get_state(void) {
     return current_state;
 }
 
-void purrgo_app_ui_mark_dirty(void) {
-    ui_dirty = true;
-}
-
-void purrgo_app_ui_consume_dirty(void) {
-    ui_dirty = false;
-}
-
 void purrgo_app_ui_defer_render(uint32_t delay_ms) {
     render_not_before_ms = purrgo_system_time_ms() + delay_ms;
     render_gate_active = true;
@@ -154,9 +144,9 @@ bool purrgo_app_ui_needs_render(uint32_t now_ms) {
      * Флаг карты имеет смысл только на экране карты: на остальных экранах
      * он остаётся взведённым до возврата и не должен гнать перерисовку.
      */
-    bool map_needs = (current_state == APP_STATE_MAP) && purrgo_ui_map_is_dirty();
+    bool map_needs = (current_state == APP_STATE_MAP) && purrgo_ui_dirty_test(UI_DIRTY_MAP);
 
-    if (!ui_dirty && !map_needs) {
+    if (!purrgo_ui_dirty_test(UI_DIRTY_SCREEN) && !map_needs) {
         return false;
     }
 
@@ -239,9 +229,9 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
 
     if (handled) {
         // Контроллер принял кнопку: состояние экрана могло измениться.
-        ui_dirty = true;
+        purrgo_ui_dirty_mark(UI_DIRTY_SCREEN);
         if (current_state == APP_STATE_MAP && prev_state != APP_STATE_MAP) {
-            purrgo_ui_map_mark_dirty();
+            purrgo_ui_dirty_mark(UI_DIRTY_MAP);
         }
         return;
     }
@@ -260,16 +250,16 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
 
             default:
                 current_state = APP_STATE_MAP;
-                purrgo_ui_map_mark_dirty();
+                purrgo_ui_dirty_mark(UI_DIRTY_MAP);
                 break;
         }
     }
 
     // Переход между экранами всегда требует перерисовки.
     if (current_state != prev_state) {
-        ui_dirty = true;
+        purrgo_ui_dirty_mark(UI_DIRTY_SCREEN);
         if (current_state == APP_STATE_MAP) {
-            purrgo_ui_map_mark_dirty();
+            purrgo_ui_dirty_mark(UI_DIRTY_MAP);
         }
     }
 }
@@ -331,7 +321,7 @@ void purrgo_app_tick(uint32_t current_time_ms) {
         (uint32_t)(current_time_ms - last_data_redraw_ms) >= PURRGO_UI_MIN_DATA_REDRAW_MS) {
         data_redraw_pending = false;
         last_data_redraw_ms = current_time_ms;
-        ui_dirty = true;
+        purrgo_ui_dirty_mark(UI_DIRTY_SCREEN);
     }
 
     if (current_time_ms - last_gnss_update_ms >= 1000U) {
@@ -401,7 +391,7 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
      *     и учитывается только при заметном изменении значения.
      */
     if (current_fix->valid != prev_fix.valid) {
-        ui_dirty = true;
+        purrgo_ui_dirty_mark(UI_DIRTY_SCREEN);
         data_redraw_pending = false;
         last_data_redraw_ms = purrgo_system_time_ms();
     }
@@ -438,14 +428,14 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
         current_fix->minutes != prev_fix.minutes ||
         current_fix->hours != prev_fix.hours) {
 
-        purrgo_ui_status_bar_mark_dirty();
+        purrgo_ui_dirty_mark(UI_DIRTY_STATUS);
     }
 
     static track_logger_state_t prev_rec_state = LOGGER_STATE_IDLE;
     if (purrgo_logger_get_state() != prev_rec_state) {
         prev_rec_state = purrgo_logger_get_state();
-        ui_dirty = true;
-        purrgo_ui_status_bar_mark_dirty();
+        purrgo_ui_dirty_mark(UI_DIRTY_SCREEN);
+        purrgo_ui_dirty_mark(UI_DIRTY_STATUS);
     }
 
     prev_fix = *current_fix;
@@ -504,7 +494,7 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
             if (logger_state == LOGGER_STATE_RECORDING) {
                 // Передаем координаты в фильтр (он сам решит, записывать ли точку)
                 if (purrgo_logger_add_point(current_fix)) {
-                    purrgo_map_controller_mark_track_dirty();
+                    purrgo_ui_dirty_mark(UI_DIRTY_TRACK);
                 }
             }
         }

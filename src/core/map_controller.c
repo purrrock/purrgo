@@ -6,7 +6,7 @@
 #include "purrgo/hardware_config.h"
 #include "purrgo/logger.h"
 #include "purrgo/purrgo_format.h"
-#include "purrgo/ui/ui_map_dirty.h"
+#include "purrgo/ui/ui_dirty.h"
 
 #define AUTO_FOLLOW_EDGE_MARGIN_PX 16
 #define AUTO_FOLLOW_STOP_MARGIN_DIV 16
@@ -16,7 +16,6 @@ static int32_t map_center_lat_1e7;
 static int32_t map_center_lon_1e7;
 static purrgo_map_scale_t map_zoom_level;
 static bool manual_pan_active;
-static bool track_dirty = false;
 static purrgo_gnss_solution_t prev_fix_for_map = {0};
 
 // Значения физической ширины BBox в метрах для расчета координат.
@@ -35,21 +34,9 @@ void purrgo_map_controller_init(void) {
     map_center_lon_1e7 = app_config.last_lon_1e7;
     map_zoom_level = PURRGO_MAP_SCALE_500M;
     manual_pan_active = false;
-    track_dirty = false;
+    purrgo_ui_dirty_clear(UI_DIRTY_TRACK);
     memset(&prev_fix_for_map, 0, sizeof prev_fix_for_map);
-    purrgo_ui_map_mark_dirty();
-}
-
-void purrgo_map_controller_mark_track_dirty(void) {
-    track_dirty = true;
-}
-
-bool purrgo_map_controller_is_track_dirty(void) {
-    return track_dirty;
-}
-
-void purrgo_map_controller_clear_track_dirty(void) {
-    track_dirty = false;
+    purrgo_ui_dirty_mark(UI_DIRTY_MAP);
 }
 
 int32_t map_app_get_map_center_lat(void) {
@@ -207,7 +194,7 @@ static void apply_auto_follow(const purrgo_gnss_solution_t* fix) {
             if (map_center_lat_1e7 != (int32_t)candidate_lat || map_center_lon_1e7 != wrapped_lon) {
                 map_center_lat_1e7 = (int32_t)candidate_lat;
                 map_center_lon_1e7 = wrapped_lon;
-                purrgo_ui_map_mark_dirty();
+                purrgo_ui_dirty_mark(UI_DIRTY_MAP);
             }
         }
     }
@@ -222,14 +209,14 @@ bool purrgo_map_controller_handle_button(purrgo_action_t button) {
     if (button == PURRGO_ACTION_PLUS) {
         if (map_zoom_level > 0) {
             map_zoom_level--;
-            purrgo_ui_map_mark_dirty();
+            purrgo_ui_dirty_mark(UI_DIRTY_MAP);
         }
         return true;
     }
     if (button == PURRGO_ACTION_MINUS) {
         if (map_zoom_level < PURRGO_MAP_SCALE_COUNT - 1) {
             map_zoom_level++;
-            purrgo_ui_map_mark_dirty();
+            purrgo_ui_dirty_mark(UI_DIRTY_MAP);
         }
         return true;
     }
@@ -259,7 +246,7 @@ bool purrgo_map_controller_handle_button(purrgo_action_t button) {
         if (next_lat < INT32_MIN) next_lat = INT32_MIN;
         map_center_lat_1e7 = (int32_t)next_lat;
         manual_pan_active = true;
-        purrgo_ui_map_mark_dirty();
+        purrgo_ui_dirty_mark(UI_DIRTY_MAP);
         return true;
     }
     if (button == PURRGO_ACTION_DOWN) {
@@ -268,7 +255,7 @@ bool purrgo_map_controller_handle_button(purrgo_action_t button) {
         if (next_lat < INT32_MIN) next_lat = INT32_MIN;
         map_center_lat_1e7 = (int32_t)next_lat;
         manual_pan_active = true;
-        purrgo_ui_map_mark_dirty();
+        purrgo_ui_dirty_mark(UI_DIRTY_MAP);
         return true;
     }
     if (button == PURRGO_ACTION_RIGHT) {
@@ -277,7 +264,7 @@ bool purrgo_map_controller_handle_button(purrgo_action_t button) {
         if (next_lon < INT32_MIN) next_lon = INT32_MIN;
         map_center_lon_1e7 = (int32_t)next_lon;
         manual_pan_active = true;
-        purrgo_ui_map_mark_dirty();
+        purrgo_ui_dirty_mark(UI_DIRTY_MAP);
         return true;
     }
     if (button == PURRGO_ACTION_LEFT) {
@@ -286,7 +273,7 @@ bool purrgo_map_controller_handle_button(purrgo_action_t button) {
         if (next_lon < INT32_MIN) next_lon = INT32_MIN;
         map_center_lon_1e7 = (int32_t)next_lon;
         manual_pan_active = true;
-        purrgo_ui_map_mark_dirty();
+        purrgo_ui_dirty_mark(UI_DIRTY_MAP);
         return true;
     }
 

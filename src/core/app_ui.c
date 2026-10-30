@@ -5,8 +5,7 @@
 #include "ui/ui_config.h"
 #include "ui/ui_dir_select.h"
 #include "ui/ui_map_layers.h"
-#include "purrgo/ui/ui_map_dirty.h"
-#include "purrgo/ui/ui_status_bar.h"
+#include "purrgo/ui/ui_dirty.h"
 
 #include "purrgo/gfx_text.h"
 #include "purrgo/gfx_rect.h"
@@ -152,7 +151,7 @@ void purrgo_app_ui_render(
      * Общий флаг забирается до отрисовки: всё, что изменится во время
      * прохода, взведёт его заново и приведёт к следующему проходу.
      */
-    purrgo_app_ui_consume_dirty();
+    purrgo_ui_dirty_clear(UI_DIRTY_SCREEN);
 
     /*
      * Режим дисплея выбирается до отрисовки и до refresh/flush: при смене
@@ -229,8 +228,8 @@ bool purrgo_app_ui_render_power_off(void)
      * Показываем карту независимо от текущего экрана (выключение из меню):
      * карта и строка статуса перерисовываются целиком.
      */
-    purrgo_ui_map_mark_dirty();
-    purrgo_ui_status_bar_mark_dirty();
+    purrgo_ui_dirty_mark(UI_DIRTY_MAP);
+    purrgo_ui_dirty_mark(UI_DIRTY_STATUS);
     ui_render_map(s_last_gfx, &s_last_gnss, &s_last_sun);
     ui_draw_key_hints(s_last_gfx, APP_STATE_MAP, false);
 
@@ -248,6 +247,6 @@ void purrgo_app_ui_reset(void)
     s_full_refresh_requested = false;
     prev_state = APP_STATE_MAP;
     ui_map_reset();
-    purrgo_ui_map_mark_dirty();
-    purrgo_ui_status_bar_mark_dirty();
+    purrgo_ui_dirty_mark(UI_DIRTY_MAP);
+    purrgo_ui_dirty_mark(UI_DIRTY_STATUS);
 }
