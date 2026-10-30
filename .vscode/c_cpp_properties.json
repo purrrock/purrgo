@@ -2,7 +2,7 @@
     "configurations": [
         {
             "name": "PurrGO",
-            "compileCommands": "${workspaceFolder}/out/build/win-mingw-debug/compile_commands.json"
+            "compileCommands": "${workspaceFolder}/out/build/stm32u5-debug/compile_commands.json"
         }
     ],
     "version": 4
