@@ -14,6 +14,7 @@
 #include "purrgo/hardware_config.h"
 #include "purrgo/display_hal.h"
 #include "purrgo/purrgo_time.h"
+#include "purrgo/battery.h"
 
 typedef struct {
     bool rendered;
@@ -26,6 +27,8 @@ typedef struct {
     int16_t course_deg;
     int32_t lat_1e7;
     int32_t lon_1e7;
+    int16_t cx;     /* центр маркёра на экране, px */
+    int16_t cy;
 
     gfx_point_t pts[8];
     uint8_t point_count;
@@ -85,6 +88,27 @@ static struct {
 #include <string.h>
 
 #define PURRGO_MAP_POS_MARK_SIZE_PX 10
+
+/*
+ * Порог перерисовки маркёра GNSS (E-Ink: каждое обновление области - это
+ * частичный refresh дисплея, поэтому мелкие дрожания позиции не рисуем).
+ * Маркёр не обновляется, пока его центр на экране сместился относительно
+ * последнего НАРИСОВАННОГО положения не более чем на это число пикселей по
+ * каждой из осей (сравнивается с нарисованным положением, а не с предыдущим
+ * отчётом приёмника, поэтому смещения накапливаются и маркёр не "залипает").
+ */
+#ifndef PURRGO_MAP_MARKER_MIN_SHIFT_PX
+#define PURRGO_MAP_MARKER_MIN_SHIFT_PX 3
+#endif
+
+/*
+ * Минимальное изменение курса (градусы), при котором маркёр-стрелка
+ * перерисовывается, если его положение не изменилось. 0 - перерисовывать при
+ * любом изменении курса на 1 градус.
+ */
+#ifndef PURRGO_MAP_MARKER_MIN_COURSE_DELTA_DEG
+#define PURRGO_MAP_MARKER_MIN_COURSE_DELTA_DEG 10
+#endif
 #define PURRGO_MAP_POS_MARK_DIRECTION_HALF_WIDTH_PX 4
 #define PURRGO_MAP_POS_MARK_OCTAGON_CUT_PX           2
 
@@ -178,6 +202,8 @@ static void ui_calc_marker_state(
         &cx,
         &cy
     );
+    out_state->cx = cx;
+    out_state->cy = cy;
 
     const int32_t size = PURRGO_MAP_POS_MARK_SIZE_PX;
     const int32_t half_size = size / 2;
@@ -382,8 +408,8 @@ static void ui_save_marker_bg(gfx_context_t* gfx, const marker_state_t* state) {
     // Clip to screen to prevent buffer overflow
     // Map viewport offset_y is 9 and height is HEIGHT - 18
     // So viewport bounds are y: 9 to HEIGHT - 9.
-    int16_t map_vp_offset_y = 9;
-    int16_t map_vp_height = PURRGO_HW_DISPLAY_HEIGHT_PX - 18;
+    int16_t map_vp_offset_y = PURRGO_MAP_STATUS_BAR_H_PX;
+    int16_t map_vp_height = PURRGO_MAP_VIEWPORT_HEIGHT_PX;
 
     if (x < 0) { w += x; x = 0; }
     if (y < map_vp_offset_y) { h = (int16_t)(h - (map_vp_offset_y - y)); y = map_vp_offset_y; }
@@ -529,6 +555,24 @@ static void ui_update_status_bar(gfx_context_t* gfx, const purrgo_gnss_solution_
     int16_t scale_x = (int16_t)(PURRGO_HW_DISPLAY_WIDTH_PX - (int)(strlen(scale_label) * 6) - 2);
     gfx_draw_string(gfx, scale_x, 1, scale_label);
 
+    /*
+     * Заряд батареи, %: между статусом записи и масштабом, прижат к масштабу.
+     * Если в строке не хватает места (длинный масштаб + ERR-REC + NO-FIX),
+     * заряд не рисуется. Данные - заглушка (purrgo/battery.h).
+     */
+    purrgo_battery_t bat;
+    char bat_str[8];
+    if (purrgo_battery_read(&bat) && bat.percent >= 0 && bat.percent <= 100) {
+        purrgo_snprintf(bat_str, sizeof(bat_str), "%d%%", (int)bat.percent);
+    } else {
+        purrgo_snprintf(bat_str, sizeof(bat_str), "--%%");
+    }
+    const int16_t rec_end_x = (int16_t)(next_x + get_string_width(rec_str));
+    const int16_t bat_x = (int16_t)(scale_x - 6 - get_string_width(bat_str));
+    if (bat_x >= rec_end_x + 4) {
+        gfx_draw_string(gfx, bat_x, 1, bat_str);
+    }
+
 
     if (prev_status_state.valid && !purrgo_ui_dirty_test(UI_DIRTY_MAP)) {
         display_refresh_region(0, 0, PURRGO_HW_DISPLAY_WIDTH_PX, status_h);
@@ -539,9 +583,9 @@ static void ui_update_status_bar(gfx_context_t* gfx, const purrgo_gnss_solution_
 
 static void ui_map_setup_viewport(purrgo_viewport_t* map_vp, purrgo_bbox_t* dynamic_cam) {
     map_vp->width = PURRGO_HW_DISPLAY_WIDTH_PX;
-    map_vp->height = PURRGO_HW_DISPLAY_HEIGHT_PX - 18;
+    map_vp->height = PURRGO_MAP_VIEWPORT_HEIGHT_PX;
     map_vp->offset_x = 0;
-    map_vp->offset_y = 9;
+    map_vp->offset_y = PURRGO_MAP_STATUS_BAR_H_PX;
 
     int32_t center_lat = map_app_get_map_center_lat();
     int32_t center_lon = map_app_get_map_center_lon();
@@ -583,6 +627,42 @@ static void ui_map_render_dynamic_data(gfx_context_t* gfx, const purrgo_viewport
     }
 }
 
+/*
+ * Нужно ли перерисовывать маркёр: prev - то, что сейчас нарисовано на экране.
+ * Смена состояния (виден/не виден, есть фикс/нет, есть курс/нет) - всегда.
+ * Иначе - только если центр сместился больше чем на PURRGO_MAP_MARKER_MIN_SHIFT_PX
+ * по любой оси либо курс изменился не меньше чем на
+ * PURRGO_MAP_MARKER_MIN_COURSE_DELTA_DEG.
+ */
+static bool ui_marker_needs_redraw(const marker_state_t* prev, const marker_state_t* cur) {
+    if (cur->rendered != prev->rendered ||
+        cur->gnss_valid != prev->gnss_valid ||
+        cur->course_valid != prev->course_valid) {
+        return true;
+    }
+    if (!cur->rendered) {
+        return false;   /* оба невидимы: рисовать нечего */
+    }
+
+    int32_t dx = (int32_t)cur->cx - (int32_t)prev->cx;
+    int32_t dy = (int32_t)cur->cy - (int32_t)prev->cy;
+    if (dx < 0) dx = -dx;
+    if (dy < 0) dy = -dy;
+    if (dx > PURRGO_MAP_MARKER_MIN_SHIFT_PX || dy > PURRGO_MAP_MARKER_MIN_SHIFT_PX) {
+        return true;
+    }
+
+    if (cur->course_valid) {
+        int32_t dc = (int32_t)cur->course_deg - (int32_t)prev->course_deg;
+        if (dc < 0) dc = -dc;
+        if (dc > 180) dc = 360 - dc;
+        if (dc > 0 && dc >= PURRGO_MAP_MARKER_MIN_COURSE_DELTA_DEG) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static void ui_map_render_gnss_marker(
     gfx_context_t* gfx,
     const purrgo_gnss_solution_t* gnss,
@@ -604,12 +684,7 @@ static void ui_map_render_gnss_marker(
             purrgo_app_notify_marker_rendered(gnss);
         }
     } else {
-        bool changed = (new_marker_state.rendered != prev_marker_state.rendered) ||
-                       (new_marker_state.gnss_valid != prev_marker_state.gnss_valid) ||
-                       (new_marker_state.course_valid != prev_marker_state.course_valid) ||
-                       (new_marker_state.course_deg != prev_marker_state.course_deg) ||
-                       (new_marker_state.lat_1e7 != prev_marker_state.lat_1e7) ||
-                       (new_marker_state.lon_1e7 != prev_marker_state.lon_1e7);
+        const bool changed = ui_marker_needs_redraw(&prev_marker_state, &new_marker_state);
 
         if (changed) {
             // Restore the old background

@@ -11,6 +11,16 @@
 #define AUTO_FOLLOW_EDGE_MARGIN_PX 16
 #define AUTO_FOLLOW_STOP_MARGIN_DIV 16
 
+/*
+ * Шаг ручного сдвига карты за одно нажатие:
+ */
+#ifndef PURRGO_MAP_PAN_STEP_X_DIV
+#define PURRGO_MAP_PAN_STEP_X_DIV 3
+#endif
+#ifndef PURRGO_MAP_PAN_STEP_Y_DIV
+#define PURRGO_MAP_PAN_STEP_Y_DIV 3
+#endif
+
 // Состояние окна просмотра карты (Map Viewport)
 static int32_t map_center_lat_1e7;
 static int32_t map_center_lon_1e7;
@@ -221,15 +231,22 @@ bool purrgo_map_controller_handle_button(purrgo_action_t button) {
         return true;
     }
 
-    uint32_t width_m = map_app_get_map_scale_width_m();
-    uint32_t step_m = width_m / 4;
-    if (step_m == 0) step_m = 1;
+    const uint32_t width_m = map_app_get_map_scale_width_m();
 
-    int64_t step_y_64 = (int64_t)step_m * PURRGO_1E7_PER_METER;
+    /* Высота окна карты в метрах: окно имеет те же метры на пиксель по обеим осям. */
+    const uint64_t height_m = ((uint64_t)width_m * PURRGO_MAP_VIEWPORT_HEIGHT_PX) /
+                              PURRGO_HW_DISPLAY_WIDTH_PX;
+
+    uint64_t step_x_m = width_m / PURRGO_MAP_PAN_STEP_X_DIV;
+    uint64_t step_y_m = height_m / PURRGO_MAP_PAN_STEP_Y_DIV;
+    if (step_x_m == 0) step_x_m = 1;
+    if (step_y_m == 0) step_y_m = 1;
+
+    int64_t step_y_64 = (int64_t)step_y_m * PURRGO_1E7_PER_METER;
 
     int32_t cos_val = purrgo_geo_cos_10k(map_center_lat_1e7);
     if (cos_val < 100) cos_val = 100; // prevent division by zero near poles
-    int64_t step_x_64 = (step_y_64 * 10000) / cos_val;
+    int64_t step_x_64 = ((int64_t)step_x_m * PURRGO_1E7_PER_METER * 10000) / cos_val;
 
     // Safety clamping before casting to int32_t
     if (step_y_64 > INT32_MAX) step_y_64 = INT32_MAX;

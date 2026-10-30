@@ -1,6 +1,6 @@
 /*
  * Конфигурация FatFs R0.16 для проекта STM32U585 (в CubeMX для STM32U5 нет
- * middleware FATFS). LFN включён (статический буфер), кодовая страница 855,
+ * middleware FATFS). LFN включён (статический буфер), кодовая страница 866,
  * FASTSEEK, f_gets/f_puts в UTF-8, до 14 одновременно открытых файлов
  * (FF_FS_LOCK), без mkfs/find/label.
  * Остальные параметры - значения по умолчанию из дистрибутива FatFs.
@@ -94,7 +94,7 @@
 / Locale and Namespace Configurations
 /---------------------------------------------------------------------------*/
 
-#define FF_CODE_PAGE 855
+#define FF_CODE_PAGE 866
 /* This option specifies the OEM code page to be used on the target system.
 /  Incorrect code page setting can cause a file open failure.
 /

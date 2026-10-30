@@ -2,6 +2,7 @@
 
 #include "purrgo/track_logger.h"
 #include "purrgo/geo.h"
+#include "purrgo/battery.h"
 #include "purrgo/config.h" // Подключаем доступ к app_config.timezone_offset_h
 #include <string.h>
 
@@ -63,7 +64,8 @@ static size_t ram_track_count = 0;
 // Стандартный заголовок файла GPX 1.1
 static const char* GPX_HEADER = 
     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-    "<gpx version=\"1.1\" creator=\"PurrGo\">\n"
+    "<gpx version=\"1.1\" creator=\"PurrGo\" "
+    "xmlns:pg=\"https://github.com/purrrock/purrgo\">\n"
     "<trk><trkseg>\n";
 
 // Закрывающие теги
@@ -390,17 +392,38 @@ bool purrgo_logger_add_point(const purrgo_gnss_solution_t* fix) {
     int32_t lat_abs = fix->lat_1e7 < 0 ? -fix->lat_1e7 : fix->lat_1e7;
     int32_t lon_abs = fix->lon_1e7 < 0 ? -fix->lon_1e7 : fix->lon_1e7;
 
-    char point_str[128];
+    /*
+     * Заряд батареи пишется в <extensions> точки (расширение pg:, см. GPX_HEADER),
+     * чтобы по треку анализировать энергопотребление. Сейчас данные - заглушка
+     * (purrgo/battery.h). Напряжение пишется, только если оно измерено.
+     */
+    char bat_str[64] = "";
+    purrgo_battery_t bat;
+    if (purrgo_battery_read(&bat) && bat.percent >= 0) {
+        if (bat.millivolts != 0) {
+            purrgo_snprintf(bat_str, sizeof(bat_str),
+                     "  <extensions><pg:bat>%d</pg:bat><pg:vbat>%u</pg:vbat></extensions>\n",
+                     (int)bat.percent, (unsigned int)bat.millivolts);
+        } else {
+            purrgo_snprintf(bat_str, sizeof(bat_str),
+                     "  <extensions><pg:bat>%d</pg:bat></extensions>\n",
+                     (int)bat.percent);
+        }
+    }
+
+    char point_str[224];
     purrgo_snprintf(point_str, sizeof(point_str),
              "<trkpt lat=\"%s%d.%07d\" lon=\"%s%d.%07d\">\n"
              "  <ele>%d</ele>\n"
              "  <time>20%02d-%02d-%02dT%02d:%02d:%02dZ</time>\n"
+             "%s"
              "</trkpt>\n",
              fix->lat_1e7 < 0 ? "-" : "", (int)(lat_abs / 10000000), (int)(lat_abs % 10000000),
              fix->lon_1e7 < 0 ? "-" : "", (int)(lon_abs / 10000000), (int)(lon_abs % 10000000),
              (int)fix->alt_m,
              fix->year, fix->month, fix->day,
-             fix->hours, fix->minutes, fix->seconds);
+             fix->hours, fix->minutes, fix->seconds,
+             bat_str);
 
     if (!write_to_buffer(point_str)) {
         // Сбой записи на SD: точка потеряна, логгер уходит в ERROR (повтор - из app_fsm).
