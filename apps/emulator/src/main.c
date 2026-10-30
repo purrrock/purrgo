@@ -1,4 +1,4 @@
-#include "purrgo/ui/ui_map_dirty.h"
+#include "purrgo/ui/ui_dirty.h"
 #include <SDL2/SDL.h>
 #include <stdio.h>
 #include <stdbool.h>

@@ -5,7 +5,17 @@
 #include <string.h>
 
 
-#define CONFIG_MAX_SIZE 512
+/*
+ * Размер буфера чтения PURRGO.CFG: с запасом под комментарии и пустые строки
+ * при ручной правке (строки за пределами буфера не читаются).
+ */
+#define CONFIG_MAX_SIZE 1024
+
+/*
+ * Буфер записи: наихудший случай - около 250 байт полей и слоёв плюс MAP_DIR
+ * (до PURRGO_FS_MAX_PATH + 31 символов).
+ */
+#define CONFIG_SAVE_MAX_SIZE 576
 
 
 purrgo_config_t app_config;
@@ -257,6 +267,10 @@ bool purrgo_config_load(void)
 
     purrgo_fs_close(file);
 
+    if (bytes_read == sizeof(buf) - 1) {
+        PURRGO_LOG("Config file is larger than %u bytes: the tail is ignored\r\n", (unsigned)(sizeof(buf) - 1));
+    }
+
     if (bytes_read == 0) {
         purrgo_config_init();
         purrgo_logger_set_mode(app_config.log_mode);
@@ -479,7 +493,7 @@ bool purrgo_config_save(void)
         return false;
     }
 
-    char buf[CONFIG_MAX_SIZE];
+    char buf[CONFIG_SAVE_MAX_SIZE];
 
     /*
      * Формируем текстовую конфигурацию.

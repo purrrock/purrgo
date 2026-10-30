@@ -1,6 +1,5 @@
 #include "purrgo/app_ui.h"
-#include "purrgo/ui/ui_map_dirty.h"
-#include "purrgo/ui/ui_status_bar.h"
+#include "purrgo/ui/ui_dirty.h"
 #include "ui_map.h"
 #include "purrgo/app_fsm.h"
 #include "purrgo/map_controller.h"
@@ -531,7 +530,7 @@ static void ui_update_status_bar(gfx_context_t* gfx, const purrgo_gnss_solution_
     gfx_draw_string(gfx, scale_x, 1, scale_label);
 
 
-    if (prev_status_state.valid && !purrgo_ui_map_is_dirty()) {
+    if (prev_status_state.valid && !purrgo_ui_dirty_test(UI_DIRTY_MAP)) {
         display_refresh_region(0, 0, PURRGO_HW_DISPLAY_WIDTH_PX, status_h);
     }
     prev_status_state = new_state;
@@ -662,9 +661,9 @@ static void ui_map_render_gnss_marker(
 }
 
 static void ui_map_render_overlays(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const purrgo_viewport_t* map_vp) {
-    if (purrgo_ui_status_bar_is_dirty() || purrgo_ui_map_is_dirty() || !prev_status_state.valid) {
+    if (purrgo_ui_dirty_test(UI_DIRTY_STATUS) || purrgo_ui_dirty_test(UI_DIRTY_MAP) || !prev_status_state.valid) {
         ui_update_status_bar(gfx, gnss, map_vp->offset_y);
-        purrgo_ui_status_bar_clear_dirty();
+        purrgo_ui_dirty_clear(UI_DIRTY_STATUS);
     }
 
     // Clear bottom status area
@@ -693,7 +692,7 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
 
     ui_map_render_overlays(gfx, gnss, &map_vp);
 
-    if (purrgo_ui_map_is_dirty()) {
+    if (purrgo_ui_dirty_test(UI_DIRTY_MAP)) {
         bool map_success = ui_map_render_base_layers(gfx, &map_vp, &dynamic_cam);
 
         ui_map_render_dynamic_data(gfx, &map_vp, &dynamic_cam);
@@ -704,7 +703,7 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
         gfx_reset_clip(gfx);
 
         if (map_success) {
-            purrgo_ui_map_clear_dirty();
+            purrgo_ui_dirty_clear(UI_DIRTY_MAP);
             s_map_render_attempts = 0;
         } else if (++s_map_render_attempts >= PURRGO_MAP_RENDER_MAX_ATTEMPTS) {
             /*
@@ -713,21 +712,21 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
              * попытка будет при очередном действии пользователя.
              */
             PURRGO_LOG("Map render failed, giving up until next change\n\r");
-            purrgo_ui_map_clear_dirty();
+            purrgo_ui_dirty_clear(UI_DIRTY_MAP);
             s_map_render_attempts = 0;
         } else {
             PURRGO_LOG("Map render failed, retrying\n\r");
             purrgo_app_ui_defer_render(PURRGO_MAP_RENDER_RETRY_DELAY_MS);
         }
-        purrgo_map_controller_clear_track_dirty();
+        purrgo_ui_dirty_clear(UI_DIRTY_TRACK);
         purrgo_app_ui_request_full_refresh();
         dbg_map_render_calls++;
     } else {
-        if (purrgo_map_controller_is_track_dirty()) {
+        if (purrgo_ui_dirty_test(UI_DIRTY_TRACK)) {
             purrgo_rect_t rect;
             if (purrgo_track_render_last_segment(gfx, &dynamic_cam, &map_vp, &rect)) {
                 display_refresh_region(rect.x, rect.y, rect.w, rect.h);
-                purrgo_map_controller_clear_track_dirty();
+                purrgo_ui_dirty_clear(UI_DIRTY_TRACK);
             }
         }
         ui_map_render_gnss_marker(gfx, gnss, &map_vp, &dynamic_cam, false);

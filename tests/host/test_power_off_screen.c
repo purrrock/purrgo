@@ -15,7 +15,7 @@
 #include "purrgo/hardware_config.h"
 #include "purrgo/map.h"
 #include "purrgo/sun.h"
-#include "purrgo/ui/ui_map_dirty.h"
+#include "purrgo/ui/ui_dirty.h"
 #include "fake_fs.h"
 #include "test_common.h"
 

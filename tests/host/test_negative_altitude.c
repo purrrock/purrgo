@@ -15,7 +15,7 @@
 #include "purrgo/purrgo_format.h"
 #include "purrgo/sun.h"
 #include "purrgo/track_logger.h"
-#include "purrgo/ui/ui_map_dirty.h"
+#include "purrgo/ui/ui_dirty.h"
 #include "ui_trip.h"
 #include "fake_fs.h"
 #include "test_common.h"
@@ -128,7 +128,7 @@ static void test_app_negative_altitude(void)
     for (int i = 0; i < 12; i++) {
         run_ticks(1000);
         feed_epoch("-430.4");
-        while (purrgo_app_ui_needs_render(g_now)) { purrgo_app_ui_consume_dirty(); purrgo_ui_map_clear_dirty(); }
+        while (purrgo_app_ui_needs_render(g_now)) { purrgo_ui_dirty_clear(UI_DIRTY_SCREEN); purrgo_ui_dirty_clear(UI_DIRTY_MAP); }
     }
 
     /* Изменение меньше порога (5 м): перерисовки нет, независимо от знака. */
@@ -136,7 +136,7 @@ static void test_app_negative_altitude(void)
     for (int i = 0; i < 12; i++) {
         run_ticks(1000);
         feed_epoch(i % 2 ? "-432.1" : "-428.9");
-        if (purrgo_app_ui_needs_render(g_now)) { redraws++; purrgo_app_ui_consume_dirty(); }
+        if (purrgo_app_ui_needs_render(g_now)) { redraws++; purrgo_ui_dirty_clear(UI_DIRTY_SCREEN); }
     }
     CHECK(redraws == 0);
     CHECK(purrgo_app_get_gnss_solution()->alt_m == -428 || purrgo_app_get_gnss_solution()->alt_m == -432);
@@ -146,18 +146,18 @@ static void test_app_negative_altitude(void)
     for (int i = 0; i < 8; i++) {
         run_ticks(1000);
         feed_epoch("-440.0");
-        if (purrgo_app_ui_needs_render(g_now)) { redraws_down++; purrgo_app_ui_consume_dirty(); }
+        if (purrgo_app_ui_needs_render(g_now)) { redraws_down++; purrgo_ui_dirty_clear(UI_DIRTY_SCREEN); }
     }
     CHECK(redraws_down >= 1);
     CHECK(purrgo_app_get_gnss_solution()->alt_m == -440);
 
     /* Подъём через уровень моря: -3 -> +4 (разница 7 м) тоже приводит к перерисовке. */
-    for (int i = 0; i < 8; i++) { run_ticks(1000); feed_epoch("-3.0"); while (purrgo_app_ui_needs_render(g_now)) { purrgo_app_ui_consume_dirty(); } }
+    for (int i = 0; i < 8; i++) { run_ticks(1000); feed_epoch("-3.0"); while (purrgo_app_ui_needs_render(g_now)) { purrgo_ui_dirty_clear(UI_DIRTY_SCREEN); } }
     int redraws_cross = 0;
     for (int i = 0; i < 8; i++) {
         run_ticks(1000);
         feed_epoch("4.0");
-        if (purrgo_app_ui_needs_render(g_now)) { redraws_cross++; purrgo_app_ui_consume_dirty(); }
+        if (purrgo_app_ui_needs_render(g_now)) { redraws_cross++; purrgo_ui_dirty_clear(UI_DIRTY_SCREEN); }
     }
     CHECK(redraws_cross >= 1);
     CHECK(purrgo_app_get_gnss_solution()->alt_m == 4);
