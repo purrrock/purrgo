@@ -36,7 +36,7 @@ _Static_assert(PURRGO_LAYER_COUNT <= 16, "purrgo_config_t.layers - uint16_t");
 
 static inline bool purrgo_layer_on(uint16_t mask, purrgo_layer_t id)
 {
-    return ((mask >> (unsigned)id) & 1u) != 0u;
+    return (((unsigned)mask >> (unsigned)id) & 1u) != 0u;
 }
 
 /* Заголовок пункта меню MAP LAYERS. */

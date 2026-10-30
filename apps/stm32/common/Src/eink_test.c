@@ -132,6 +132,15 @@ void EinkTest_Run4Gray(void)
  *   S4  4 gray МЕНЮ  обновление по разнице кадров, пауза 2,5 с
  *   S5  1-bit  КАРТА маркёр + трек, область вокруг старой и новой позиции, пауза 0,6 с
  *   S6  4 gray КАРТА маркёр + трек, обновление по разнице кадров, пауза 2,5 с
+ *   S7  1-bit  ГОСТ  40 частичных подряд: курсор прыгает между двумя строками меню (худший случай
+ *                    для остаточного изображения), контрольные точки после 10/20/30/40 шагов
+ *   S8  4 gray ГОСТ  40 частичных подряд: маркёр ходит по пути вперёд-назад (трек то растёт, то
+ *                    стирается), контрольные точки после 10/20/30/40 шагов
+ *
+ * S7 и S8 не входят в набор по умолчанию (маска 0xC0): по ним выбирают, сколько частичных
+ * обновлений подряд допустимо до полного (PURRGO_EINK_*_PARTIALS_BEFORE_FULL). В контрольной точке
+ * тест 4 с держит кадр и пишет "checkpoint N partials": сфотографировать экран, в конце сцены
+ * полное обновление того же кадра - эталон без остаточного изображения.
  *
  * Каждая сцена: полное обновление начального кадра, 10 шагов частичных обновлений,
  * выдержка 3 с, затем полное обновление того же кадра (эталон) и выдержка 3 с.
@@ -141,10 +150,13 @@ void EinkTest_Run4Gray(void)
  */
 
 #ifndef PURRGO_EINK_TEST_SCENES
-#define PURRGO_EINK_TEST_SCENES 0x3FU     /* битовая маска сцен S1..S6 */
+#define PURRGO_EINK_TEST_SCENES 0x3FU     /* битовая маска сцен S1..S8 (S7, S8 - по запросу: 0xC0) */
 #endif
 
 #define ET_STEPS        10
+#define ET_GHOST_STEPS  40
+#define ET_GHOST_EVERY  10
+#define ET_CHECK_MS     4000U
 #define ET_GAP_SHORT_MS 600U
 #define ET_GAP_LONG_MS  2500U
 #define ET_HOLD_MS      3000U
@@ -158,7 +170,10 @@ static gfx_context_t s_ctx;
 /* Пауза с опросом драйвера: так же засыпает панель, как в главном цикле. */
 static void et_delay(uint32_t ms)
 {
-    for (uint32_t i = 0; i < ms; i++)
+    /* По HAL_GetTick(), а не счётчиком HAL_Delay(1): HAL_Delay(1) длится 1-2 мс (HAL добавляет тик). */
+    const uint32_t t0 = HAL_GetTick();
+
+    while (HAL_GetTick() - t0 < ms)
     {
         display_stm32_poll();
         HAL_Delay(1);
@@ -360,12 +375,70 @@ static void et_scene_map(int scene, display_mode_t mode, uint32_t gap_ms, const 
     et_scene_end(scene);
 }
 
+/* Контрольная точка сцены остаточного изображения: держим кадр, снимаем экран на фото. */
+static void et_ghost_checkpoint(int scene, int step)
+{
+    if ((step % ET_GHOST_EVERY) == 0)
+    {
+        PURRGO_LOG("EINKTEST S%d checkpoint %d partials\r\n", scene, step);
+        et_delay(ET_CHECK_MS);
+    }
+}
+
+/* S7: курсор меню прыгает между строками 2 и 3: одни и те же пиксели меняются на каждом шаге. */
+static void et_scene_ghost_menu(int scene, display_mode_t mode, const char *title)
+{
+    et_scene_begin(scene, mode);
+    et_draw_menu(title, 2);
+    et_scene_full();
+    et_delay(ET_GAP_SHORT_MS);
+
+    for (int step = 1; step <= ET_GHOST_STEPS; step++)
+    {
+        const int cur  = 2 + (step & 1);
+        const int prev = 2 + ((step - 1) & 1);
+
+        et_draw_menu(title, cur);
+        display_refresh_region(0, (int16_t)(ET_ROW_Y0 + prev * ET_ROW_STEP), DISPLAY_WIDTH, ET_ROW_STEP);
+        display_refresh_region(0, (int16_t)(ET_ROW_Y0 + cur * ET_ROW_STEP), DISPLAY_WIDTH, ET_ROW_STEP);
+        et_step_done(scene, step);
+        et_delay(ET_GAP_SHORT_MS);
+        et_ghost_checkpoint(scene, step);
+    }
+    et_scene_end(scene);
+}
+
+/* S8: маркёр идёт по пути вперёд-назад (индекс 0..10..0..), трек растёт и стирается. */
+static void et_scene_ghost_map(int scene, display_mode_t mode, const char *title)
+{
+    const bool mono = (mode == DISPLAY_MODE_MONO);
+    int idx = 0;
+
+    et_scene_begin(scene, mode);
+    et_draw_map(title, idx, mono);
+    et_scene_full();
+    et_delay(ET_GAP_SHORT_MS);
+
+    for (int step = 1; step <= ET_GHOST_STEPS; step++)
+    {
+        const int prev = idx;
+        const int k = step % (2 * ET_STEPS);
+
+        idx = (k <= ET_STEPS) ? k : (2 * ET_STEPS - k);
+        et_draw_map(title, idx, mono);
+        et_region_marker(prev, idx);
+        et_step_done(scene, step);
+        et_delay(ET_GAP_SHORT_MS);
+        et_ghost_checkpoint(scene, step);
+    }
+    et_scene_end(scene);
+}
+
 void EinkTest_RunPartial(void)
 {
     display_init();
     et_gfx_init();
     display_eink_set_partial_limits(250U, 250U);
-    display_eink_set_log(true);             /* строки "EINK t=..." рядом с "EINKTEST ..." */
 
     const unsigned mask = PURRGO_EINK_TEST_SCENES;
 
@@ -375,6 +448,8 @@ void EinkTest_RunPartial(void)
     if (mask & 0x08U) { et_scene_menu(4, DISPLAY_MODE_GRAY4, false, ET_GAP_LONG_MS,  "S4 4GRAY MENU"); }
     if (mask & 0x10U) { et_scene_map (5, DISPLAY_MODE_MONO,  ET_GAP_SHORT_MS, "S5 1BIT MAP"); }
     if (mask & 0x20U) { et_scene_map (6, DISPLAY_MODE_GRAY4, ET_GAP_LONG_MS,  "S6 4GRAY MAP"); }
+    if (mask & 0x40U) { et_scene_ghost_menu(7, DISPLAY_MODE_MONO,  "S7 1BIT GHOST"); }
+    if (mask & 0x80U) { et_scene_ghost_map (8, DISPLAY_MODE_GRAY4, "S8 4GRAY GHOST"); }
 
     PURRGO_LOG("EINKTEST done\r\n");
     display_eink_set_partial_limits(0U, 0U);

@@ -52,18 +52,6 @@
 #define EINK_RETRY_DELAY_MS 2000U
 #define EINK_WAIT_LIMIT_MS  30000U
 
-/* ------------------------------ журнал ----------------------------------- */
-
-/* Журнал физических операций с панелью (UART2), включается display_eink_set_log(true). */
-static bool s_log;
-
-#define EINK_LOG(...) do { if (s_log) { PURRGO_LOG(__VA_ARGS__); } } while (0)
-
-static const char *mode_name(display_mode_t m)
-{
-    return (m == DISPLAY_MODE_GRAY4) ? "4gray" : "1bit";
-}
-
 /* ------------------------------ состояние -------------------------------- */
 
 typedef enum { OP_NONE, OP_INIT, OP_FULL, OP_PARTIAL, OP_SLEEP } eink_op_t;
@@ -187,19 +175,15 @@ static void start_next(uint32_t now)
     const display_mode_t mode = s_target_mode;
     const bool need_full = s_req_full || !s_img_valid || s_img_mode != mode ||
                            s_partials >= partial_limit(mode);
-    const char *why = s_req_full ? "requested" : !s_img_valid ? "no picture on panel" :
-                      (s_img_mode != mode) ? "mode change" : "partials limit";
 
     if (need_full) {
         if (!awake_for(mode)) {
-            EINK_LOG("EINK t=%lu INIT %s (before full: %s)\r\n", (unsigned long)now, mode_name(mode), why);
             op_started(OP_INIT, mode,
                        (mode == DISPLAY_MODE_GRAY4) ? epd4g_start_init()
                                                     : epd4g_start_bw_init(PURRGO_EINK_MONO_FULL_MODE),
                        now);
             return;
         }
-        EINK_LOG("EINK t=%lu FULL %s (%s)\r\n", (unsigned long)now, mode_name(mode), why);
         const int rc = (mode == DISPLAY_MODE_GRAY4)
                      ? epd4g_start_full(s_fb, PURRGO_EINK_GRAY_FULL_MODE)
                      : epd4g_start_bw_full(s_fb, EPD4G_SRC_2BPP, PURRGO_EINK_MONO_FULL_MODE);
@@ -221,7 +205,6 @@ static void start_next(uint32_t now)
     /* Частичное обновление: картинка этого режима на панели известна. */
     if (mode == DISPLAY_MODE_GRAY4) {
         if (!awake_for(mode)) {
-            EINK_LOG("EINK t=%lu INIT 4gray (wake before partial)\r\n", (unsigned long)now);
             op_started(OP_INIT, mode, epd4g_start_init(), now);
             return;
         }
@@ -230,19 +213,15 @@ static void start_next(uint32_t now)
         if (rc == EPD4G_OK) {
             s_req_region = false;
             if (changed == 0U) {
-                EINK_LOG("EINK t=%lu PART 4gray: no changed pixels, nothing sent\r\n", (unsigned long)now);
                 s_idle_since = now;           /* ничего не изменилось, задания нет */
                 return;
             }
-            EINK_LOG("EINK t=%lu PART 4gray changed=%lu\r\n", (unsigned long)now, (unsigned long)changed);
             memcpy(s_prev, s_fb, sizeof(s_prev));
             s_partials++;
         }
         op_started(OP_PARTIAL, mode, rc, now);
     } else {
         const epd4g_rect_t r = { s_rx0, s_ry0, s_rx1, s_ry1 };
-        EINK_LOG("EINK t=%lu PART 1bit x %d..%d y %d..%d%s\r\n", (unsigned long)now,
-                 (int)r.x0, (int)r.x1, (int)r.y0, (int)r.y1, s_mono_asleep ? " (wake)" : "");
         const int rc = epd4g_start_bw_partial(s_fb, EPD4G_SRC_2BPP, &r);
         if (rc == EPD4G_OK) {
             s_req_region = false;
@@ -273,7 +252,6 @@ static void poll_core(bool allow_sleep)
     /* Простой: усыпляем панель (в 4 gray это ещё и выключает питание аналоговой части). */
     if (allow_sleep && !request_pending() && (s_hw != HW_OFF) && !s_mono_asleep &&
         time_reached(now, s_idle_since + PURRGO_EINK_SLEEP_AFTER_MS)) {
-        EINK_LOG("EINK t=%lu SLEEP %s\r\n", (unsigned long)now, mode_name((s_hw == HW_GRAY) ? DISPLAY_MODE_GRAY4 : DISPLAY_MODE_MONO));
         op_started(OP_SLEEP, s_img_mode, epd4g_start_sleep(), now);
     }
 }
@@ -344,11 +322,6 @@ bool display_eink_is_busy(void)
     return s_op != OP_NONE || request_pending();
 }
 
-void display_eink_set_log(bool enable)
-{
-    s_log = enable;
-}
-
 void display_eink_set_partial_limits(unsigned gray, unsigned mono)
 {
     s_limit_gray = (gray != 0U) ? gray : PURRGO_EINK_GRAY_PARTIALS_BEFORE_FULL;
@@ -383,7 +356,6 @@ void display_eink_sleep(void)
 {
     display_eink_wait();
     if (s_hw != HW_OFF && !s_mono_asleep) {
-        EINK_LOG("EINK t=%lu SLEEP (final, blocking)\r\n", (unsigned long)HAL_GetTick());
         (void)epd4g_sleep();   /* блокирующий, ошибка не критична: питание всё равно снимается */
         if (s_hw == HW_GRAY) {
             s_hw = HW_OFF;

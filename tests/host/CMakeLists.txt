@@ -84,7 +84,7 @@ if(EXISTS ${EPD4G_DIR}/src/epd4g.c)
         ${CMAKE_CURRENT_SOURCE_DIR}/stm32_shim
         ${PROJECT_SOURCE_DIR}/apps/stm32/common/Inc
         ${EPD4G_DIR}/include)
-    target_compile_definitions(eink_selftest_host PRIVATE EPD4G_BW_THRESHOLD=3)
+    target_compile_definitions(eink_selftest_host PRIVATE EPD4G_BW_THRESHOLD=3 PURRGO_EINK_TEST_SCENES=0xFFU)
     target_link_options(eink_selftest_host PRIVATE -Wl,--wrap=display_set_mode)
     purrgo_target_warnings(eink_selftest_host)
     target_link_libraries(eink_selftest_host PRIVATE purrgo_core m)
