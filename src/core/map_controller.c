@@ -11,16 +11,6 @@
 #define AUTO_FOLLOW_EDGE_MARGIN_PX 16
 #define AUTO_FOLLOW_STOP_MARGIN_DIV 16
 
-/*
- * Шаг ручного сдвига карты за одно нажатие:
- */
-#ifndef PURRGO_MAP_PAN_STEP_X_DIV
-#define PURRGO_MAP_PAN_STEP_X_DIV 3
-#endif
-#ifndef PURRGO_MAP_PAN_STEP_Y_DIV
-#define PURRGO_MAP_PAN_STEP_Y_DIV 3
-#endif
-
 // Состояние окна просмотра карты (Map Viewport)
 static int32_t map_center_lat_1e7;
 static int32_t map_center_lon_1e7;
