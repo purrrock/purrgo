@@ -1,9 +1,10 @@
 #include "purrgo/gnss_io.h"
 #include "purrgo/gnss_ring.h"
 #include "purrgo/gnss_receiver.h"
-#include "usart.h"
+#include "lpuart.h"
 #include "gpdma.h"
 #include "main.h"
+#include "purrgo/hardware_config.h"
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -14,13 +15,15 @@
 #include "gnss_monitor.h"
 
 /*
- * GNSS на STM32U585: USART1_RX -> GPDMA1 Channel 0, linked-list в круговом
+ * GNSS на STM32U585: LPUART1_RX -> GPDMA1 Channel 0, linked-list в круговом
  * режиме (один узел, ссылающийся на себя):
  *   - очередь узлов собирается здесь, а не берётся из linked_list.c CubeMX:
  *     CubeMX создаёт узел GPDMA_2D, а канал 0 линейный (HAL_DMAEx_List_LinkQ
  *     вернул бы HAL_ERROR), и канал инициализируется им в режиме NORMAL;
  *   - HAL_UART_Receive_DMA() сам записывает в узел размер блока, адрес RDR и
  *     адрес буфера, поэтому узел собирается с нулевыми адресами;
+ *   - LPUART1 обслуживается GPDMA1 (запрос LPUART1_RX); LPDMA1 и режим Stop 2
+ *     пока не используются, при их внедрении изменится только канал и запрос;
  *   - остаток блока читается из CBR1.BNDT (__HAL_DMA_GET_COUNTER); его
  *     семантика для кольцевого буфера соответствует
  *     purrgo_gnss_ring_head_from_ndtr() из gnss_ring.h.
@@ -31,8 +34,11 @@
  *
  * DMA непрерывно записывает входные байты в этот массив.
  * После достижения конца массива DMA начинает запись с начала.
+ *
+ * G10A F30 работает на 38400 бод (до 3840 байт/с в пределе); после настройки
+ * (GGA, RMC, GSA, 1 Гц) реальный поток - несколько сотен байт/с.
  */
-#define GNSS_RX_BUFFER_SIZE 1024U
+#define GNSS_RX_BUFFER_SIZE 2048U
 
 #if (GNSS_RX_BUFFER_SIZE & (GNSS_RX_BUFFER_SIZE - 1U)) != 0U
 #error "GNSS_RX_BUFFER_SIZE must be a power of two"
@@ -53,7 +59,8 @@ static uint8_t gnss_rx_buffer[GNSS_RX_BUFFER_SIZE];
  *
  * Условие корректности: потребитель обязан вызывать
  * purrgo_gnss_read_byte() чаще, чем DMA заполняет весь буфер
- * (при 9600 бод и 1024 байтах это ~1.07 с).
+ * (после настройки приёмника - несколько секунд; при полной загрузке линии
+ * 38400 бод - ~0.53 с на 2048 байт).
  */
 static purrgo_gnss_ring_t gnss_ring;
 
@@ -67,6 +74,12 @@ static purrgo_gnss_ring_t gnss_ring;
  * перезапускается без гонки данных.
  */
 static volatile bool gnss_rx_error_flag = false;
+
+#if (PURRGO_GNSS_CONFIG_RETRY_MS > 0)
+/* Повторная отправка настройки: модуль мог не успеть загрузиться к первой. */
+static uint32_t gnss_t_init = 0U;
+static bool gnss_cfg_retry_done = false;
+#endif
 
 /*
  * Последнее достоверное положение producer (индекс следующего байта,
@@ -85,7 +98,7 @@ static DMA_QListTypeDef gnss_rx_queue;
 
 /**
  * @brief Собрать круговую очередь из одного линейного узла и привязать её
- *        к каналу GPDMA1 и к USART1 (приёмник).
+ *        к каналу GPDMA1 и к LPUART1 (приёмник).
  *
  * @return true при успехе.
  */
@@ -99,7 +112,7 @@ static bool gnss_dma_setup(void)
     memset(&gnss_rx_queue, 0, sizeof gnss_rx_queue);
 
     node_cfg.NodeType = DMA_GPDMA_LINEAR_NODE;
-    node_cfg.Init.Request = GPDMA1_REQUEST_USART1_RX;
+    node_cfg.Init.Request = GPDMA1_REQUEST_LPUART1_RX;
     node_cfg.Init.BlkHWRequest = DMA_BREQ_SINGLE_BURST;
     node_cfg.Init.Direction = DMA_PERIPH_TO_MEMORY;
     node_cfg.Init.SrcInc = DMA_SINC_FIXED;
@@ -129,7 +142,7 @@ static bool gnss_dma_setup(void)
     ret |= HAL_DMA_ConfigChannelAttributes(&handle_GPDMA1_Channel0, DMA_CHANNEL_NPRIV);
     ret |= HAL_DMAEx_List_LinkQ(&handle_GPDMA1_Channel0, &gnss_rx_queue);
 
-    __HAL_LINKDMA(&huart1, hdmarx, handle_GPDMA1_Channel0);
+    __HAL_LINKDMA(&hlpuart1, hdmarx, handle_GPDMA1_Channel0);
 
     return (ret == HAL_OK);
 }
@@ -139,11 +152,11 @@ static bool gnss_dma_setup(void)
  */
 static void gnss_uart_tx(const uint8_t *data, size_t len)
 {
-    (void)HAL_UART_Transmit(&huart1, (uint8_t *)(uintptr_t)data, (uint16_t)len, 1000U);
+    (void)HAL_UART_Transmit(&hlpuart1, (uint8_t *)(uintptr_t)data, (uint16_t)len, 1000U);
 }
 
 /**
- * @brief Инициализировать приём GNSS через USART1.
+ * @brief Инициализировать приём GNSS через LPUART1.
  */
 void purrgo_gnss_init(void)
 {
@@ -165,7 +178,7 @@ void purrgo_gnss_init(void)
      * и избежать аппаратной ошибки переполнения буфера ORE (Overrun Error).
      */
     if (HAL_UART_Receive_DMA(
-            &huart1,
+            &hlpuart1,
             gnss_rx_buffer,
             GNSS_RX_BUFFER_SIZE) != HAL_OK)
     {
@@ -181,6 +194,11 @@ void purrgo_gnss_init(void)
      * (gnss_receiver.c, выбор - PURRGO_HW_GNSS_RECEIVER в hardware_config.h).
      */
     purrgo_gnss_receiver_configure(gnss_uart_tx);
+
+#if (PURRGO_GNSS_CONFIG_RETRY_MS > 0)
+    gnss_t_init = HAL_GetTick();
+    gnss_cfg_retry_done = false;
+#endif
 }
 
 /**
@@ -205,7 +223,7 @@ static void gnss_dma_force_ready(void)
         h->LinkedListQueue->State = HAL_DMA_QUEUE_STATE_READY;
     }
     __HAL_UNLOCK(h);
-    huart1.RxState = HAL_UART_STATE_READY;
+    hlpuart1.RxState = HAL_UART_STATE_READY;
 }
 
 /**
@@ -215,20 +233,20 @@ static void gnss_dma_force_ready(void)
  */
 static bool gnss_rx_restart(void)
 {
-    if (HAL_UART_Receive_DMA(&huart1, gnss_rx_buffer, GNSS_RX_BUFFER_SIZE) == HAL_OK)
+    if (HAL_UART_Receive_DMA(&hlpuart1, gnss_rx_buffer, GNSS_RX_BUFFER_SIZE) == HAL_OK)
     {
         return true;
     }
 
     /* Канал мог остаться не в READY: сбросить и повторить один раз. */
     PURRGO_LOG("GNSS RX restart: retry (uart err 0x%lX, dma err 0x%lX, dma state %d)\r\n",
-               (unsigned long)huart1.ErrorCode,
+               (unsigned long)hlpuart1.ErrorCode,
                (unsigned long)handle_GPDMA1_Channel0.ErrorCode,
                (int)handle_GPDMA1_Channel0.State);
 
     gnss_dma_force_ready();
 
-    return (HAL_UART_Receive_DMA(&huart1, gnss_rx_buffer, GNSS_RX_BUFFER_SIZE) == HAL_OK);
+    return (HAL_UART_Receive_DMA(&hlpuart1, gnss_rx_buffer, GNSS_RX_BUFFER_SIZE) == HAL_OK);
 }
 
 /**
@@ -257,10 +275,20 @@ bool purrgo_gnss_read_byte(uint8_t *byte)
     }
 
     /* Если DMA ещё не был запущен, читать нечего. */
-    if (huart1.hdmarx == NULL)
+    if (hlpuart1.hdmarx == NULL)
     {
         return false;
     }
+
+#if (PURRGO_GNSS_CONFIG_RETRY_MS > 0)
+    /* Повторяем настройку один раз: модуль мог ещё не принимать команды. */
+    if (!gnss_cfg_retry_done &&
+        ((uint32_t)(HAL_GetTick() - gnss_t_init) >= (uint32_t)PURRGO_GNSS_CONFIG_RETRY_MS))
+    {
+        gnss_cfg_retry_done = true;
+        purrgo_gnss_receiver_configure(gnss_uart_tx);
+    }
+#endif
 
     /*
      * Положение producer по счётчику CBR1 (в штатной работе). После ошибки UART
@@ -274,7 +302,7 @@ bool purrgo_gnss_read_byte(uint8_t *byte)
     else
     {
         head = purrgo_gnss_ring_head_from_ndtr(&gnss_ring,
-                                               __HAL_DMA_GET_COUNTER(huart1.hdmarx));
+                                               __HAL_DMA_GET_COUNTER(hlpuart1.hdmarx));
         gnss_last_head = head;
     }
 
@@ -303,7 +331,7 @@ bool purrgo_gnss_read_byte(uint8_t *byte)
         if (!gnss_rx_restart())
         {
             PURRGO_LOG("GNSS RX RESTART ERROR! (uart err 0x%lX, dma err 0x%lX, dma state %d)\r\n",
-                       (unsigned long)huart1.ErrorCode,
+                       (unsigned long)hlpuart1.ErrorCode,
                        (unsigned long)handle_GPDMA1_Channel0.ErrorCode,
                        (int)handle_GPDMA1_Channel0.State);
         }
@@ -315,22 +343,22 @@ bool purrgo_gnss_read_byte(uint8_t *byte)
 }
 
 /**
- * @brief Callback половины DMA-передачи USART1 RX.
+ * @brief Callback половины DMA-передачи LPUART1 RX.
  */
 void HAL_UART_RxHalfCpltCallback(UART_HandleTypeDef *huart)
 {
-    if (huart->Instance != USART1)
+    if (huart->Instance != LPUART1)
     {
         return;
     }
 }
 
 /**
- * @brief Callback полного DMA-буфера USART1 RX.
+ * @brief Callback полного DMA-буфера LPUART1 RX.
  */
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
-    if (huart->Instance != USART1)
+    if (huart->Instance != LPUART1)
     {
         return;
     }
@@ -351,7 +379,7 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
         return;
     }
 
-    if (huart->Instance != USART1)
+    if (huart->Instance != LPUART1)
     {
         return;
     }

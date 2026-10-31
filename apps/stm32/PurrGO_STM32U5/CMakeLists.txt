@@ -56,7 +56,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     ${PURRGO_STM32_COMMON}/fatfs/ffsystem.c
 
     # STM32 implementation of the common GNSS byte-stream interface
-    # (USART1_RX + GPDMA1 linked-list circular).
+    # (LPUART1_RX + GPDMA1 linked-list circular).
     Core/Src/gnss_io.c
 
     # STM32 system time implementation.

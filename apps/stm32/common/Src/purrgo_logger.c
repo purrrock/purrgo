@@ -29,9 +29,9 @@
 void purrgo_logger_init(void)
 {
     /*
-     * USART2 уже инициализируется в main():
+     * USART1 уже инициализируется в main():
      *
-     *     MX_USART2_UART_Init();
+     *     MX_USART1_UART_Init();
      *
      * Поэтому повторно настраивать UART здесь нельзя и не требуется.
      *
@@ -99,9 +99,9 @@ void purrgo_logger_write(const char *format, ...)
     }
 
     /*
-     * Передаём сообщение через USART2.
+     * Передаём сообщение через USART1.
      *
-     * huart2 объявлен в usart.c и доступен через usart.h.
+     * huart1 объявлен в usart.c и доступен через usart.h.
      *
      * HAL_UART_Transmit() в данном варианте работает блокирующе:
      * функция не возвращается, пока передача не завершится
@@ -112,7 +112,7 @@ void purrgo_logger_write(const char *format, ...)
      * микроконтроллера.
      */
     (void)HAL_UART_Transmit(
-        &huart2,
+        &huart1,
         (uint8_t *)buffer,
         (uint16_t)length,
         100U

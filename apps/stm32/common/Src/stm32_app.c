@@ -96,12 +96,12 @@ void purrgo_stm32_init(void)
    * Диагностический UART.
    * -------------------------------------------------------------------------
    * purrgo_logger использует платформенную реализацию logger,
-   * которая уже привязана к USART2.
+   * которая уже привязана к USART1.
    */
   purrgo_logger_init();
 
   PURRGO_LOG("PurrGO STM32 boot\r\n");
-  PURRGO_LOG("UART2 logger OK\r\n");
+  PURRGO_LOG("UART1 logger OK\r\n");
 
   /*
    * -------------------------------------------------------------------------
@@ -118,16 +118,16 @@ void purrgo_stm32_init(void)
   s_prev_sd_state = purrgo_sd_state();
 
   // purrgo_debug_buttons_init();
-  // PURRGO_LOG("UART2 Buttons OK\r\n");
+  // PURRGO_LOG("UART1 Buttons OK\r\n");
 
   /*
    * -------------------------------------------------------------------------
    * GNSS.
    * -------------------------------------------------------------------------
-   * AT6558R подключён к USART1.
+   * G10A F30 подключён к LPUART1 (PA3 RX, PA2 TX), приём через GPDMA1.
    */
   purrgo_gnss_init();
-  PURRGO_LOG("GNSS USART1 INIT FINISHED\r\n");
+  PURRGO_LOG("GNSS LPUART1 INIT FINISHED\r\n");
   purrgo_gnss_monitor_init();
 
   /*

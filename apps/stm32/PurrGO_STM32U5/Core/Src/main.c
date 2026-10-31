@@ -20,8 +20,8 @@
 #include "main.h"
 #include "gpdma.h"
 #include "icache.h"
-#include "spi.h"
 #include "usart.h"
+#include "spi.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
@@ -98,8 +98,8 @@ int main(void)
   MX_ICACHE_Init();
   MX_SPI1_Init();
   MX_SPI2_Init();
-  MX_USART2_UART_Init();
   MX_USART1_UART_Init();
+  MX_LPUART1_UART_Init();
   /* USER CODE BEGIN 2 */
   
 // #define PURRGO_EINK_SELFTEST_4GRAY
@@ -109,7 +109,7 @@ int main(void)
   while (1) {}
 #endif
 
-#define PURRGO_EINK_SELFTEST_PARTIAL
+// #define PURRGO_EINK_SELFTEST_PARTIAL
 #if defined(PURRGO_EINK_SELFTEST_PARTIAL)
   /* Самотест частичного обновления. */
   EinkTest_RunPartial();

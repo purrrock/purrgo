@@ -31,7 +31,7 @@
 
 /* Exported types ------------------------------------------------------------*/
 /* Exported constants --------------------------------------------------------*/
-HAL_StatusTypeDef MX_USART1_RX_Queue_Config(void);
+HAL_StatusTypeDef MX_LPUART1_RX_Queue_Config(void);
 
 #ifdef __cplusplus
 }

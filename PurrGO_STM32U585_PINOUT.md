@@ -11,7 +11,7 @@
 - MCU: **STM32U585CIU6** (UFQFPN48, вариант без SMPS: питание ядра от внутреннего LDO, на VCAP1 4.7 мкФ). SDMMC в этом корпусе нет.
 - Плата: WeAct STM32U585Cx CoreBoard V3.1. Схема: `docs/STM32U585CIU6/`.
 - Отладочный интерфейс: ST-LINK, **SWD** (PA13/PA14), 4-контактный разъём `SW 3V3 DIO SCK GND`. Запасной путь прошивки: BOOT0 + системный DFU через USB-C.
-- Отладочный текстовый вывод: USART2.
+- Отладочный текстовый вывод: USART1 (PA9/PA10), USART2 не используется.
 - Тактирование (решения D4, D9): **HSI16 → PLL1 → SYSCLK 80 МГц** (M=1, N=10, R=2), Voltage Scaling **Range 2**, HSE и LSE выключены. Кварцы на плате (Y1 32.768 кГц на PC14/PC15, Y2 25 МГц на PH0/PH1) не используются.
 - Питание на период разработки: **5 В по USB-C** (LDO платы ME6231A33M3G → 3.3 В). Питание от батарей (TPS63802) и мониторинг батареи отложены; **не подавать 3.3 В от внешнего преобразователя на вывод `3V3`, пока подключён USB.**
 
@@ -22,8 +22,8 @@
 | SPI1 | E-Ink дисплей (только передача) | **FIXED** |
 | SPI2 | MicroSD-карта (SPI-режим) | **FIXED** |
 | GPIO | Кнопки E-Ink HAT K1…K4 | **FIXED** |
-| USART1 | GNSS-приёмник (RX через GPDMA1, кольцевой) | **FIXED** |
-| USART2 | Отладочный лог | **FIXED** |
+| LPUART1 | GNSS-приёмник G10A F30 (RX через GPDMA1, кольцевой) | **PLANNED** (переход с USART1) |
+| USART1 | Отладочный лог (переход с USART2) | **PLANNED** |
 | ADC1 | Мониторинг батареи (PB1, ADC1_IN16) | **RESERVED**, отложено |
 
 ### SPI1 — E-Ink
@@ -58,25 +58,32 @@ DAT1 и DAT2 модуля не подключаются (подтяжки на �
 - `Detect_SD`: вход с Pull-up. Полярность: `PURRGO_SD_DETECT_MODE = PURRGO_SD_DETECT_ACTIVE_HIGH` (карта вставлена = высокий уровень, проверено на плате).
 - FatFs: в CubeMX для U5 недоступен (только FileX), подключается вручную, SPI-драйвер диска пишется поверх SPI2.
 
-### USART1 — GNSS
+### LPUART1 — GNSS (G10A F30)
 
-| STM32U585 | GNSS | Назначение | Статус |
+Переход с USART1 на LPUART1; приём по-прежнему через GPDMA1 в кольцевом режиме (решение D5).
+LPDMA1 и Stop 2 пока не используются. До подтверждения на железе назначения помечены `PLANNED`.
+
+| STM32U585 | G10A F30 (разъём 1.25 мм, 6 pin) | Назначение | Статус |
 |---|---|---|---|
-| PA9 / USART1_TX (AF7) | RX | STM32 → GNSS (решение D2) | **FIXED** |
-| PA10 / USART1_RX (AF7) | TX | GNSS → STM32 | **FIXED** |
-| GND | GND | Общая земля | **FIXED** |
+| PA2 / LPUART1_TX (AF8) | 4 (R, RX) | STM32 → GNSS | **PLANNED** |
+| PA3 / LPUART1_RX (AF8), Pull-up | 3 (T, TX) | GNSS → STM32 | **PLANNED** |
+| 3V3 | 2 (V, VCC) | Питание 3.3 В (допустимо 3.3–5 В; при 3.3 В уровни UART 3.3 В) | **PLANNED** |
+| GND | 5 (G, GND) | Общая земля | **PLANNED** |
+| — | 6 (E, EN) | Не подключать: по умолчанию высокий уровень, модуль работает | — |
+| — | 1 (P, 1PPS) | Пока не используется (проверка 1PPS — отдельная задача) | — |
 
-9600 8N1, приём через GPDMA1 в кольцевом режиме (linked-list circular, решение D5). Резерв: приём по прерыванию в кольцевой буфер.
+38400 8N1 (заводская скорость G10A F30). Тактирование LPUART1 — HSI16. Приём: GPDMA1 Channel 0,
+запрос `GPDMA1_REQUEST_LPUART1_RX`, linked-list circular (`gnss_io.c`).
 
-### USART2 — отладочный лог
+### USART1 — отладочный лог
 
 - Подключение: STM32 → USB-UART адаптер (PL2303TA TTL) → ПК.
 - Параметры терминала: `115200`, `8N1`.
 
 | STM32U585 | USB-UART | Цвет провода | Назначение |
 |---|---|---|---|
-| PA2 / USART2_TX (AF7) | RX | белый | STM32 → ПК |
-| PA3 / USART2_RX (AF7) | TX | зелёный | ПК → STM32 |
+| PA9 / USART1_TX (AF7) | RX | белый | STM32 → ПК |
+| PA10 / USART1_RX (AF7) | TX | зелёный | ПК → STM32 |
 | GND | GND | чёрный | Общая земля |
 
 ## 3. E-Ink дисплей
@@ -127,12 +134,12 @@ DAT1 и DAT2 модуля не подключаются (подтяжки на �
 |---|---|---|
 | PA0 | K1 (кнопка E-Ink HAT), WKUP1 | **FIXED** |
 | PA1 | K2 (кнопка E-Ink HAT) | **FIXED** |
-| PA2 | USART2_TX / Debug | **FIXED** |
-| PA3 | USART2_RX / Debug | **FIXED** |
+| PA2 | LPUART1_TX / GNSS (был USART2_TX / Debug) | **PLANNED** |
+| PA3 | LPUART1_RX / GNSS (был USART2_RX / Debug) | **PLANNED** |
 | PA5 | SPI1_SCK / E-Ink | **FIXED** |
 | PA7 | SPI1_MOSI / E-Ink | **FIXED** |
-| PA9 | USART1_TX / GNSS | **FIXED** |
-| PA10 | USART1_RX / GNSS | **FIXED** |
+| PA9 | USART1_TX / Debug (был GNSS) | **PLANNED** |
+| PA10 | USART1_RX / Debug (был GNSS) | **PLANNED** |
 | PB1 | V_MAIN_BAT, ADC1_IN16: мониторинг батареи отложен, в CubeMX не настраивать | **RESERVED** |
 | PB2 | E-Ink BUSY | **FIXED** |
 | PB7 | E-Ink CS | **FIXED** |
@@ -149,9 +156,9 @@ DAT1 и DAT2 модуля не подключаются (подтяжки на �
 
 | SPI1 | E-Ink (TX only) | **FIXED** |
 | SPI2 | MicroSD | **FIXED** |
-| USART1 | GNSS | **FIXED** |
-| USART2 | Debug log | **FIXED** |
-| GPDMA1 | USART1_RX (GNSS, linked-list circular) | **FIXED** |
+| LPUART1 | GNSS | **PLANNED** |
+| USART1 | Debug log | **PLANNED** |
+| GPDMA1 | LPUART1_RX (GNSS, linked-list circular) | **PLANNED** |
 | ADC1 | мониторинг батареи, отложен | **RESERVED** |
 
 ## 7. Правила ведения pinout
@@ -182,3 +189,4 @@ DAT1 и DAT2 модуля не подключаются (подтяжки на �
 |---|---|
 | 2026-10-27 | Поддержка F411 удалена: убраны сравнение с F411 и ссылки на `PurrGO_STM32F411_PINOUT.md`; статусы назначений обновлены `PLANNED` → `FIXED` по результатам проверки на плате U585 (E-Ink, SD, кнопки, GNSS). |
 | 2026-10-24 | Создан документ распиновки U585 по принятым решениям D1…D5, D7, D9 (`TODO_migrate.md`): microSD на SPI2 (PB12…PB15, Detect PB10), GNSS TX на PA9, USART1_RX через GPDMA1, HSI16 → 80 МГц. Мониторинг батареи (PB1) отложен, питание на период разработки от USB 5 В. |
+| 2026-10-31 | GNSS: переход с USART1 на LPUART1 (PA2 TX, PA3 RX, GPDMA1 сохраняется) и замена модуля на G10A F30 (u-blox M10, 38400). Отладочный лог переносится с USART2 на USART1 (PA9/PA10), USART2 не используется. PB11 на плате отсутствует. Статус `PLANNED` до проверки на железе. |

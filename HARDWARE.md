@@ -22,7 +22,7 @@ PurrGO — автономный GNSS-навигатор и трекер без �
 | Параметр | Значение |
 |---|---|
 | MCU | STM32U585CIU6 (784 Kbytes RAM, 2 Mbytes Flash) |
-| GNSS | GY-NEO6MV2 (после отладки замена на G10A F30) |
+| GNSS | G10A F30 (u-blox M10), LPUART1; GY-NEO6MV2 использовался при отладке |
 | Дисплей | Waveshare 2.7inch e-Paper HAT |
 | Разрешение | 176 × 264 px |
 | Градации | 4 уровня серого |
