@@ -27,12 +27,16 @@
 #define PURRGO_EINK_SPI_PRESCALER SPI_BAUDRATEPRESCALER_8
 #endif
 
-/* Частичных обновлений подряд до принудительного полного (сброс «шлейфов»). */
+/*
+ * Частичных обновлений подряд до принудительного полного (сброс «шлейфов»).
+ * Самотест на железе (сцены S7, S8: 40 частичных подряд, худший случай) - следов нет даже после
+ * 40; взято 25 (около двух третей от проверенного).
+ */
 #ifndef PURRGO_EINK_GRAY_PARTIALS_BEFORE_FULL
-#define PURRGO_EINK_GRAY_PARTIALS_BEFORE_FULL 8
+#define PURRGO_EINK_GRAY_PARTIALS_BEFORE_FULL 25
 #endif
 #ifndef PURRGO_EINK_MONO_PARTIALS_BEFORE_FULL
-#define PURRGO_EINK_MONO_PARTIALS_BEFORE_FULL 5
+#define PURRGO_EINK_MONO_PARTIALS_BEFORE_FULL 25
 #endif
 
 /* Полное обновление: 4 gray (FAST ~3 с, DEEP ~5 с) и 1 bit (NORMAL ~2 с, FAST ~1 с). */
