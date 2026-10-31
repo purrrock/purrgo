@@ -81,6 +81,7 @@ int main(void)
     memset(fb, 0xFF, sizeof(fb));
     display_eink_init(fb);
     CHECK(hspi1.Init.BaudRatePrescaler == SPI_BAUDRATEPRESCALER_8);
+    display_eink_set_partial_limits(8U, 5U);   /* сценарий ниже рассчитан на лимит 8; значения по умолчанию другие */
 
     /* 1. Первое обновление - полное, 1 bit. */
     display_eink_set_mode(DISPLAY_MODE_MONO);
@@ -143,7 +144,7 @@ int main(void)
     CHECK(b.rst > a.rst);                          /* разбудили: init */
     CHECK(display_eink_partial_count() == 2);      /* но обновление частичное */
 
-    /* 7. Лимит частичных подряд (8): девятое - полное. */
+    /* 7. Лимит частичных подряд (здесь задан 8): девятое - полное. */
     for (int i = 0; i < 6; i++) {
         set_px(100 + i, 200, (uint8_t)(i & 3));
         set_px(100 + i, 201, 0);
