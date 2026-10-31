@@ -56,7 +56,7 @@ HAL_StatusTypeDef MX_LPUART1_RX_Queue_Config(void)
 
   /* Set node configuration ################################################*/
   pNodeConfig.NodeType = DMA_GPDMA_LINEAR_NODE;
-  pNodeConfig.Init.Request = GPDMA1_REQUEST_USART1_RX;
+  pNodeConfig.Init.Request = GPDMA1_REQUEST_LPUART1_RX;
   pNodeConfig.Init.BlkHWRequest = DMA_BREQ_SINGLE_BURST;
   pNodeConfig.Init.Direction = DMA_PERIPH_TO_MEMORY;
   pNodeConfig.Init.SrcInc = DMA_SINC_FIXED;

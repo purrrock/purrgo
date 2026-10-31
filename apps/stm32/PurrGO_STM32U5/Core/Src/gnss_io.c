@@ -1,7 +1,7 @@
 #include "purrgo/gnss_io.h"
 #include "purrgo/gnss_ring.h"
 #include "purrgo/gnss_receiver.h"
-#include "lpuart.h"
+#include "usart.h"
 #include "gpdma.h"
 #include "main.h"
 #include "purrgo/hardware_config.h"
@@ -74,6 +74,9 @@ static purrgo_gnss_ring_t gnss_ring;
  * перезапускается без гонки данных.
  */
 static volatile bool gnss_rx_error_flag = false;
+
+/* Код ошибки UART, с которым вызван HAL_UART_ErrorCallback (для лога). */
+static volatile uint32_t gnss_rx_error_code = 0U;
 
 #if (PURRGO_GNSS_CONFIG_RETRY_MS > 0)
 /* Повторная отправка настройки: модуль мог не успеть загрузиться к первой. */
@@ -152,7 +155,18 @@ static bool gnss_dma_setup(void)
  */
 static void gnss_uart_tx(const uint8_t *data, size_t len)
 {
-    (void)HAL_UART_Transmit(&hlpuart1, (uint8_t *)(uintptr_t)data, (uint16_t)len, 1000U);
+    const HAL_StatusTypeDef st =
+        HAL_UART_Transmit(&hlpuart1, (uint8_t *)(uintptr_t)data, (uint16_t)len, 1000U);
+
+    if (st == HAL_OK)
+    {
+        PURRGO_LOG("GNSS: config sent to module (%u bytes)\r\n", (unsigned)len);
+    }
+    else
+    {
+        PURRGO_LOG("GNSS: config TX FAILED (HAL status %d, uart err 0x%lX)\r\n",
+                   (int)st, (unsigned long)hlpuart1.ErrorCode);
+    }
 }
 
 /**
@@ -239,7 +253,8 @@ static bool gnss_rx_restart(void)
     }
 
     /* Канал мог остаться не в READY: сбросить и повторить один раз. */
-    PURRGO_LOG("GNSS RX restart: retry (uart err 0x%lX, dma err 0x%lX, dma state %d)\r\n",
+    /* Здесь коды - от неудавшегося перезапуска (DMA err 0x40 = BUSY), а не исходной ошибки. */
+    PURRGO_LOG("GNSS RX restart: channel busy, forcing READY (uart err 0x%lX, dma err 0x%lX, dma state %d)\r\n",
                (unsigned long)hlpuart1.ErrorCode,
                (unsigned long)handle_GPDMA1_Channel0.ErrorCode,
                (int)handle_GPDMA1_Channel0.State);
@@ -326,6 +341,9 @@ bool purrgo_gnss_read_byte(uint8_t *byte)
         gnss_rx_error_flag = false;
         purrgo_gnss_ring_reset(&gnss_ring);
 
+        PURRGO_LOG("GNSS RX error 0x%lX (PE=1 NE=2 FE=4 ORE=8 DMA=0x10), restarting RX\r\n",
+                   (unsigned long)gnss_rx_error_code);
+
         gnss_last_head = 0U;
 
         if (!gnss_rx_restart())
@@ -391,6 +409,7 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
      * определит, сколько байт ещё нужно вычитать.
      */
     /* Код ошибки - для монитора связи (до того, как Abort его сбросит). */
+    gnss_rx_error_code = huart->ErrorCode;
     purrgo_gnss_monitor_uart_error(huart->ErrorCode);
 
     (void)HAL_UART_AbortReceive(huart);
