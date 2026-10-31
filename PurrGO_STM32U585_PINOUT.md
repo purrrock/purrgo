@@ -90,16 +90,18 @@ LPDMA1 и Stop 2 пока не используются. Подтвержден�
 
 **Waveshare 2.7" e-Paper HAT, 264×176.**
 
-| Контакт дисплея | Пин STM32U585CIU6 | Описание и настройка в CubeMX | Статус |
-|---|---|---|---|
-| VCC | 3V3 | Питание | **FIXED** |
-| GND | GND | Общая земля | **FIXED** |
-| DIN | PA7 | SPI1_MOSI | **FIXED** |
-| CLK | PA5 | SPI1_SCK | **FIXED** |
-| CS | PB7 | GPIO_Output, `EINK_CS`, High | **FIXED** |
-| DC | PB8 | GPIO_Output, `EINK_DC`, Low | **FIXED** |
-| RST | PB9 | GPIO_Output, `EINK_RST`, High | **FIXED** |
-| BUSY | PB2 | GPIO_Input, `EINK_BUSY`, без подтяжки | **FIXED** |
+| Контакт дисплея | Пин гребёнки HAT (физ. / BCM) | Пин STM32U585CIU6 | Описание и настройка в CubeMX | Статус |
+|---|---|---|---|---|
+| VCC | 1 или 17 / 3V3 | 3V3 | Питание | **FIXED** |
+| GND | 6 (или 9, 14, 20, 25, 30, 34, 39) / GND | GND | Общая земля | **FIXED** |
+| DIN | 19 / GPIO10 (MOSI) | PA7 | SPI1_MOSI | **FIXED** |
+| CLK | 23 / GPIO11 (SCLK) | PA5 | SPI1_SCK | **FIXED** |
+| CS | 24 / GPIO8 (CE0) | PB7 | GPIO_Output, `EINK_CS`, High | **FIXED** |
+| DC | 22 / GPIO25 | PB8 | GPIO_Output, `EINK_DC`, Low | **FIXED** |
+| RST | 11 / GPIO17 | PB9 | GPIO_Output, `EINK_RST`, High | **FIXED** |
+| BUSY | 18 / GPIO24 | PB2 | GPIO_Input, `EINK_BUSY`, без подтяжки | **FIXED** |
+
+Пины 2 и 4 (5V), I2C (3, 5) и остальные выводы гребёнки не подключаются. Переключатель BS на HAT должен стоять в положении 4-line SPI. Сигналы дисплея сверены с разделом Hardware Connection в `docs/Display_modules/E-Ink/display-e-ink-paper-hat-2n7in-user-manual.pdf`.
 
 Для E-Ink не используется SPI1_MISO. PB2 на плате подтянут к GND резистором 10 кОм (R3); для BUSY это не мешает, дисплей управляет линией активно.
 
@@ -107,12 +109,12 @@ LPDMA1 и Stop 2 пока не используются. Подтвержден�
 
 Используются четыре кнопки Waveshare 2.7" e-Paper HAT (K1…K4) на гребёнке 40 pin, совместимой с Raspberry Pi. Каждая замыкает вывод на GND, поэтому входы настроены с внутренним Pull-up: отпущена = 1, нажата = 0.
 
-| Кнопка | Вывод HAT (нумерация Raspberry Pi) | Пин STM32 | Метка CubeMX | Статус |
-|---|---|---|---|---|
-| K1 (KEY1) | GPIO5 | PA0 | `K1` | **FIXED** |
-| K2 (KEY2) | GPIO6 | PA1 | `K2` | **FIXED** |
-| K3 (KEY3) | GPIO13 | PC14 | `K3` | **FIXED** |
-| K4 (KEY4) | GPIO19 | PC15 | `K4` | **FIXED** |
+| Кнопка | Вывод HAT (BCM) | Пин гребёнки HAT (физ.) | Пин STM32 | Метка CubeMX | Статус |
+|---|---|---|---|---|---|
+| K1 (KEY1) | GPIO5 | 29 | PA0 | `K1` | **FIXED** |
+| K2 (KEY2) | GPIO6 | 31 | PA1 | `K2` | **FIXED** |
+| K3 (KEY3) | GPIO13 | 33 | PC14 | `K3` | **FIXED** |
+| K4 (KEY4) | GPIO19 | 35 | PC15 | `K4` | **FIXED** |
 
 - PA0: на плате встроенная кнопка KEY через 330 Ом на GND, **подтяжки к питанию на плате нет**, внутренний Pull-up в CubeMX обязателен. PA0 = `WKUP1` (пробуждение по низкому уровню).
 - PC14/PC15 — выводы LSE (OSC32), на плате установлен кварц Y1 32.768 кГц; LSE в проекте выключен. Кварц не мешает: K3 и K4 читаются (проверено на U585).
@@ -187,6 +189,7 @@ LPDMA1 и Stop 2 пока не используются. Подтвержден�
 
 | Дата | Изменение |
 |---|---|
+| 2026-10-31 | В таблицы E-Ink и кнопок добавлены номера пинов гребёнки 40 pin (физическая нумерация и BCM) Waveshare 2.7" e-Paper HAT. |
 | 2026-10-27 | Поддержка F411 удалена: убраны сравнение с F411 и ссылки на `PurrGO_STM32F411_PINOUT.md`; статусы назначений обновлены `PLANNED` → `FIXED` по результатам проверки на плате U585 (E-Ink, SD, кнопки, GNSS). |
 | 2026-10-24 | Создан документ распиновки U585 по принятым решениям D1…D5, D7, D9 (`TODO_migrate.md`): microSD на SPI2 (PB12…PB15, Detect PB10), GNSS TX на PA9, USART1_RX через GPDMA1, HSI16 → 80 МГц. Мониторинг батареи (PB1) отложен, питание на период разработки от USB 5 В. |
 | 2026-10-31 | GNSS: переход с USART1 на LPUART1 (PA2 TX, PA3 RX, GPDMA1 сохраняется) и замена модуля на G10A F30 (u-blox M10, 38400). Отладочный лог перенесён с USART2 на USART1 (PA9/PA10), USART2 не используется. PB11 на плате отсутствует. Проверено на плате: статус `FIXED`. |
