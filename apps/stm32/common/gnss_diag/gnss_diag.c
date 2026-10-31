@@ -109,6 +109,7 @@ static void handle_sentence(gnss_diag_t *d)
     if ((d->body_len < 6U) || (d->body[5] != ','))
     {
         d->seen_mask |= GNSS_DIAG_SEEN_OTHER;
+        d->seen_interval |= GNSS_DIAG_SEEN_OTHER;
         return;
     }
 
@@ -118,6 +119,7 @@ static void handle_sentence(gnss_diag_t *d)
     if (memcmp(type, "GGA", 3U) == 0)
     {
         d->seen_mask |= GNSS_DIAG_SEEN_GGA;
+        d->seen_interval |= GNSS_DIAG_SEEN_GGA;
         d->gga_seen = true;
         d->gga_quality = parse_u8(d, 6U);
         d->gga_sats_used = parse_u8(d, 7U);
@@ -128,30 +130,153 @@ static void handle_sentence(gnss_diag_t *d)
         unsigned len;
 
         d->seen_mask |= GNSS_DIAG_SEEN_RMC;
+        d->seen_interval |= GNSS_DIAG_SEEN_RMC;
         d->rmc_seen = true;
         d->rmc_valid = find_field(d, 2U, &start, &len) && (len >= 1U) && (d->body[start] == 'A');
     }
     else if (memcmp(type, "GSV", 3U) == 0)
     {
         d->seen_mask |= GNSS_DIAG_SEEN_GSV;
+        d->seen_interval |= GNSS_DIAG_SEEN_GSV;
         d->gsv_seen = true;
         d->gsv_in_view[talker_index(t1)] = parse_u8(d, 3U);
     }
     else if (memcmp(type, "GSA", 3U) == 0)
     {
         d->seen_mask |= GNSS_DIAG_SEEN_GSA;
+        d->seen_interval |= GNSS_DIAG_SEEN_GSA;
     }
     else if (memcmp(type, "VTG", 3U) == 0)
     {
         d->seen_mask |= GNSS_DIAG_SEEN_VTG;
+        d->seen_interval |= GNSS_DIAG_SEEN_VTG;
     }
     else if (memcmp(type, "GLL", 3U) == 0)
     {
         d->seen_mask |= GNSS_DIAG_SEEN_GLL;
+        d->seen_interval |= GNSS_DIAG_SEEN_GLL;
     }
     else
     {
         d->seen_mask |= GNSS_DIAG_SEEN_OTHER;
+        d->seen_interval |= GNSS_DIAG_SEEN_OTHER;
+    }
+}
+
+/*
+ * Разбор UBX-кадров класса ACK: B5 62 05 {00 NAK | 01 ACK} 02 00 <cls> <id> CK_A CK_B.
+ * Остальные UBX-кадры игнорируются (возврат в начало на несовпадении).
+ */
+enum
+{
+    UBX_IDLE = 0,
+    UBX_SYNC2,
+    UBX_CLASS,
+    UBX_ID,
+    UBX_LEN_LO,
+    UBX_LEN_HI,
+    UBX_PAYLOAD,
+    UBX_CK_A,
+    UBX_CK_B
+};
+
+static void ubx_ck_add(gnss_diag_t *d, uint8_t byte)
+{
+    d->ubx_ck_a = (uint8_t)(d->ubx_ck_a + byte);
+    d->ubx_ck_b = (uint8_t)(d->ubx_ck_b + d->ubx_ck_a);
+}
+
+static void ubx_feed(gnss_diag_t *d, uint8_t byte)
+{
+    switch (d->ubx_state)
+    {
+    case UBX_IDLE:
+        if (byte == 0xB5U)
+        {
+            d->ubx_state = UBX_SYNC2;
+        }
+        break;
+
+    case UBX_SYNC2:
+        d->ubx_state = (byte == 0x62U) ? UBX_CLASS : ((byte == 0xB5U) ? UBX_SYNC2 : UBX_IDLE);
+        d->ubx_ck_a = 0U;
+        d->ubx_ck_b = 0U;
+        break;
+
+    case UBX_CLASS:
+        if (byte != 0x05U)       /* не UBX-ACK */
+        {
+            d->ubx_state = (byte == 0xB5U) ? UBX_SYNC2 : UBX_IDLE;
+            break;
+        }
+        d->ubx_cls = byte;
+        ubx_ck_add(d, byte);
+        d->ubx_state = UBX_ID;
+        break;
+
+    case UBX_ID:
+        if (byte > 0x01U)
+        {
+            d->ubx_state = (byte == 0xB5U) ? UBX_SYNC2 : UBX_IDLE;
+            break;
+        }
+        d->ubx_id = byte;
+        ubx_ck_add(d, byte);
+        d->ubx_state = UBX_LEN_LO;
+        break;
+
+    case UBX_LEN_LO:
+        d->ubx_len = byte;
+        ubx_ck_add(d, byte);
+        d->ubx_state = UBX_LEN_HI;
+        break;
+
+    case UBX_LEN_HI:
+        d->ubx_len = (uint16_t)(d->ubx_len | ((uint16_t)byte << 8));
+        ubx_ck_add(d, byte);
+        d->ubx_pos = 0U;
+        d->ubx_state = (d->ubx_len == 2U) ? UBX_PAYLOAD : UBX_IDLE;
+        break;
+
+    case UBX_PAYLOAD:
+        d->ubx_payload[d->ubx_pos++] = byte;
+        ubx_ck_add(d, byte);
+        if (d->ubx_pos >= 2U)
+        {
+            d->ubx_state = UBX_CK_A;
+        }
+        break;
+
+    case UBX_CK_A:
+        d->ubx_state = (byte == d->ubx_ck_a) ? UBX_CK_B : UBX_IDLE;
+        break;
+
+    case UBX_CK_B:
+    default:
+        if (byte == d->ubx_ck_b)
+        {
+            d->ubx_last_cls = d->ubx_payload[0];
+            d->ubx_last_id = d->ubx_payload[1];
+            d->ubx_last_was_nak = (d->ubx_id == 0U);
+            if (d->ubx_last_was_nak)
+            {
+                d->ubx_nak++;
+            }
+            else
+            {
+                d->ubx_ack++;
+            }
+        }
+        d->ubx_state = UBX_IDLE;
+        break;
+    }
+}
+
+void gnss_diag_end_interval(gnss_diag_t *d)
+{
+    if (d != NULL)
+    {
+        d->seen_interval = 0U;
     }
 }
 
@@ -163,6 +288,7 @@ void gnss_diag_feed(gnss_diag_t *d, uint8_t byte)
     }
 
     d->bytes++;
+    ubx_feed(d, byte);
     if (((byte >= 0x20U) && (byte <= 0x7EU)) || (byte == (uint8_t)'\r') || (byte == (uint8_t)'\n'))
     {
         d->printable++;

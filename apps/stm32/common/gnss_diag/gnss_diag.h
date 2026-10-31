@@ -50,8 +50,10 @@ typedef struct
     uint32_t sentences_bad;    /* неверная контрольная сумма, обрыв, переполнение */
     uint32_t err_pe, err_ne, err_fe, err_ore, err_dma;
 
-    /* Что видели. */
+    /* Что видели. seen_mask - с момента старта, seen_interval - с последнего
+     * gnss_diag_end_interval() (показывает, что приходит сейчас). */
     uint8_t seen_mask;
+    uint8_t seen_interval;
     bool gga_seen;
     uint8_t gga_quality;       /* поле 6 GGA */
     uint8_t gga_sats_used;     /* поле 7 GGA */
@@ -59,6 +61,23 @@ typedef struct
     bool rmc_valid;            /* статус A */
     uint8_t gsv_in_view[GNSS_DIAG_TALKERS];
     bool gsv_seen;
+
+    /* Ответы модуля u-blox на UBX-команды (UBX-ACK-ACK / UBX-ACK-NAK). */
+    uint32_t ubx_ack;
+    uint32_t ubx_nak;
+    uint8_t ubx_last_cls;      /* класс/ид подтверждённой (отклонённой) команды */
+    uint8_t ubx_last_id;
+    bool ubx_last_was_nak;
+
+    /* Состояние разбора UBX (только кадры класса ACK). */
+    uint8_t ubx_state;
+    uint8_t ubx_cls;
+    uint8_t ubx_id;
+    uint16_t ubx_len;
+    uint16_t ubx_pos;
+    uint8_t ubx_payload[2];
+    uint8_t ubx_ck_a;
+    uint8_t ubx_ck_b;
 
     /* Состояние разбора. */
     uint8_t parse_state;
@@ -76,6 +95,9 @@ void gnss_diag_feed(gnss_diag_t *d, uint8_t byte);
 
 /** @brief Учесть ошибку UART (набор битов GNSS_DIAG_UART_ERR_*). */
 void gnss_diag_uart_error(gnss_diag_t *d, uint32_t err_bits);
+
+/** @brief Начать новый интервал наблюдения (сбрасывает seen_interval). */
+void gnss_diag_end_interval(gnss_diag_t *d);
 
 /** @brief Общее число спутников в видимости (сумма по системам из GSV). */
 uint16_t gnss_diag_sats_in_view(const gnss_diag_t *d);

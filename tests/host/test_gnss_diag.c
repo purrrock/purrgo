@@ -150,8 +150,76 @@ static void test_uart_errors(void)
     CHECK(d.err_dma == 1U);
 }
 
+static void feed_bytes(gnss_diag_t *d, const uint8_t *b, size_t n)
+{
+    for (size_t i = 0; i < n; i++)
+    {
+        gnss_diag_feed(d, b[i]);
+    }
+}
+
+/* UBX-ACK-ACK / UBX-ACK-NAK: ответы u-blox на UBX-CFG-VALSET. */
+static void test_ubx_ack(void)
+{
+    gnss_diag_t d;
+    /* ACK для CFG (0x06) VALSET (0x8A): B5 62 05 01 02 00 06 8A 98 C1 */
+    static const uint8_t ack[] = {0xB5, 0x62, 0x05, 0x01, 0x02, 0x00, 0x06, 0x8A, 0x98, 0xC1};
+    /* NAK: B5 62 05 00 02 00 06 8A 97 BC */
+    static const uint8_t nak[] = {0xB5, 0x62, 0x05, 0x00, 0x02, 0x00, 0x06, 0x8A, 0x97, 0xBC};
+    uint8_t bad[sizeof ack];
+
+    gnss_diag_init(&d);
+    CHECK(d.ubx_ack == 0 && d.ubx_nak == 0);
+
+    feed_bytes(&d, ack, sizeof ack);
+    CHECK(d.ubx_ack == 1 && d.ubx_nak == 0);
+    CHECK(d.ubx_last_cls == 0x06 && d.ubx_last_id == 0x8A && !d.ubx_last_was_nak);
+
+    /* Между NMEA-предложениями. */
+    feed_sentence(&d, "GNGGA,,,,,,0,00,99.99,,,,,,");
+    feed_bytes(&d, nak, sizeof nak);
+    CHECK(d.ubx_ack == 1 && d.ubx_nak == 1 && d.ubx_last_was_nak);
+    CHECK(d.sentences_ok == 1);
+
+    /* Неверная контрольная сумма не засчитывается. */
+    memcpy(bad, ack, sizeof bad);
+    bad[9] ^= 0x01U;
+    feed_bytes(&d, bad, sizeof bad);
+    CHECK(d.ubx_ack == 1 && d.ubx_nak == 1);
+
+    /* Мусор перед кадром и повторный B5 не мешают. */
+    gnss_diag_feed(&d, 0xB5);
+    feed_bytes(&d, ack, sizeof ack);
+    CHECK(d.ubx_ack == 2);
+
+    /* Чужие UBX-кадры (например, класс 0x01) игнорируются. */
+    static const uint8_t other[] = {0xB5, 0x62, 0x01, 0x07, 0x02, 0x00, 0x11, 0x22, 0x00, 0x00};
+    feed_bytes(&d, other, sizeof other);
+    CHECK(d.ubx_ack == 2 && d.ubx_nak == 1);
+}
+
+/* seen_interval показывает только то, что пришло после gnss_diag_end_interval(). */
+static void test_seen_interval(void)
+{
+    gnss_diag_t d;
+
+    gnss_diag_init(&d);
+    feed_sentence(&d, "GNGLL,,,,,,V,N");
+    feed_sentence(&d, "GNVTG,,,,,,,,,N");
+    CHECK((d.seen_interval & GNSS_DIAG_SEEN_GLL) != 0 && (d.seen_interval & GNSS_DIAG_SEEN_VTG) != 0);
+
+    gnss_diag_end_interval(&d);
+    CHECK(d.seen_interval == 0);
+    CHECK((d.seen_mask & GNSS_DIAG_SEEN_GLL) != 0);        /* накопленная маска сохраняется */
+
+    feed_sentence(&d, "GNGGA,,,,,,0,00,99.99,,,,,,");
+    CHECK(d.seen_interval == GNSS_DIAG_SEEN_GGA);
+}
+
 int main(void)
 {
+    test_ubx_ack();
+    test_seen_interval();
     test_no_data();
     test_not_nmea();
     test_search_then_fix();
