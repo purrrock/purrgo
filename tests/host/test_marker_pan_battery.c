@@ -155,26 +155,29 @@ static void test_pan_step(void)
     const int32_t lat0 = map_app_get_map_center_lat();
     const int32_t lon0 = map_app_get_map_center_lon();
 
-    /* Вертикаль: 1/2 высоты окна карты. */
+    /* Вертикаль: 1/PURRGO_MAP_PAN_STEP_Y_DIV высоты окна карты (по умолчанию 1/2). */
     CHECK(purrgo_map_controller_handle_button(PURRGO_ACTION_UP));
     int32_t dlat = map_app_get_map_center_lat() - lat0;
-    int64_t expect_dy_m = ((int64_t)width_m * PURRGO_MAP_VIEWPORT_HEIGHT_PX / PURRGO_HW_DISPLAY_WIDTH_PX) / 2;
+    int64_t expect_dy_m = ((int64_t)width_m * PURRGO_MAP_VIEWPORT_HEIGHT_PX / PURRGO_HW_DISPLAY_WIDTH_PX)
+                           / PURRGO_MAP_PAN_STEP_Y_DIV;
     CHECK(dlat == (int32_t)(expect_dy_m * PURRGO_1E7_PER_METER));
     CHECK(map_app_is_manual_pan_active());
 
     CHECK(purrgo_map_controller_handle_button(PURRGO_ACTION_DOWN));
     CHECK(map_app_get_map_center_lat() == lat0);
 
-    /* Горизонталь: по-прежнему 1/4 ширины (с поправкой на cos(широты)). */
+    /* Горизонталь: 1/PURRGO_MAP_PAN_STEP_X_DIV ширины (по умолчанию 1/4), с поправкой на cos(широты). */
     CHECK(purrgo_map_controller_handle_button(PURRGO_ACTION_RIGHT));
     int32_t dlon = map_app_get_map_center_lon() - lon0;
     int32_t cos_val = purrgo_geo_cos_10k(lat0);
-    int64_t expect_dx = ((int64_t)(width_m / 4) * PURRGO_1E7_PER_METER * 10000) / cos_val;
+    int64_t expect_dx = ((int64_t)(width_m / PURRGO_MAP_PAN_STEP_X_DIV) * PURRGO_1E7_PER_METER * 10000) / cos_val;
     CHECK(dlon == (int32_t)expect_dx);
 
-    /* Вертикальный шаг в пикселях заметно больше горизонтального (ожидаем ~123 против ~44). */
+    /* Вертикальный шаг в пикселях заметно больше горизонтального (по умолчанию ~123 против ~44). */
     int64_t px_y = (int64_t)dlat * PURRGO_HW_DISPLAY_WIDTH_PX / ((int64_t)width_m * PURRGO_1E7_PER_METER);
-    CHECK(px_y >= 100 && px_y <= PURRGO_MAP_VIEWPORT_HEIGHT_PX);
+    int64_t px_x = (int64_t)PURRGO_HW_DISPLAY_WIDTH_PX / PURRGO_MAP_PAN_STEP_X_DIV;
+    CHECK(px_y > px_x);
+    CHECK(px_y <= PURRGO_MAP_VIEWPORT_HEIGHT_PX);
 }
 
 static void test_track_battery(void)

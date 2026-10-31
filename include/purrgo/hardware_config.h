@@ -110,6 +110,18 @@
     (PURRGO_HW_DISPLAY_HEIGHT_PX - 2 * PURRGO_MAP_STATUS_BAR_H_PX)
 
 /*
+ * Шаг ручного сдвига карты за одно нажатие:
+ *   по горизонтали - 1/PURRGO_MAP_PAN_STEP_X_DIV ширины окна карты (1/3),
+ *   по вертикали   - 1/PURRGO_MAP_PAN_STEP_Y_DIV высоты окна карты (1/3).
+ */
+#ifndef PURRGO_MAP_PAN_STEP_X_DIV
+#define PURRGO_MAP_PAN_STEP_X_DIV 3
+#endif
+#ifndef PURRGO_MAP_PAN_STEP_Y_DIV
+#define PURRGO_MAP_PAN_STEP_Y_DIV 3
+#endif
+
+/*
  * --------------------------------------------------------------------------
  * Display diagonal
  * --------------------------------------------------------------------------
