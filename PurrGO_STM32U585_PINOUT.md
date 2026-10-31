@@ -4,7 +4,7 @@
 >
 > **Правило:** если подключение ещё не подтверждено или не решено, оно явно помечается как `PLANNED` / `TBD`. Не следует считать такое назначение установленным.
 >
-> **Состояние на 2026-10-27:** проект CubeMX `PurrGO_STM32U5.ioc` создан и настроен; на железе подтверждена работа E-Ink, microSD (SPI2), кнопок K1…K4 и GNSS (USART1 + GPDMA1), поэтому эти назначения имеют статус `FIXED`. Мониторинг батареи (PB1, ADC1) отложен и остаётся `RESERVED`.
+> **Состояние на 2026-10-31:** проект CubeMX `PurrGO_STM32U5.ioc` создан и настроен; на железе подтверждена работа E-Ink, microSD (SPI2), кнопок K1…K4 и GNSS (LPUART1 + GPDMA1, G10A F30), поэтому эти назначения имеют статус `FIXED`. Мониторинг батареи (PB1, ADC1) отложен и остаётся `RESERVED`.
 
 ## 1. Контроллер и плата
 
@@ -22,8 +22,8 @@
 | SPI1 | E-Ink дисплей (только передача) | **FIXED** |
 | SPI2 | MicroSD-карта (SPI-режим) | **FIXED** |
 | GPIO | Кнопки E-Ink HAT K1…K4 | **FIXED** |
-| LPUART1 | GNSS-приёмник G10A F30 (RX через GPDMA1, кольцевой) | **PLANNED** (переход с USART1) |
-| USART1 | Отладочный лог (переход с USART2) | **PLANNED** |
+| LPUART1 | GNSS-приёмник G10A F30 (RX через GPDMA1, кольцевой) | **FIXED** |
+| USART1 | Отладочный лог (переход с USART2) | **FIXED** |
 | ADC1 | Мониторинг батареи (PB1, ADC1_IN16) | **RESERVED**, отложено |
 
 ### SPI1 — E-Ink
@@ -61,14 +61,14 @@ DAT1 и DAT2 модуля не подключаются (подтяжки на �
 ### LPUART1 — GNSS (G10A F30)
 
 Переход с USART1 на LPUART1; приём по-прежнему через GPDMA1 в кольцевом режиме (решение D5).
-LPDMA1 и Stop 2 пока не используются. До подтверждения на железе назначения помечены `PLANNED`.
+LPDMA1 и Stop 2 пока не используются. Подтверждено на железе U585 (2026-10-31): приём NMEA, настройка UBX (ACK), фикс на улице.
 
 | STM32U585 | G10A F30 (разъём 1.25 мм, 6 pin) | Назначение | Статус |
 |---|---|---|---|
-| PA2 / LPUART1_TX (AF8) | 4 (R, RX) | STM32 → GNSS | **PLANNED** |
-| PA3 / LPUART1_RX (AF8), Pull-up | 3 (T, TX) | GNSS → STM32 | **PLANNED** |
-| 3V3 | 2 (V, VCC) | Питание 3.3 В (допустимо 3.3–5 В; при 3.3 В уровни UART 3.3 В) | **PLANNED** |
-| GND | 5 (G, GND) | Общая земля | **PLANNED** |
+| PA2 / LPUART1_TX (AF8) | 4 (R, RX) | STM32 → GNSS | **FIXED** |
+| PA3 / LPUART1_RX (AF8), Pull-up | 3 (T, TX) | GNSS → STM32 | **FIXED** |
+| 3V3 | 2 (V, VCC) | Питание 3.3 В (допустимо 3.3–5 В; при 3.3 В уровни UART 3.3 В) | **FIXED** |
+| GND | 5 (G, GND) | Общая земля | **FIXED** |
 | — | 6 (E, EN) | Не подключать: по умолчанию высокий уровень, модуль работает | — |
 | — | 1 (P, 1PPS) | Пока не используется (проверка 1PPS — отдельная задача) | — |
 
@@ -134,12 +134,12 @@ LPDMA1 и Stop 2 пока не используются. До подтвержд
 |---|---|---|
 | PA0 | K1 (кнопка E-Ink HAT), WKUP1 | **FIXED** |
 | PA1 | K2 (кнопка E-Ink HAT) | **FIXED** |
-| PA2 | LPUART1_TX / GNSS (был USART2_TX / Debug) | **PLANNED** |
-| PA3 | LPUART1_RX / GNSS (был USART2_RX / Debug) | **PLANNED** |
+| PA2 | LPUART1_TX / GNSS (был USART2_TX / Debug) | **FIXED** |
+| PA3 | LPUART1_RX / GNSS (был USART2_RX / Debug) | **FIXED** |
 | PA5 | SPI1_SCK / E-Ink | **FIXED** |
 | PA7 | SPI1_MOSI / E-Ink | **FIXED** |
-| PA9 | USART1_TX / Debug (был GNSS) | **PLANNED** |
-| PA10 | USART1_RX / Debug (был GNSS) | **PLANNED** |
+| PA9 | USART1_TX / Debug (был GNSS) | **FIXED** |
+| PA10 | USART1_RX / Debug (был GNSS) | **FIXED** |
 | PB1 | V_MAIN_BAT, ADC1_IN16: мониторинг батареи отложен, в CubeMX не настраивать | **RESERVED** |
 | PB2 | E-Ink BUSY | **FIXED** |
 | PB7 | E-Ink CS | **FIXED** |
@@ -156,9 +156,9 @@ LPDMA1 и Stop 2 пока не используются. До подтвержд
 
 | SPI1 | E-Ink (TX only) | **FIXED** |
 | SPI2 | MicroSD | **FIXED** |
-| LPUART1 | GNSS | **PLANNED** |
-| USART1 | Debug log | **PLANNED** |
-| GPDMA1 | LPUART1_RX (GNSS, linked-list circular) | **PLANNED** |
+| LPUART1 | GNSS | **FIXED** |
+| USART1 | Debug log | **FIXED** |
+| GPDMA1 | LPUART1_RX (GNSS, linked-list circular) | **FIXED** |
 | ADC1 | мониторинг батареи, отложен | **RESERVED** |
 
 ## 7. Правила ведения pinout
@@ -189,4 +189,4 @@ LPDMA1 и Stop 2 пока не используются. До подтвержд
 |---|---|
 | 2026-10-27 | Поддержка F411 удалена: убраны сравнение с F411 и ссылки на `PurrGO_STM32F411_PINOUT.md`; статусы назначений обновлены `PLANNED` → `FIXED` по результатам проверки на плате U585 (E-Ink, SD, кнопки, GNSS). |
 | 2026-10-24 | Создан документ распиновки U585 по принятым решениям D1…D5, D7, D9 (`TODO_migrate.md`): microSD на SPI2 (PB12…PB15, Detect PB10), GNSS TX на PA9, USART1_RX через GPDMA1, HSI16 → 80 МГц. Мониторинг батареи (PB1) отложен, питание на период разработки от USB 5 В. |
-| 2026-10-31 | GNSS: переход с USART1 на LPUART1 (PA2 TX, PA3 RX, GPDMA1 сохраняется) и замена модуля на G10A F30 (u-blox M10, 38400). Отладочный лог переносится с USART2 на USART1 (PA9/PA10), USART2 не используется. PB11 на плате отсутствует. Статус `PLANNED` до проверки на железе. |
+| 2026-10-31 | GNSS: переход с USART1 на LPUART1 (PA2 TX, PA3 RX, GPDMA1 сохраняется) и замена модуля на G10A F30 (u-blox M10, 38400). Отладочный лог перенесён с USART2 на USART1 (PA9/PA10), USART2 не используется. PB11 на плате отсутствует. Проверено на плате: статус `FIXED`. |
