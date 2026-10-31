@@ -109,7 +109,7 @@ int main(void)
   while (1) {}
 #endif
 
-// #define PURRGO_EINK_SELFTEST_PARTIAL
+//#define PURRGO_EINK_SELFTEST_PARTIAL
 #if defined(PURRGO_EINK_SELFTEST_PARTIAL)
   /* Самотест частичного обновления. */
   EinkTest_RunPartial();
