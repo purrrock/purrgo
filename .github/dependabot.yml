@@ -1,0 +1,15 @@
+version: 2
+updates:
+  # Автообновление git-сабмодулей (third_party/eink_part_refresh, third_party/minmea).
+  # Dependabot раз в день проверяет новые коммиты в удалённых репозиториях
+  # и открывает PR с новым указателем; CI на PR проверяет, что всё собирается.
+  - package-ecosystem: "gitsubmodule"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    groups:
+      submodules:
+        patterns: ["*"]
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps"
