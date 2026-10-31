@@ -25,8 +25,8 @@
 
 /* USER CODE END Includes */
 
-DMA_NodeTypeDef USART1_RX_Node;
-DMA_QListTypeDef USART1_RX_Queue;
+DMA_NodeTypeDef LPUART1_RX_Node;
+DMA_QListTypeDef LPUART1_RX_Queue;
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
@@ -44,11 +44,11 @@ DMA_QListTypeDef USART1_RX_Queue;
 /* USER CODE END PM */
 
 /**
-  * @brief  DMA Linked-list USART1_RX_Queue configuration
+  * @brief  DMA Linked-list LPUART1_RX_Queue configuration
   * @param  None
   * @retval None
   */
-HAL_StatusTypeDef MX_USART1_RX_Queue_Config(void)
+HAL_StatusTypeDef MX_LPUART1_RX_Queue_Config(void)
 {
   HAL_StatusTypeDef ret = HAL_OK;
   /* DMA node configuration declaration */
@@ -75,13 +75,13 @@ HAL_StatusTypeDef MX_USART1_RX_Queue_Config(void)
   pNodeConfig.DstAddress = 0;
   pNodeConfig.DataSize = 0;
 
-  /* Build USART1_RX_Node Node */
-  ret |= HAL_DMAEx_List_BuildNode(&pNodeConfig, &USART1_RX_Node);
+  /* Build LPUART1_RX_Node Node */
+  ret |= HAL_DMAEx_List_BuildNode(&pNodeConfig, &LPUART1_RX_Node);
 
-  /* Insert USART1_RX_Node to Queue */
-  ret |= HAL_DMAEx_List_InsertNode_Tail(&USART1_RX_Queue, &USART1_RX_Node);
+  /* Insert LPUART1_RX_Node to Queue */
+  ret |= HAL_DMAEx_List_InsertNode_Tail(&LPUART1_RX_Queue, &LPUART1_RX_Node);
 
-  ret |= HAL_DMAEx_List_SetCircularMode(&USART1_RX_Queue);
+  ret |= HAL_DMAEx_List_SetCircularMode(&LPUART1_RX_Queue);
 
    return ret;
 }

@@ -27,20 +27,47 @@
  *   PURRGO_GNSS_RECEIVER_NONE  - ничего не отправлять (приёмник работает с
  *                                настройками по умолчанию);
  *   PURRGO_GNSS_RECEIVER_CASIC - CASIC AT6558R (команды $PCAS...). Отладочный
- *                                модуль; приёмник Release (G10A F30, u-blox M10)
- *                                настраивается командами UBX - отдельная
- *                                реализация в gnss_receiver.c.
+ *                                модуль;
+ *   PURRGO_GNSS_RECEIVER_UBX   - u-blox M10: Release-модуль G10A F30
+ *                                (UBX-M10050-KB), настройка бинарными
+ *                                сообщениями UBX-CFG-VALSET. По умолчанию.
  */
 #define PURRGO_GNSS_RECEIVER_NONE   0
 #define PURRGO_GNSS_RECEIVER_CASIC  1
+#define PURRGO_GNSS_RECEIVER_UBX    2
 
 #ifndef PURRGO_HW_GNSS_RECEIVER
-#define PURRGO_HW_GNSS_RECEIVER PURRGO_GNSS_RECEIVER_CASIC
+#define PURRGO_HW_GNSS_RECEIVER PURRGO_GNSS_RECEIVER_UBX
 #endif
 
 #if (PURRGO_HW_GNSS_RECEIVER != PURRGO_GNSS_RECEIVER_NONE) && \
-    (PURRGO_HW_GNSS_RECEIVER != PURRGO_GNSS_RECEIVER_CASIC)
+    (PURRGO_HW_GNSS_RECEIVER != PURRGO_GNSS_RECEIVER_CASIC) && \
+    (PURRGO_HW_GNSS_RECEIVER != PURRGO_GNSS_RECEIVER_UBX)
 #error "Invalid PURRGO_HW_GNSS_RECEIVER"
+#endif
+
+/* Период навигационных решений GNSS, мс (1000 = 1 Гц). */
+#ifndef PURRGO_GNSS_UPDATE_PERIOD_MS
+#define PURRGO_GNSS_UPDATE_PERIOD_MS 1000
+#endif
+
+/*
+ * Слои конфигурации UBX-CFG-VALSET (битовая маска: 0x01 RAM, 0x02 BBR,
+ * 0x04 Flash). По умолчанию только RAM: настройка отправляется при каждом
+ * старте, а ресурс Flash модуля не расходуется. Значение 0x07 сохранит
+ * настройку в Flash модуля.
+ */
+#ifndef PURRGO_GNSS_UBX_LAYERS
+#define PURRGO_GNSS_UBX_LAYERS 0x01
+#endif
+
+/*
+ * Повторная отправка настройки через столько мс после старта (0 - не
+ * повторять). Модуль, запитанный одновременно с МК, может ещё не принимать
+ * команды в момент первой отправки; настройка идемпотентна.
+ */
+#ifndef PURRGO_GNSS_CONFIG_RETRY_MS
+#define PURRGO_GNSS_CONFIG_RETRY_MS 2000
 #endif
 
 

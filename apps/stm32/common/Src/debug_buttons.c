@@ -3,7 +3,7 @@
  *
  * This module allows operating the device during debugging
  * without connecting physical buttons. It receives ASCII characters
- * from the diagnostic UART (USART2) and injects corresponding
+ * from the diagnostic UART (USART1) and injects corresponding
  * button events into the existing FSM via purrgo_app_handle_button().
  *
  * It is a debug-only alternative input source.
@@ -24,7 +24,7 @@
 void purrgo_debug_buttons_init(void)
 {
     /*
-     * USART2 is already initialized in main.c by MX_USART2_UART_Init().
+     * USART1 is already initialized in main.c by MX_USART1_UART_Init().
      * There is no extra initialization needed here for basic non-blocking RX.
      */
 }
@@ -40,9 +40,9 @@ void purrgo_debug_buttons_process(void)
      */
     uint16_t bytes_processed = 0U;
 
-    if (__HAL_UART_GET_FLAG(&huart2, UART_FLAG_RXNE))
+    if (__HAL_UART_GET_FLAG(&huart1, UART_FLAG_RXNE))
     {
-        if (HAL_UART_Receive(&huart2, &rx_char, 1, 0) == HAL_OK)
+        if (HAL_UART_Receive(&huart1, &rx_char, 1, 0) == HAL_OK)
         {
             PURRGO_LOG("DEBUG RX: 0x%02X '%c'\r\n",
                rx_char,

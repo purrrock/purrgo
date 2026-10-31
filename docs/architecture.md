@@ -154,7 +154,7 @@ The STM32 platform adapters implement the interfaces declared in
 setup lives in `apps/stm32/common/`; code tied to the MCU peripherals lives next
 to the CubeMX project (`apps/stm32/PurrGO_STM32U5/Core/Src/`):
 
-* UART + DMA GNSS input (`gnss_io.c`: USART1_RX with a GPDMA1 linked-list circular
+* UART + DMA GNSS input (`gnss_io.c`: LPUART1_RX with a GPDMA1 linked-list circular
   channel; the ring-buffer logic is in the portable header
   `include/purrgo/gnss_ring.h` and is covered by host tests);
 * microSD + FatFs (`fs_hal_stm32.c` in `common`, `sd_card.c` in the project):

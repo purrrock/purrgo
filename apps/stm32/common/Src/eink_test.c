@@ -146,11 +146,12 @@ void EinkTest_Run4Gray(void)
  * выдержка 3 с, затем полное обновление того же кадра (эталон) и выдержка 3 с.
  * Лимит «частичных подряд до полного» на время теста отключён, чтобы артефакты
  * накапливались (в приложении каждое 5-е/8-е обновление полное и лечит их).
- * Ход теста пишется в UART2 (строки "EINKTEST ...").
+ * Ход теста пишется в UART1 (строки "EINKTEST ...").
  */
 
 #ifndef PURRGO_EINK_TEST_SCENES
-#define PURRGO_EINK_TEST_SCENES 0x3FU     /* битовая маска сцен S1..S8 (S7, S8 - по запросу: 0xC0) */
+// #define PURRGO_EINK_TEST_SCENES 0x3FU     /* битовая маска сцен S1..S8 (S7, S8 - по запросу: 0xC0) */
+#define PURRGO_EINK_TEST_SCENES 0xC0U     /* битовая маска сцен S1..S8 (S7, S8 - по запросу: 0xC0) */
 #endif
 
 #define ET_STEPS        10
