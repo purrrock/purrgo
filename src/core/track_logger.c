@@ -39,6 +39,20 @@ static uint32_t points_since_sync = 0;
 static bool     last_recorded_course_valid = false;
 static int32_t  last_recorded_course_100 = 0;
 
+/*
+ * Цепочка подряд отброшенных выбросов (скачок быстрее LOGGER_MAX_SPEED_MPS от
+ * последней записанной точки). Если опорная точка сама оказалась ошибочной
+ * (например, первый фикс после холодного старта), все хорошие точки выглядели бы
+ * выбросами. Поэтому LOGGER_OUTLIER_RESET_COUNT подряд отброшенных точек, которые
+ * согласуются друг с другом (каждая не дальше LOGGER_MAX_SPEED_MPS * dt от
+ * предыдущей отброшенной), считаются новым положением: последняя из них
+ * записывается и становится опорной.
+ */
+static uint8_t  outlier_count = 0;
+static int32_t  outlier_lat = 0;
+static int32_t  outlier_lon = 0;
+static uint32_t outlier_time = 0;
+
 static char write_buffer[GPX_BUFFER_SIZE];
 static size_t buffer_pos = 0;
 
@@ -96,7 +110,7 @@ track_logger_mode_t purrgo_logger_get_mode(void) {
  * попробует переоткрыть тот же файл в режиме дозаписи.
  */
 static void enter_error_state(const char* reason) {
-    PURRGO_LOG("Track logger error: %s\r\n", reason);
+    PURRGO_LOGE("Track logger error: %s\r\n", reason);
     if (active_file != NULL) {
         (void)purrgo_fs_close(active_file);
         active_file = NULL;
@@ -180,6 +194,7 @@ static bool finalize_active_file(void) {
 #define LOGGER_MIN_SATELLITES      4U      /* меньше 4 спутников в решении - не пишем */
 #define LOGGER_STATIONARY_KNOTS_100 50     /* < 0.5 уз - стоим, дрейф координат - шум */
 #define LOGGER_MAX_SPEED_MPS       500U    /* быстрее - выброс (скачок координат) */
+#define LOGGER_OUTLIER_RESET_COUNT 5U      /* столько согласованных выбросов подряд - сброс опорной точки */
 #define LOGGER_TURN_MIN_DEG_100    2000    /* EXPEDITION: поворот >= 20 градусов ... */
 #define LOGGER_TURN_MIN_DIST_M     10U     /* ... при смещении >= 10 м от последней точки */
 
@@ -207,6 +222,32 @@ static uint32_t course_diff_100(int32_t a, int32_t b) {
         d = 36000 - d;
     }
     return (uint32_t)d;
+}
+
+/*
+ * Учитывает отброшенный выброс. true - цепочка достигла LOGGER_OUTLIER_RESET_COUNT:
+ * опорную точку нужно заменить текущей (счётчик сброшен).
+ */
+static bool outlier_note(const purrgo_gnss_solution_t* fix, uint32_t utc_epoch) {
+    bool consistent = false;
+
+    if (outlier_count != 0U) {
+        uint32_t dist = purrgo_geo_distance_m(outlier_lat, outlier_lon, fix->lat_1e7, fix->lon_1e7);
+        uint32_t dt = (utc_epoch >= outlier_time) ? (utc_epoch - outlier_time) : 0U;
+        uint64_t dt_eff = (dt != 0U) ? dt : 1U;
+        consistent = ((uint64_t)dist <= (uint64_t)LOGGER_MAX_SPEED_MPS * dt_eff);
+    }
+
+    outlier_count = consistent ? (uint8_t)(outlier_count + 1U) : 1U;
+    outlier_lat = fix->lat_1e7;
+    outlier_lon = fix->lon_1e7;
+    outlier_time = utc_epoch;
+
+    if (outlier_count >= LOGGER_OUTLIER_RESET_COUNT) {
+        outlier_count = 0U;
+        return true;
+    }
+    return false;
 }
 
 static void make_track_filename(char* out, size_t out_size, uint32_t track_id) {
@@ -242,7 +283,7 @@ static bool logger_start_impl(const purrgo_gnss_solution_t* first_fix, bool keep
             current_state = LOGGER_STATE_RECORDING;
             return true;
         }
-        PURRGO_LOG("Track logging: cannot resume %s, starting new file\r\n", s_active_filename);
+        PURRGO_LOGW("Track logging: cannot resume %s, starting new file\r\n", s_active_filename);
         s_active_filename[0] = '\0';
         buffer_pos = 0;
         keep_ram = true;    /* сессия продолжается в новом файле */
@@ -287,7 +328,7 @@ static bool logger_start_impl(const purrgo_gnss_solution_t* first_fix, bool keep
         (void)purrgo_fs_close(probe);
     }
     if (!name_found) {
-        PURRGO_LOG("Track logger: no free file name\r\n");
+        PURRGO_LOGE("Track logger: no free file name\r\n");
         current_state = LOGGER_STATE_ERROR;
         return false;
     }
@@ -305,6 +346,7 @@ static bool logger_start_impl(const purrgo_gnss_solution_t* first_fix, bool keep
     last_sync_time = 0;
     points_since_sync = 0;
     last_recorded_course_valid = false;
+    outlier_count = 0;
 
     // Clear the RAM buffer for the new session
     if (!keep_ram) {
@@ -365,22 +407,29 @@ bool purrgo_logger_add_point(const purrgo_gnss_solution_t* fix) {
         // Выброс: скачок координат быстрее LOGGER_MAX_SPEED_MPS (dt < 1 с считаем за 1 с).
         uint64_t dt_eff = (dt_s != 0) ? dt_s : 1;
         if ((uint64_t)dist_m > (uint64_t)LOGGER_MAX_SPEED_MPS * dt_eff) {
-            return false;
-        }
-
-        // Стоим на месте: смещение в пределах шума GNSS не пишем, остаётся точка по таймауту.
-        if (!timeout && fix->speed_knots < LOGGER_STATIONARY_KNOTS_100) {
-            return false;
-        }
-
-        // EXPEDITION: поворот при достаточном смещении (дистанция 100 м на повороте теряет излом).
-        bool turn = (current_mode == LOGGER_MODE_EXPEDITION) &&
-                    fix->course_valid && last_recorded_course_valid &&
-                    dist_m >= LOGGER_TURN_MIN_DIST_M &&
-                    course_diff_100(fix->course_deg_100, last_recorded_course_100) >= (uint32_t)LOGGER_TURN_MIN_DEG_100;
-
-        if (timeout || dist_m >= target_dist || turn) {
+            // Точка отбрасывается, пока цепочка выбросов не наберёт LOGGER_OUTLIER_RESET_COUNT:
+            // тогда опорная точка считается ошибочной, и эта точка записывается как новая.
+            if (!outlier_note(fix, utc_epoch)) {
+                return false;
+            }
             should_record = true;
+        } else {
+            outlier_count = 0;
+
+            // Стоим на месте: смещение в пределах шума GNSS не пишем, остаётся точка по таймауту.
+            if (!timeout && fix->speed_knots < LOGGER_STATIONARY_KNOTS_100) {
+                return false;
+            }
+
+            // EXPEDITION: поворот при достаточном смещении (дистанция 100 м на повороте теряет излом).
+            bool turn = (current_mode == LOGGER_MODE_EXPEDITION) &&
+                        fix->course_valid && last_recorded_course_valid &&
+                        dist_m >= LOGGER_TURN_MIN_DIST_M &&
+                        course_diff_100(fix->course_deg_100, last_recorded_course_100) >= (uint32_t)LOGGER_TURN_MIN_DEG_100;
+
+            if (timeout || dist_m >= target_dist || turn) {
+                should_record = true;
+            }
         }
     }
 
@@ -478,7 +527,7 @@ static void logger_stop_impl(bool clear_ram) {
         if (finalize_active_file()) {
             PURRGO_LOG("Track logging stop\r\n");
         } else {
-            PURRGO_LOG("Track logging stop: write error, file may be incomplete\r\n");
+            PURRGO_LOGE("Track logging stop: write error, file may be incomplete\r\n");
         }
     }
     buffer_pos = 0;
@@ -579,6 +628,10 @@ void purrgo_logger_reset(void) {
     points_since_sync = 0;
     last_recorded_course_valid = false;
     last_recorded_course_100 = 0;
+    outlier_count = 0;
+    outlier_lat = 0;
+    outlier_lon = 0;
+    outlier_time = 0;
     buffer_pos = 0;
     ram_track_head = 0;
     ram_track_count = 0;

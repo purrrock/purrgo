@@ -327,12 +327,12 @@ if (style == PURRGO_STYLE_NONE) {
             uint32_t jump_amount = v3_jump;
 
             if (UINT32_MAX - *current_idx_offset < jump_amount) {
-                PURRGO_LOG("MAP: ERROR v3_jump overflow\n\r");
+                PURRGO_LOGE("MAP: ERROR v3_jump overflow\n\r");
                 return false;
             }
 
             if (*current_idx_offset + jump_amount > lod_end) {
-                PURRGO_LOG("MAP: ERROR v3_jump exceeds LOD boundary\n\r");
+                PURRGO_LOGE("MAP: ERROR v3_jump exceeds LOD boundary\n\r");
                 return false;
             }
 
@@ -348,7 +348,7 @@ if (style == PURRGO_STYLE_NONE) {
     bool child_is_nav = (nav_level > 0);
 
     if (s_tree_depth >= PURRGO_MAP_MAX_TREE_DEPTH) {
-        PURRGO_LOG("MAP: ERROR tree depth limit exceeded\n\r");
+        PURRGO_LOGE("MAP: ERROR tree depth limit exceeded\n\r");
         return false;
     }
 

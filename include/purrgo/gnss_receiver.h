@@ -22,23 +22,13 @@ extern "C" {
 typedef void (*purrgo_gnss_tx_fn)(const uint8_t *data, size_t len);
 
 /*
- * Формирует NMEA-кадр "$<body>*HH\r\n" (HH - XOR всех символов body, две
- * шестнадцатеричные цифры верхнего регистра) и '\0' в конце.
- *
- * body - тело команды БЕЗ '$' и '*HH', например "PCAS02,1000".
- * Возвращает длину кадра без '\0'; 0, если кадр с '\0' не помещается в out.
- */
-size_t purrgo_nmea_build_frame(char *out, size_t out_size, const char *body);
-
-/*
  * Отправляет приёмнику стартовую конфигурацию выбранной модели
  * (PURRGO_HW_GNSS_RECEIVER). Вызывать после запуска приёма, чтобы не пропустить
  * ответы приёмника. Конфигурация идемпотентна: можно отправлять повторно.
  */
 void purrgo_gnss_receiver_configure(purrgo_gnss_tx_fn tx);
 
-/* Реализации конкретных моделей (всегда доступны, в том числе для host-тестов). */
-void purrgo_gnss_receiver_configure_casic(purrgo_gnss_tx_fn tx);
+/* Реализация для u-blox M10 (всегда доступна, в том числе для host-тестов). */
 void purrgo_gnss_receiver_configure_ubx(purrgo_gnss_tx_fn tx);
 
 /*

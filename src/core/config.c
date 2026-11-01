@@ -218,7 +218,7 @@ static void config_recover_interrupted_save(void)
     (void)purrgo_fs_close(file);
 
     if (n > 0 && n < sizeof(buf) && buf[n - 1] == '\n') {
-        PURRGO_LOG("Recovering config from interrupted save\r\n");
+        PURRGO_LOGW("Recovering config from interrupted save\r\n");
         (void)purrgo_fs_replace(tmp_path, cfg_path);
     }
 }
@@ -247,7 +247,7 @@ bool purrgo_config_load(void)
          * Если файла нет, создаём его с дефолтными значениями.
          */
         purrgo_logger_set_mode(app_config.log_mode);
-        PURRGO_LOG("FILE READ ERROR, SAVING DEFAULTS TO FILE: %s\r\n", purrgo_fs_get_config_path());
+        PURRGO_LOGE("FILE READ ERROR, SAVING DEFAULTS TO FILE: %s\r\n", purrgo_fs_get_config_path());
         purrgo_config_save();
         return false;
     }
@@ -268,7 +268,7 @@ bool purrgo_config_load(void)
     purrgo_fs_close(file);
 
     if (bytes_read == sizeof(buf) - 1) {
-        PURRGO_LOG("Config file is larger than %u bytes: the tail is ignored\r\n", (unsigned)(sizeof(buf) - 1));
+        PURRGO_LOGW("Config file is larger than %u bytes: the tail is ignored\r\n", (unsigned)(sizeof(buf) - 1));
     }
 
     if (bytes_read == 0) {
@@ -555,7 +555,7 @@ bool purrgo_config_save(void)
         len < 0 ||
         (size_t)len >= sizeof(buf)
     ) {
-        PURRGO_LOG("purrgo_config_save: config does not fit buffer\n\r");
+        PURRGO_LOGE("purrgo_config_save: config does not fit buffer\n\r");
         return false;
     }
 
@@ -565,7 +565,7 @@ bool purrgo_config_save(void)
     );
 
     if (!file) {
-        PURRGO_LOG(
+        PURRGO_LOGE(
             "purrgo_config_save: failed to open temporary file\n\r"
         );
 
@@ -589,12 +589,12 @@ bool purrgo_config_save(void)
     }
 
     if (!ok) {
-        PURRGO_LOG("purrgo_config_save: write error\n\r");
+        PURRGO_LOGE("purrgo_config_save: write error\n\r");
         return false;
     }
 
     if (!purrgo_fs_replace(tmp_path, purrgo_fs_get_config_path())) {
-        PURRGO_LOG("purrgo_config_save: replace error\n\r");
+        PURRGO_LOGE("purrgo_config_save: replace error\n\r");
         return false;
     }
 

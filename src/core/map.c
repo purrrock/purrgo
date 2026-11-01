@@ -114,7 +114,7 @@ static bool map_open_pair(const char* map_dir, const char* name_a, const char* n
     }
     if (a) purrgo_fs_close(a);
     if (b) purrgo_fs_close(b);
-    PURRGO_LOG("Map: %s or %s not found in %s\r\n", name_a, name_b, map_dir);
+    PURRGO_LOGE("Map: %s or %s not found in %s\r\n", name_a, name_b, map_dir);
     return false;
 }
 
@@ -130,7 +130,7 @@ static bool map_sync_files(const purrgo_map_render_params_t *params)
         if (!s_map_context.dir_invalid) {
             map_close_all_files();
             s_map_context.dir_invalid = true;
-            PURRGO_LOG("Map: map_dir is too long (max %d)\r\n", (int)MAP_DIR_MAX_LEN);
+            PURRGO_LOGE("Map: map_dir is too long (max %d)\r\n", (int)MAP_DIR_MAX_LEN);
         }
         return false;
     }
@@ -173,7 +173,7 @@ static bool map_sync_files(const purrgo_map_render_params_t *params)
             s_map_context.layer_landuse_labels = true;
         } else {
             s_map_context.landuse_labels_missing = true;
-            PURRGO_LOG("Map: landuse.db not found in %s\r\n", map_dir);
+            PURRGO_LOGE("Map: landuse.db not found in %s\r\n", map_dir);
         }
     }
 
@@ -207,7 +207,7 @@ static bool map_sync_files(const purrgo_map_render_params_t *params)
             s_map_context.layer_poi = true;
         } else {
             s_map_context.poi_missing = true;
-            PURRGO_LOG("Map: pois.idx not found in %s\r\n", map_dir);
+            PURRGO_LOGE("Map: pois.idx not found in %s\r\n", map_dir);
         }
     }
 
@@ -223,7 +223,7 @@ static bool map_sync_files(const purrgo_map_render_params_t *params)
             s_map_context.layer_poi_labels = true;
         } else {
             s_map_context.poi_labels_missing = true;
-            PURRGO_LOG("Map: pois.db not found in %s\r\n", map_dir);
+            PURRGO_LOGE("Map: pois.db not found in %s\r\n", map_dir);
         }
     }
 

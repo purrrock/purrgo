@@ -280,7 +280,7 @@ static void queue_event(purrgo_btn_t event)
      */
     if (event_queue_count >= PURRGO_BUTTON_EVENT_QUEUE_SIZE)
     {
-        PURRGO_LOG("BUTTON EVENT QUEUE FULL\r\n");
+        PURRGO_LOGW("BUTTON EVENT QUEUE FULL\r\n");
         return;
     }
 

@@ -120,7 +120,7 @@ static void op_done(int rc, uint32_t now)
     s_idle_since = now;
 
     if (rc != EPD4G_OK) {
-        PURRGO_LOG("E-Ink: op %d failed, rc=%d, panel will be re-initialised\n\r", (int)op, rc);
+        PURRGO_LOGE("E-Ink: op %d failed, rc=%d, panel will be re-initialised\n\r", (int)op, rc);
         epd4g_abort();
         invalidate_panel();
         if (op == OP_FULL || op == OP_PARTIAL) {
@@ -343,7 +343,7 @@ void display_eink_wait(void)
 
     while (display_eink_is_busy()) {
         if (HAL_GetTick() - start > EINK_WAIT_LIMIT_MS) {
-            PURRGO_LOG("E-Ink: wait timeout, dropping pending update\n\r");
+            PURRGO_LOGE("E-Ink: wait timeout, dropping pending update\n\r");
             epd4g_abort();
             s_op = OP_NONE;
             s_req_full = false;

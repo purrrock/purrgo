@@ -101,7 +101,7 @@ static void card_lost(const char *reason)
     if (!s_card_lost)
     {
         s_card_lost = true;
-        PURRGO_LOG("SD: card lost (%s)\r\n", reason);
+        PURRGO_LOGE("SD: card lost (%s)\r\n", reason);
     }
 }
 
@@ -126,7 +126,7 @@ static void spi_set_prescaler(uint32_t prescaler)
     hspi2.Init.BaudRatePrescaler = prescaler;
     if (HAL_SPI_Init(&hspi2) != HAL_OK)
     {
-        PURRGO_LOG("SD: SPI2 reinit failed\r\n");
+        PURRGO_LOGE("SD: SPI2 reinit failed\r\n");
     }
 }
 
@@ -195,7 +195,7 @@ static const sd_spi_port_t s_port = {
 /* Реакция на сбой обмена: извлечённая или зависшая карта объявляется потерянной. */
 static DRESULT io_failed(sd_spi_res_t res)
 {
-    PURRGO_LOG("SD: I/O error %d\r\n", (int)res);
+    PURRGO_LOGE("SD: I/O error %d\r\n", (int)res);
 
     if (!card_inserted())
     {
@@ -236,7 +236,7 @@ DSTATUS disk_initialize(BYTE pdrv)
 
     if (res != SD_SPI_OK)
     {
-        PURRGO_LOG("SD: init FAILED, code %d\r\n", (int)res);
+        PURRGO_LOGE("SD: init FAILED, code %d\r\n", (int)res);
         spi_set_prescaler(PURRGO_SD_SPI_INIT_PRESCALER);
         s_stat = (DSTATUS)STA_NOINIT;
         return s_stat;
@@ -358,7 +358,7 @@ static void make_dir(const char *path)
 
     if ((res != FR_OK) && (res != FR_EXIST))
     {
-        PURRGO_LOG("SD: mkdir %s error: %d\r\n", path, (int)res);
+        PURRGO_LOGE("SD: mkdir %s error: %d\r\n", path, (int)res);
     }
 }
 
@@ -384,7 +384,7 @@ static bool mount_card(void)
 
     if (res != FR_OK)
     {
-        PURRGO_LOG("SD: mount ERROR: %d (FatFs FRESULT)\r\n", (int)res);
+        PURRGO_LOGE("SD: mount ERROR: %d (FatFs FRESULT)\r\n", (int)res);
         unmount();
         s_state = PURRGO_SD_MOUNT_ERROR;
         return false;
@@ -425,7 +425,7 @@ bool purrgo_sd_init(void)
     if (!s_present_stable)
     {
         s_state = PURRGO_SD_NO_CARD;
-        PURRGO_LOG("SD: no card (Detect_SD)\r\n");
+        PURRGO_LOGW("SD: no card (Detect_SD)\r\n");
         return false;
     }
 
@@ -466,12 +466,12 @@ void purrgo_sd_poll(uint32_t now_ms)
     {
         if (!s_present_stable)
         {
-            PURRGO_LOG("SD: card removed\r\n");
+            PURRGO_LOGW("SD: card removed\r\n");
             unmount();
         }
         else if (s_card_lost)
         {
-            PURRGO_LOG("SD: I/O failure, remounting later\r\n");
+            PURRGO_LOGE("SD: I/O failure, remounting later\r\n");
             unmount();
             s_state = PURRGO_SD_MOUNT_ERROR;
             s_retry_armed = true;
@@ -515,7 +515,7 @@ void purrgo_sd_poll(uint32_t now_ms)
     {
         if (s_card_lost)
         {
-            PURRGO_LOG("SD: I/O failure, remounting later\r\n");
+            PURRGO_LOGE("SD: I/O failure, remounting later\r\n");
             unmount();
             s_state = PURRGO_SD_MOUNT_ERROR;
             s_retry_armed = true;

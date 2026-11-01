@@ -552,6 +552,45 @@ static void test_logger_filters(void)
     CHECK(purrgo_logger_add_point(&f));
     purrgo_logger_stop();
 
+    /*
+     * Ошибочная опорная точка (первый фикс после холодного старта далеко от истины):
+     * 4 согласованных "выброса" отбрасываются, пятый записывается и становится опорной.
+     */
+    logger_reset(0);
+    f = fixt(26, 10, 19, 12, 0, 0);
+    CHECK(purrgo_logger_start(&f) && purrgo_logger_add_point(&f));
+    for (int sec = 1; sec <= 4; sec++) {
+        f = fixt(26, 10, 19, 12, 0, (uint8_t)sec); f.lat_1e7 += 1000000;    /* ~111 км от опорной */
+        CHECK(!purrgo_logger_add_point(&f));
+    }
+    CHECK(purrgo_logger_get_track_point_count() == 1);
+    f = fixt(26, 10, 19, 12, 0, 5); f.lat_1e7 += 1000000;
+    CHECK(purrgo_logger_add_point(&f));                             /* 5-й подряд: новая опорная точка */
+    CHECK(purrgo_logger_get_track_point_count() == 2);
+    f = fixt(26, 10, 19, 12, 0, 6); f.lat_1e7 += 1000000 + 1000;    /* ~11 м от новой опорной: обычная точка */
+    CHECK(purrgo_logger_add_point(&f));
+    CHECK(purrgo_logger_get_track_point_count() == 3);
+    purrgo_logger_stop();
+
+    /* Несогласованные выбросы (прыгают туда-сюда) цепочку не копят: опорная точка остаётся прежней. */
+    logger_reset(0);
+    f = fixt(26, 10, 19, 12, 0, 0);
+    CHECK(purrgo_logger_start(&f) && purrgo_logger_add_point(&f));
+    for (int sec = 1; sec <= 8; sec++) {
+        f = fixt(26, 10, 19, 12, 0, (uint8_t)sec);
+        f.lat_1e7 += (sec % 2) ? 1000000 : -1000000;
+        CHECK(!purrgo_logger_add_point(&f));
+    }
+    CHECK(purrgo_logger_get_track_point_count() == 1);
+    /* Нормальная точка около исходной по-прежнему принимается и обнуляет цепочку. */
+    f = fixt(26, 10, 19, 12, 0, 9); f.lat_1e7 += 1000;
+    CHECK(purrgo_logger_add_point(&f));
+    for (int sec = 10; sec <= 13; sec++) {                          /* 4 выброса после обнуления - мало */
+        f = fixt(26, 10, 19, 12, 0, (uint8_t)sec); f.lat_1e7 += 1000000;
+        CHECK(!purrgo_logger_add_point(&f));
+    }
+    purrgo_logger_stop();
+
     /* EXPEDITION: поворот >= 20 градусов при смещении >= 10 м пишется раньше, чем 100 м. */
     logger_reset(0);
     purrgo_logger_set_mode(LOGGER_MODE_EXPEDITION);

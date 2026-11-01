@@ -194,6 +194,11 @@ cmake --preset stm32u5-debug
 cmake --build --preset stm32u5-debug
 ```
 
+Уровень логирования UART/stderr (`include/purrgo/logger.h`) выбирается кэш-переменной
+`PURRGO_LOG_LEVEL`: 0 NONE, 1 ERROR, 2 WARN, 3 INFO, 4 DEBUG. По умолчанию Release собирается
+с уровнем 1 (только ошибки, светодиод PC13 не мигает), остальные типы сборки - с 3. Пример:
+`cmake --preset stm32u5-release -DPURRGO_LOG_LEVEL=3`.
+
 Результат сборки: `out/build/<пресет>/`. Прошивка — `out/build/stm32u5-*/PurrGO_STM32U5.elf`,
 эмулятор — `out/build/<пресет>/apps/emulator/purrgo_emulator`.
 

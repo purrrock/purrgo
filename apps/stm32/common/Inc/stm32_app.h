@@ -6,8 +6,8 @@
  *
  * This function orchestrates the startup of the application layer.
  * It handles the initialization of UART diagnostics, FatFs, GNSS,
- * physical buttons, display, graphics context, application FSM,
- * and shows the splash screen.
+ * physical buttons, display, graphics context and application FSM.
+ * There is no splash screen: the first frame is the map.
  *
  * It must be called after the HAL and CubeMX peripheral initializations.
  */
