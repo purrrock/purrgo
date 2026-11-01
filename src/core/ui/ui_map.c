@@ -786,11 +786,11 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
              * полный refresh e-ink, поэтому повторы ограничены; следующая
              * попытка будет при очередном действии пользователя.
              */
-            PURRGO_LOG("Map render failed, giving up until next change\n\r");
+            PURRGO_LOGE("Map render failed, giving up until next change\n\r");
             purrgo_ui_dirty_clear(UI_DIRTY_MAP);
             s_map_render_attempts = 0;
         } else {
-            PURRGO_LOG("Map render failed, retrying\n\r");
+            PURRGO_LOGE("Map render failed, retrying\n\r");
             purrgo_app_ui_defer_render(PURRGO_MAP_RENDER_RETRY_DELAY_MS);
         }
         purrgo_ui_dirty_clear(UI_DIRTY_TRACK);

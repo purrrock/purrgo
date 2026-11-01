@@ -164,7 +164,7 @@ static void gnss_uart_tx(const uint8_t *data, size_t len)
     }
     else
     {
-        PURRGO_LOG("GNSS: config TX FAILED (HAL status %d, uart err 0x%lX)\r\n",
+        PURRGO_LOGE("GNSS: config TX FAILED (HAL status %d, uart err 0x%lX)\r\n",
                    (int)st, (unsigned long)hlpuart1.ErrorCode);
     }
 }
@@ -182,7 +182,7 @@ void purrgo_gnss_init(void)
 
     if (!gnss_dma_setup())
     {
-        PURRGO_LOG("GNSS DMA SETUP ERROR!\r\n");
+        PURRGO_LOGE("GNSS DMA SETUP ERROR!\r\n");
         return;
     }
 
@@ -196,7 +196,7 @@ void purrgo_gnss_init(void)
             gnss_rx_buffer,
             GNSS_RX_BUFFER_SIZE) != HAL_OK)
     {
-        PURRGO_LOG("GNSS INIT ERROR!\r\n");
+        PURRGO_LOGE("GNSS INIT ERROR!\r\n");
     }
 
     /*
@@ -254,7 +254,7 @@ static bool gnss_rx_restart(void)
 
     /* Канал мог остаться не в READY: сбросить и повторить один раз. */
     /* Здесь коды - от неудавшегося перезапуска (DMA err 0x40 = BUSY), а не исходной ошибки. */
-    PURRGO_LOG("GNSS RX restart: channel busy, forcing READY (uart err 0x%lX, dma err 0x%lX, dma state %d)\r\n",
+    PURRGO_LOGE("GNSS RX restart: channel busy, forcing READY (uart err 0x%lX, dma err 0x%lX, dma state %d)\r\n",
                (unsigned long)hlpuart1.ErrorCode,
                (unsigned long)handle_GPDMA1_Channel0.ErrorCode,
                (int)handle_GPDMA1_Channel0.State);
@@ -341,14 +341,14 @@ bool purrgo_gnss_read_byte(uint8_t *byte)
         gnss_rx_error_flag = false;
         purrgo_gnss_ring_reset(&gnss_ring);
 
-        PURRGO_LOG("GNSS RX error 0x%lX (PE=1 NE=2 FE=4 ORE=8 DMA=0x10), restarting RX\r\n",
+        PURRGO_LOGE("GNSS RX error 0x%lX (PE=1 NE=2 FE=4 ORE=8 DMA=0x10), restarting RX\r\n",
                    (unsigned long)gnss_rx_error_code);
 
         gnss_last_head = 0U;
 
         if (!gnss_rx_restart())
         {
-            PURRGO_LOG("GNSS RX RESTART ERROR! (uart err 0x%lX, dma err 0x%lX, dma state %d)\r\n",
+            PURRGO_LOGE("GNSS RX RESTART ERROR! (uart err 0x%lX, dma err 0x%lX, dma state %d)\r\n",
                        (unsigned long)hlpuart1.ErrorCode,
                        (unsigned long)handle_GPDMA1_Channel0.ErrorCode,
                        (int)handle_GPDMA1_Channel0.State);

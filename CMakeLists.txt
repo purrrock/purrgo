@@ -45,6 +45,26 @@ else()
     set(CMAKE_C_EXTENSIONS ON)
 endif()
 
+# Уровень логирования PURRGO_LOG_LEVEL (см. include/purrgo/logger.h):
+#   0 NONE, 1 ERROR, 2 WARN, 3 INFO, 4 DEBUG.
+# Пусто - автоматически: Release и MinSizeRel -> 1 (ERROR), остальное -> 3 (INFO).
+# Пример: cmake --preset stm32u5-release -DPURRGO_LOG_LEVEL=3
+set(PURRGO_LOG_LEVEL "" CACHE STRING "Log level 0..4 (empty = auto by build type)")
+if("${PURRGO_LOG_LEVEL}" STREQUAL "")
+    if(CMAKE_BUILD_TYPE MATCHES "^(Release|MinSizeRel)$")
+        set(_purrgo_log_level 1)
+    else()
+        set(_purrgo_log_level 3)
+    endif()
+else()
+    if(NOT PURRGO_LOG_LEVEL MATCHES "^[0-4]$")
+        message(FATAL_ERROR "PURRGO_LOG_LEVEL must be 0..4 (got '${PURRGO_LOG_LEVEL}')")
+    endif()
+    set(_purrgo_log_level ${PURRGO_LOG_LEVEL})
+endif()
+add_compile_definitions(PURRGO_LOG_LEVEL=${_purrgo_log_level})
+message(STATUS "PurrGO log level: ${_purrgo_log_level}")
+
 # Опции эмуляции GNSS (только PC; в прошивке мок не используется).
 if(PURRGO_PLATFORM STREQUAL "pc")
     option(USE_MOCK_GNSS "Enable mock GNSS data generator" ON)

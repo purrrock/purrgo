@@ -25,23 +25,20 @@
  * старте (см. purrgo/gnss_receiver.h).
  *
  *   PURRGO_GNSS_RECEIVER_NONE  - ничего не отправлять (приёмник работает с
- *                                настройками по умолчанию);
- *   PURRGO_GNSS_RECEIVER_CASIC - CASIC AT6558R (команды $PCAS...). Отладочный
- *                                модуль;
+ *                                настройками по умолчанию, например отладочный
+ *                                GY-NEO6MV2);
  *   PURRGO_GNSS_RECEIVER_UBX   - u-blox M10: Release-модуль G10A F30
  *                                (UBX-M10050-KB), настройка бинарными
  *                                сообщениями UBX-CFG-VALSET. По умолчанию.
  */
 #define PURRGO_GNSS_RECEIVER_NONE   0
-#define PURRGO_GNSS_RECEIVER_CASIC  1
-#define PURRGO_GNSS_RECEIVER_UBX    2
+#define PURRGO_GNSS_RECEIVER_UBX    1
 
 #ifndef PURRGO_HW_GNSS_RECEIVER
 #define PURRGO_HW_GNSS_RECEIVER PURRGO_GNSS_RECEIVER_UBX
 #endif
 
 #if (PURRGO_HW_GNSS_RECEIVER != PURRGO_GNSS_RECEIVER_NONE) && \
-    (PURRGO_HW_GNSS_RECEIVER != PURRGO_GNSS_RECEIVER_CASIC) && \
     (PURRGO_HW_GNSS_RECEIVER != PURRGO_GNSS_RECEIVER_UBX)
 #error "Invalid PURRGO_HW_GNSS_RECEIVER"
 #endif

@@ -113,7 +113,7 @@ void purrgo_stm32_init(void)
    */
   if (!purrgo_sd_init())
   {
-      PURRGO_LOG("SD card is not available\r\n");
+      PURRGO_LOGW("SD card is not available\r\n");
   }
   s_prev_sd_state = purrgo_sd_state();
 
@@ -180,7 +180,7 @@ void purrgo_stm32_init(void)
        * gfx_init() возвращает false только при некорректных
        * аргументах/нулевых указателях согласно его API.
        */
-      PURRGO_LOG("GFX INIT ERROR\r\n");
+      PURRGO_LOGE("GFX INIT ERROR\r\n");
       Error_Handler();
   }
 
@@ -200,15 +200,10 @@ void purrgo_stm32_init(void)
 
   PURRGO_LOG("GFX OK\r\n");
 
-  // PURRGO_LOG("Splash Screen\r\n");
-  /* Splash: PurrGO! */
-  // display_set_mode(DISPLAY_MODE_MONO);
-  // gfx_set_color(&global_gfx_ctx, COLOR_WHITE, COLOR_BLACK);
-  // gfx_clear(&global_gfx_ctx);
-  // gfx_draw_string(&global_gfx_ctx, DISPLAY_WIDTH / 2 - 23, DISPLAY_HEIGHT / 2, "PurrGO!");
-  /* Неблокирующе: первый кадр карты встанет в очередь за заставкой. */
-  // display_refresh();
-
+  /*
+   * Заставки нет: первый кадр - сразу карта (один полный refresh при старте).
+   * Он ставится в очередь первым purrgo_stm32_process() -> purrgo_app_ui_render().
+   */
   last_button_poll_ms = purrgo_system_time_ms();
 }
 

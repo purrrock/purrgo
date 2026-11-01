@@ -304,7 +304,7 @@ static void gnss_check_fix_timeout(uint32_t now_ms) {
 
     if (internal_gnss_solution.valid &&
         (uint32_t)(now_ms - last_rmc_ms) > PURRGO_GNSS_FIX_TIMEOUT_MS) {
-        PURRGO_LOG("GNSS fix timeout\r\n");
+        PURRGO_LOGW("GNSS fix timeout\r\n");
         internal_gnss_solution.valid = false;
         internal_gnss_solution.course_valid = false;
         internal_gnss_solution.speed_knots = 0;

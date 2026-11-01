@@ -25,6 +25,11 @@
  */
 #define PURRGO_LOG_BUFFER_SIZE 256U
 
+/* Мигать светодиодом PC13 на каждое сообщение: по умолчанию только при INFO/DEBUG. */
+#ifndef PURRGO_LOG_LED
+#define PURRGO_LOG_LED (PURRGO_LOG_LEVEL >= PURRGO_LOG_LEVEL_INFO)
+#endif
+
 
 void purrgo_logger_init(void)
 {
@@ -117,11 +122,13 @@ void purrgo_logger_write(const char *format, ...)
         (uint16_t)length,
         100U
     );
-        /*
-     * Индикация активности.
-       * Alive_LED (PC13) подключён к встроенному
-     * светодиоду платы. После каждого сообщения логгера
-     * состояние светодиода переключается.
+
+#if PURRGO_LOG_LED
+    /*
+     * Индикация активности: Alive_LED (PC13) переключается после каждого
+     * сообщения. Только для отладки (PURRGO_LOG_LED, по умолчанию - при уровне
+     * INFO и выше): светодиод потребляет ток и мигает на каждое сообщение.
      */
     HAL_GPIO_TogglePin(Alive_LED_GPIO_Port, Alive_LED_Pin);
+#endif
 }

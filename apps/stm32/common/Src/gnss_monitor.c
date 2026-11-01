@@ -134,7 +134,7 @@ void purrgo_gnss_monitor_process(void)
     switch (state)
     {
     case GNSS_DIAG_NO_DATA:
-        PURRGO_LOG("GNSS: NO DATA for %lu s (0 bytes; FE=%lu NE=%lu ORE=%lu). Check: module TX -> PA3, "
+        PURRGO_LOGW("GNSS: NO DATA for %lu s (0 bytes; FE=%lu NE=%lu ORE=%lu). Check: module TX -> PA3, "
                    "module RX -> PA2, VCC/GND, module powered\r\n",
                    up_s, (unsigned long)s_diag.err_fe, (unsigned long)s_diag.err_ne,
                    (unsigned long)s_diag.err_ore);
@@ -145,7 +145,7 @@ void purrgo_gnss_monitor_process(void)
         const unsigned long pct = (s_diag.bytes == 0U) ? 0UL
             : (unsigned long)(((uint64_t)s_diag.printable * 100U) / s_diag.bytes);
 
-        PURRGO_LOG("GNSS: NOT NMEA after %lu s: bytes=%lu (+%lu) printable=%lu%% bad=%lu FE=%lu NE=%lu "
+        PURRGO_LOGW("GNSS: NOT NMEA after %lu s: bytes=%lu (+%lu) printable=%lu%% bad=%lu FE=%lu NE=%lu "
                    "ORE=%lu. Wrong baud (expected 38400), noise or bad wiring\r\n",
                    up_s, (unsigned long)s_diag.bytes, (unsigned long)delta, pct,
                    (unsigned long)s_diag.sentences_bad, (unsigned long)s_diag.err_fe,
@@ -162,10 +162,10 @@ void purrgo_gnss_monitor_process(void)
         gnss_diag_end_interval(&s_diag);
         if (delta == 0U)
         {
-            PURRGO_LOG("GNSS: DATA STOPPED: no bytes in the last report period (total %lu bytes)\r\n",
+            PURRGO_LOGW("GNSS: DATA STOPPED: no bytes in the last report period (total %lu bytes)\r\n",
                        (unsigned long)s_diag.bytes);
         }
-        PURRGO_LOG("GNSS: NMEA OK, no fix yet (%lu s): bytes=%lu (+%lu) ok=%lu bad=%lu sentences (last period): %s"
+        PURRGO_LOGW("GNSS: NMEA OK, no fix yet (%lu s): bytes=%lu (+%lu) ok=%lu bad=%lu sentences (last period): %s"
                    "in view=%u used=%u fix quality=%u FE=%lu NE=%lu ORE=%lu DMA=%lu\r\n",
                    up_s, (unsigned long)s_diag.bytes, (unsigned long)delta,
                    (unsigned long)s_diag.sentences_ok, (unsigned long)s_diag.sentences_bad, seen,
