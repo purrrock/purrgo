@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include "purrgo/track_logger.h"
 #include "purrgo/map_types.h"
+#include "purrgo/battery.h"
 
 
 /* purrgo_poi_mode_t и purrgo_map_details_t определены в map_types.h */
@@ -80,6 +81,12 @@ typedef struct {
      * показывается. Проверка - purrgo_layer_on().
      */
     uint16_t layers;
+
+    /*
+     * Источник питания: выбирает кривую разряда для индикации заряда
+     * (меню CONFIG, ключ POWER_SRC в PURRGO.CFG).
+     */
+    purrgo_power_source_t power_source;
 } purrgo_config_t;
 
 

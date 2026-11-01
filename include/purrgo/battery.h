@@ -5,23 +5,57 @@
 #include <stdint.h>
 
 /*
+ * Источник питания (пункт меню CONFIG, ключ POWER_SRC в PURRGO.CFG).
+ * Числа сохраняются в файле конфигурации, поэтому порядок менять нельзя;
+ * новые значения добавляются перед PURRGO_POWER_SRC_COUNT.
+ */
+typedef enum {
+    PURRGO_POWER_SRC_ZINC_CARBON = 0,   /* солевые батарейки */
+    PURRGO_POWER_SRC_ALKALINE    = 1,   /* алкалайновые батарейки */
+    PURRGO_POWER_SRC_NIMH        = 2,   /* Ni-MH аккумуляторы */
+    PURRGO_POWER_SRC_LITHIUM     = 3,   /* литиевые аккумуляторы */
+    PURRGO_POWER_SRC_EXTERNAL_5V = 4,   /* внешнее питание 5 В (USB, powerbank) */
+    PURRGO_POWER_SRC_COUNT
+} purrgo_power_source_t;
+
+/* Источник питания по умолчанию (основной тип элементов - Ni-MH). */
+#define PURRGO_POWER_SRC_DEFAULT PURRGO_POWER_SRC_NIMH
+
+/* Число последовательно включённых элементов (три AA/AAA). */
+#define PURRGO_BATTERY_CELLS 3
+
+/* Название источника питания для меню (латиница, шрифт 5x7). */
+const char* purrgo_power_source_title(purrgo_power_source_t src);
+
+/*
  * Состояние батареи.
  *
  * ЗАГЛУШКА: измерение напряжения (АЦП + делитель) ещё не реализовано, поэтому
  * purrgo_battery_read() возвращает фиксированные значения из battery.c
  * (PURRGO_BATTERY_STUB_PERCENT, напряжение не измеряется). Когда появится
- * реальное измерение, достаточно заменить реализацию purrgo_battery_read():
- * строка состояния и запись в трек уже используют этот интерфейс.
+ * реальное измерение, достаточно вернуть напряжение из
+ * battery_measure_millivolts() (battery.c): процент считается по кривой
+ * разряда выбранного источника питания, строка состояния и запись в трек
+ * уже используют этот интерфейс.
  */
 typedef struct {
-    int8_t   percent;      /* 0..100; -1 - неизвестно */
+    int8_t   percent;      /* 0..100; -1 - неизвестно или питание внешнее */
     uint16_t millivolts;   /* напряжение батареи, мВ; 0 - не измерено */
+    bool     external;     /* true - питание 5 В, заряда батареи нет */
 } purrgo_battery_t;
 
 /*
- * Заполняет out текущим состоянием. Возвращает false, если состояние
- * неизвестно (percent = -1, millivolts = 0).
+ * Заполняет out текущим состоянием для источника питания из app_config.
+ * Возвращает false, если процент неизвестен (percent = -1): при питании 5 В
+ * и когда нет данных.
  */
 bool purrgo_battery_read(purrgo_battery_t* out);
+
+/*
+ * Заряд в процентах (0..100) по напряжению батареи из PURRGO_BATTERY_CELLS
+ * элементов и кривой разряда источника src. Для PURRGO_POWER_SRC_EXTERNAL_5V
+ * и неизвестного src возвращает -1.
+ */
+int purrgo_battery_percent_from_mv(purrgo_power_source_t src, uint32_t pack_mv);
 
 #endif /* PURRGO_BATTERY_H */

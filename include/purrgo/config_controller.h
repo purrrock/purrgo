@@ -9,6 +9,12 @@
 #include <stdint.h>
 
 
+/*
+ * Число пунктов главного меню CONFIG. Порядок: POWER SOURCE, POWER OFF, TZ,
+ * DIR, POI, LOG, MAP DETAILS, MAP LAYERS.
+ */
+#define PURRGO_CONFIG_MENU_ITEMS 8
+
 void purrgo_config_controller_init(void);
 
 void purrgo_config_controller_update(
@@ -48,6 +54,11 @@ purrgo_poi_mode_t config_app_get_draft_poi_mode(void);
 track_logger_mode_t config_app_get_draft_log_mode(void);
 
 purrgo_map_details_t config_app_get_draft_map_details(void);
+
+/*
+ * Черновик источника питания (выбирает кривую разряда).
+ */
+purrgo_power_source_t config_app_get_draft_power_source(void);
 
 /*
  * Состояние редактирования слоев карты.

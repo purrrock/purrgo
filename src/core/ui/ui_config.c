@@ -11,8 +11,32 @@
 
 static int prev_config_cursor = -1;
 
+/* Первая строка списка и шаг строк, px. */
+#define CONFIG_ROW_Y0    25
+#define CONFIG_ROW_STEP  15
+
 void ui_menu_config_reset(void) {
     prev_config_cursor = -1;
+}
+
+/*
+ * Рисует пункт меню в строке row: выбранный (row == cursor) - инверсно.
+ */
+static void draw_item(gfx_context_t* gfx, int cursor, int row, const char* text)
+{
+    if (cursor == row) {
+        gfx_set_color(gfx, 3, 0);
+    }
+    else {
+        gfx_set_color(gfx, 0, 3);
+    }
+
+    gfx_draw_string(
+        gfx,
+        10,
+        (int16_t)(CONFIG_ROW_Y0 + row * CONFIG_ROW_STEP),
+        text
+    );
 }
 
 void ui_render_menu_config(gfx_context_t* gfx)
@@ -32,12 +56,14 @@ void ui_render_menu_config(gfx_context_t* gfx)
     purrgo_poi_mode_t poi_mode =
         config_app_get_draft_poi_mode();
 
-
     track_logger_mode_t log_mode =
         config_app_get_draft_log_mode();
 
     purrgo_map_details_t map_details =
         config_app_get_draft_map_details();
+
+    purrgo_power_source_t power_src =
+        config_app_get_draft_power_source();
 
 
     gfx_draw_string(
@@ -47,12 +73,26 @@ void ui_render_menu_config(gfx_context_t* gfx)
         "=== CONFIG ==="
     );
 
-
     /*
-     * ---------------------------------------------------------------
-     * TIME ZONE
-     * ---------------------------------------------------------------
+     * Порядок строк совпадает с CONFIG_CURSOR_* в config_controller.c:
+     * 0 POWER SRC, 1 POWER OFF, 2 TZ, 3 DIR, 4 POI, 5 LOG, 6 MAP DETAILS,
+     * 7 MAP LAYERS.
      */
+    int row = 0;
+
+    /* POWER SOURCE */
+    purrgo_snprintf(
+        buf,
+        sizeof(buf),
+        "POWER: %s",
+        purrgo_power_source_title(power_src)
+    );
+    draw_item(gfx, cursor, row++, buf);
+
+    /* POWER OFF */
+    draw_item(gfx, cursor, row++, "POWER OFF");
+
+    /* TIME ZONE */
     char sign =
         (draft_tz >= 0) ? '+' : '-';
 
@@ -70,61 +110,18 @@ void ui_render_menu_config(gfx_context_t* gfx)
         hours,
         mins
     );
+    draw_item(gfx, cursor, row++, buf);
 
-    if (cursor == 0) {
-        gfx_set_color(gfx, 3, 0);
-    }
-    else {
-        gfx_set_color(gfx, 0, 3);
-    }
-
-    gfx_draw_string(
-        gfx,
-        10,
-        25,
-        buf
-    );
-
-
-    /*
-     * ---------------------------------------------------------------
-     * MAP DIRECTORY
-     * ---------------------------------------------------------------
-     */
-    if (cursor == 1) {
-        gfx_set_color(gfx, 3, 0);
-    }
-    else {
-        gfx_set_color(gfx, 0, 3);
-    }
-
+    /* MAP DIRECTORY */
     purrgo_snprintf(
         buf,
         sizeof(buf),
         "DIR: %s",
         app_config.map_dir
     );
+    draw_item(gfx, cursor, row++, buf);
 
-    gfx_draw_string(
-        gfx,
-        10,
-        40,
-        buf
-    );
-
-
-    /*
-     * ---------------------------------------------------------------
-     * POI
-     * ---------------------------------------------------------------
-     */
-    if (cursor == 2) {
-        gfx_set_color(gfx, 3, 0);
-    }
-    else {
-        gfx_set_color(gfx, 0, 3);
-    }
-
+    /* POI */
     const char* poi_mode_str;
     if (poi_mode == PURRGO_POI_MODE_CIRCLES) {
         poi_mode_str = "CIRCLES";
@@ -140,27 +137,9 @@ void ui_render_menu_config(gfx_context_t* gfx)
         "POI: %s",
         poi_mode_str
     );
+    draw_item(gfx, cursor, row++, buf);
 
-    gfx_draw_string(
-        gfx,
-        10,
-        55,
-        buf
-    );
-
-
-    /*
-     * ---------------------------------------------------------------
-     * LOG MODE
-     * ---------------------------------------------------------------
-     */
-    if (cursor == 3) {
-        gfx_set_color(gfx, 3, 0);
-    }
-    else {
-        gfx_set_color(gfx, 0, 3);
-    }
-
+    /* LOG MODE */
     const char* log_mode_text;
     switch (log_mode) {
         case LOGGER_MODE_EXPEDITION:
@@ -181,26 +160,9 @@ void ui_render_menu_config(gfx_context_t* gfx)
         "LOG: %s",
         log_mode_text
     );
+    draw_item(gfx, cursor, row++, buf);
 
-    gfx_draw_string(
-        gfx,
-        10,
-        70,
-        buf
-    );
-
-    /*
-     * ---------------------------------------------------------------
-     * MAP DETAILS
-     * ---------------------------------------------------------------
-     */
-    if (cursor == 4) {
-        gfx_set_color(gfx, 3, 0);
-    }
-    else {
-        gfx_set_color(gfx, 0, 3);
-    }
-
+    /* MAP DETAILS */
     const char* map_details_str;
     if (map_details == PURRGO_MAP_DETAILS_HIGH) {
         map_details_str = "HIGH";
@@ -214,78 +176,37 @@ void ui_render_menu_config(gfx_context_t* gfx)
         "MAP DETAILS: %s",
         map_details_str
     );
+    draw_item(gfx, cursor, row++, buf);
 
-    gfx_draw_string(
-        gfx,
-        10,
-        85,
-        buf
-    );
+    /* MAP LAYERS */
+    draw_item(gfx, cursor, row++, "MAP LAYERS");
 
     /*
-     * ---------------------------------------------------------------
-     * MAP LAYERS
-     * ---------------------------------------------------------------
-     */
-    if (cursor == 5) {
-        gfx_set_color(gfx, 3, 0);
-    }
-    else {
-        gfx_set_color(gfx, 0, 3);
-    }
-
-    gfx_draw_string(
-        gfx,
-        10,
-        100,
-        "MAP LAYERS"
-    );
-
-
-    /*
-     * ---------------------------------------------------------------
-     * POWER OFF
-     * ---------------------------------------------------------------
-     */
-    if (cursor == 6) {
-        gfx_set_color(gfx, 3, 0);
-    }
-    else {
-        gfx_set_color(gfx, 0, 3);
-    }
-
-    gfx_draw_string(
-        gfx,
-        10,
-        115,
-        "POWER OFF"
-    );
-
-    /*
-     * ---------------------------------------------------------------
-     * HELP
-     * ---------------------------------------------------------------
+     * HELP: под последней строкой списка.
      */
     gfx_set_color(gfx, 0, 3);
 
+    const int16_t help_y =
+        (int16_t)(CONFIG_ROW_Y0 + row * CONFIG_ROW_STEP + 5);
+
     gfx_draw_string(
         gfx,
         10,
-        135,
+        help_y,
         "UP/DN: Select"
     );
 
     gfx_draw_string(
         gfx,
         10,
-        150,
+        (int16_t)(help_y + 15),
         "SEL  : Change"
     );
 
     gfx_draw_string(
         gfx,
         10,
-        165,
+        (int16_t)(help_y + 30),
         "BACK : Save"
     );
 
@@ -294,13 +215,13 @@ void ui_render_menu_config(gfx_context_t* gfx)
            just remember the cursor. */
         prev_config_cursor = cursor;
     } else if (cursor != prev_config_cursor) {
-        if (prev_config_cursor >= 0 && prev_config_cursor <= 6) {
-            int16_t prev_y = (int16_t)(25 + prev_config_cursor * 15);
-            display_refresh_region(0, prev_y, PURRGO_HW_DISPLAY_WIDTH_PX, 15);
+        if (prev_config_cursor >= 0 && prev_config_cursor < PURRGO_CONFIG_MENU_ITEMS) {
+            int16_t prev_y = (int16_t)(CONFIG_ROW_Y0 + prev_config_cursor * CONFIG_ROW_STEP);
+            display_refresh_region(0, prev_y, PURRGO_HW_DISPLAY_WIDTH_PX, CONFIG_ROW_STEP);
         }
-        if (cursor >= 0 && cursor <= 6) {
-            int16_t curr_y = (int16_t)(25 + cursor * 15);
-            display_refresh_region(0, curr_y, PURRGO_HW_DISPLAY_WIDTH_PX, 15);
+        if (cursor >= 0 && cursor < PURRGO_CONFIG_MENU_ITEMS) {
+            int16_t curr_y = (int16_t)(CONFIG_ROW_Y0 + cursor * CONFIG_ROW_STEP);
+            display_refresh_region(0, curr_y, PURRGO_HW_DISPLAY_WIDTH_PX, CONFIG_ROW_STEP);
         }
         prev_config_cursor = cursor;
     }
