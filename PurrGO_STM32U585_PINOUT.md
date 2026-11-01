@@ -4,7 +4,7 @@
 >
 > **Правило:** если подключение ещё не подтверждено или не решено, оно явно помечается как `PLANNED` / `TBD`. Не следует считать такое назначение установленным.
 >
-> **Состояние на 2026-10-31:** проект CubeMX `PurrGO_STM32U5.ioc` создан и настроен; на железе подтверждена работа E-Ink, microSD (SPI2), кнопок K1…K4 и GNSS (LPUART1 + GPDMA1, G10A F30), поэтому эти назначения имеют статус `FIXED`. Мониторинг батареи (PB1, ADC1) отложен и остаётся `RESERVED`.
+> **Состояние на 2026-10-31:** проект CubeMX `PurrGO_STM32U5.ioc` создан и настроен; на железе подтверждена работа E-Ink, microSD (SPI2), кнопок K1…K4 и GNSS (LPUART1 + GPDMA1, G10A F30), поэтому эти назначения имеют статус `FIXED`. Мониторинг батареи (PB1, ADC1_IN16) настроен и подтверждён сборкой (`FIXED`); проверка на железе - по TODO.
 
 ## 1. Контроллер и плата
 
@@ -24,7 +24,7 @@
 | GPIO | Кнопки E-Ink HAT K1…K4 | **FIXED** |
 | LPUART1 | GNSS-приёмник G10A F30 (RX через GPDMA1, кольцевой) | **FIXED** |
 | USART1 | Отладочный лог (переход с USART2) | **FIXED** |
-| ADC1 | Мониторинг батареи (PB1, ADC1_IN16) | **RESERVED**, отложено |
+| ADC1 | Мониторинг батареи (PB1, ADC1_IN16, 14 бит, HSI) | **FIXED** |
 
 ### SPI1 — E-Ink
 
@@ -142,7 +142,7 @@ LPDMA1 и Stop 2 пока не используются. Подтвержден�
 | PA7 | SPI1_MOSI / E-Ink | **FIXED** |
 | PA9 | USART1_TX / Debug (был GNSS) | **FIXED** |
 | PA10 | USART1_RX / Debug (был GNSS) | **FIXED** |
-| PB1 | V_MAIN_BAT, ADC1_IN16: мониторинг батареи отложен, в CubeMX не настраивать | **RESERVED** |
+| PB1 | V_MAIN_BAT, ADC1_IN16: делитель 1 МΩ + 1 МΩ с «+» батарейного отсека, 100 нФ на GND | **FIXED** |
 | PB2 | E-Ink BUSY | **FIXED** |
 | PB7 | E-Ink CS | **FIXED** |
 | PB8 | E-Ink DC | **FIXED** |
@@ -161,7 +161,7 @@ LPDMA1 и Stop 2 пока не используются. Подтвержден�
 | LPUART1 | GNSS | **FIXED** |
 | USART1 | Debug log | **FIXED** |
 | GPDMA1 | LPUART1_RX (GNSS, linked-list circular) | **FIXED** |
-| ADC1 | мониторинг батареи, отложен | **RESERVED** |
+| ADC1 | мониторинг батареи (PB1) | **FIXED** |
 
 ## 7. Правила ведения pinout
 

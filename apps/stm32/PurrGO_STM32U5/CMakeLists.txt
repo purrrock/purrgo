@@ -80,6 +80,8 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
 
     # STM32 Power logic
     Core/Src/power_stm32.c
+    # Измерение напряжения батареи (ADC1_IN16, PB1)
+    Core/Src/battery_adc.c
 
     # Application wrapper
     ${PURRGO_STM32_COMMON}/Src/stm32_app.c
@@ -109,6 +111,7 @@ purrgo_sources_warnings(
     ${PURRGO_STM32_COMMON}/Src/display_stm32.c
     ${PURRGO_STM32_COMMON}/Src/debug_buttons.c
     Core/Src/power_stm32.c
+    Core/Src/battery_adc.c
     ${PURRGO_STM32_COMMON}/Src/stm32_app.c
     ${PURRGO_STM32_COMMON}/Src/display_eink.c
     ${PURRGO_STM32_COMMON}/Src/eink_test.c

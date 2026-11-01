@@ -3,16 +3,19 @@
  * который завершает процесс).
  */
 #include "purrgo/power.h"
+#include "purrgo/battery.h"
 #include "fake_power.h"
 #include <stddef.h>
 
 static int s_seq, s_unmount_calls, s_standby_calls, s_unmount_seq, s_standby_seq;
 static void (*s_probe)(void);
+static uint16_t s_battery_pin_mv;
 
 void fake_power_reset(void)
 {
     s_seq = s_unmount_calls = s_standby_calls = s_unmount_seq = s_standby_seq = 0;
     s_probe = NULL;
+    s_battery_pin_mv = 0;
 }
 void fake_power_set_unmount_probe(void (*probe)(void)) { s_probe = probe; }
 int fake_power_unmount_calls(void) { return s_unmount_calls; }
@@ -32,3 +35,6 @@ void purrgo_platform_enter_standby(void)
     s_standby_calls++;
     s_standby_seq = ++s_seq;
 }
+
+void fake_power_set_battery_pin_mv(uint16_t mv) { s_battery_pin_mv = mv; }
+uint16_t purrgo_platform_battery_pin_mv(void) { return s_battery_pin_mv; }

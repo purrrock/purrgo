@@ -69,6 +69,35 @@
 
 
 /*
+ * ============================================================================
+ * Измерение напряжения батареи (PB1 = ADC1_IN16, метка V_MAIN_BAT)
+ * ============================================================================
+ *
+ * Делитель из двух резисторов между плюсом батарейного отсека и GND, средняя
+ * точка на PB1, конденсатор 100 нФ между PB1 и GND. Напряжение блока:
+ *
+ *   U_блока = U_PB1 * (R_TOP + R_BOTTOM) / R_BOTTOM * CAL / 1000
+ *
+ * R_TOP и R_BOTTOM - фактические сопротивления резисторов (измерить
+ * мультиметром). CAL_PERMILLE - поправка в тысячных: сравнить U_блока в логе
+ * (PURRGO_LOG_LEVEL >= 3) с мультиметром, CAL = 1000 * U_мультиметр / U_лога.
+ */
+#ifndef PURRGO_HW_BATT_DIV_R_TOP_OHM
+#define PURRGO_HW_BATT_DIV_R_TOP_OHM     1000000u
+#endif
+#ifndef PURRGO_HW_BATT_DIV_R_BOTTOM_OHM
+#define PURRGO_HW_BATT_DIV_R_BOTTOM_OHM  1000000u
+#endif
+#ifndef PURRGO_HW_BATT_CAL_PERMILLE
+#define PURRGO_HW_BATT_CAL_PERMILLE      1000u
+#endif
+
+/* Не чаще одного измерения за столько мс; между ними возвращается прошлое значение. */
+#ifndef PURRGO_HW_BATT_PERIOD_MS
+#define PURRGO_HW_BATT_PERIOD_MS         10000u
+#endif
+
+/*
  * Аппаратный backend дисплея. Единственный поддерживаемый - E-Ink
  * (Waveshare 2.7" e-Paper V2). Отладочный TFT ST7789 удалён из проекта.
  */
