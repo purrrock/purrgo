@@ -1,24 +1,19 @@
 #include "purrgo/battery.h"
 #include "purrgo/config.h"
+#include "purrgo/hardware_config.h"
 
 /*
  * Мониторинг батареи (см. purrgo/battery.h).
  *
  * Кривая разряда выбирается по источнику питания из app_config.power_source
- * (меню CONFIG, первый пункт). Измерение напряжения пока ЗАГЛУШКА:
- * battery_measure_millivolts() возвращает PURRGO_BATTERY_STUB_MV, а при 0
- * ("не измерено") процент берётся из PURRGO_BATTERY_STUB_PERCENT.
- * Для проверки отображения и кривых можно переопределить при сборке:
- *   -DPURRGO_BATTERY_STUB_PERCENT=55  (-1 - показывать "неизвестно"),
- *   -DPURRGO_BATTERY_STUB_MV=3900     (напряжение батареи целиком, мВ;
- *                                      тогда процент считается по кривой).
+ * (меню CONFIG, первый пункт). Напряжение на выводе АЦП даёт платформа
+ * (purrgo_platform_battery_pin_mv()), здесь оно пересчитывается по делителю.
+ * Если напряжение не измерено (0), процент берётся из заглушки
+ * PURRGO_BATTERY_STUB_PERCENT; для проверки отображения можно переопределить
+ * при сборке: -DPURRGO_BATTERY_STUB_PERCENT=55 (-1 - показывать "неизвестно").
  */
 #ifndef PURRGO_BATTERY_STUB_PERCENT
 #define PURRGO_BATTERY_STUB_PERCENT 100
-#endif
-
-#ifndef PURRGO_BATTERY_STUB_MV
-#define PURRGO_BATTERY_STUB_MV 0   /* 0 - напряжение не измеряется */
 #endif
 
 /*
@@ -55,9 +50,15 @@ static const curve_point_t s_curve_nimh[] = {
     { 1150,  10 }, { 1050,  0 },
 };
 
+/*
+ * Li-ion AA со встроенным стабилизатором 1,5 В: напряжение почти не меняется
+ * до конца разряда, затем резко падает (срабатывает защита). Процент по
+ * напряжению невозможен: кривая - "ступенька", 100 % пока напряжение держится
+ * и быстрое падение к 0 в конце. Пороги ЗАГЛУШКА, уточнить по логу разряда
+ * (pg:vbat в треке).
+ */
 static const curve_point_t s_curve_lithium[] = {
-    { 1750, 100 }, { 1650, 85 }, { 1550, 55 }, { 1450, 25 },
-    { 1300,   8 }, { 1000,  0 },
+    { 1600, 100 }, { 1400, 100 }, { 1300, 10 }, { 1100, 0 },
 };
 
 #define CURVE(a) { (a), (uint8_t)(sizeof(a) / sizeof((a)[0])) }
@@ -114,13 +115,12 @@ int purrgo_battery_percent_from_mv(purrgo_power_source_t src, uint32_t pack_mv)
     return p[n - 1u].percent;
 }
 
-/*
- * Напряжение батареи целиком (3 элемента), мВ; 0 - не измерено.
- * ЗАГЛУШКА: когда появится АЦП и делитель, вернуть здесь измеренное значение.
- */
-static uint16_t battery_measure_millivolts(void)
+uint32_t purrgo_battery_pack_mv_from_pin(uint32_t pin_mv)
 {
-    return (uint16_t)PURRGO_BATTERY_STUB_MV;
+    const uint64_t div = (uint64_t)pin_mv
+        * (PURRGO_HW_BATT_DIV_R_TOP_OHM + PURRGO_HW_BATT_DIV_R_BOTTOM_OHM)
+        / PURRGO_HW_BATT_DIV_R_BOTTOM_OHM;
+    return (uint32_t)(div * PURRGO_HW_BATT_CAL_PERMILLE / 1000u);
 }
 
 bool purrgo_battery_read(purrgo_battery_t* out)
@@ -139,7 +139,11 @@ bool purrgo_battery_read(purrgo_battery_t* out)
         return false;
     }
 
-    out->millivolts = battery_measure_millivolts();
+    uint32_t pack_mv = purrgo_battery_pack_mv_from_pin(purrgo_platform_battery_pin_mv());
+    if (pack_mv > UINT16_MAX) {
+        pack_mv = UINT16_MAX;
+    }
+    out->millivolts = (uint16_t)pack_mv;
     if (out->millivolts != 0) {
         out->percent = (int8_t)purrgo_battery_percent_from_mv(src, out->millivolts);
     } else {

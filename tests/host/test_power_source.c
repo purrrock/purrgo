@@ -6,7 +6,8 @@
  *     выбор и сохраняет его (до MENU app_config не меняется);
  *   - кривые разряда: границы, монотонность, разные результаты для разных
  *     источников при одном напряжении, питание 5 В без процентов;
- *   - purrgo_battery_read() использует источник из app_config.
+ *   - purrgo_battery_read() использует источник из app_config; напряжение
+ *     на выводе АЦП (хук платформы) пересчитывается по делителю.
  */
 #include <string.h>
 #include "purrgo/app_fsm.h"
@@ -14,6 +15,7 @@
 #include "purrgo/config.h"
 #include "purrgo/config_controller.h"
 #include "fake_fs.h"
+#include "fake_power.h"
 #include "test_common.h"
 
 uint32_t purrgo_system_time_ms(void) { return 0; }
@@ -172,6 +174,14 @@ static void test_curves(void)
     CHECK(nimh > zinc && nimh > alk);
     CHECK(lith < zinc);
 
+    /* Li-ion AA со стабилизатором 1,5 В: "ступенька" - 100 % пока напряжение
+     * держится, быстрое падение к 0 в конце. */
+    CHECK(purrgo_battery_percent_from_mv(PURRGO_POWER_SRC_LITHIUM, 3u * 1500u) == 100);
+    CHECK(purrgo_battery_percent_from_mv(PURRGO_POWER_SRC_LITHIUM, 3u * 1400u) == 100);
+    CHECK(purrgo_battery_percent_from_mv(PURRGO_POWER_SRC_LITHIUM, 3u * 1350u) == 55);
+    CHECK(purrgo_battery_percent_from_mv(PURRGO_POWER_SRC_LITHIUM, 3u * 1300u) == 10);
+    CHECK(purrgo_battery_percent_from_mv(PURRGO_POWER_SRC_LITHIUM, 3u * 1100u) == 0);
+
     /* Заголовки для меню. */
     CHECK(strcmp(purrgo_power_source_title(PURRGO_POWER_SRC_EXTERNAL_5V), "5V") == 0);
     CHECK(strcmp(purrgo_power_source_title(PURRGO_POWER_SRC_NIMH), "NIMH") == 0);
@@ -199,11 +209,50 @@ static void test_read(void)
     CHECK(!purrgo_battery_read(NULL));
 }
 
+static void test_pin_voltage(void)
+{
+    purrgo_battery_t b;
+
+    /* Делитель 1 МΩ + 1 МΩ, поправка 1000: напряжение блока вдвое больше, чем на PB1. */
+    CHECK(purrgo_battery_pack_mv_from_pin(0) == 0);
+    CHECK(purrgo_battery_pack_mv_from_pin(2250) == 4500);
+    CHECK(purrgo_battery_pack_mv_from_pin(1) == 2);
+
+    purrgo_config_init();
+
+    /* Измеренное напряжение выбирает процент по кривой выбранного источника. */
+    fake_power_reset();
+    fake_power_set_battery_pin_mv(1875);               /* блок 3750 мВ = 1250 мВ на элемент */
+    app_config.power_source = PURRGO_POWER_SRC_NIMH;
+    CHECK(purrgo_battery_read(&b));
+    CHECK(b.millivolts == 3750 && b.percent == 60 && !b.external);
+
+    app_config.power_source = PURRGO_POWER_SRC_ZINC_CARBON;
+    CHECK(purrgo_battery_read(&b));
+    CHECK(b.millivolts == 3750 && b.percent == 35);
+
+    app_config.power_source = PURRGO_POWER_SRC_LITHIUM;
+    CHECK(purrgo_battery_read(&b));
+    CHECK(b.percent == 7);
+
+    /* 5V: напряжение на выводе не важно, процентов нет. */
+    app_config.power_source = PURRGO_POWER_SRC_EXTERNAL_5V;
+    CHECK(!purrgo_battery_read(&b));
+    CHECK(b.percent == -1 && b.millivolts == 0 && b.external);
+
+    /* Не измерено (0): заглушка 100 %. */
+    fake_power_set_battery_pin_mv(0);
+    app_config.power_source = PURRGO_POWER_SRC_NIMH;
+    CHECK(purrgo_battery_read(&b));
+    CHECK(b.percent == 100 && b.millivolts == 0);
+}
+
 int main(void)
 {
     test_config_key();
     test_menu();
     test_curves();
     test_read();
+    test_pin_voltage();
     return test_finish("test_power_source");
 }
