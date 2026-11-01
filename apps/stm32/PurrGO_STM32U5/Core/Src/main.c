@@ -18,6 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "adc.h"
 #include "gpdma.h"
 #include "icache.h"
 #include "usart.h"
@@ -100,6 +101,7 @@ int main(void)
   MX_SPI2_Init();
   MX_USART1_UART_Init();
   MX_LPUART1_UART_Init();
+  MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
   
 // #define PURRGO_EINK_SELFTEST_4GRAY

@@ -70,24 +70,26 @@ static purrgo_map_details_t draft_map_details;
 
 
 /*
- * Индекс курсора в меню настроек.
- *
- * Логические позиции:
- *
- *     0 = TZ
- *     1 = DIR
- *     2 = POI
- *     3 = POI labels (только при draft_poi_mode != PURRGO_POI_MODE_NO)
- *     4 или 3 = LOG_MODE (зависит от POI labels)
- *     5 или 4 = TRACK_DISPLAY (зависит от POI labels)
+ * Черновик источника питания.
  */
-#define CONFIG_CURSOR_TZ            0
-#define CONFIG_CURSOR_DIR           1
-#define CONFIG_CURSOR_POI           2
-#define CONFIG_CURSOR_LOG_MODE      3
-#define CONFIG_CURSOR_MAP_DETAILS   4
-#define CONFIG_CURSOR_MAP_LAYERS    5
-#define CONFIG_CURSOR_POWER_OFF     6
+static purrgo_power_source_t draft_power_source;
+
+
+/*
+ * Индекс курсора в меню настроек (порядок совпадает с порядком пунктов на
+ * экране, см. ui_config.c).
+ */
+#define CONFIG_CURSOR_POWER_SRC     0
+#define CONFIG_CURSOR_POWER_OFF     1
+#define CONFIG_CURSOR_TZ            2
+#define CONFIG_CURSOR_DIR           3
+#define CONFIG_CURSOR_POI           4
+#define CONFIG_CURSOR_LOG_MODE      5
+#define CONFIG_CURSOR_MAP_DETAILS   6
+#define CONFIG_CURSOR_MAP_LAYERS    7
+
+_Static_assert(CONFIG_CURSOR_MAP_LAYERS + 1 == PURRGO_CONFIG_MENU_ITEMS,
+               "PURRGO_CONFIG_MENU_ITEMS: число пунктов меню CONFIG");
 
 #define MAP_LAYERS_COUNT PURRGO_LAYER_COUNT
 
@@ -96,7 +98,7 @@ static purrgo_map_details_t draft_map_details;
 #define CONFIG_TZ_MIN_MINS          -720
 #define CONFIG_TZ_MAX_MINS          840
 
-static int config_cursor_idx = CONFIG_CURSOR_TZ;
+static int config_cursor_idx = CONFIG_CURSOR_POWER_SRC;
 
 /*
  * Состояние редактирования слоев карты.
@@ -106,12 +108,10 @@ static uint16_t draft_layers;
 
 /*
  * Возвращает максимальный индекс курсора меню.
- *
- * Если POI выключены, пункт подписей отсутствует.
  */
 static int get_config_last_cursor(void)
 {
-    return CONFIG_CURSOR_POWER_OFF;
+    return PURRGO_CONFIG_MENU_ITEMS - 1;
 }
 
 
@@ -339,7 +339,10 @@ void purrgo_config_controller_init(void)
     draft_poi_mode =
         app_config.poi_mode;
 
-    config_cursor_idx = CONFIG_CURSOR_TZ;
+    draft_power_source =
+        app_config.power_source;
+
+    config_cursor_idx = CONFIG_CURSOR_POWER_SRC;
 }
 
 
@@ -364,7 +367,10 @@ void purrgo_config_controller_on_enter(
         draft_map_details =
             app_config.map_details;
 
-        config_cursor_idx = CONFIG_CURSOR_TZ;
+        draft_power_source =
+            app_config.power_source;
+
+        config_cursor_idx = CONFIG_CURSOR_POWER_SRC;
     }
     else if (state == APP_STATE_MENU_MAP_LAYERS) {
         draft_layers = app_config.layers;
@@ -451,9 +457,22 @@ bool purrgo_config_controller_handle_button(
             case PURRGO_ACTION_OK:
 
                 /*
+                 * POWER SOURCE.
+                 */
+                if (config_cursor_idx == CONFIG_CURSOR_POWER_SRC) {
+                    if (draft_power_source + 1 >= PURRGO_POWER_SRC_COUNT) {
+                        draft_power_source = (purrgo_power_source_t)0;
+                    }
+                    else {
+                        draft_power_source =
+                            (purrgo_power_source_t)(draft_power_source + 1);
+                    }
+                }
+
+                /*
                  * TZ.
                  */
-                if (config_cursor_idx == CONFIG_CURSOR_TZ) {
+                else if (config_cursor_idx == CONFIG_CURSOR_TZ) {
                     if (
                         draft_tz_offset_minutes + CONFIG_TZ_STEP_MINS <= CONFIG_TZ_MAX_MINS
                     ) {
@@ -574,6 +593,9 @@ bool purrgo_config_controller_handle_button(
 
                 app_config.map_details =
                     draft_map_details;
+
+                app_config.power_source =
+                    draft_power_source;
 
                 purrgo_config_save();
 
@@ -821,6 +843,12 @@ purrgo_map_details_t
 config_app_get_draft_map_details(void)
 {
     return draft_map_details;
+}
+
+purrgo_power_source_t
+config_app_get_draft_power_source(void)
+{
+    return draft_power_source;
 }
 
 int config_app_get_map_layers_cursor(void)

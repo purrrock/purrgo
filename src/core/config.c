@@ -148,6 +148,11 @@ void purrgo_config_init(void)
     app_config.map_details = PURRGO_MAP_DETAILS_HIGH;
 
     /*
+     * Источник питания: основной тип элементов - Ni-MH.
+     */
+    app_config.power_source = PURRGO_POWER_SRC_DEFAULT;
+
+    /*
      * Отображение текущего трека по умолчанию включено.
      */
 
@@ -413,6 +418,17 @@ bool purrgo_config_load(void)
             }
 
             /*
+             * Источник питания.
+             */
+            else if (strcmp(key, "POWER_SRC") == 0) {
+                int32_t src = parse_int32(val);
+
+                if (src >= 0 && src < PURRGO_POWER_SRC_COUNT) {
+                    app_config.power_source = (purrgo_power_source_t)src;
+                }
+            }
+
+            /*
              * Режим записи трека.
              */
             else if (strcmp(key, "LOG_MODE") == 0) {
@@ -509,7 +525,8 @@ bool purrgo_config_save(void)
         "POI_MODE=%d\n"
 
         "LOG_MODE=%d\n"
-        "MAP_DETAILS=%d\n",
+        "MAP_DETAILS=%d\n"
+        "POWER_SRC=%d\n",
 
         (int)app_config.tz_offset_minutes,
 
@@ -526,7 +543,9 @@ bool purrgo_config_save(void)
 
         (int)app_config.log_mode,
 
-        (int)app_config.map_details
+        (int)app_config.map_details,
+
+        (int)app_config.power_source
     );
 
     /*
