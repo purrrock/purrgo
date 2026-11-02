@@ -44,6 +44,14 @@ track_logger_state_t purrgo_logger_get_state(void);
 size_t purrgo_logger_get_track_point_count(void);
 
 /**
+ * Порядковый номер последней добавленной точки RAM-трека: монотонный счётчик
+ * всех точек, попавших в трек. Очистка буфера (новая сессия, stop, reset) его
+ * не сбрасывает. Разность двух значений - сколько точек добавилось между
+ * вызовами; по ней отрисовка трека понимает, какие отрезки ещё не нарисованы.
+ */
+uint32_t purrgo_logger_get_track_serial(void);
+
+/**
  * Reads one track point by chronological index.
  * index == 0 means the oldest currently retained point.
  * Increasing index returns progressively newer points.

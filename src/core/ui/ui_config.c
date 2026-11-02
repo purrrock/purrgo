@@ -8,19 +8,22 @@
 #include "purrgo/purrgo_format.h"
 #include "purrgo/display_hal.h"
 #include "purrgo/hardware_config.h"
+#include "ui_rows.h"
 
-static int prev_config_cursor = -1;
+static ui_rows_t s_rows;
 
 /* Первая строка списка и шаг строк, px. */
 #define CONFIG_ROW_Y0    25
 #define CONFIG_ROW_STEP  15
 
 void ui_menu_config_reset(void) {
-    prev_config_cursor = -1;
+    ui_rows_reset(&s_rows);
 }
 
 /*
  * Рисует пункт меню в строке row: выбранный (row == cursor) - инверсно.
+ * Изменение текста или выделения строки регистрирует её область обновления
+ * (при смене значения кнопкой SEL курсор остаётся на месте, меняется текст).
  */
 static void draw_item(gfx_context_t* gfx, int cursor, int row, const char* text)
 {
@@ -37,6 +40,8 @@ static void draw_item(gfx_context_t* gfx, int cursor, int row, const char* text)
         (int16_t)(CONFIG_ROW_Y0 + row * CONFIG_ROW_STEP),
         text
     );
+
+    ui_rows_update(&s_rows, row, cursor == row, text);
 }
 
 void ui_render_menu_config(gfx_context_t* gfx)
@@ -79,6 +84,8 @@ void ui_render_menu_config(gfx_context_t* gfx)
      * 7 MAP LAYERS.
      */
     int row = 0;
+
+    ui_rows_begin(&s_rows, CONFIG_ROW_Y0, CONFIG_ROW_STEP);
 
     /* POWER SOURCE */
     purrgo_snprintf(
@@ -210,19 +217,5 @@ void ui_render_menu_config(gfx_context_t* gfx)
         "BACK : Save"
     );
 
-    if (prev_config_cursor == -1) {
-        /* First render, the full screen refresh is handled by state change,
-           just remember the cursor. */
-        prev_config_cursor = cursor;
-    } else if (cursor != prev_config_cursor) {
-        if (prev_config_cursor >= 0 && prev_config_cursor < PURRGO_CONFIG_MENU_ITEMS) {
-            int16_t prev_y = (int16_t)(CONFIG_ROW_Y0 + prev_config_cursor * CONFIG_ROW_STEP);
-            display_refresh_region(0, prev_y, PURRGO_HW_DISPLAY_WIDTH_PX, CONFIG_ROW_STEP);
-        }
-        if (cursor >= 0 && cursor < PURRGO_CONFIG_MENU_ITEMS) {
-            int16_t curr_y = (int16_t)(CONFIG_ROW_Y0 + cursor * CONFIG_ROW_STEP);
-            display_refresh_region(0, curr_y, PURRGO_HW_DISPLAY_WIDTH_PX, CONFIG_ROW_STEP);
-        }
-        prev_config_cursor = cursor;
-    }
+    ui_rows_end(&s_rows, row);
 }

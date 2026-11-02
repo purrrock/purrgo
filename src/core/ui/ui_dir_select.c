@@ -7,11 +7,15 @@
 #include "purrgo/purrgo_format.h"
 #include "purrgo/display_hal.h"
 #include "purrgo/hardware_config.h"
+#include "ui_rows.h"
 
-static int prev_dir_cursor = -1;
+#define DIR_LIST_Y0 25
+#define DIR_ROW_H   12
+
+static ui_rows_t s_rows;
 
 void ui_menu_dir_select_reset(void) {
-    prev_dir_cursor = -1;
+    ui_rows_reset(&s_rows);
 }
 
 void ui_render_menu_dir_select(gfx_context_t* gfx)
@@ -41,7 +45,9 @@ void ui_render_menu_dir_select(gfx_context_t* gfx)
     int count = config_app_get_dir_list(&dir_list);
     int cursor = config_app_get_dir_cursor();
 
-    int16_t y_pos = 25;
+    int16_t y_pos = DIR_LIST_Y0;
+
+    ui_rows_begin(&s_rows, DIR_LIST_Y0, DIR_ROW_H);
 
 
     /*
@@ -73,7 +79,10 @@ void ui_render_menu_dir_select(gfx_context_t* gfx)
             buf
         );
 
-        y_pos = (int16_t)(y_pos + 12);
+        /* Смена страницы списка и перемещение курсора меняют текст/выделение строк. */
+        ui_rows_update(&s_rows, i, i == cursor, buf);
+
+        y_pos = (int16_t)(y_pos + DIR_ROW_H);
     }
 
 
@@ -91,17 +100,5 @@ void ui_render_menu_dir_select(gfx_context_t* gfx)
         );
     }
 
-    if (prev_dir_cursor == -1) {
-        prev_dir_cursor = cursor;
-    } else if (cursor != prev_dir_cursor) {
-        if (prev_dir_cursor >= 0 && prev_dir_cursor < count) {
-            int16_t prev_y = (int16_t)(25 + prev_dir_cursor * 12);
-            display_refresh_region(0, prev_y, PURRGO_HW_DISPLAY_WIDTH_PX, 12);
-        }
-        if (cursor >= 0 && cursor < count) {
-            int16_t curr_y = (int16_t)(25 + cursor * 12);
-            display_refresh_region(0, curr_y, PURRGO_HW_DISPLAY_WIDTH_PX, 12);
-        }
-        prev_dir_cursor = cursor;
-    }
+    ui_rows_end(&s_rows, count);
 }

@@ -32,22 +32,28 @@ typedef struct {
 } purrgo_rect_t;
 
 /**
- * @brief Renders only the newest track segment between the two latest recorded points.
+ * @brief Дорисовывает отрезки трека, добавленные после предыдущего вызова.
  *
- * This function is intended for incremental rendering of the active track to
- * avoid a full redraw of all track points. It retrieves the last two points
- * from the track logger and draws a single segment connecting them.
+ * Для инкрементальной отрисовки активного трека без полной перерисовки карты.
+ * Рисует ВСЕ новые отрезки (а не только последний): между двумя обновлениями
+ * экрана точек может добавиться несколько. Первый новый отрезок соединяет
+ * первую новую точку с последней уже нарисованной. Рисование ограничено
+ * окном карты vp.
  *
- * @param gfx Graphics context to draw the track segment on.
- * @param camera Current geographic bounding box of the camera.
- * @param vp Current screen viewport.
- * @param out_rect Output bounding rectangle of the rendered segment (clamped to viewport).
- * @return true if the segment was successfully rendered and intersects the viewport, false otherwise.
+ * @param gfx          Графический контекст.
+ * @param camera       Текущий географический bbox камеры.
+ * @param vp           Окно карты на экране.
+ * @param drawn_serial Номер последней нарисованной точки (purrgo_logger_get_track_serial());
+ *                     после вызова равен текущему номеру. После полной отрисовки
+ *                     трека (purrgo_track_render) вызывающий задаёт его сам.
+ * @param out_rect     Объединённая рамка нарисованных отрезков (внутри окна карты).
+ * @return true, если что-то нарисовано (out_rect заполнен).
  */
-bool purrgo_track_render_last_segment(
+bool purrgo_track_render_new_segments(
     gfx_context_t *gfx,
     const purrgo_bbox_t *camera,
     const purrgo_viewport_t *vp,
+    uint32_t *drawn_serial,
     purrgo_rect_t *out_rect
 );
 

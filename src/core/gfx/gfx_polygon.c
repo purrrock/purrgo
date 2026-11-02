@@ -109,6 +109,157 @@ void gfx_fill_polygon(
 
 
 /*
+ * Границы контура по строкам: для каждой строки - самый левый и самый правый
+ * пиксель линии. Шаг Bresenham тот же, что в gfx_draw_line() (и то же
+ * направление отрезка), поэтому набор пикселей совпадает с нарисованным
+ * контуром.
+ */
+typedef struct {
+    int16_t y0;
+    int16_t rows;
+    int16_t xmin[GFX_BORDERED_MAX_H];
+    int16_t xmax[GFX_BORDERED_MAX_H];
+    int16_t x0;                              /* первый столбец таблиц ниже */
+    int16_t cols;
+    int16_t ymin[GFX_BORDERED_MAX_H];        /* то же по столбцам */
+    int16_t ymax[GFX_BORDERED_MAX_H];
+} outline_extent_t;
+
+static void extent_add(outline_extent_t *e, int16_t x, int16_t y)
+{
+    const int16_t r = (int16_t)(y - e->y0);
+    const int16_t k = (int16_t)(x - e->x0);
+
+    if (r < 0 || r >= e->rows || k < 0 || k >= e->cols) {
+        return;
+    }
+    if (x < e->xmin[r]) {
+        e->xmin[r] = x;
+    }
+    if (x > e->xmax[r]) {
+        e->xmax[r] = x;
+    }
+    if (y < e->ymin[k]) {
+        e->ymin[k] = y;
+    }
+    if (y > e->ymax[k]) {
+        e->ymax[k] = y;
+    }
+}
+
+static void extent_add_line(outline_extent_t *e, int16_t x0, int16_t y0, int16_t x1, int16_t y1)
+{
+    int16_t dx = (int16_t)((x1 > x0) ? (x1 - x0) : (x0 - x1));
+    int16_t dy = (int16_t)-((y1 > y0) ? (y1 - y0) : (y0 - y1));
+    const int16_t sx = (x0 < x1) ? 1 : -1;
+    const int16_t sy = (y0 < y1) ? 1 : -1;
+    int16_t err = (int16_t)(dx + dy);
+
+    for (;;) {
+        extent_add(e, x0, y0);
+
+        if (x0 == x1 && y0 == y1) {
+            break;
+        }
+
+        const int16_t e2 = (int16_t)(err * 2);
+
+        if (e2 >= dy) {
+            err = (int16_t)(err + dy);
+            x0 = (int16_t)(x0 + sx);
+        }
+        if (e2 <= dx) {
+            err = (int16_t)(err + dx);
+            y0 = (int16_t)(y0 + sy);
+        }
+    }
+}
+
+void gfx_draw_polygon_bordered(
+    gfx_context_t *ctx,
+    const gfx_point_t *points,
+    uint16_t count,
+    gfx_color_t fill,
+    gfx_color_t border
+) {
+    if (!ctx || !points || count < 3) {
+        return;
+    }
+
+    const gfx_color_t old_fg = ctx->color_fg;
+
+    int32_t min_y = points[0].y;
+    int32_t max_y = points[0].y;
+    int32_t min_x = points[0].x;
+    int32_t max_x = points[0].x;
+
+    for (uint16_t i = 1; i < count; i++) {
+        if (points[i].y < min_y) { min_y = points[i].y; }
+        if (points[i].y > max_y) { max_y = points[i].y; }
+        if (points[i].x < min_x) { min_x = points[i].x; }
+        if (points[i].x > max_x) { max_x = points[i].x; }
+    }
+
+    if (min_y < INT16_MIN || max_y > INT16_MAX || min_x < INT16_MIN || max_x > INT16_MAX ||
+        max_y - min_y + 1 > GFX_BORDERED_MAX_H || max_x - min_x + 1 > GFX_BORDERED_MAX_H) {
+        /* Слишком большой для таблицы строк: обычный путь. */
+        ctx->color_fg = fill;
+        gfx_fill_polygon(ctx, points, count);
+        ctx->color_fg = border;
+        gfx_draw_polygon(ctx, points, count);
+        ctx->color_fg = old_fg;
+        return;
+    }
+
+    outline_extent_t ext;
+
+    ext.y0 = (int16_t)min_y;
+    ext.rows = (int16_t)(max_y - min_y + 1);
+    ext.x0 = (int16_t)min_x;
+    ext.cols = (int16_t)(max_x - min_x + 1);
+    for (int16_t r = 0; r < ext.rows; r++) {
+        ext.xmin[r] = INT16_MAX;
+        ext.xmax[r] = INT16_MIN;
+    }
+    for (int16_t k = 0; k < ext.cols; k++) {
+        ext.ymin[k] = INT16_MAX;
+        ext.ymax[k] = INT16_MIN;
+    }
+
+    for (uint16_t i = 0; i < count; i++) {
+        const uint16_t j = (uint16_t)((i + 1U == count) ? 0U : (i + 1U));
+
+        extent_add_line(&ext,
+                        clamp_i16(points[i].x), clamp_i16(points[i].y),
+                        clamp_i16(points[j].x), clamp_i16(points[j].y));
+    }
+
+    /*
+     * Заливка строго внутри крайних пикселей контура и по строке, и по столбцу
+     * (иначе у тонких фигур пиксель между крайними по строке мог бы оказаться
+     * снаружи по вертикали).
+     */
+    ctx->color_fg = fill;
+    for (int16_t r = 0; r < ext.rows; r++) {
+        const int16_t y = (int16_t)(ext.y0 + r);
+
+        for (int16_t x = (int16_t)(ext.xmin[r] + 1); x < ext.xmax[r]; x++) {
+            const int16_t k = (int16_t)(x - ext.x0);
+
+            if (y > ext.ymin[k] && y < ext.ymax[k]) {
+                gfx_draw_hline(ctx, x, x, y);
+            }
+        }
+    }
+
+    ctx->color_fg = border;
+    gfx_draw_polygon(ctx, points, count);
+
+    ctx->color_fg = old_fg;
+}
+
+
+/*
  * Пересечение ребра (i -> j) со scanline y.
  *
  * Используется полуоткрытый интервал:

@@ -75,6 +75,8 @@ static size_t buffer_pos = 0;
 static track_point_t ram_track_buffer[TRACK_RAM_MAX_POINTS];
 static size_t ram_track_head = 0;
 static size_t ram_track_count = 0;
+/* Сколько точек всего попало в RAM-трек (монотонно, при очистке буфера не сбрасывается). */
+static uint32_t ram_track_serial = 0;
 // Стандартный заголовок файла GPX 1.1
 static const char* GPX_HEADER = 
     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
@@ -497,6 +499,7 @@ bool purrgo_logger_add_point(const purrgo_gnss_solution_t* fix) {
     if (ram_track_count < TRACK_RAM_MAX_POINTS) {
         ram_track_count++;
     }
+    ram_track_serial++;
 
     // Периодическая синхронизация FAT. Точка уже в буфере и в RAM-треке,
     // поэтому при сбое она не теряется: после дозаписи файла уйдёт на SD.
@@ -554,6 +557,10 @@ const char* purrgo_logger_get_active_filename(void) {
 
 track_logger_state_t purrgo_logger_get_state(void) {
     return current_state;
+}
+
+uint32_t purrgo_logger_get_track_serial(void) {
+    return ram_track_serial;
 }
 
 size_t purrgo_logger_get_track_point_count(void) {

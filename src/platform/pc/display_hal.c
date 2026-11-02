@@ -1,6 +1,7 @@
 #include "purrgo/display_hal.h"
 #include "purrgo/logger.h"
 #include "purrgo/hardware_config.h"
+#include "purrgo/pc_display_stats.h"
 
 static int partial_refresh_count = 0;
 
@@ -10,6 +11,16 @@ static int16_t pending_x2 = -1;
 static int16_t pending_y2 = -1;
 static int pending_has_region = 0;
 
+static pc_display_stats_t s_stats;
+
+void pc_display_stats_reset(void) {
+    s_stats = (pc_display_stats_t){0};
+}
+
+pc_display_stats_t pc_display_stats_get(void) {
+    return s_stats;
+}
+
 void display_set_mode(display_mode_t mode) {
     /* Эмулятору и host-тестам режим панели не нужен. */
     (void)mode;
@@ -17,6 +28,7 @@ void display_set_mode(display_mode_t mode) {
 
 void display_refresh(void) {
     PURRGO_LOG("FULL REFRESH\r\n");
+    s_stats.fulls++;
     partial_refresh_count = 0;
     pending_has_region = 0;
 }
@@ -58,6 +70,12 @@ void display_flush(void) {
     } else {
         PURRGO_LOG("PARTIAL REFRESH x=%d y=%d w=%d h=%d\r\n", pending_x1, pending_y1, w, h);
         partial_refresh_count++;
+        s_stats.partials++;
+        s_stats.has_region = true;
+        s_stats.last_x = pending_x1;
+        s_stats.last_y = pending_y1;
+        s_stats.last_w = w;
+        s_stats.last_h = h;
         pending_has_region = 0;
     }
 }

@@ -28,15 +28,17 @@
 #endif
 
 /*
- * Частичных обновлений подряд до принудительного полного (сброс «шлейфов»).
- * Самотест на железе (сцены S7, S8: 40 частичных подряд, худший случай) - следов нет даже после
- * 40; взято 25 (около двух третей от проверенного).
+ * Частичных обновлений подряд до принудительного полного (сброс «шлейфов»):
+ * после каждых 10 частичных следующее обновление - полное. Самотест на железе
+ * (сцены S7, S8: 40 частичных подряд, худший случай) следов не показал, лимит 10
+ * взят с запасом: полное обновление на реальной карте всё равно нужно, чтобы
+ * убрать накопленные артефакты трека и маркёра.
  */
 #ifndef PURRGO_EINK_GRAY_PARTIALS_BEFORE_FULL
-#define PURRGO_EINK_GRAY_PARTIALS_BEFORE_FULL 25
+#define PURRGO_EINK_GRAY_PARTIALS_BEFORE_FULL 10
 #endif
 #ifndef PURRGO_EINK_MONO_PARTIALS_BEFORE_FULL
-#define PURRGO_EINK_MONO_PARTIALS_BEFORE_FULL 25
+#define PURRGO_EINK_MONO_PARTIALS_BEFORE_FULL 10
 #endif
 
 /* Полное обновление: 4 gray (FAST ~3 с, DEEP ~5 с) и 1 bit (NORMAL ~2 с, FAST ~1 с). */
