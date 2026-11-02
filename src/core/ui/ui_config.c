@@ -80,8 +80,8 @@ void ui_render_menu_config(gfx_context_t* gfx)
 
     /*
      * Порядок строк совпадает с CONFIG_CURSOR_* в config_controller.c:
-     * 0 POWER SRC, 1 POWER OFF, 2 TZ, 3 DIR, 4 POI, 5 LOG, 6 MAP DETAILS,
-     * 7 MAP LAYERS.
+     * 0 POWER SRC, 1 POWER OFF, 2 TZ, 3 DIR, 4 ROUTE, 5 POI, 6 LOG,
+     * 7 MAP DETAILS, 8 MAP LAYERS.
      */
     int row = 0;
 
@@ -125,6 +125,15 @@ void ui_render_menu_config(gfx_context_t* gfx)
         sizeof(buf),
         "DIR: %s",
         app_config.map_dir
+    );
+    draw_item(gfx, cursor, row++, buf);
+
+    /* ROUTE (GPX-файл из каталога ROUTES) */
+    purrgo_snprintf(
+        buf,
+        sizeof(buf),
+        "ROUTE: %s",
+        (app_config.route_file[0] != '\0') ? app_config.route_file : "NONE"
     );
     draw_item(gfx, cursor, row++, buf);
 

@@ -320,6 +320,10 @@ const char* purrgo_fs_get_tracks_path(void) {
     return "0:/PURRGO/TRACKS";
 }
 
+const char* purrgo_fs_get_routes_path(void) {
+    return "0:/PURRGO/ROUTES";
+}
+
 purrgo_file_t* purrgo_fs_open(const char* filepath, fs_mode_t mode) {
     if (!filepath) return NULL;
     BYTE ff_mode = 0;

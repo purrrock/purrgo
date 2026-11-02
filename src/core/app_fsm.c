@@ -187,7 +187,7 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
                 break;
             default: break;
         }
-    } else if (current_state == APP_STATE_MENU_CONFIG || current_state == APP_STATE_MENU_DIR_SELECT || current_state == APP_STATE_MENU_MAP_LAYERS) {
+    } else if (current_state == APP_STATE_MENU_CONFIG || current_state == APP_STATE_MENU_DIR_SELECT || current_state == APP_STATE_MENU_MAP_LAYERS || current_state == APP_STATE_MENU_ROUTE_SELECT) {
         switch (button) {
             case PURRGO_BTN_KEY1_SHORT:
             case PURRGO_BTN_KEY1_LONG:
@@ -218,7 +218,7 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
     render_gate_active = false;
 
     // 1 & 2. Dispatch to module based on state
-    if (current_state == APP_STATE_MENU_CONFIG || current_state == APP_STATE_MENU_DIR_SELECT || current_state == APP_STATE_MENU_MAP_LAYERS) {
+    if (current_state == APP_STATE_MENU_CONFIG || current_state == APP_STATE_MENU_DIR_SELECT || current_state == APP_STATE_MENU_MAP_LAYERS || current_state == APP_STATE_MENU_ROUTE_SELECT) {
         handled = purrgo_config_controller_handle_button(current_state, mapped_button, &next_state);
         current_state = next_state;
     } else if (current_state == APP_STATE_MAP) {
@@ -523,6 +523,7 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
         case APP_STATE_MENU_CONFIG:
         case APP_STATE_MENU_DIR_SELECT:
         case APP_STATE_MENU_MAP_LAYERS:
+        case APP_STATE_MENU_ROUTE_SELECT:
             purrgo_config_controller_update(current_fix);
             break;
     }

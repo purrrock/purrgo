@@ -2,7 +2,9 @@
 #include "purrgo/app_fsm.h"
 #include "purrgo/gfx_text.h"
 #include "purrgo/gfx_rect.h"
+#include "purrgo/config.h"
 #include "purrgo/config_controller.h"
+#include <string.h>
 #include "purrgo/fs_hal.h"
 #include "purrgo/purrgo_format.h"
 #include "purrgo/display_hal.h"
@@ -18,7 +20,11 @@ void ui_menu_dir_select_reset(void) {
     ui_rows_reset(&s_rows);
 }
 
-void ui_render_menu_dir_select(gfx_context_t* gfx)
+/*
+ * Общий список для выбора каталога карты и файла маршрута.
+ * route_mode: без скобок, пустое имя - "(none)", активный маршрут помечен "*".
+ */
+static void render_browser(gfx_context_t* gfx, const char* title, bool route_mode)
 {
     /*
      * Буфер используется только для формирования строки одного
@@ -31,7 +37,7 @@ void ui_render_menu_dir_select(gfx_context_t* gfx)
     gfx_set_color(gfx, 0, 3);
     gfx_clear(gfx);
 
-    gfx_draw_string(gfx, 10, 10, "=== SELECT DIR ===");
+    gfx_draw_string(gfx, 10, 10, title);
 
 
     /*
@@ -65,12 +71,17 @@ void ui_render_menu_dir_select(gfx_context_t* gfx)
             gfx_set_color(gfx, 0, 3);
         }
 
-        purrgo_snprintf(
-            buf,
-            sizeof(buf),
-            "[%s]",
-            dir_list[i].name
-        );
+        if (!route_mode) {
+            purrgo_snprintf(buf, sizeof(buf), "[%s]", dir_list[i].name);
+        }
+        else if (dir_list[i].name[0] == '\0') {
+            purrgo_snprintf(buf, sizeof(buf), "(none)%s",
+                            (app_config.route_file[0] == '\0') ? " *" : "");
+        }
+        else {
+            purrgo_snprintf(buf, sizeof(buf), "%s%s", dir_list[i].name,
+                            (strcmp(dir_list[i].name, app_config.route_file) == 0) ? " *" : "");
+        }
 
         gfx_draw_string(
             gfx,
@@ -96,9 +107,19 @@ void ui_render_menu_dir_select(gfx_context_t* gfx)
             gfx,
             10,
             y_pos,
-            "(No directories)"
+            route_mode ? "(No routes)" : "(No directories)"
         );
     }
 
     ui_rows_end(&s_rows, count);
+}
+
+void ui_render_menu_dir_select(gfx_context_t* gfx)
+{
+    render_browser(gfx, "=== SELECT DIR ===", false);
+}
+
+void ui_render_menu_route_select(gfx_context_t* gfx)
+{
+    render_browser(gfx, "= SELECT ROUTE =", true);
 }
