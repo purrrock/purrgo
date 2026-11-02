@@ -29,6 +29,10 @@ jobs:
         run: cmake --build --preset linux-gcc-test
       - name: Test
         run: ctest --preset linux-gcc-test
+      - name: Python-инструменты (таблица PurrGO-256, конвертер книг)
+        run: |
+          python3 tests/check_pgo_text_table.py
+          python3 -m unittest tests/test_book_compiler.py
 
   # Эмулятор для ПК (проверяет, что ядро собирается вместе с SDL2-приложением).
   build-pc:
