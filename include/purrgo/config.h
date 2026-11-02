@@ -46,6 +46,9 @@ const char* purrgo_layer_title(purrgo_layer_t id);
 /* Маска слоёв по умолчанию. */
 uint16_t purrgo_layers_default(void);
 
+/* Максимальная длина имени GPX-файла маршрута в каталоге ROUTES (с завершающим нулём). */
+#define PURRGO_ROUTE_NAME_MAX 96
+
 typedef struct {
     int16_t tz_offset_minutes;
     track_logger_mode_t log_mode;
@@ -55,6 +58,12 @@ typedef struct {
      * Директория выбранной карты.
      */
     char map_dir[PURRGO_FS_MAX_PATH + 32];
+
+    /*
+     * Имя GPX-файла выбранного маршрута в каталоге ROUTES (без пути).
+     * Пустая строка - маршрут не выбран. Ключ ROUTE_FILE в PURRGO.CFG.
+     */
+    char route_file[PURRGO_ROUTE_NAME_MAX];
 
     /*
      * Последняя широта для центрирования при холодном старте.

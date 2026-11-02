@@ -55,5 +55,7 @@ void purrgo_fs_closedir(purrgo_dir_t* dir);
 const char* purrgo_fs_get_config_path(void);
 const char* purrgo_fs_get_maps_path(void);
 const char* purrgo_fs_get_tracks_path(void);
+/* Каталог пользовательских маршрутов (GPX). */
+const char* purrgo_fs_get_routes_path(void);
 
 #endif // PURRGO_FS_HAL_H

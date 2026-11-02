@@ -4,6 +4,7 @@
 #include "purrgo/config.h"
 #include "purrgo/purrgo_format.h"
 #include "purrgo/power.h"
+#include <string.h>
 
 
 /*
@@ -40,6 +41,25 @@ static int dir_page_start = 0;
  * Открытый каталог.
  */
 static purrgo_dir_t* dir_handle = NULL;
+
+
+/*
+ * Что показывает браузер: каталоги карт (DIR) или GPX-файлы маршрутов (ROUTE).
+ */
+typedef enum {
+    BROWSE_MAP_DIRS,
+    BROWSE_ROUTE_FILES
+} browse_kind_t;
+
+static browse_kind_t browse_kind = BROWSE_MAP_DIRS;
+
+
+/*
+ * true - первая запись текущей страницы синтетическая "(none)" (снять маршрут).
+ * Бывает только на первой странице списка маршрутов; в счёт dir_page_start
+ * не входит (он считает только реальные записи каталога).
+ */
+static bool dir_page_has_none = false;
 
 
 /*
@@ -83,10 +103,11 @@ static purrgo_power_source_t draft_power_source;
 #define CONFIG_CURSOR_POWER_OFF     1
 #define CONFIG_CURSOR_TZ            2
 #define CONFIG_CURSOR_DIR           3
-#define CONFIG_CURSOR_POI           4
-#define CONFIG_CURSOR_LOG_MODE      5
-#define CONFIG_CURSOR_MAP_DETAILS   6
-#define CONFIG_CURSOR_MAP_LAYERS    7
+#define CONFIG_CURSOR_ROUTE         4
+#define CONFIG_CURSOR_POI           5
+#define CONFIG_CURSOR_LOG_MODE      6
+#define CONFIG_CURSOR_MAP_DETAILS   7
+#define CONFIG_CURSOR_MAP_LAYERS    8
 
 _Static_assert(CONFIG_CURSOR_MAP_LAYERS + 1 == PURRGO_CONFIG_MENU_ITEMS,
                "PURRGO_CONFIG_MENU_ITEMS: число пунктов меню CONFIG");
@@ -120,7 +141,9 @@ static int get_config_last_cursor(void)
  */
 static const char* get_maps_base_path(void)
 {
-    return purrgo_fs_get_maps_path();
+    return (browse_kind == BROWSE_ROUTE_FILES)
+        ? purrgo_fs_get_routes_path()
+        : purrgo_fs_get_maps_path();
 }
 
 
@@ -151,16 +174,60 @@ static bool is_dot_directory(
 
 
 /*
- * Возвращает true только для каталогов,
- * которые должны быть видимы пользователю.
+ * Файл маршрута: обычный файл *.gpx (регистр расширения любой), имя которого
+ * помещается в app_config.route_file; скрытые файлы (".", "._") пропускаются.
+ */
+static bool is_route_file(
+    const purrgo_fs_dirent_t* entry
+)
+{
+    if (entry->is_directory || entry->name[0] == '.') {
+        return false;
+    }
+
+    size_t len = strlen(entry->name);
+
+    if (len < 5 || len >= PURRGO_ROUTE_NAME_MAX) {
+        return false;
+    }
+
+    const char* ext = entry->name + len - 4;
+
+    return
+        ext[0] == '.' &&
+        (ext[1] == 'g' || ext[1] == 'G') &&
+        (ext[2] == 'p' || ext[2] == 'P') &&
+        (ext[3] == 'x' || ext[3] == 'X');
+}
+
+
+/*
+ * Возвращает true только для записей,
+ * которые должны быть видимы пользователю в текущем браузере.
  */
 static bool is_visible_directory(
     const purrgo_fs_dirent_t* entry
 )
 {
+    if (browse_kind == BROWSE_ROUTE_FILES) {
+        return is_route_file(entry);
+    }
+
     return
         entry->is_directory &&
         !is_dot_directory(entry);
+}
+
+
+/*
+ * Первой страницей списка маршрутов начинается синтетическая запись "(none)".
+ */
+static void add_none_entry(void)
+{
+    dir_page[0].name[0] = '\0';
+    dir_page[0].is_directory = false;
+    dir_page_count = 1;
+    dir_page_has_none = true;
 }
 
 
@@ -188,6 +255,11 @@ static void load_first_directory_page(void)
     dir_page_count = 0;
     dir_page_cursor = 0;
     dir_page_start = 0;
+    dir_page_has_none = false;
+
+    if (browse_kind == BROWSE_ROUTE_FILES) {
+        add_none_entry();
+    }
 
     dir_handle = purrgo_fs_opendir(
         get_maps_base_path()
@@ -232,8 +304,9 @@ static bool load_next_directory_page(void)
         return false;
     }
 
-    dir_page_start += dir_page_count;
+    dir_page_start += dir_page_count - (dir_page_has_none ? 1 : 0);
 
+    dir_page_has_none = false;
     dir_page_count = 0;
     dir_page_cursor = 0;
 
@@ -269,6 +342,11 @@ static bool load_directory_page(int page_start)
     dir_page_count = 0;
     dir_page_cursor = 0;
     dir_page_start = page_start;
+    dir_page_has_none = false;
+
+    if (browse_kind == BROWSE_ROUTE_FILES && page_start == 0) {
+        add_none_entry();
+    }
 
     dir_handle = purrgo_fs_opendir(
         get_maps_base_path()
@@ -328,6 +406,7 @@ static void leave_directory_browser(void)
     dir_page_count = 0;
     dir_page_cursor = 0;
     dir_page_start = 0;
+    dir_page_has_none = false;
 }
 
 
@@ -378,6 +457,12 @@ void purrgo_config_controller_on_enter(
     }
     else if (state == APP_STATE_MENU_DIR_SELECT) {
 
+        browse_kind = BROWSE_MAP_DIRS;
+        load_first_directory_page();
+    }
+    else if (state == APP_STATE_MENU_ROUTE_SELECT) {
+
+        browse_kind = BROWSE_ROUTE_FILES;
         load_first_directory_page();
     }
 }
@@ -493,6 +578,19 @@ bool purrgo_config_controller_handle_button(
 
                     purrgo_config_controller_on_enter(
                         APP_STATE_MENU_DIR_SELECT
+                    );
+                }
+
+                /*
+                 * ROUTE.
+                 */
+                else if (config_cursor_idx == CONFIG_CURSOR_ROUTE) {
+
+                    *next_state_out =
+                        APP_STATE_MENU_ROUTE_SELECT;
+
+                    purrgo_config_controller_on_enter(
+                        APP_STATE_MENU_ROUTE_SELECT
                     );
                 }
 
@@ -661,7 +759,10 @@ bool purrgo_config_controller_handle_button(
      * DIRECTORY SELECTOR
      * ================================================================
      */
-    if (current_state == APP_STATE_MENU_DIR_SELECT) {
+    if (
+        current_state == APP_STATE_MENU_DIR_SELECT ||
+        current_state == APP_STATE_MENU_ROUTE_SELECT
+    ) {
 
         switch (button) {
 
@@ -745,6 +846,39 @@ bool purrgo_config_controller_handle_button(
             case PURRGO_ACTION_OK:
 
                 if (
+                    dir_page_count > 0 &&
+                    dir_page_cursor >= 0 &&
+                    dir_page_cursor < dir_page_count &&
+                    browse_kind == BROWSE_ROUTE_FILES
+                ) {
+
+                    /*
+                     * Пустое имя ("(none)") снимает маршрут. Выбор файла
+                     * заодно включает слой Route: иначе линия не появится.
+                     */
+                    purrgo_snprintf(
+                        app_config.route_file,
+                        sizeof(app_config.route_file),
+                        "%s",
+                        dir_page[dir_page_cursor].name
+                    );
+
+                    if (app_config.route_file[0] != '\0') {
+                        app_config.layers = (uint16_t)(
+                            app_config.layers | (1u << PURRGO_LAYER_ROUTE)
+                        );
+                    }
+
+                    purrgo_config_save();
+
+                    leave_directory_browser();
+
+                    *next_state_out =
+                        APP_STATE_MENU_CONFIG;
+
+                    purrgo_ui_dirty_mark(UI_DIRTY_MAP);
+                }
+                else if (
                     dir_page_count > 0 &&
                     dir_page_cursor >= 0 &&
                     dir_page_cursor < dir_page_count

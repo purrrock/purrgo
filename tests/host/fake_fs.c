@@ -8,7 +8,8 @@
 #include <stdio.h>
 
 struct purrgo_file_s { int idx; uint32_t pos; };
-struct purrgo_dir_s  { int unused; };
+struct purrgo_dir_s  { char prefix[320]; int next; int used; };
+static struct purrgo_dir_s fdir;
 
 typedef struct { char name[320]; uint8_t* data; uint32_t size; int used; uint8_t read_ahead; } ffile_t;
 static ffile_t files[32];
@@ -121,9 +122,28 @@ bool purrgo_fs_replace(const char* s, const char* d) {
     snprintf(files[i].name, sizeof(files[i].name), "%s", d);
     return true;
 }
-purrgo_dir_t* purrgo_fs_opendir(const char* p) { (void)p; return NULL; }
-bool purrgo_fs_readdir(purrgo_dir_t* d, purrgo_fs_dirent_t* e) { (void)d; (void)e; return false; }
-void purrgo_fs_closedir(purrgo_dir_t* d) { (void)d; }
+/* Каталог = файлы с именем "<путь>/<имя>" (без вложенных); подкаталогов нет. */
+purrgo_dir_t* purrgo_fs_opendir(const char* p) {
+    if (fdir.used) return NULL;
+    snprintf(fdir.prefix, sizeof(fdir.prefix), "%s/", p);
+    fdir.next = 0; fdir.used = 1;
+    return &fdir;
+}
+bool purrgo_fs_readdir(purrgo_dir_t* d, purrgo_fs_dirent_t* e) {
+    size_t pl = strlen(d->prefix);
+    while (d->next < 32) {
+        ffile_t* f = &files[d->next++];
+        if (f->used && !strncmp(f->name, d->prefix, pl) && !strchr(f->name + pl, '/')) {
+            snprintf(e->name, sizeof(e->name), "%s", f->name + pl);
+            e->is_directory = false;
+            return true;
+        }
+    }
+    return false;
+}
+void purrgo_fs_closedir(purrgo_dir_t* d) { d->used = 0; }
+int fake_fs_open_dirs(void) { return fdir.used; }
 const char* purrgo_fs_get_config_path(void) { return "PURRGO.CFG"; }
 const char* purrgo_fs_get_maps_path(void) { return "maps"; }
 const char* purrgo_fs_get_tracks_path(void) { return "TRACKS"; }
+const char* purrgo_fs_get_routes_path(void) { return "routes"; }

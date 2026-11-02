@@ -13,9 +13,9 @@
 
 /*
  * Буфер записи: наихудший случай - около 250 байт полей и слоёв плюс MAP_DIR
- * (до PURRGO_FS_MAX_PATH + 31 символов).
+ * (до PURRGO_FS_MAX_PATH + 31 символов) и ROUTE_FILE (до PURRGO_ROUTE_NAME_MAX).
  */
-#define CONFIG_SAVE_MAX_SIZE 576
+#define CONFIG_SAVE_MAX_SIZE 704
 
 
 purrgo_config_t app_config;
@@ -171,6 +171,11 @@ void purrgo_config_init(void)
         "%s",
         purrgo_fs_get_maps_path()
     );
+
+    /*
+     * Маршрут по умолчанию не выбран.
+     */
+    app_config.route_file[0] = '\0';
 
     /*
      * Последние координаты.
@@ -342,6 +347,22 @@ bool purrgo_config_load(void)
                     (int)(sizeof(app_config.map_dir) - 1),
                     val
                 );
+            }
+
+            /*
+             * Файл маршрута (только имя, без пути).
+             */
+            else if (strcmp(key, "ROUTE_FILE") == 0) {
+                if (strchr(val, '/') == NULL && strchr(val, '\\') == NULL &&
+                    val[0] != '.' &&
+                    strlen(val) < sizeof(app_config.route_file)) {
+                    purrgo_snprintf(
+                        app_config.route_file,
+                        sizeof(app_config.route_file),
+                        "%s",
+                        val
+                    );
+                }
             }
 
             /*
@@ -520,6 +541,7 @@ bool purrgo_config_save(void)
 
         "TZ_MIN=%d\n"
         "MAP_DIR=%.*s\n"
+        "ROUTE_FILE=%.*s\n"
         "LAST_LAT_1E7=%d\n"
         "LAST_LON_1E7=%d\n"
         "POI_MODE=%d\n"
@@ -532,6 +554,9 @@ bool purrgo_config_save(void)
 
         (int)(sizeof(app_config.map_dir) - 1),
         app_config.map_dir,
+
+        (int)(sizeof(app_config.route_file) - 1),
+        app_config.route_file,
 
         (int)app_config.last_lat_1e7,
 

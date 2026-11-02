@@ -104,7 +104,7 @@ static void test_menu(void)
     /* До MENU конфиг не меняется. */
     CHECK(app_config.power_source == PURRGO_POWER_SRC_LITHIUM);
 
-    /* Порядок остальных пунктов: 1 POWER OFF, 2 TZ, ..., 7 MAP LAYERS - последний. */
+    /* Порядок остальных пунктов: 1 POWER OFF, 2 TZ, ..., 8 MAP LAYERS - последний. */
     st = press(st, PURRGO_ACTION_DOWN);
     CHECK(config_app_get_config_cursor() == 1);
     st = press(st, PURRGO_ACTION_DOWN);
@@ -116,7 +116,7 @@ static void test_menu(void)
         st = press(st, PURRGO_ACTION_DOWN);
     }
     CHECK(config_app_get_config_cursor() == PURRGO_CONFIG_MENU_ITEMS - 1);
-    CHECK(PURRGO_CONFIG_MENU_ITEMS == 8);
+    CHECK(PURRGO_CONFIG_MENU_ITEMS == 9);
     st = press(st, PURRGO_ACTION_OK);                          /* MAP LAYERS */
     CHECK(st == APP_STATE_MENU_MAP_LAYERS);
     st = press(st, PURRGO_ACTION_MENU);                        /* назад в CONFIG */

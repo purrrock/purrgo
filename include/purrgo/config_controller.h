@@ -11,9 +11,9 @@
 
 /*
  * Число пунктов главного меню CONFIG. Порядок: POWER SOURCE, POWER OFF, TZ,
- * DIR, POI, LOG, MAP DETAILS, MAP LAYERS.
+ * DIR, ROUTE, POI, LOG, MAP DETAILS, MAP LAYERS.
  */
-#define PURRGO_CONFIG_MENU_ITEMS 8
+#define PURRGO_CONFIG_MENU_ITEMS 9
 
 void purrgo_config_controller_init(void);
 
@@ -41,6 +41,11 @@ int config_app_get_dir_list(
     purrgo_fs_dirent_t** list_out
 );
 int config_app_get_dir_cursor(void);
+
+/*
+ * В режиме выбора маршрута запись списка с пустым именем означает "(none)"
+ * (снять маршрут).
+ */
 
 
 /*

@@ -8,6 +8,7 @@
 #include "purrgo/geo.h"
 #include "purrgo/map.h"
 #include "purrgo/track_renderer.h"
+#include "purrgo/route.h"
 #include "purrgo/track_logger.h"
 #include "purrgo/config.h"
 #include "purrgo/logger.h"
@@ -643,6 +644,13 @@ static bool ui_map_track_visible(void) {
 }
 
 static void ui_map_render_dynamic_data(gfx_context_t* gfx, const purrgo_viewport_t* map_vp, const purrgo_bbox_t* dynamic_cam) {
+    /* Маршрут рисуется под текущим треком: порядок слоёв см. docs/MAP_RENDER_LAYERS.md. */
+    if (purrgo_layer_on(app_config.layers, PURRGO_LAYER_ROUTE)) {
+        if (purrgo_route_sync(app_config.route_file)) {
+            purrgo_route_render(gfx, dynamic_cam, map_vp);
+        }
+    }
+
     if (ui_map_track_visible()) {
         purrgo_track_render(gfx, dynamic_cam, map_vp, purrgo_logger_get_active_filename());
     }
