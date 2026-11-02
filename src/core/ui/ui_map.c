@@ -38,6 +38,9 @@ typedef struct {
 static marker_state_t prev_marker_state;
 static bool prev_marker_state_valid = false;
 
+/* Номер последней точки трека, отрисованной на экране (purrgo_logger_get_track_serial()). */
+static uint32_t s_track_drawn_serial = 0;
+
 typedef struct {
     uint8_t minutes;
     uint8_t hours;
@@ -50,10 +53,11 @@ static status_bar_state_t prev_status_state = {0};
 
 /*
  * Background cache to avoid re-rendering the whole map when marker changes.
- * Size 16x16 is enough for the marker size + safety margin.
+ * Size 24x24 is enough for the marker (rotated bbox up to ~17 px at
+ * PURRGO_MAP_POS_MARK_SIZE_PX = 13) + safety margin 2 px on each side.
  */
-#define MARKER_BG_CACHE_W 16
-#define MARKER_BG_CACHE_H 16
+#define MARKER_BG_CACHE_W 24
+#define MARKER_BG_CACHE_H 24
 
 static struct {
     int16_t x;
@@ -87,7 +91,11 @@ static struct {
 #include "purrgo/purrgo_format.h"
 #include <string.h>
 
-#define PURRGO_MAP_POS_MARK_SIZE_PX 10
+/*
+ * Размер маркёра, px (нечётный: у фигуры есть центральный пиксель). Был 10.
+ * Если менять, проверить размер кэша фона MARKER_BG_CACHE_W/H.
+ */
+#define PURRGO_MAP_POS_MARK_SIZE_PX 13
 
 /*
  * Порог перерисовки маркёра GNSS (E-Ink: каждое обновление области - это
@@ -109,7 +117,7 @@ static struct {
 #ifndef PURRGO_MAP_MARKER_MIN_COURSE_DELTA_DEG
 #define PURRGO_MAP_MARKER_MIN_COURSE_DELTA_DEG 10
 #endif
-#define PURRGO_MAP_POS_MARK_DIRECTION_HALF_WIDTH_PX 4
+#define PURRGO_MAP_POS_MARK_DIRECTION_HALF_WIDTH_PX 5
 #define PURRGO_MAP_POS_MARK_OCTAGON_CUT_PX           2
 
 extern int dbg_map_render_calls;
@@ -132,6 +140,11 @@ static int32_t get_cos_10k(int16_t deg) {
     if (deg <= 180) return -cos_lut[180 - deg];
     if (deg <= 270) return -cos_lut[deg - 180];
     return cos_lut[360 - deg];
+}
+
+/* Деление на 10000 с округлением к ближайшему (а не усечением к нулю). */
+static int32_t div_round_10k(int32_t v) {
+    return (v >= 0) ? ((v + 5000) / 10000) : -((-v + 5000) / 10000);
 }
 
 /*
@@ -262,13 +275,11 @@ static void ui_calc_marker_state(
              * sin/cos are represented as integer values scaled by 10000.
              */
             out_state->pts[i].x = (int16_t)(
-                cx +
-                (local_x[i] * c - local_y[i] * s) / 10000
+                cx + div_round_10k(local_x[i] * c - local_y[i] * s)
             );
 
             out_state->pts[i].y = (int16_t)(
-                cy +
-                (local_x[i] * s + local_y[i] * c) / 10000
+                cy + div_round_10k(local_x[i] * s + local_y[i] * c)
             );
         }
 
@@ -484,14 +495,15 @@ static void ui_draw_marker(gfx_context_t* gfx, const marker_state_t* state) {
      */
     gfx_color_t old_fg = gfx->color_fg;
 
-    gfx_set_color(gfx, BLACK, gfx->color_bg);
-
     if (state->filled) {
-        gfx_fill_polygon(gfx, (gfx_point_t*)state->pts, state->point_count);
-        gfx_set_color(gfx, WHITE, gfx->color_bg);
-        gfx_draw_polygon(gfx, (gfx_point_t*)state->pts, state->point_count);
+        /*
+         * Чёрная заливка строго внутри белой рамки: обычные fill + outline
+         * растеризуют края по-разному и заливка местами выходила за рамку.
+         */
+        gfx_draw_polygon_bordered(gfx, state->pts, state->point_count, BLACK, WHITE);
     } else {
-        gfx_draw_polygon(gfx, (gfx_point_t*)state->pts, state->point_count);
+        gfx_set_color(gfx, BLACK, gfx->color_bg);
+        gfx_draw_polygon(gfx, state->pts, state->point_count);
     }
 
     gfx_set_color(gfx, old_fg, gfx->color_bg);
@@ -624,11 +636,18 @@ static bool ui_map_render_base_layers(gfx_context_t* gfx, const purrgo_viewport_
     return purrgo_map_render_viewport(gfx, map_vp, dynamic_cam, &params);
 }
 
+/* Рисуется ли сейчас активный трек: идёт запись и слой трека включён. */
+static bool ui_map_track_visible(void) {
+    return purrgo_logger_get_active_filename() != NULL &&
+           purrgo_layer_on(app_config.layers, PURRGO_LAYER_TRACK);
+}
+
 static void ui_map_render_dynamic_data(gfx_context_t* gfx, const purrgo_viewport_t* map_vp, const purrgo_bbox_t* dynamic_cam) {
-    const char* active_track_filename = purrgo_logger_get_active_filename();
-    if (active_track_filename != NULL && purrgo_layer_on(app_config.layers, PURRGO_LAYER_TRACK)) {
-        purrgo_track_render(gfx, dynamic_cam, map_vp, active_track_filename);
+    if (ui_map_track_visible()) {
+        purrgo_track_render(gfx, dynamic_cam, map_vp, purrgo_logger_get_active_filename());
     }
+    /* Все точки, имеющиеся сейчас, нарисованы (или трек не показывается). */
+    s_track_drawn_serial = purrgo_logger_get_track_serial();
 }
 
 /*
@@ -688,11 +707,38 @@ static void ui_map_render_gnss_marker(
             purrgo_app_notify_marker_rendered(gnss);
         }
     } else {
+        const bool track_pending = purrgo_ui_dirty_test(UI_DIRTY_TRACK);
         const bool changed = ui_marker_needs_redraw(&prev_marker_state, &new_marker_state);
 
-        if (changed) {
+        /*
+         * Новые отрезки трека тянутся к маркёру, то есть ложатся на область
+         * вокруг него. Порядок обязателен: сначала снять старый маркёр
+         * (вернуть сохранённый фон), потом дорисовать трек, и только потом
+         * сохранить фон и нарисовать маркёр. Иначе возврат фона затирает
+         * только что нарисованный отрезок (короткие отрезки пропадали целиком),
+         * а рисование трека поверх маркёра портит его рамку. Поэтому при
+         * новых точках трека маркёр перерисовывается всегда; если он при этом
+         * сместился меньше порога, он остаётся на прежнем месте (рисуется
+         * прежнее состояние), чтобы порог смещения продолжал работать.
+         */
+        if (changed || track_pending) {
+            const marker_state_t draw_state = changed ? new_marker_state : prev_marker_state;
+
             // Restore the old background
             ui_restore_marker_bg(gfx);
+
+            if (track_pending) {
+                if (ui_map_track_visible()) {
+                    purrgo_rect_t rect;
+                    if (purrgo_track_render_new_segments(gfx, dynamic_cam, map_vp,
+                                                         &s_track_drawn_serial, &rect)) {
+                        display_refresh_region(rect.x, rect.y, rect.w, rect.h);
+                    }
+                } else {
+                    s_track_drawn_serial = purrgo_logger_get_track_serial();
+                }
+                purrgo_ui_dirty_clear(UI_DIRTY_TRACK);
+            }
 
             int16_t min_x = 32767;
             int16_t max_x = -32768;
@@ -706,15 +752,15 @@ static void ui_map_render_gnss_marker(
                 if (prev_marker_state.max_y > max_y) max_y = prev_marker_state.max_y;
             }
 
-            if (new_marker_state.rendered) {
-                if (new_marker_state.min_x < min_x) min_x = new_marker_state.min_x;
-                if (new_marker_state.max_x > max_x) max_x = new_marker_state.max_x;
-                if (new_marker_state.min_y < min_y) min_y = new_marker_state.min_y;
-                if (new_marker_state.max_y > max_y) max_y = new_marker_state.max_y;
+            if (draw_state.rendered) {
+                if (draw_state.min_x < min_x) min_x = draw_state.min_x;
+                if (draw_state.max_x > max_x) max_x = draw_state.max_x;
+                if (draw_state.min_y < min_y) min_y = draw_state.min_y;
+                if (draw_state.max_y > max_y) max_y = draw_state.max_y;
             }
 
-            ui_save_marker_bg(gfx, &new_marker_state);
-            ui_draw_marker(gfx, &new_marker_state);
+            ui_save_marker_bg(gfx, &draw_state);
+            ui_draw_marker(gfx, &draw_state);
 
             if (min_x <= max_x && min_y <= max_y) {
                 // Clamp to viewport
@@ -730,9 +776,9 @@ static void ui_map_render_gnss_marker(
                     display_refresh_region(min_x, min_y, clip_w, clip_h);
                 }
             }
-            prev_marker_state = new_marker_state;
+            prev_marker_state = draw_state;
 
-            if (new_marker_state.rendered) {
+            if (changed && draw_state.rendered) {
                 purrgo_app_notify_marker_rendered(gnss);
             }
         }
@@ -801,13 +847,7 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
         purrgo_app_ui_request_full_refresh();
         dbg_map_render_calls++;
     } else {
-        if (purrgo_ui_dirty_test(UI_DIRTY_TRACK)) {
-            purrgo_rect_t rect;
-            if (purrgo_track_render_last_segment(gfx, &dynamic_cam, &map_vp, &rect)) {
-                display_refresh_region(rect.x, rect.y, rect.w, rect.h);
-                purrgo_ui_dirty_clear(UI_DIRTY_TRACK);
-            }
-        }
+        /* Новые отрезки трека дорисовываются внутри обновления маркёра (порядок слоёв). */
         ui_map_render_gnss_marker(gfx, gnss, &map_vp, &dynamic_cam, false);
     }
 }
@@ -817,4 +857,5 @@ void ui_map_reset(void) {
     prev_marker_state_valid = false;
     memset(&prev_status_state, 0, sizeof(prev_status_state));
     s_map_render_attempts = 0;
+    s_track_drawn_serial = purrgo_logger_get_track_serial();
 }

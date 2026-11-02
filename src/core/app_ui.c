@@ -119,8 +119,7 @@ static void ui_draw_key_hints(gfx_context_t* gfx, purrgo_state_t state, bool mar
      * смена скорости) через эту отметку превращался в физический
      * refresh (на E-Ink - полный).
      *
-     * На остальных экранах (например, Trip computer) модули не
-     * регистрируют области сами, поэтому отметка сохраняется.
+     * Для остальных экранов см. вызов в purrgo_app_ui_render().
      */
     if (mark_region) {
         display_refresh_region(
@@ -198,9 +197,13 @@ void purrgo_app_ui_render(
             break;
     }
 
-    ui_draw_key_hints(gfx, current_state,
-                      (current_state != prev_state) ||
-                      (current_state != APP_STATE_MAP));
+    /*
+     * Подсказки кнопок статичны для экрана: область помечается только при смене
+     * экрана. Меню сами регистрируют изменившиеся строки (ui_rows.h), Trip
+     * computer обновляет весь экран. Раньше на каждом проходе меню подсказки
+     * расширяли окно частичного обновления от изменившейся строки до низа экрана.
+     */
+    ui_draw_key_hints(gfx, current_state, current_state != prev_state);
 
     if (current_state != prev_state || s_full_refresh_requested) {
         display_refresh();

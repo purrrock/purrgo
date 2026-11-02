@@ -495,6 +495,15 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
                 // Передаем координаты в фильтр (он сам решит, записывать ли точку)
                 if (purrgo_logger_add_point(current_fix)) {
                     purrgo_ui_dirty_mark(UI_DIRTY_TRACK);
+                    /*
+                     * Сам флаг TRACK экран не перерисовывает: без этого новые
+                     * отрезки ждали бы, пока маркёр сместится или сменится
+                     * минута. Перерисовка ставится в очередь и выводится не
+                     * чаще PURRGO_UI_MIN_DATA_REDRAW_MS, как остальные данные.
+                     */
+                    if (current_state == APP_STATE_MAP) {
+                        data_redraw_pending = true;
+                    }
                 }
             }
         }

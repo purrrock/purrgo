@@ -3,7 +3,8 @@
 
 #include <stdint.h>
 
-#define MAX_PARTIAL_REFRESHES 5
+/* Частичных обновлений подряд до полного (эмулятор; на E-Ink - PURRGO_EINK_*_PARTIALS_BEFORE_FULL). */
+#define MAX_PARTIAL_REFRESHES 10
 
 /*
  * Режим вывода на дисплей (имеет значение для E-Ink).

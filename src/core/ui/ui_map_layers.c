@@ -5,14 +5,15 @@
 #include "purrgo/purrgo_format.h"
 #include "purrgo/display_hal.h"
 #include "purrgo/hardware_config.h"
+#include "ui_rows.h"
 
 #define LAYER_LIST_Y0 30
 #define LAYER_ROW_H   15
 
-static int prev_map_layers_cursor = -1;
+static ui_rows_t s_rows;
 
 void ui_menu_map_layers_reset(void) {
-    prev_map_layers_cursor = -1;
+    ui_rows_reset(&s_rows);
 }
 
 static void draw_layer_item(gfx_context_t* gfx, int y, int index, int cursor, bool enabled, const char* label) {
@@ -31,6 +32,9 @@ static void draw_layer_item(gfx_context_t* gfx, int y, int index, int cursor, bo
     purrgo_snprintf(buf, sizeof(buf), "%s %s", enabled ? "x" : " ", label);
 
     gfx_draw_string(gfx, 10, (int16_t)y, buf);
+
+    /* Переключение галочки (SEL) меняет текст при том же курсоре. */
+    ui_rows_update(&s_rows, index, cursor == index, buf);
 }
 
 void ui_render_menu_map_layers(gfx_context_t* gfx) {
@@ -44,23 +48,13 @@ void ui_render_menu_map_layers(gfx_context_t* gfx) {
 
     const uint16_t layers = config_app_get_draft_layers();
 
+    ui_rows_begin(&s_rows, LAYER_LIST_Y0, LAYER_ROW_H);
+
     for (int i = 0; i < PURRGO_LAYER_COUNT; i++) {
         draw_layer_item(gfx, LAYER_LIST_Y0 + i * LAYER_ROW_H, i, cursor,
                         purrgo_layer_on(layers, (purrgo_layer_t)i),
                         purrgo_layer_title((purrgo_layer_t)i));
     }
 
-    if (prev_map_layers_cursor == -1) {
-        prev_map_layers_cursor = cursor;
-    } else if (cursor != prev_map_layers_cursor) {
-        if (prev_map_layers_cursor >= 0 && prev_map_layers_cursor < PURRGO_LAYER_COUNT) {
-            int16_t prev_y = (int16_t)(LAYER_LIST_Y0 + prev_map_layers_cursor * LAYER_ROW_H);
-            display_refresh_region(0, prev_y, PURRGO_HW_DISPLAY_WIDTH_PX, LAYER_ROW_H);
-        }
-        if (cursor >= 0 && cursor < PURRGO_LAYER_COUNT) {
-            int16_t curr_y = (int16_t)(LAYER_LIST_Y0 + cursor * LAYER_ROW_H);
-            display_refresh_region(0, curr_y, PURRGO_HW_DISPLAY_WIDTH_PX, LAYER_ROW_H);
-        }
-        prev_map_layers_cursor = cursor;
-    }
+    ui_rows_end(&s_rows, PURRGO_LAYER_COUNT);
 }

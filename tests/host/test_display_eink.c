@@ -188,6 +188,25 @@ int main(void)
     CHECK(b.rst > a.rst);                          /* панель заново проинициализирована */
     CHECK(display_eink_partial_count() == 0);      /* и обновлена полным кадром */
 
+    /* 9b. Лимит по умолчанию: после каждых 10 частичных - полное (4 gray и 1 bit). */
+    display_eink_set_partial_limits(0U, 0U);
+    for (int pass = 0; pass < 2; pass++) {
+        display_eink_set_mode(pass == 0 ? DISPLAY_MODE_GRAY4 : DISPLAY_MODE_MONO);
+        display_eink_request_full();
+        settle(40000);
+        CHECK(display_eink_partial_count() == 0);
+        for (int i = 0; i < 10; i++) {
+            set_px(60 + i, 120 + pass, 0);
+            display_eink_request_region(60 + i, 120 + pass, 1, 1);
+            settle(20000);
+            CHECK(display_eink_partial_count() == (uint8_t)(i + 1));
+        }
+        set_px(80, 120 + pass, 0);
+        display_eink_request_region(80, 120 + pass, 1, 1);
+        settle(20000);
+        CHECK(display_eink_partial_count() == 0);      /* одиннадцатое - полное */
+    }
+
     /* 10. Выключение: блокирующий sleep дожидается поставленного full и усыпляет. */
     display_eink_request_full();
     a = snap();
