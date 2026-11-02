@@ -6,6 +6,7 @@
 #include "purrgo/config_controller.h"
 #include <string.h>
 #include "purrgo/fs_hal.h"
+#include "purrgo/pgo_text.h"
 #include "purrgo/purrgo_format.h"
 #include "purrgo/display_hal.h"
 #include "purrgo/hardware_config.h"
@@ -82,6 +83,13 @@ static void render_browser(gfx_context_t* gfx, const char* title, bool route_mod
             purrgo_snprintf(buf, sizeof(buf), "%s%s", dir_list[i].name,
                             (strcmp(dir_list[i].name, app_config.route_file) == 0) ? " *" : "");
         }
+
+        /*
+         * Имя с SD приходит в UTF-8, шрифт индексируется байтом PurrGO-256.
+         * Исходное имя в dir_list не меняется (оно нужно для сравнения и
+         * сохранения в конфиг), перекодируется только строка для вывода.
+         */
+        purrgo_utf8_to_pgo_inplace(buf);
 
         gfx_draw_string(
             gfx,

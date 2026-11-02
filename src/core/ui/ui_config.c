@@ -5,6 +5,7 @@
 #include "purrgo/config.h"
 #include "purrgo/config_controller.h"
 #include "purrgo/fs_hal.h"
+#include "purrgo/pgo_text.h"
 #include "purrgo/purrgo_format.h"
 #include "purrgo/display_hal.h"
 #include "purrgo/hardware_config.h"
@@ -126,6 +127,7 @@ void ui_render_menu_config(gfx_context_t* gfx)
         "DIR: %s",
         app_config.map_dir
     );
+    purrgo_utf8_to_pgo_inplace(buf); /* имя каталога с SD: UTF-8 -> PurrGO-256 */
     draw_item(gfx, cursor, row++, buf);
 
     /* ROUTE (GPX-файл из каталога ROUTES) */
@@ -135,6 +137,7 @@ void ui_render_menu_config(gfx_context_t* gfx)
         "ROUTE: %s",
         (app_config.route_file[0] != '\0') ? app_config.route_file : "NONE"
     );
+    purrgo_utf8_to_pgo_inplace(buf); /* имя файла с SD: UTF-8 -> PurrGO-256 */
     draw_item(gfx, cursor, row++, buf);
 
     /* POI */
