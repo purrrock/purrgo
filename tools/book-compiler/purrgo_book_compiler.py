@@ -1,139 +1,147 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Конвертер plain-text в бинарный формат электронных книг PGB 1.0 для PurrGO.
+Конвертер книг (txt / FB2 / EPUB) в бинарный формат электронных книг PGB 1.0 для PurrGO.
 
-Зависимость:
-    python -m pip install -r requirements.txt
+Зависимости: только стандартная библиотека Python 3.10+.
+Необязательно: пакет `pyphen` (нужен только для --hyphenate).
 
-Примеры использования:
-    python purrgo_book_compiler.py book.txt                  # Выходной файл станет book.pgb
-    python purrgo_book_compiler.py book.txt custom.pgb --encoding cp1251 --title "Название книги"
-    python purrgo_book_compiler.py book.pgb --verify         # Проверка готового .pgb файла и вывод 1-й и последней страниц
+Примеры:
+    python purrgo_book_compiler.py book.txt                       # -> book.pgb
+    python purrgo_book_compiler.py book.fb2 BOOK.PGB --verify
+    python purrgo_book_compiler.py book.epub --indent 2
+    python purrgo_book_compiler.py book.txt --encoding cp1251 --title "Название" --author "Автор"
+    python purrgo_book_compiler.py book.pgb                       # проверка готового файла
 """
 
 from __future__ import annotations
 
 import argparse
+import functools
+import html.parser
+import importlib.util
+import posixpath
+import re
 import struct
 import sys
 import unicodedata
+import urllib.parse
+import xml.etree.ElementTree as ET
+import zipfile
 import zlib
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterable
+from typing import Callable, Iterable
 
-try:
-    import lz4.block
-except ImportError:
-    lz4 = None
-else:
-    lz4 = lz4
-
-
-# Константы бинарного формата PGB 1.0.
+# --------------------------------------------------------------------------
+# Константы формата PGB 1.0 (см. PGB-format.md)
+# --------------------------------------------------------------------------
 MAGIC = b"PGB1"
 VERSION_MAJOR = 1
 VERSION_MINOR = 0
 HEADER_SIZE = 64
-INDEX_ENTRY_SIZE = 12
-MAX_LINE_CHARS = 29
-MAX_PAGE_LINES = 32
-MAX_PAGE_UNCOMPRESSED = MAX_LINE_CHARS * MAX_PAGE_LINES + (MAX_PAGE_LINES - 1)
-CRC_OFFSET = 36
+INDEX_ENTRY_SIZE = 8
+DEFAULT_COLS = 29
+DEFAULT_ROWS = 32
+MAX_TITLE_BYTES = 200
+MAX_AUTHOR_BYTES = 100
+COMPRESSION_NONE = 0
+
+FILE_CRC_OFFSET = 32
+META_CRC_OFFSET = 36
+
 UINT16_MAX = 0xFFFF
 UINT32_MAX = 0xFFFFFFFF
 
-# Формат заголовка: все целые поля little-endian.
-HEADER_STRUCT = struct.Struct("<4sHHHHIIIIIHHI24s")
-INDEX_STRUCT = struct.Struct("<III")
+# magic, ver_major, ver_minor, header_size, flags,
+# page_count, meta_offset, index_offset, data_offset, file_size, file_crc32, meta_crc32,
+# cols, rows, compression, reserved0, title_length, author_length, reserved1[16]
+HEADER_STRUCT = struct.Struct("<4sHHHHIIIIIIIBBBBHH16s")
+INDEX_STRUCT = struct.Struct("<IHH")  # page_offset, stored_size, raw_size
 
 assert HEADER_STRUCT.size == HEADER_SIZE
 assert INDEX_STRUCT.size == INDEX_ENTRY_SIZE
-assert MAX_PAGE_UNCOMPRESSED == 959
 
 
-# Таблица PurrGO-256
-PGO_CHAR_MAP: dict[str, int] = {
-    "№": 0x4E,
-    "«": 0x22,
-    "»": 0x22,
-    "“": 0x22,
-    "”": 0x22,
-    "„": 0x22,
-    "’": 0x27,
-    "‘": 0x27,
-    "`": 0x27,
-    "´": 0x27,
-    "ʼ": 0x27,
-
-    "А": 0x80, "Б": 0x81, "В": 0x82, "Г": 0x83, "Д": 0x84, "Е": 0x85,
-    "Ж": 0x86, "З": 0x87, "И": 0x88, "Й": 0x89, "К": 0x8A, "Л": 0x8B,
-    "М": 0x8C, "Н": 0x8D, "О": 0x8E, "П": 0x8F, "Р": 0x90, "С": 0x91,
-    "Т": 0x92, "У": 0x93, "Ф": 0x94, "Х": 0x95, "Ц": 0x96, "Ч": 0x97,
-    "Ш": 0x98, "Щ": 0x99, "Ъ": 0x9A, "Ы": 0x9B, "Ь": 0x9C, "Э": 0x9D,
-    "Ю": 0x9E, "Я": 0x9F,
-
-    "а": 0xA0, "б": 0xA1, "в": 0xA2, "г": 0xA3, "д": 0xA4, "е": 0xA5,
-    "ж": 0xA6, "з": 0xA7, "и": 0xA8, "й": 0xA9, "к": 0xAA, "л": 0xAB,
-    "м": 0xAC, "н": 0xAD, "о": 0xAE, "п": 0xAF, "р": 0xB0, "с": 0xB1,
-    "т": 0xB2, "у": 0xB3, "ф": 0xB4, "х": 0xB5, "ц": 0xB6, "ч": 0xB7,
-    "ш": 0xB8, "щ": 0xB9, "ъ": 0xBA, "ы": 0xBB, "ь": 0xBC, "э": 0xBD,
-    "ю": 0xBE, "я": 0xBF,
-
-    "Ґ": 0xC0, "Є": 0xC1, "І": 0xC2, "Ї": 0xC3, "Ў": 0xC4, "Ђ": 0xC5,
-    "Ј": 0xC6, "Љ": 0xC7, "Њ": 0xC8, "Џ": 0xC9, "Ѓ": 0xCA, "Ѕ": 0xCB,
-    "Ғ": 0xCC, "Қ": 0xCD, "Ң": 0xCE, "Ұ": 0xCF,
-    "ґ": 0xD0, "є": 0xD1, "і": 0xD2, "ї": 0xD3, "ў": 0xD4, "ђ": 0xD5,
-    "ј": 0xD6, "љ": 0xD7, "њ": 0xD8, "џ": 0xD9, "ѓ": 0xDA, "ѕ": 0xDB,
-    "ғ": 0xDC, "қ": 0xDD, "ң": 0xDE, "ұ": 0xDF,
-    "Ё": 0xF0, "ё": 0xF1,
-}
-
-LATIN_EXT = {
-    0xE0: "ÄäÀàÂâÃãÅå",
-    0xE1: "ÖöÒòÔôÕõØø",
-    0xE2: "ŬŭÜüÙùÛû",
-    0xE3: "ß",
-    0xE4: "ÇçĆćČč",
-    0xE5: "ĞğĜĝ",
-    0xE6: "İ",
-    0xE7: "ı",
-    0xE8: "ŠšŞşȘșŚś",
-    0xE9: "Ąą",
-    0xEA: "Ęę",
-    0xEB: "ŁłĹĺ",
-    0xEC: "ŃńŇňÑñ",
-    0xED: "Óó",
-    0xEE: "ŽžŹźŻż",
-    0xEF: "Řř",
-}
-for _code, _chars in LATIN_EXT.items():
-    for _char in _chars:
-        PGO_CHAR_MAP[_char] = _code
-
-# Обратная таблица для визуального контроля (--verify)
-PGO_TO_UNICODE = {v: k for k, v in PGO_CHAR_MAP.items()}
-for _i in range(128):
-    PGO_TO_UNICODE.setdefault(_i, chr(_i))
+def max_page_bytes(cols: int, rows: int) -> int:
+    return cols * rows + (rows - 1)
 
 
-def require_lz4() -> None:
-    if lz4 is None:
+# --------------------------------------------------------------------------
+# Таблица PurrGO-256: единый источник - tools/map-compiler/purrgo_models.py
+# --------------------------------------------------------------------------
+def _load_char_map() -> tuple[dict[str, int], dict[int, str]]:
+    models_path = Path(__file__).resolve().parent.parent / "map-compiler" / "purrgo_models.py"
+    if not models_path.is_file():
         raise RuntimeError(
-            "Не найден пакет 'lz4'. Установите зависимости командой: "
-            "python -m pip install -r requirements.txt"
+            f"Не найден {models_path}: таблица PurrGO-256 берётся из tools/map-compiler/purrgo_models.py."
         )
+    spec = importlib.util.spec_from_file_location("purrgo_models_for_books", models_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)  # type: ignore[union-attr]
+    char_map = {ch: code for ch, code in module._PGO_CHAR_MAP.items() if ord(ch) >= 0x80}
+
+    reverse: dict[int, str] = {i: chr(i) for i in range(0x80)}
+    for ch, code in char_map.items():
+        reverse.setdefault(code, ch)
+    return char_map, reverse
 
 
-def decode_source(raw: bytes, encoding: str) -> str:
-    actual_encoding = "utf-8-sig" if encoding == "utf-8" else encoding
-    try:
-        return raw.decode(actual_encoding, errors="strict")
-    except UnicodeDecodeError as exc:
-        raise ValueError(
-            f"Файл не декодируется как {encoding}: ошибка около байта {exc.start}. "
-            "Проверьте --encoding."
-        ) from exc
+PGO_CHAR_MAP, PGO_TO_UNICODE = _load_char_map()
+
+# Замены для символов, которых нет в шрифте. Выполняются до таблицы PurrGO-256,
+# результат всегда состоит из символов, которые кодируются одним байтом.
+FOLD: dict[str, str] = {
+    "\u2026": "...",   # …
+    "\u00d7": "x",     # ×
+    "\u2022": "*", "\u2023": "*", "\u25cf": "*", "\u25aa": "*",   # маркеры списков
+    "\u00b7": ".", "\u2219": ".",
+    "\u2032": "'", "\u2033": '"',
+    "\u201a": ",", "\u201b": "'",
+    "\u2039": "<", "\u203a": ">",
+    "\u2044": "/", "\u2215": "/",
+    "\u00ad": "",      # мягкий перенос
+    "\u2010": "-", "\u2011": "-", "\u2012": "-", "\u2013": "-", "\u2014": "-",
+    "\u2015": "-", "\u2212": "-",
+}
+
+
+def _is_mappable(ch: str) -> bool:
+    return ord(ch) < 0x80 or ch in PGO_CHAR_MAP
+
+
+@functools.lru_cache(maxsize=None)
+def fold_char(ch: str) -> str:
+    """Приводит один символ Unicode к строке из символов, которые есть в PurrGO-256."""
+    cp = ord(ch)
+    if cp < 0x80:
+        return ch
+    if ch in PGO_CHAR_MAP:
+        return ch
+    if ch in FOLD:
+        return FOLD[ch]
+
+    category = unicodedata.category(ch)
+    if category in ("Cf", "Mn", "Mc", "Me"):
+        return ""          # невидимые и комбинирующие знаки (ударения, ZWSP, BOM)
+    if category in ("Zs",):
+        return " "
+    if category in ("Zl", "Zp"):
+        return "\n"
+    if category == "Cc":
+        return " "
+    if category in ("Cs", "Co", "Cn"):
+        return "?"
+
+    # Совместимое разложение: ﬁ -> fi, ² -> 2, ™ -> TM.
+    compat = unicodedata.normalize("NFKC", ch)
+    if compat != ch and all(_is_mappable(c) for c in compat):
+        return compat
+    # Латинские буквы с диакритикой, которых нет в таблице: é -> e, ï -> i.
+    base = "".join(c for c in unicodedata.normalize("NFKD", ch) if not unicodedata.combining(c))
+    if base and all(_is_mappable(c) for c in base):
+        return base
+    return "?"
 
 
 def unicode_to_pgo(char: str) -> int:
@@ -147,194 +155,593 @@ def pgo_bytes_to_text(page_bytes: bytes) -> str:
     return "".join(PGO_TO_UNICODE.get(b, "?") for b in page_bytes)
 
 
-def normalize_source(text: str) -> str:
-    text = text.replace("\r\n", "\n").replace("\r", "\n")
-    text = text.replace("\t", " ")
-    result: list[str] = []
+def normalize_text(text: str) -> str:
+    """Нормализация: LF, NFC, табуляция, невидимые знаки, замены символов вне шрифта.
 
-    for char in text:
-        if char == "\n":
-            result.append(char)
-        elif char == "\x00":
-            result.append("?")
-        elif unicodedata.category(char).startswith("C"):
-            result.append(" ")
+    После вызова каждый символ результата кодируется ровно одним байтом PurrGO-256.
+    """
+    text = text.replace("\r\n", "\n").replace("\r", "\n").replace("\ufeff", "")
+    text = unicodedata.normalize("NFC", text)
+    out: list[str] = []
+    for ch in text:
+        if ch == "\n":
+            out.append(ch)
+        elif ch == "\t":
+            out.append("    ")
+        elif ch == "\x00":
+            out.append("?")
         else:
-            result.append(char)
+            out.append(fold_char(ch))
+    return "".join(out)
 
-    return "".join(result)
+
+# --------------------------------------------------------------------------
+# Модель документа
+# --------------------------------------------------------------------------
+@dataclass
+class Block:
+    """kind: 'p' абзац (с отступом), 'v' строка без отступа, 't' заголовок (по центру), 'b' пустая строка."""
+    kind: str
+    text: str = ""
 
 
-def wrap_line(line: str, width: int = MAX_LINE_CHARS) -> list[str]:
-    stripped = line.strip()
-    if not stripped:
-        return [""]
+@dataclass
+class Document:
+    title: str = ""
+    author: str = ""
+    blocks: list[Block] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)  # сообщения о принятых решениях
 
-    words = stripped.split()
-    output: list[str] = []
-    current = ""
 
-    for word in words:
-        if len(word) > width:
-            if current:
-                output.append(current)
-                current = ""
-            while len(word) > width:
-                output.append(word[:width])
-                word = word[width:]
-            if word:
-                current = word
+# --------------------------------------------------------------------------
+# Чтение plain text
+# --------------------------------------------------------------------------
+def decode_source(raw: bytes, encoding: str) -> tuple[str, str]:
+    """Возвращает (текст, фактически использованная кодировка)."""
+    if raw.startswith(b"\xff\xfe") or raw.startswith(b"\xfe\xff"):
+        return raw.decode("utf-16"), "utf-16"
+    if encoding == "auto":
+        try:
+            return raw.decode("utf-8-sig"), "utf-8"
+        except UnicodeDecodeError:
+            try:
+                return raw.decode("cp1251"), "cp1251 (определено автоматически)"
+            except UnicodeDecodeError as exc:
+                raise ValueError(
+                    "Не удалось определить кодировку: файл не UTF-8 и не CP1251. Укажите --encoding."
+                ) from exc
+    actual = "utf-8-sig" if encoding == "utf-8" else encoding
+    try:
+        return raw.decode(actual, errors="strict"), encoding
+    except UnicodeDecodeError as exc:
+        raise ValueError(
+            f"Файл не декодируется как {encoding}: ошибка около байта {exc.start}. Проверьте --encoding."
+        ) from exc
+
+
+def looks_hard_wrapped(lines: list[str]) -> bool:
+    """Эвристика: текст набран строками фиксированной ширины (как в книгах Project Gutenberg)."""
+    lens = sorted(len(line.rstrip()) for line in lines if line.strip())
+    n = len(lens)
+    if n < 20:
+        return False
+    p95 = lens[int(0.95 * (n - 1))]
+    median = lens[n // 2]
+    if not (55 <= p95 <= 120) or median < 35:
+        return False
+    near_max = sum(1 for v in lens if v >= 0.85 * p95) / n
+    return near_max >= 0.45
+
+
+def text_to_blocks(text: str, reflow: str) -> tuple[list[Block], str]:
+    lines = normalize_text(text).split("\n")
+    if lines and lines[-1] == "":
+        lines.pop()
+
+    if reflow == "auto":
+        do_reflow = looks_hard_wrapped(lines)
+        note = "жёсткие переносы строк в исходнике обнаружены, строки склеиваются в абзацы" if do_reflow \
+            else "абзац = одна строка исходника"
+    else:
+        do_reflow = reflow == "on"
+        note = "склейка строк в абзацы включена" if do_reflow else "абзац = одна строка исходника"
+
+    blocks: list[Block] = []
+    if not do_reflow:
+        for line in lines:
+            blocks.append(Block("p", line) if line.strip() else Block("b"))
+        return blocks, note
+
+    paragraph: list[str] = []
+
+    def flush() -> None:
+        if paragraph:
+            blocks.append(Block("p", " ".join(paragraph)))
+            paragraph.clear()
+
+    for line in lines:
+        if not line.strip():
+            flush()
+            blocks.append(Block("b"))
             continue
+        indented = len(line) - len(line.lstrip(" ")) >= 2
+        if indented:
+            flush()
+        paragraph.append(line.strip())
+    flush()
+    return blocks, note
 
-        candidate = word if not current else current + " " + word
-        if len(candidate) <= width:
-            current = candidate
+
+# --------------------------------------------------------------------------
+# Чтение FB2
+# --------------------------------------------------------------------------
+def _local(tag: object) -> str:
+    return tag.rsplit("}", 1)[-1] if isinstance(tag, str) else ""
+
+
+def _inline_text(element: ET.Element) -> str:
+    return " ".join("".join(element.itertext()).split())
+
+
+def fb2_to_document(raw: bytes) -> Document:
+    try:
+        root = ET.fromstring(raw)
+    except ET.ParseError as exc:
+        raise ValueError(f"Некорректный FB2 (XML): {exc}") from exc
+
+    doc = Document()
+    for info in root.iter():
+        if _local(info.tag) == "title-info":
+            for child in info:
+                name = _local(child.tag)
+                if name == "book-title" and not doc.title:
+                    doc.title = _inline_text(child)
+                elif name == "author" and not doc.author:
+                    parts = {_local(c.tag): _inline_text(c) for c in child}
+                    full = " ".join(
+                        parts[key] for key in ("first-name", "middle-name", "last-name") if parts.get(key)
+                    )
+                    doc.author = full or parts.get("nickname", "")
+            break
+
+    skipped_notes = False
+
+    def walk(el: ET.Element) -> None:
+        tag = _local(el.tag)
+        if tag == "p":
+            doc.blocks.append(Block("p", _inline_text(el)))
+        elif tag in ("subtitle",):
+            doc.blocks.append(Block("t", _inline_text(el)))
+        elif tag == "title":
+            for child in el:
+                if _local(child.tag) == "p":
+                    doc.blocks.append(Block("t", _inline_text(child)))
+        elif tag == "empty-line":
+            doc.blocks.append(Block("b"))
+        elif tag == "text-author":
+            doc.blocks.append(Block("v", _inline_text(el)))
+        elif tag == "v":
+            doc.blocks.append(Block("v", _inline_text(el)))
+        elif tag == "stanza":
+            for child in el:
+                walk(child)
+            doc.blocks.append(Block("b"))
+        elif tag == "table":
+            for row in el.iter():
+                if _local(row.tag) == "tr":
+                    cells = [_inline_text(c) for c in row if _local(c.tag) in ("td", "th")]
+                    doc.blocks.append(Block("v", " ".join(c for c in cells if c)))
+        elif tag in ("image", "binary", "description"):
+            return
         else:
-            output.append(current)
-            current = word
+            for child in el:
+                walk(child)
 
-    if current:
-        output.append(current)
+    for body in root:
+        if _local(body.tag) != "body":
+            continue
+        if body.get("name") in ("notes", "comments"):
+            skipped_notes = True
+            continue
+        walk(body)
 
-    return output or [""]
+    if skipped_notes:
+        doc.notes.append("FB2: сноски (body name=\"notes\") не включены в книгу")
+    return doc
 
 
-def text_to_lines(text: str) -> list[str]:
-    normalized = normalize_source(text)
-    source_lines = normalized.split("\n")
-    if source_lines and source_lines[-1] == "":
-        source_lines.pop()
+# --------------------------------------------------------------------------
+# Чтение EPUB
+# --------------------------------------------------------------------------
+class _HtmlBlocks(html.parser.HTMLParser):
+    BLOCK_TAGS = {
+        "p", "div", "li", "ul", "ol", "blockquote", "pre", "tr", "table", "section", "article",
+        "aside", "dd", "dt", "dl", "figure", "figcaption", "caption", "header", "footer",
+        "body", "hr", "nav", "main",
+    }
+    HEAD_TAGS = {"h1", "h2", "h3", "h4", "h5", "h6"}
+    SKIP_TAGS = {"script", "style", "head", "title", "svg", "math"}
 
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.blocks: list[Block] = []
+        self._buf: list[str] = []
+        self._skip = 0
+        self._in_head = False
+        self._cont = False
+
+    def _flush(self) -> None:
+        text = " ".join("".join(self._buf).split())
+        self._buf.clear()
+        if not text:
+            return
+        if self._in_head:
+            kind = "t"
+        else:
+            kind = "v" if self._cont else "p"
+            self._cont = True
+        self.blocks.append(Block(kind, text))
+
+    def handle_starttag(self, tag: str, attrs: list) -> None:
+        if tag in self.SKIP_TAGS:
+            self._flush()
+            self._skip += 1
+        elif tag in self.HEAD_TAGS:
+            self._flush()
+            self._in_head = True
+        elif tag == "br":
+            self._flush()
+        elif tag in self.BLOCK_TAGS:
+            self._flush()
+            self._cont = False
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in self.SKIP_TAGS:
+            self._skip = max(0, self._skip - 1)
+        elif tag in self.HEAD_TAGS:
+            self._flush()
+            self._in_head = False
+            self._cont = False
+        elif tag in self.BLOCK_TAGS:
+            self._flush()
+            self._cont = False
+
+    def handle_data(self, data: str) -> None:
+        if not self._skip:
+            self._buf.append(data)
+
+    def close(self) -> None:  # noqa: D401
+        super().close()
+        self._flush()
+
+
+def _decode_markup(raw: bytes) -> str:
+    if raw.startswith(b"\xef\xbb\xbf"):
+        return raw.decode("utf-8-sig", errors="replace")
+    head = raw[:1024]
+    match = re.search(rb"""(?:encoding|charset)\s*=\s*["']?\s*([A-Za-z0-9_\-]+)""", head)
+    encoding = match.group(1).decode("ascii") if match else "utf-8"
+    try:
+        return raw.decode(encoding, errors="replace")
+    except LookupError:
+        return raw.decode("utf-8", errors="replace")
+
+
+def epub_to_document(source: Path) -> Document:
+    try:
+        archive = zipfile.ZipFile(source)
+    except (zipfile.BadZipFile, OSError) as exc:
+        raise ValueError(f"Не удалось открыть EPUB как ZIP: {exc}") from exc
+
+    with archive:
+        names = set(archive.namelist())
+        try:
+            container = ET.fromstring(archive.read("META-INF/container.xml"))
+        except (KeyError, ET.ParseError) as exc:
+            raise ValueError("В EPUB нет корректного META-INF/container.xml.") from exc
+        opf_path = next(
+            (el.get("full-path") for el in container.iter() if _local(el.tag) == "rootfile" and el.get("full-path")),
+            None,
+        )
+        if not opf_path or opf_path not in names:
+            raise ValueError("В EPUB не найден файл пакета (OPF).")
+        try:
+            opf = ET.fromstring(archive.read(opf_path))
+        except ET.ParseError as exc:
+            raise ValueError(f"Некорректный OPF: {exc}") from exc
+
+        doc = Document()
+        manifest: dict[str, tuple[str, str, str]] = {}
+        spine: list[tuple[str, bool]] = []
+        for el in opf.iter():
+            name = _local(el.tag)
+            if name == "title" and not doc.title and (el.text or "").strip():
+                doc.title = " ".join(el.text.split())
+            elif name == "creator" and not doc.author and (el.text or "").strip():
+                doc.author = " ".join(el.text.split())
+            elif name == "item" and el.get("id"):
+                manifest[el.get("id")] = (
+                    el.get("href", ""), el.get("media-type", ""), el.get("properties", ""),
+                )
+            elif name == "itemref" and el.get("idref"):
+                spine.append((el.get("idref"), el.get("linear", "yes") != "no"))
+
+        base = posixpath.dirname(opf_path)
+        missing = 0
+        for idref, linear in spine:
+            if not linear or idref not in manifest:
+                continue
+            href, media, props = manifest[idref]
+            if media not in ("application/xhtml+xml", "text/html") or "nav" in props.split():
+                continue
+            member = posixpath.normpath(posixpath.join(base, urllib.parse.unquote(href.split("#")[0])))
+            if member not in names:
+                missing += 1
+                continue
+            parser = _HtmlBlocks()
+            parser.feed(_decode_markup(archive.read(member)))
+            parser.close()
+            doc.blocks.extend(parser.blocks)
+
+        if missing:
+            doc.notes.append(f"EPUB: {missing} файл(ов) из spine не найдено в архиве и пропущено")
+        if not doc.blocks:
+            raise ValueError("В EPUB не найден текст (возможно, книга защищена DRM).")
+        return doc
+
+
+def read_document(path: Path, encoding: str, reflow: str) -> Document:
+    name = path.name.lower()
+    try:
+        if name.endswith(".epub"):
+            return epub_to_document(path)
+        if name.endswith(".fb2"):
+            return fb2_to_document(path.read_bytes())
+        if name.endswith(".zip"):
+            with zipfile.ZipFile(path) as archive:
+                members = [n for n in archive.namelist() if n.lower().endswith(".fb2")]
+                if not members:
+                    raise ValueError("В ZIP-архиве нет файла .fb2.")
+                return fb2_to_document(archive.read(members[0]))
+        raw = path.read_bytes()
+    except (OSError, zipfile.BadZipFile) as exc:
+        raise ValueError(f"Не удалось прочитать {path}: {exc}") from exc
+
+    text, used_encoding = decode_source(raw, encoding)
+    blocks, note = text_to_blocks(text, reflow)
+    doc = Document(blocks=blocks)
+    doc.notes.append(f"Кодировка: {used_encoding}")
+    doc.notes.append(f"Абзацы: {note}")
+    return doc
+
+
+# --------------------------------------------------------------------------
+# Перенос слов и разбиение на страницы
+# --------------------------------------------------------------------------
+_HARD_HYPHEN_RE = re.compile(r"(?<=\w-)(?=\w)")
+_WORD_CORE_RE = re.compile(r"([^\w]*)([^\W\d_]{5,})([^\w]*)")
+
+Piece = tuple[str, str]  # (текст, разделитель после: " ", "" или "soft")
+
+
+def make_hyphenator(lang: str | None) -> Callable[[str], list[str]] | None:
+    if not lang:
+        return None
+    try:
+        import pyphen
+    except ImportError as exc:
+        raise RuntimeError(
+            "Для --hyphenate нужен пакет pyphen: python -m pip install pyphen"
+        ) from exc
+    if lang not in pyphen.LANGUAGES:
+        raise ValueError(f"pyphen не знает язык {lang!r}. Пример: ru_RU, en_US, uk_UA.")
+    dic = pyphen.Pyphen(lang=lang)
+
+    def split(word: str) -> list[str]:
+        cuts = dic.positions(word)
+        parts, prev = [], 0
+        for cut in cuts:
+            parts.append(word[prev:cut])
+            prev = cut
+        parts.append(word[prev:])
+        return parts
+
+    return split
+
+
+def word_pieces(word: str, hyphenator: Callable[[str], list[str]] | None) -> list[Piece]:
+    parts = _HARD_HYPHEN_RE.split(word)
+    pieces: list[Piece] = []
+    for index, part in enumerate(parts):
+        end_sep = " " if index == len(parts) - 1 else ""
+        match = _WORD_CORE_RE.fullmatch(part) if hyphenator else None
+        syllables = hyphenator(match.group(2)) if match else []
+        if match and len(syllables) > 1:
+            syllables[0] = match.group(1) + syllables[0]
+            syllables[-1] = syllables[-1] + match.group(3)
+            pieces.extend((s, "soft") for s in syllables[:-1])
+            pieces.append((syllables[-1], end_sep))
+        else:
+            pieces.append((part, end_sep))
+    return pieces
+
+
+def wrap_pieces(pieces: Iterable[Piece], width: int, indent: int = 0) -> list[str]:
+    out: list[str] = []
+    cur = " " * indent
+    pending = ""
+    empty = True
+    for text, sep in pieces:
+        gap = " " if (pending == " " and not empty) else ""
+        reserve = 1 if sep == "soft" else 0
+        if len(cur) + len(gap) + len(text) + reserve <= width:
+            cur += gap + text
+            pending = sep
+            empty = False
+            continue
+        if not empty:
+            if pending == "soft":
+                cur += "-"
+            out.append(cur)
+        cur = ""
+        while len(text) + reserve > width and len(text) > 1:
+            out.append(text[:width])
+            text = text[width:]
+        cur = text
+        pending = sep
+        empty = False
+    if not empty:
+        out.append(cur)
+    return out
+
+
+def wrap_text(text: str, width: int, indent: int = 0,
+              hyphenator: Callable[[str], list[str]] | None = None) -> list[str]:
+    pieces: list[Piece] = []
+    for word in text.split():
+        pieces.extend(word_pieces(word, hyphenator))
+    return wrap_pieces(pieces, width, indent)
+
+
+def blocks_to_lines(blocks: list[Block], width: int = DEFAULT_COLS, indent: int = 0,
+                    collapse_blank: bool = False,
+                    hyphenator: Callable[[str], list[str]] | None = None) -> list[str]:
+    if not 0 <= indent < width:
+        raise ValueError(f"--indent должен быть от 0 до {width - 1}.")
     lines: list[str] = []
-    for line in source_lines:
-        lines.extend(wrap_line(line))
+    blank_pending = False
 
-    if not lines or (len(lines) == 1 and lines[0] == ""):
-        raise ValueError("Исходный текст пуст: PGB 1.0 не допускает пустую страницу.")
+    def add_blank(force: bool = False) -> None:
+        if lines and (force or lines[-1] != ""):
+            lines.append("")
 
+    for block in blocks:
+        if block.kind == "b":
+            if not collapse_blank or (lines and lines[-1] != ""):
+                lines.append("")
+            blank_pending = False
+            continue
+        text = " ".join(normalize_text(block.text).split())
+        if not text:
+            continue
+        if blank_pending:
+            add_blank()
+            blank_pending = False
+        if block.kind == "t":
+            add_blank()
+            for line in wrap_text(text, width):
+                lines.append(" " * ((width - len(line)) // 2) + line)
+            blank_pending = True
+        elif block.kind == "v":
+            lines.extend(wrap_text(text, width, 0, hyphenator))
+        else:
+            lines.extend(wrap_text(text, width, indent, hyphenator))
+
+    while lines and lines[0] == "":
+        lines.pop(0)
+    while lines and lines[-1] == "":
+        lines.pop()
+    if not lines:
+        raise ValueError("Исходный текст пуст: PGB не допускает пустую страницу.")
     return lines
 
 
-def paginate(lines: list[str]) -> list[bytes]:
-    """Создаёт страницы максимум по 32 строки и кодирует их в PurrGO-256."""
+def paginate(lines: list[str], rows: int = DEFAULT_ROWS, cols: int = DEFAULT_COLS) -> list[bytes]:
+    """Страницы максимум по `rows` строк в PurrGO-256; пустые строки в начале и конце страницы отбрасываются."""
     pages: list[bytes] = []
-
-    for start in range(0, len(lines), MAX_PAGE_LINES):
-        page_lines = lines[start:start + MAX_PAGE_LINES]
-        page_text = "\n".join(page_lines)
-        page_bytes = bytes(unicode_to_pgo(char) for char in page_text)
-        
-        # Гарантированно удаляем завершающий LF на конце страницы
-        page_bytes = page_bytes.rstrip(b"\n")
-
-        if not page_bytes:
-            raise ValueError(
-                "Получилась пустая страница. Измените исходный текст: "
-                "страница PGB не может иметь нулевой размер."
-            )
-        if len(page_bytes) > MAX_PAGE_UNCOMPRESSED:
-            raise ValueError(
-                f"Внутренняя ошибка: страница имеет {len(page_bytes)} байт, "
-                f"максимум {MAX_PAGE_UNCOMPRESSED}."
-            )
-        if b"\x00" in page_bytes:
+    limit = max_page_bytes(cols, rows)
+    i = 0
+    while i < len(lines):
+        while i < len(lines) and lines[i] == "":
+            i += 1
+        if i >= len(lines):
+            break
+        chunk = lines[i:i + rows]
+        i += rows
+        while chunk and chunk[-1] == "":
+            chunk.pop()
+        page = bytes(unicode_to_pgo(ch) for ch in "\n".join(chunk))
+        if len(page) > limit or any(len(line) > cols for line in chunk):
+            raise ValueError("Внутренняя ошибка: страница не укладывается в геометрию.")
+        if b"\x00" in page:
             raise ValueError("Внутренняя ошибка: NUL обнаружен в данных страницы.")
-        pages.append(page_bytes)
-
+        pages.append(page)
+    if not pages:
+        raise ValueError("Исходный текст пуст: PGB не допускает пустую страницу.")
     return pages
 
 
-def encode_title(title: str) -> bytes:
-    normalized = normalize_source(title).replace("\n", " ").strip()
-    encoded = bytes(unicode_to_pgo(char) for char in normalized)
-    if len(encoded) > UINT16_MAX:
-        raise ValueError("Название книги слишком длинное: максимум 65535 байт.")
-    if b"\x00" in encoded:
-        raise ValueError("Название содержит NUL, который запрещен форматом.")
-    return encoded
+def encode_meta(value: str, limit: int, what: str, notes: list[str]) -> bytes:
+    text = " ".join(normalize_text(value).replace("\n", " ").split())
+    if len(text) > limit:
+        notes.append(f"{what} обрезано до {limit} символов")
+        text = text[:limit].rstrip()
+    return bytes(unicode_to_pgo(ch) for ch in text)
 
 
-def crc32_with_zeroed_field(data: bytes | bytearray) -> int:
-    mutable = bytearray(data)
-    mutable[CRC_OFFSET:CRC_OFFSET + 4] = b"\x00\x00\x00\x00"
-    return zlib.crc32(mutable) & UINT32_MAX
+# --------------------------------------------------------------------------
+# Сборка и проверка PGB
+# --------------------------------------------------------------------------
+def crc32_zeroed(data: bytes | bytearray, end: int | None = None) -> int:
+    """CRC-32/ISO-HDLC по data[0:end], где поля file_crc32 и meta_crc32 считаются нулевыми."""
+    view = memoryview(data)
+    end = len(data) if end is None else end
+    crc = zlib.crc32(view[:FILE_CRC_OFFSET])
+    crc = zlib.crc32(b"\x00" * 8, crc)
+    crc = zlib.crc32(view[META_CRC_OFFSET + 4:end], crc)
+    return crc & UINT32_MAX
 
 
-def build_pgb(pages: list[bytes], title: bytes) -> bytes:
-    require_lz4()
-
+def build_pgb(pages: list[bytes], title: bytes, author: bytes,
+              cols: int = DEFAULT_COLS, rows: int = DEFAULT_ROWS) -> bytes:
     if not pages:
         raise ValueError("В книге должна быть хотя бы одна страница.")
-    if len(pages) > UINT32_MAX:
-        raise ValueError("Слишком много страниц для поля page_count uint32.")
-
-    compressed_pages = [
-        lz4.block.compress(page, store_size=False)
-        for page in pages
-    ]
+    if not (1 <= cols <= 255 and 1 <= rows <= 255):
+        raise ValueError("cols и rows должны быть в диапазоне 1..255.")
+    if len(title) > MAX_TITLE_BYTES or len(author) > MAX_AUTHOR_BYTES:
+        raise ValueError("Название или автор слишком длинные.")
 
     page_count = len(pages)
-    index_offset = HEADER_SIZE
-    title_offset = index_offset + page_count * INDEX_ENTRY_SIZE
-    data_offset = title_offset + len(title)
-    if any(value > UINT32_MAX for value in (title_offset, data_offset)):
-        raise ValueError("Размер метаданных превышает диапазон uint32.")
+    meta_offset = HEADER_SIZE
+    index_offset = meta_offset + len(title) + len(author)
+    data_offset = index_offset + page_count * INDEX_ENTRY_SIZE
 
-    index_data = bytearray()
-    page_offset = data_offset
-    for original, compressed in zip(pages, compressed_pages):
-        if not compressed:
-            raise ValueError("LZ4 вернул пустой блок для непустой страницы.")
-        if len(compressed) > UINT32_MAX or len(original) > UINT32_MAX:
-            raise ValueError("Размер страницы превышает диапазон uint32.")
-        index_data.extend(INDEX_STRUCT.pack(page_offset, len(compressed), len(original)))
-        page_offset += len(compressed)
-        if page_offset > UINT32_MAX:
+    index = bytearray()
+    offset = data_offset
+    for page in pages:
+        index += INDEX_STRUCT.pack(offset, len(page), len(page))
+        offset += len(page)
+        if offset > UINT32_MAX:
             raise ValueError("Размер файла превышает диапазон uint32.")
+    file_size = offset
 
-    file_size = page_offset
     header = HEADER_STRUCT.pack(
-        MAGIC,
-        VERSION_MAJOR,
-        VERSION_MINOR,
-        HEADER_SIZE,
-        0,
-        page_count,
-        index_offset,
-        data_offset,
-        file_size,
-        title_offset,
-        len(title),
-        0,
-        0,
-        b"\x00" * 24,
+        MAGIC, VERSION_MAJOR, VERSION_MINOR, HEADER_SIZE, 0,
+        page_count, meta_offset, index_offset, data_offset, file_size, 0, 0,
+        cols, rows, COMPRESSION_NONE, 0, len(title), len(author), b"\x00" * 16,
     )
-
     result = bytearray(header)
-    result.extend(index_data)
-    result.extend(title)
-    for block in compressed_pages:
-        result.extend(block)
-
+    result += title
+    result += author
+    result += index
+    for page in pages:
+        result += page
     if len(result) != file_size:
         raise AssertionError(f"Размер собранного файла {len(result)} != {file_size}")
 
-    crc = crc32_with_zeroed_field(result)
-    struct.pack_into("<I", result, CRC_OFFSET, crc)
+    struct.pack_into("<I", result, META_CRC_OFFSET, crc32_zeroed(result, data_offset))
+    struct.pack_into("<I", result, FILE_CRC_OFFSET, crc32_zeroed(result))
     return bytes(result)
 
 
-def verify_pgb(data: bytes) -> dict[str, int]:
-    require_lz4()
-
+def verify_pgb(data: bytes) -> dict:
     if len(data) < HEADER_SIZE:
         raise ValueError("Файл короче заголовка PGB.")
-    fields = HEADER_STRUCT.unpack_from(data, 0)
     (
-        magic, major, minor, header_size, flags, page_count,
-        index_offset, data_offset, file_size, title_offset,
-        title_length, reserved0, stored_crc, reserved1,
-    ) = fields
+        magic, major, minor, header_size, flags, page_count, meta_offset, index_offset,
+        data_offset, file_size, file_crc, meta_crc, cols, rows, compression, reserved0,
+        title_len, author_len, reserved1,
+    ) = HEADER_STRUCT.unpack_from(data, 0)
 
     if magic != MAGIC:
         raise ValueError("Неверный magic: ожидалось PGB1.")
@@ -344,201 +751,175 @@ def verify_pgb(data: bytes) -> dict[str, int]:
         raise ValueError(f"Неверный header_size: {header_size}.")
     if flags != 0:
         raise ValueError(f"Неподдерживаемые flags: 0x{flags:04X}.")
-    if page_count == 0:
-        raise ValueError("page_count равен нулю.")
+    if compression != COMPRESSION_NONE:
+        raise ValueError(f"Неподдерживаемый способ сжатия: {compression}.")
     if reserved0 != 0 or any(reserved1):
         raise ValueError("Зарезервированные поля заголовка должны быть нулевыми.")
+    if page_count == 0:
+        raise ValueError("page_count равен нулю.")
+    if cols == 0 or rows == 0:
+        raise ValueError("cols и rows должны быть больше нуля.")
     if file_size != len(data):
         raise ValueError(f"file_size={file_size}, фактический размер={len(data)}.")
-    if index_offset != HEADER_SIZE:
-        raise ValueError("index_offset должен быть равен 64.")
+    if title_len > MAX_TITLE_BYTES or author_len > MAX_AUTHOR_BYTES:
+        raise ValueError("Название или автор длиннее допустимого.")
+    if meta_offset != HEADER_SIZE:
+        raise ValueError("meta_offset должен быть равен 64.")
+    if index_offset != meta_offset + title_len + author_len:
+        raise ValueError("index_offset не соответствует концу метаданных.")
+    if data_offset != index_offset + page_count * INDEX_ENTRY_SIZE:
+        raise ValueError("data_offset не соответствует концу индекса.")
+    if data_offset >= file_size:
+        raise ValueError("Нет данных страниц: data_offset выходит за границы файла.")
 
-    expected_title_offset = index_offset + page_count * INDEX_ENTRY_SIZE
-    if title_offset != expected_title_offset:
-        raise ValueError("title_offset не соответствует концу индекса.")
-    if title_offset + title_length != data_offset:
-        raise ValueError("data_offset не соответствует концу названия.")
-    if title_offset + title_length > file_size:
-        raise ValueError("Название выходит за границы файла.")
-    if data_offset > file_size:
-        raise ValueError("data_offset выходит за границы файла.")
+    calculated_meta = crc32_zeroed(data, data_offset)
+    if calculated_meta != meta_crc:
+        raise ValueError(f"meta_crc32 не совпадает: в файле 0x{meta_crc:08X}, рассчитан 0x{calculated_meta:08X}.")
+    calculated_file = crc32_zeroed(data)
+    if calculated_file != file_crc:
+        raise ValueError(f"file_crc32 не совпадает: в файле 0x{file_crc:08X}, рассчитан 0x{calculated_file:08X}.")
 
-    calculated_crc = crc32_with_zeroed_field(data)
-    if calculated_crc != stored_crc:
-        raise ValueError(
-            f"CRC-32 не совпадает: в файле 0x{stored_crc:08X}, "
-            f"рассчитан 0x{calculated_crc:08X}."
-        )
+    limit = max_page_bytes(cols, rows)
+    expected = data_offset
+    total = 0
+    for number in range(page_count):
+        page_offset, stored, raw = INDEX_STRUCT.unpack_from(data, index_offset + number * INDEX_ENTRY_SIZE)
+        label = f"Страница {number + 1}"
+        if stored == 0 or raw == 0:
+            raise ValueError(f"{label}: нулевой размер.")
+        if stored != raw:
+            raise ValueError(f"{label}: stored_size != raw_size при отсутствии сжатия.")
+        if raw > limit:
+            raise ValueError(f"{label}: размер {raw} превышает {limit}.")
+        if page_offset != expected:
+            raise ValueError(f"{label}: page_offset={page_offset}, ожидалось {expected}; промежуток или перекрытие.")
+        end = page_offset + stored
+        if end > file_size:
+            raise ValueError(f"{label}: страница выходит за файл.")
 
-    expected_offset = data_offset
-    total_uncompressed = 0
+        page = data[page_offset:end]
+        if any((b < 0x20 and b != 0x0A) or b == 0x7F for b in page):
+            raise ValueError(f"{label}: запрещённый управляющий символ в тексте.")
+        if page.endswith(b"\n"):
+            raise ValueError(f"{label}: запрещён завершающий LF.")
+        lines = page.split(b"\n")
+        if len(lines) > rows:
+            raise ValueError(f"{label}: больше {rows} строк.")
+        if any(len(line) > cols for line in lines):
+            raise ValueError(f"{label}: строка длиннее {cols} байт.")
+        expected = end
+        total += raw
 
-    for page_number in range(page_count):
-        entry_offset = index_offset + page_number * INDEX_ENTRY_SIZE
-        page_offset, compressed_size, uncompressed_size = INDEX_STRUCT.unpack_from(
-            data, entry_offset
-        )
+    if expected != file_size:
+        raise ValueError("Конец последней страницы не совпадает с file_size.")
 
-        if compressed_size == 0 or uncompressed_size == 0:
-            raise ValueError(f"Страница {page_number + 1}: нулевой размер.")
-        if uncompressed_size > MAX_PAGE_UNCOMPRESSED:
-            raise ValueError(
-                f"Страница {page_number + 1}: uncompressed_size={uncompressed_size} "
-                f"превышает {MAX_PAGE_UNCOMPRESSED}."
-            )
-        if page_offset != expected_offset:
-            raise ValueError(
-                f"Страница {page_number + 1}: page_offset={page_offset}, "
-                f"ожидалось {expected_offset}; найдены промежуток или перекрытие."
-            )
-        page_end = page_offset + compressed_size
-        if page_end > file_size or page_end < page_offset:
-            raise ValueError(f"Страница {page_number + 1}: блок выходит за файл.")
-
-        block = data[page_offset:page_end]
-        try:
-            decoded = lz4.block.decompress(block, uncompressed_size=uncompressed_size)
-        except Exception as exc:
-            raise ValueError(
-                f"Страница {page_number + 1}: ошибка распаковки LZ4: {exc}"
-            ) from exc
-
-        if len(decoded) != uncompressed_size:
-            raise ValueError(
-                f"Страница {page_number + 1}: после распаковки {len(decoded)} байт, "
-                f"ожидалось {uncompressed_size}."
-            )
-        if b"\x00" in decoded or b"\r" in decoded:
-            raise ValueError(
-                f"Страница {page_number + 1}: запрещенный NUL или CR в тексте."
-            )
-
-        lines = decoded.split(b"\n")
-        if len(lines) > MAX_PAGE_LINES:
-            raise ValueError(f"Страница {page_number + 1}: больше 32 строк.")
-        if any(len(line) > MAX_LINE_CHARS for line in lines):
-            raise ValueError(
-                f"Страница {page_number + 1}: строка длиннее 29 байт."
-            )
-        if decoded.endswith(b"\n"):
-            raise ValueError(
-                f"Страница {page_number + 1}: запрещен завершающий LF."
-            )
-
-        expected_offset = page_end
-        total_uncompressed += len(decoded)
-
-    if expected_offset != file_size:
-        raise ValueError("Конец последнего LZ4-блока не совпадает с file_size.")
-
+    title_start = meta_offset
+    author_start = title_start + title_len
     return {
         "pages": page_count,
         "file_size": file_size,
-        "uncompressed_size": total_uncompressed,
-        "crc32": stored_crc,
+        "text_size": total,
+        "crc32": file_crc,
+        "cols": cols,
+        "rows": rows,
+        "title": pgo_bytes_to_text(data[title_start:author_start]),
+        "author": pgo_bytes_to_text(data[author_start:index_offset]),
     }
 
 
 def extract_all_pages_text(data: bytes) -> list[str]:
-    """Извлекает и декодирует текст всех страниц из PGB-файла."""
-    require_lz4()
     fields = HEADER_STRUCT.unpack_from(data, 0)
-    _, _, _, _, _, page_count, index_offset, _, _, _, _, _, _, _ = fields
-
-    pages_text = []
-    for page_number in range(page_count):
-        entry_offset = index_offset + page_number * INDEX_ENTRY_SIZE
-        page_offset, compressed_size, uncompressed_size = INDEX_STRUCT.unpack_from(
-            data, entry_offset
-        )
-        block = data[page_offset:page_offset + compressed_size]
-        decoded = lz4.block.decompress(block, uncompressed_size=uncompressed_size)
-        pages_text.append(pgo_bytes_to_text(decoded))
-    return pages_text
+    page_count, index_offset = fields[5], fields[7]
+    pages = []
+    for number in range(page_count):
+        offset, stored, _raw = INDEX_STRUCT.unpack_from(data, index_offset + number * INDEX_ENTRY_SIZE)
+        pages.append(pgo_bytes_to_text(data[offset:offset + stored]))
+    return pages
 
 
+# --------------------------------------------------------------------------
+# Командная строка
+# --------------------------------------------------------------------------
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Конвертер plain-text в бинарный формат PurrGO PGB 1.0 и проверка."
+        description="Конвертер txt / FB2 / EPUB в формат электронных книг PurrGO PGB 1.0 и проверка PGB."
     )
-    parser.add_argument("input", type=Path, help="Исходный текстовый файл или готовый .pgb файл.")
-    parser.add_argument(
-        "output",
-        type=Path,
-        nargs="?",
-        default=None,
-        help="Путь выходного файла .pgb (если не задан, используется имя входного файла с расширением .pgb).",
-    )
-    parser.add_argument(
-        "--encoding",
-        choices=("utf-8", "cp1251", "cp866"),
-        default="utf-8",
-        help="Кодировка исходного файла (по умолчанию utf-8).",
-    )
-    parser.add_argument(
-        "--title",
-        help="Название книги. По умолчанию используется имя исходного файла без расширения.",
-    )
-    parser.add_argument(
-        "--verify",
-        action="store_true",
-        help="Проверить соответствие формату и вывести первую и последнюю страницы текста в консоль.",
-    )
+    parser.add_argument("input", type=Path,
+                        help="Исходная книга (.txt, .fb2, .fb2.zip, .epub) или готовый .pgb для проверки.")
+    parser.add_argument("output", type=Path, nargs="?", default=None,
+                        help="Выходной .pgb (по умолчанию - имя входного файла с расширением .pgb).")
+    parser.add_argument("--encoding", choices=("auto", "utf-8", "cp1251", "cp866"), default="auto",
+                        help="Кодировка txt (по умолчанию auto: UTF-8, иначе CP1251; CP866 только явно).")
+    parser.add_argument("--title", help="Название книги (по умолчанию из метаданных или имя файла).")
+    parser.add_argument("--author", help="Автор (по умолчанию из метаданных FB2/EPUB).")
+    parser.add_argument("--reflow", choices=("auto", "on", "off"), default="auto",
+                        help="txt: склеивать строки с жёсткими переносами в абзацы (по умолчанию auto).")
+    parser.add_argument("--indent", type=int, default=2,
+                        help="Отступ первой строки абзаца в пробелах (по умолчанию 2, 0 - без отступа).")
+    parser.add_argument("--collapse-blank", action="store_true",
+                        help="Сворачивать несколько пустых строк подряд в одну.")
+    parser.add_argument("--hyphenate", metavar="LANG",
+                        help="Расставлять переносы по словарю pyphen (например ru_RU, en_US).")
+    parser.add_argument("--cols", type=int, default=DEFAULT_COLS, help=argparse.SUPPRESS)
+    parser.add_argument("--rows", type=int, default=DEFAULT_ROWS, help=argparse.SUPPRESS)
+    parser.add_argument("--verify", action="store_true",
+                        help="Перечитать записанный файл, проверить и показать первую и последнюю страницы.")
     return parser
+
+
+def _print_page_preview(pages_text: list[str]) -> None:
+    bar = "=" * 40
+    print(f"\n{bar}\n ПЕРВАЯ СТРАНИЦА \n{bar}\n{pages_text[0]}\n{bar}")
+    if len(pages_text) > 1:
+        print(f"\n{bar}\n ПОСЛЕДНЯЯ СТРАНИЦА ({len(pages_text)} из {len(pages_text)}) \n{bar}\n{pages_text[-1]}\n{bar}")
+
+
+def _default_title(path: Path) -> str:
+    name = path.name
+    for suffix in (".fb2.zip", ".fb2", ".epub", ".zip", ".txt"):
+        if name.lower().endswith(suffix):
+            return name[: -len(suffix)]
+    return path.stem
+
+
+def _default_output(path: Path) -> Path:
+    return path.with_name(_default_title(path) + ".pgb")
 
 
 def main(argv: Iterable[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-
     try:
-        # Режим проверки готового .pgb файла (если передан .pgb или указан --verify с .pgb)
         if args.input.suffix.lower() == ".pgb":
             try:
                 raw_pgb = args.input.read_bytes()
             except OSError as exc:
                 print(f"Ошибка: Не удалось прочитать {args.input}: {exc}", file=sys.stderr)
                 return 2
-
             stats = verify_pgb(raw_pgb)
             print(f"Успешно проверен файл: {args.input}")
-            print(f"Страниц: {stats['pages']}")
+            print(f"Название: {stats['title']}")
+            print(f"Автор: {stats['author']}")
+            print(f"Страниц: {stats['pages']} ({stats['cols']}x{stats['rows']})")
             print(f"Размер PGB: {stats['file_size']} байт")
             print(f"CRC-32: 0x{stats['crc32']:08X}")
             print("Формат и CRC соответствуют спецификации PGB 1.0: OK")
-
-            # Вывод первой и последней страниц для визуального контроля
-            pages_text = extract_all_pages_text(raw_pgb)
-            if pages_text:
-                print("\n" + "=" * 40)
-                print(" ПЕРВАЯ СТРАНИЦА ")
-                print("=" * 40)
-                print(pages_text[0])
-                print("=" * 40)
-
-                if len(pages_text) > 1:
-                    print("\n" + "=" * 40)
-                    print(f" ПОСЛЕДНЯЯ СТРАНИЦА ({len(pages_text)} из {len(pages_text)}) ")
-                    print("=" * 40)
-                    print(pages_text[-1])
-                    print("=" * 40)
+            _print_page_preview(extract_all_pages_text(raw_pgb))
             return 0
 
-        # Режим компиляции из текстового файла
-        output_path = args.output if args.output is not None else args.input.with_suffix(".pgb")
+        output_path = args.output if args.output is not None else _default_output(args.input)
+        hyphenator = make_hyphenator(args.hyphenate)
 
-        try:
-            raw = args.input.read_bytes()
-        except OSError as exc:
-            raise ValueError(f"Не удалось прочитать {args.input}: {exc}") from exc
+        doc = read_document(args.input, args.encoding, args.reflow)
+        lines = blocks_to_lines(doc.blocks, args.cols, args.indent, args.collapse_blank, hyphenator)
+        pages = paginate(lines, args.rows, args.cols)
 
-        text = decode_source(raw, args.encoding)
-        lines = text_to_lines(text)
-        pages = paginate(lines)
+        notes = list(doc.notes)
+        title = args.title if args.title is not None else (doc.title or _default_title(args.input))
+        author = args.author if args.author is not None else doc.author
+        title_bytes = encode_meta(title, MAX_TITLE_BYTES, "Название", notes)
+        author_bytes = encode_meta(author, MAX_AUTHOR_BYTES, "Автор", notes)
 
-        book_title = args.title if args.title is not None else args.input.stem
-        title_bytes = encode_title(book_title)
-        pgb_data = build_pgb(pages, title_bytes)
-
+        pgb_data = build_pgb(pages, title_bytes, author_bytes, args.cols, args.rows)
         stats = verify_pgb(pgb_data)
         try:
             output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -546,42 +927,25 @@ def main(argv: Iterable[str] | None = None) -> int:
         except OSError as exc:
             raise ValueError(f"Не удалось записать {output_path}: {exc}") from exc
 
+        for note in notes:
+            print(note)
         if args.verify:
-            # Если запрошен --verify при компиляции, перепроверим файл с диска и выведем страницы
-            written_data = output_path.read_bytes()
-            stats = verify_pgb(written_data)
-            pages_text = extract_all_pages_text(written_data)
-            
+            written = output_path.read_bytes()
+            stats = verify_pgb(written)
             print(f"Создан и проверен файл: {output_path}")
-            print(f"Страниц: {stats['pages']}")
-            print(f"Строк текста: {len(lines)}")
-            print(f"Распакованный текст: {stats['uncompressed_size']} байт")
-            print(f"Размер PGB: {stats['file_size']} байт")
-            print(f"CRC-32: 0x{stats['crc32']:08X}")
-            print("Проверка структуры, CRC и LZ4: OK")
-
-            if pages_text:
-                print("\n" + "=" * 40)
-                print(" ПЕРВАЯ СТРАНИЦА ")
-                print("=" * 40)
-                print(pages_text[0])
-                print("=" * 40)
-
-                if len(pages_text) > 1:
-                    print("\n" + "=" * 40)
-                    print(f" ПОСЛЕДНЯЯ СТРАНИЦА ({len(pages_text)} из {len(pages_text)}) ")
-                    print("=" * 40)
-                    print(pages_text[-1])
-                    print("=" * 40)
         else:
             print(f"Создан файл: {output_path}")
-            print(f"Страниц: {stats['pages']}")
-            print(f"Строк текста: {len(lines)}")
-            print(f"Распакованный текст: {stats['uncompressed_size']} байт")
-            print(f"Размер PGB: {stats['file_size']} байт")
-            print(f"CRC-32: 0x{stats['crc32']:08X}")
-            print("Сборка и проверка структуры выполнены успешно.")
-
+        print(f"Название: {stats['title']}")
+        if stats["author"]:
+            print(f"Автор: {stats['author']}")
+        print(f"Страниц: {stats['pages']}")
+        print(f"Строк текста: {len(lines)}")
+        print(f"Текст: {stats['text_size']} байт")
+        print(f"Размер PGB: {stats['file_size']} байт")
+        print(f"CRC-32: 0x{stats['crc32']:08X}")
+        print("Сборка и проверка структуры выполнены успешно.")
+        if args.verify:
+            _print_page_preview(extract_all_pages_text(written))
         return 0
 
     except (ValueError, RuntimeError, OSError) as exc:
