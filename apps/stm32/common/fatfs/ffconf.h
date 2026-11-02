@@ -1,7 +1,9 @@
 /*
  * Конфигурация FatFs R0.16 для проекта STM32U585 (в CubeMX для STM32U5 нет
- * middleware FATFS). LFN включён (статический буфер), кодовая страница 866,
- * FASTSEEK, f_gets/f_puts в UTF-8, до 14 одновременно открытых файлов
+ * middleware FATFS). LFN включён (статический буфер), API в UTF-8
+ * (FF_LFN_UNICODE = 2: имена с SD читаются/пишутся в UTF-8, в т.ч. І, ў, Ґ,
+ * которых нет в CP866; на дисплей их выводит purrgo_utf8_to_pgo()),
+ * кодовая страница 866 (только для коротких 8.3-имён), FASTSEEK, f_gets/f_puts в UTF-8, до 14 одновременно открытых файлов
  * (FF_FS_LOCK), без mkfs/find/label.
  * Остальные параметры - значения по умолчанию из дистрибутива FatFs.
  *
@@ -143,7 +145,7 @@
 /  ff_memfree() exemplified in ffsystem.c, need to be added to the project. */
 
 
-#define FF_LFN_UNICODE	0
+#define FF_LFN_UNICODE	2
 /* This option switches the character encoding on the API when LFN is enabled.
 /
 /   0: ANSI/OEM in current CP (TCHAR = char)
