@@ -4,8 +4,12 @@
  * Слой между display_stm32.c (framebuffer, накопление областей) и epd4g:
  * очередь запросов (одно обновление в работе, остальное сливается), выбор
  * полное/частичное обновление, смена режима панели 4 gray <-> 1 bit,
- * учёт числа частичных обновлений подряд, засыпание панели в простое,
- * восстановление после ошибки. Подробности: docs/architecture.md, раздел "E-Ink driver (epd4g)".
+ * deep sleep панели в простое, восстановление после ошибки.
+ *
+ * Сама библиотека epd4g: считает частичные обновления подряд и заменяет очередное
+ * частичное полным (EPD4G_PARTIALS_BEFORE_FULL), а также выключает питание панели
+ * после EPD4G_AUTO_POWEROFF_MS простоя (внутри epd4g_poll()). Здесь этого нет.
+ * Подробности: docs/architecture.md, раздел "E-Ink driver (epd4g)".
  */
 #include "display_eink.h"
 
@@ -28,17 +32,19 @@
 #endif
 
 /*
- * Частичных обновлений подряд до принудительного полного (сброс «шлейфов»):
- * после каждых 10 частичных следующее обновление - полное. Самотест на железе
- * (сцены S7, S8: 40 частичных подряд, худший случай) следов не показал, лимит 10
- * взят с запасом: полное обновление на реальной карте всё равно нужно, чтобы
- * убрать накопленные артефакты трека и маркёра.
+ * Частичных обновлений подряд до полного (сброс «шлейфов»): после стольких частичных
+ * библиотека epd4g сама выполняет следующий запрос как полное обновление того же кадра.
+ * Самотест на железе (сцены S7, S8: 40 частичных подряд, худший случай) следов не показал,
+ * лимит 10 взят с запасом. По умолчанию значения библиотеки (EPD4G_PARTIALS_BEFORE_FULL,
+ * EPD4G_BW_PARTIALS_BEFORE_FULL); переопределяются -D и применяются в display_eink_init().
+ * Режим автоматического полного обновления в 4 gray - EPD4G_AUTO_FULL_MODE (по умолчанию
+ * EPD4G_FULL_FAST, задаётся при сборке библиотеки), в 1 bit - всегда EPD4G_BW_NORMAL.
  */
 #ifndef PURRGO_EINK_GRAY_PARTIALS_BEFORE_FULL
-#define PURRGO_EINK_GRAY_PARTIALS_BEFORE_FULL 10
+#define PURRGO_EINK_GRAY_PARTIALS_BEFORE_FULL EPD4G_PARTIALS_BEFORE_FULL
 #endif
 #ifndef PURRGO_EINK_MONO_PARTIALS_BEFORE_FULL
-#define PURRGO_EINK_MONO_PARTIALS_BEFORE_FULL 10
+#define PURRGO_EINK_MONO_PARTIALS_BEFORE_FULL EPD4G_BW_PARTIALS_BEFORE_FULL
 #endif
 
 /* Полное обновление: 4 gray (FAST ~3 с, DEEP ~5 с) и 1 bit (NORMAL ~2 с, FAST ~1 с). */
@@ -49,7 +55,11 @@
 #define PURRGO_EINK_MONO_FULL_MODE EPD4G_BW_NORMAL
 #endif
 
-/* Сколько панель простаивает до deep sleep, мс. */
+/*
+ * Сколько панель простаивает до deep sleep, мс. Питание аналоговой части библиотека
+ * отключает раньше сама (EPD4G_AUTO_POWEROFF_MS = 500 мс), так что к deep sleep
+ * остаётся только команда 0x10.
+ */
 #ifndef PURRGO_EINK_SLEEP_AFTER_MS
 #define PURRGO_EINK_SLEEP_AFTER_MS 1000U
 #endif
@@ -78,7 +88,6 @@ static eink_hw_t s_hw = HW_OFF;                /* в каком режиме и�
 static bool      s_mono_asleep;                /* 1 bit: в deep sleep, partial разбудит сам */
 static bool      s_img_valid;                  /* на панели известная картинка режима s_img_mode */
 static display_mode_t s_img_mode;
-static uint8_t   s_partials;                   /* частичных подряд после последнего полного */
 
 /* Выполняемая операция. */
 static eink_op_t     s_op = OP_NONE;
@@ -94,20 +103,11 @@ static bool time_reached(uint32_t now, uint32_t t)
     return (int32_t)(now - t) >= 0;
 }
 
-static unsigned s_limit_gray = PURRGO_EINK_GRAY_PARTIALS_BEFORE_FULL;
-static unsigned s_limit_mono = PURRGO_EINK_MONO_PARTIALS_BEFORE_FULL;
-
-static unsigned partial_limit(display_mode_t m)
-{
-    return (m == DISPLAY_MODE_GRAY4) ? s_limit_gray : s_limit_mono;
-}
-
 static void invalidate_panel(void)
 {
     s_hw = HW_OFF;
     s_mono_asleep = false;
     s_img_valid = false;
-    s_partials = 0;
 }
 
 static bool request_pending(void)
@@ -179,8 +179,8 @@ static void start_next(uint32_t now)
     s_have_retry = false;
 
     const display_mode_t mode = s_target_mode;
-    const bool need_full = s_req_full || !s_img_valid || s_img_mode != mode ||
-                           s_partials >= partial_limit(mode);
+    /* Лимит частичных подряд здесь не проверяется: его контролирует epd4g. */
+    const bool need_full = s_req_full || !s_img_valid || s_img_mode != mode;
 
     if (need_full) {
         if (!awake_for(mode)) {
@@ -202,7 +202,6 @@ static void start_next(uint32_t now)
             s_req_region = false;
             s_img_valid = true;
             s_img_mode = mode;
-            s_partials = 0;
         }
         op_started(OP_FULL, mode, rc, now);
         return;
@@ -218,12 +217,14 @@ static void start_next(uint32_t now)
         const int rc = epd4g_start_partial_diff(s_prev, s_fb, NULL, &changed);
         if (rc == EPD4G_OK) {
             s_req_region = false;
-            if (changed == 0U) {
-                s_idle_since = now;           /* ничего не изменилось, задания нет */
-                return;
+            if (changed != 0U) {
+                /* Если лимит исчерпан, библиотека выполнит полное обновление этого же кадра:
+                 * на панели в любом случае будет s_fb. */
+                memcpy(s_prev, s_fb, sizeof(s_prev));
             }
-            memcpy(s_prev, s_fb, sizeof(s_prev));
-            s_partials++;
+            /* При changed == 0 библиотека ставит пустое задание (epd4g_start_noop()): оно
+             * завершается в следующем epd4g_poll(). Его нужно довести до конца, иначе
+             * библиотека останется занятой и следующий start вернёт EPD4G_ERR_BUSY. */
         }
         op_started(OP_PARTIAL, mode, rc, now);
     } else {
@@ -231,8 +232,7 @@ static void start_next(uint32_t now)
         const int rc = epd4g_start_bw_partial(s_fb, EPD4G_SRC_2BPP, &r);
         if (rc == EPD4G_OK) {
             s_req_region = false;
-            s_mono_asleep = false;
-            s_partials++;
+            s_mono_asleep = false;      /* частичное (или полное вместо него) будит панель само */
         }
         op_started(OP_PARTIAL, mode, rc, now);
     }
@@ -242,11 +242,17 @@ static void poll_core(bool allow_sleep)
 {
     const uint32_t now = HAL_GetTick();
 
+    /*
+     * epd4g_poll() вызывается всегда, не только при своей операции: именно он запускает
+     * автоматическое выключение питания панели после простоя. Это обычное задание
+     * (~0,3 с, epd4g_is_busy() == 1, молчаливое: epd4g_result() не меняется), и пока оно
+     * идёт, любой epd4g_start_*() вернул бы EPD4G_ERR_BUSY (в op_started() это ошибка).
+     */
+    epd4g_poll();
+    if (epd4g_is_busy()) {
+        return;
+    }
     if (s_op != OP_NONE) {
-        epd4g_poll();
-        if (epd4g_is_busy()) {
-            return;
-        }
         op_done(epd4g_result(), now);
     }
 
@@ -255,7 +261,7 @@ static void poll_core(bool allow_sleep)
         return;
     }
 
-    /* Простой: усыпляем панель (в 4 gray это ещё и выключает питание аналоговой части). */
+    /* Простой: deep sleep панели (питание аналоговой части уже снял epd4g). */
     if (allow_sleep && !request_pending() && (s_hw != HW_OFF) && !s_mono_asleep &&
         time_reached(now, s_idle_since + PURRGO_EINK_SLEEP_AFTER_MS)) {
         op_started(OP_SLEEP, s_img_mode, epd4g_start_sleep(), now);
@@ -272,6 +278,9 @@ void display_eink_init(const uint8_t *framebuffer)
     hspi1.Init.BaudRatePrescaler = PURRGO_EINK_SPI_PRESCALER;
     (void)HAL_SPI_DeInit(&hspi1);
     (void)HAL_SPI_Init(&hspi1);
+
+    epd4g_set_partials_before_full(PURRGO_EINK_GRAY_PARTIALS_BEFORE_FULL,
+                                   PURRGO_EINK_MONO_PARTIALS_BEFORE_FULL);
 
     memset(s_prev, 0, sizeof(s_prev));
     s_req_full = false;
@@ -330,13 +339,14 @@ bool display_eink_is_busy(void)
 
 void display_eink_set_partial_limits(unsigned gray, unsigned mono)
 {
-    s_limit_gray = (gray != 0U) ? gray : PURRGO_EINK_GRAY_PARTIALS_BEFORE_FULL;
-    s_limit_mono = (mono != 0U) ? mono : PURRGO_EINK_MONO_PARTIALS_BEFORE_FULL;
+    epd4g_set_partials_before_full((gray != 0U) ? gray : PURRGO_EINK_GRAY_PARTIALS_BEFORE_FULL,
+                                   (mono != 0U) ? mono : PURRGO_EINK_MONO_PARTIALS_BEFORE_FULL);
 }
 
 uint8_t display_eink_partial_count(void)
 {
-    return s_partials;
+    const unsigned n = epd4g_partials_since_full();
+    return (uint8_t)((n > 255U) ? 255U : n);
 }
 
 void display_eink_wait(void)
@@ -361,6 +371,7 @@ void display_eink_wait(void)
 void display_eink_sleep(void)
 {
     display_eink_wait();
+    (void)epd4g_wait();        /* автоматическое выключение питания, если оно ещё идёт: иначе sleep вернёт ERR_BUSY */
     if (s_hw != HW_OFF && !s_mono_asleep) {
         (void)epd4g_sleep();   /* блокирующий, ошибка не критична: питание всё равно снимается */
         if (s_hw == HW_GRAY) {

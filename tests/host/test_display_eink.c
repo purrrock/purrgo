@@ -130,6 +130,24 @@ int main(void)
     b = snap();
     CHECK(b.act == a.act);
     CHECK(!display_eink_is_busy());
+    CHECK(!epd4g_is_busy());            /* пустое задание библиотеки доведено до конца, она свободна */
+    CHECK(display_eink_partial_count() == 1);
+
+    /* 5b. Питание панели библиотека снимает сама (EPD4G_AUTO_POWEROFF_MS), раньше deep sleep слоя PurrGO. */
+    a = snap();
+    idle_for(EPD4G_AUTO_POWEROFF_MS + 50U);
+    CHECK(epd4g_is_busy());             /* идёт собственное задание библиотеки (выключение питания) */
+    CHECK(!display_eink_is_busy());     /* слой PurrGO про него не знает */
+
+    /* 5c. Запрос во время автоматического выключения питания ждёт его конца: без ERR_BUSY и потерь. */
+    set_px(30, 60, 0);
+    display_eink_request_region(30, 60, 1, 1);
+    settle(20000);
+    b = snap();
+    CHECK(!display_eink_is_busy());
+    CHECK(!epd4g_is_busy());
+    CHECK(b.act >= a.act + 2);          /* выключение питания и само обновление */
+    CHECK(display_eink_partial_count() == 2);
 
     /* 6. Простой > 1 с: deep sleep; следующее частичное будит (init), но остаётся частичным. */
     a = snap();
@@ -142,10 +160,10 @@ int main(void)
     settle(20000);
     b = snap();
     CHECK(b.rst > a.rst);                          /* разбудили: init */
-    CHECK(display_eink_partial_count() == 2);      /* но обновление частичное */
+    CHECK(display_eink_partial_count() == 3);      /* но обновление частичное */
 
     /* 7. Лимит частичных подряд (здесь задан 8): девятое - полное. */
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < 5; i++) {
         set_px(100 + i, 200, (uint8_t)(i & 3));
         set_px(100 + i, 201, 0);
         display_eink_request_region(100, 200, 8, 2);
