@@ -15,3 +15,5 @@
 
 Предварительаня загрузка всей или большей части книги в RAM (у STM32U585CIU6 784 Kbytes RAM, 2 Mbytes Flash) для минимизации обращений к SD.
 Навигация четырьмя аппаратными кнопками.
+
+Чтение PGB (без UI): include/purrgo/pgb.h, src/core/pgb.c - разбор и проверка заголовка, meta_crc32, индекса и страниц поверх fs_hal; host-тест tests/host/test_pgb.c (эталонный файл tests/host/data/sample.pgb создаёт tests/host/data/make_sample_pgb.py независимой реализацией из tools/book-compiler).
