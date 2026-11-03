@@ -76,7 +76,7 @@ void ui_render_menu_config(gfx_context_t* gfx)
         gfx,
         10,
         10,
-        "=== CONFIG ==="
+        "==== MENU ===="
     );
 
     /*
