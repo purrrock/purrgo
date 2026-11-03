@@ -215,12 +215,12 @@ int main(void)
         CHECK(display_eink_partial_count() == 0);
         for (int i = 0; i < 10; i++) {
             set_px(60 + i, 120 + pass, 0);
-            display_eink_request_region(60 + i, 120 + pass, 1, 1);
+            display_eink_request_region((int16_t)(60 + i), (int16_t)(120 + pass), 1, 1);
             settle(20000);
             CHECK(display_eink_partial_count() == (uint8_t)(i + 1));
         }
         set_px(80, 120 + pass, 0);
-        display_eink_request_region(80, 120 + pass, 1, 1);
+        display_eink_request_region(80, (int16_t)(120 + pass), 1, 1);
         settle(20000);
         CHECK(display_eink_partial_count() == 0);      /* одиннадцатое - полное */
     }
