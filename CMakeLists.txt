@@ -97,6 +97,7 @@ if(PURRGO_SANITIZE)
 endif()
 
 include(cmake/PurrgoWarnings.cmake)
+include(cmake/PurrgoMap.cmake)
 
 # ==============================================================================
 # Общая часть: внешние зависимости и портативное ядро
