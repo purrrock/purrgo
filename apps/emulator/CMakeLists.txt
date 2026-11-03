@@ -9,6 +9,7 @@ target_include_directories(purrgo_emulator PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/in
 
 # Линковка с ядром проекта и импортированными целями SDL2
 purrgo_target_warnings(purrgo_emulator)
+purrgo_target_map(purrgo_emulator)
 
 # Выбрасывать неиспользуемые секции (флаги -ffunction-sections уже заданы выше).
 if(NOT APPLE)

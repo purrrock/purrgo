@@ -22,6 +22,7 @@ foreach(test_src IN LISTS PURRGO_HOST_TESTS)
     target_compile_definitions(${test_name} PRIVATE
         TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
     purrgo_target_warnings(${test_name})
+    purrgo_target_map(${test_name})
     target_link_libraries(${test_name} PRIVATE purrgo_core minmea m)
     add_test(NAME ${test_name} COMMAND ${test_name}
              WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
@@ -87,6 +88,7 @@ if(EXISTS ${EPD4G_DIR}/src/epd4g.c)
     target_compile_definitions(eink_selftest_host PRIVATE EPD4G_BW_THRESHOLD=3 PURRGO_EINK_TEST_SCENES=0xFFU)
     target_link_options(eink_selftest_host PRIVATE -Wl,--wrap=display_set_mode)
     purrgo_target_warnings(eink_selftest_host)
+    purrgo_target_map(eink_selftest_host)
     target_link_libraries(eink_selftest_host PRIVATE purrgo_core m)
     add_test(NAME eink_selftest_host COMMAND eink_selftest_host 1
              WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
