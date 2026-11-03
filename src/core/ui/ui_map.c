@@ -119,7 +119,6 @@ static struct {
 #define PURRGO_MAP_MARKER_MIN_COURSE_DELTA_DEG 10
 #endif
 #define PURRGO_MAP_POS_MARK_DIRECTION_HALF_WIDTH_PX 5
-#define PURRGO_MAP_POS_MARK_OCTAGON_CUT_PX           2
 
 extern int dbg_map_render_calls;
 
@@ -161,8 +160,9 @@ static int32_t div_round_10k(int32_t v) {
  *      Filled narrow isosceles triangle pointing in the current course.
  *
  *   2. Valid position + invalid course:
- *      Filled black octagon. Its fixed shape indicates that the position
- *      is valid, but the direction of movement is unknown.
+ *      Filled black equilateral triangle (pointing up). Same shape as the
+ *      no-fix marker, but filled: the position is valid, but the direction
+ *      of movement is unknown.
  *
  *   3. Invalid position:
  *      Outline equilateral triangle at the configured last position.
@@ -223,9 +223,7 @@ static void ui_calc_marker_state(
     const int32_t half_size = size / 2;
 
     /*
-     * Maximum number of vertices required by any marker shape:
-     *   - triangle: 3
-     *   - octagon:  8
+     * Every marker shape is a triangle (3 vertices).
      */
     if (gnss->valid && gnss->course_valid) {
         /*
@@ -291,45 +289,25 @@ static void ui_calc_marker_state(
         /*
          * Valid position but invalid course:
          *
-         * Use a fixed filled octagon. This is intentionally visually
-         * distinct from the directional triangle.
-         *
-         * The octagon occupies approximately the same 12 px envelope
-         * as the other marker shapes.
+         * Filled equilateral triangle pointing up. The geometry is the
+         * same as for the no-fix marker below, only filled.
          */
-        const int32_t cut =
-            PURRGO_MAP_POS_MARK_OCTAGON_CUT_PX;
+        const int32_t w =
+            (size * 5774 + 5000) / 10000;
 
-        const int32_t left = -half_size;
-        const int32_t right = half_size;
-        const int32_t top = -half_size;
-        const int32_t bottom = half_size;
+        const int32_t top_y = -half_size;
+        const int32_t bottom_y = half_size;
 
-        out_state->pts[0].x = (int16_t)(cx - cut);
-        out_state->pts[0].y = (int16_t)(cy + top);
+        out_state->pts[0].x = cx;
+        out_state->pts[0].y = (int16_t)(cy + top_y);
 
-        out_state->pts[1].x = (int16_t)(cx + cut);
-        out_state->pts[1].y = (int16_t)(cy + top);
+        out_state->pts[1].x = (int16_t)(cx - w);
+        out_state->pts[1].y = (int16_t)(cy + bottom_y);
 
-        out_state->pts[2].x = (int16_t)(cx + right);
-        out_state->pts[2].y = (int16_t)(cy - cut);
+        out_state->pts[2].x = (int16_t)(cx + w);
+        out_state->pts[2].y = (int16_t)(cy + bottom_y);
 
-        out_state->pts[3].x = (int16_t)(cx + right);
-        out_state->pts[3].y = (int16_t)(cy + cut);
-
-        out_state->pts[4].x = (int16_t)(cx + cut);
-        out_state->pts[4].y = (int16_t)(cy + bottom);
-
-        out_state->pts[5].x = (int16_t)(cx - cut);
-        out_state->pts[5].y = (int16_t)(cy + bottom);
-
-        out_state->pts[6].x = (int16_t)(cx + left);
-        out_state->pts[6].y = (int16_t)(cy + cut);
-
-        out_state->pts[7].x = (int16_t)(cx + left);
-        out_state->pts[7].y = (int16_t)(cy - cut);
-
-        out_state->point_count = 8;
+        out_state->point_count = 3;
         out_state->filled = true;
 
     } else {
