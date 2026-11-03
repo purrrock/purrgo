@@ -80,6 +80,36 @@ def _sanitize_name_cached(name: str) -> str:
     return name
 
 
+# Приоритет тегов для названия объекта
+_NAME_TAG_PRIORITY = (
+    'name:ru', 'name:be', 'int_name',
+    'short_name:en', 'name:en', 'short_name', 'name',
+)
+
+
+def _resolve_name(tags: dict, rule=None, is_poi: bool = False) -> str:
+    """
+    Название объекта: name:ru > name:be > int_name > short_name:en >
+    name:en > short_name > name.
+
+    Если у POI названия нет, в качестве названия используется значение
+    тега типа из правила (например shop=clothes -> "clothes").
+    Фолбэк не проходит через стоп-слова (иначе "marketplace" -> "Place market").
+    """
+    for key in _NAME_TAG_PRIORITY:
+        value = tags.get(key)
+        if value and value.strip():
+            return _sanitize_name_cached(value)
+
+    if is_poi and rule is not None and rule.osm_tags:
+        type_name = rule.osm_tags[0][1]
+        if len(type_name) > 22:
+            type_name = type_name[:20].rstrip('_') + ".."
+        return type_name
+
+    return ""
+
+
 class OSMParser:
     """Two-pass streaming OSM parser with hybrid memory optimization (C-Arrays + lxml)."""
 
@@ -533,20 +563,7 @@ class OSMParser:
         if not rule:
             return
 
-        raw_name = (
-            tags.get('short_name:en')
-            or tags.get('int_name')
-            or tags.get('name:en')
-            or tags.get('short_name')
-            or tags.get('name')
-            or ""
-        )
-
-        name = _sanitize_name_cached(raw_name)
-
-        # отключил замену имени на тег
-        # if not name:
-        #    name = str(rule.pg_class)
+        name = _resolve_name(tags, rule, is_poi=(rule.layer == 'pois'))
 
         try:
             osm_id = elem.get('id')
@@ -650,22 +667,14 @@ class OSMParser:
         except (TypeError, ValueError):
             return
 
-        raw_name = (
-            tags.get('short_name:en')
-            or tags.get('int_name')
-            or tags.get('name:en')
-            or tags.get('short_name')
-            or tags.get('name')
-            or ""
-        )
-
-        name = _sanitize_name_cached(raw_name)
         osm_id = str(way_id)
 
         rule = LookupTables.match_feature(tags)
 
         if not rule:
             return
+
+        name = _resolve_name(tags, rule, is_poi=(rule.layer == 'pois'))
 
         is_closed = (
             len(points) >= 4
@@ -688,12 +697,6 @@ class OSMParser:
                 
                 
                 poi_name = name
-                # отключил подстановку тега вместо имени
-                # poi_name = (
-                    # name
-                    # if name
-                    # else str(rule.pg_class)
-                # )
 
                 points_bytes = struct.pack(
                     "<ii",
@@ -798,16 +801,7 @@ class OSMParser:
         if not rule or rule.layer not in ('landuse', 'water'):
             return
 
-        raw_name = (
-            tags.get('short_name:en')
-            or tags.get('int_name')
-            or tags.get('name:en')
-            or tags.get('short_name')
-            or tags.get('name')
-            or ""
-        )
-
-        name = _sanitize_name_cached(raw_name)
+        name = _resolve_name(tags, rule)
 
         combined_points = []
         parts = []
