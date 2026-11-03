@@ -188,8 +188,11 @@ void gfx_draw_polygon_bordered(
 
     const gfx_color_t old_fg = ctx->color_fg;
 
+    /* Начальные значения границ намеренно одинаковы (min = max = первая точка). */
+    // cppcheck-suppress duplicateAssignExpression
     int32_t min_y = points[0].y;
     int32_t max_y = points[0].y;
+    // cppcheck-suppress duplicateAssignExpression
     int32_t min_x = points[0].x;
     int32_t max_x = points[0].x;
 

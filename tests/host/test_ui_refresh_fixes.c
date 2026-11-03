@@ -295,8 +295,8 @@ static void test_marker_fill_inside_frame(void)
         gfx_point_t p[3];
 
         for (int i = 0; i < 3; i++) {
-            p[i].x = 32 + lround(lx[i] * cs - ly[i] * sn);
-            p[i].y = 32 + lround(lx[i] * sn + ly[i] * cs);
+            p[i].x = (int32_t)(32 + lround(lx[i] * cs - ly[i] * sn));
+            p[i].y = (int32_t)(32 + lround(lx[i] * sn + ly[i] * cs));
         }
 
         mk_reset(&c);
