@@ -120,7 +120,14 @@ static void gnss_solution_invalidate(void) {
     internal_gnss_solution.course_valid = false;
     internal_gnss_solution.speed_knots = 0;
     internal_gnss_solution.fix_quality = 0;
-    internal_gnss_solution.fix_type = 1;
+    /*
+     * fix_type = 0 - "тип фикса неизвестен" (как после старта): значение 1 из GSA
+     * ("нет фикса") выставляет только адаптер. Если здесь поставить 1, а приёмник
+     * (или мок на PC) не шлёт GSA, то fix_type так и останется 1 и после появления
+     * фикса фильтр качества логгера отбросит все точки: файл трека создан, а
+     * точек в нём и на экране нет.
+     */
+    internal_gnss_solution.fix_type = 0;
 }
 
 /*
