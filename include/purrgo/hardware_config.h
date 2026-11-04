@@ -98,20 +98,6 @@
 #endif
 
 /*
- * Аппаратный backend дисплея. Единственный поддерживаемый - E-Ink
- * (Waveshare 2.7" e-Paper V2). Отладочный TFT ST7789 удалён из проекта.
- */
-#define PURRGO_DISPLAY_BACKEND_EINK   1
-
-#ifndef PURRGO_HW_DISPLAY_BACKEND
-#define PURRGO_HW_DISPLAY_BACKEND PURRGO_DISPLAY_BACKEND_EINK
-#endif
-
-#if (PURRGO_HW_DISPLAY_BACKEND != PURRGO_DISPLAY_BACKEND_EINK)
-#error "Invalid PURRGO_HW_DISPLAY_BACKEND"
-#endif
-
-/*
  * Режим передачи на панель E-Ink (4 gray / 1 bit) выбирается не при сборке, а
  * по экрану: ядро вызывает display_set_mode() (purrgo/display_hal.h). Внутренний
  * framebuffer PurrGO в обоих режимах остаётся 2-битным.

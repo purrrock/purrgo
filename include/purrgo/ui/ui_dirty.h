@@ -38,11 +38,7 @@ typedef enum {
 } purrgo_ui_dirty_t;
 
 #ifndef PURRGO_UI_MIN_DATA_REDRAW_MS
-#if (PURRGO_HW_DISPLAY_BACKEND == PURRGO_DISPLAY_BACKEND_EINK)
 #define PURRGO_UI_MIN_DATA_REDRAW_MS 5000U
-#else
-#define PURRGO_UI_MIN_DATA_REDRAW_MS 1000U
-#endif
 #endif
 
 void purrgo_ui_dirty_mark(purrgo_ui_dirty_t flags);
