@@ -428,11 +428,11 @@ static void test_route_menu(void)
     put_route("._r00.gpx", "x");
     put_route("gpx", "x");
 
-    /* Пункт ROUTE в меню CONFIG (индекс 4) открывает выбор маршрута. */
+    /* Пункт ROUTE в меню CONFIG (индекс 5) открывает выбор маршрута. */
     purrgo_state_t st = APP_STATE_MENU_CONFIG;
     purrgo_config_controller_on_enter(APP_STATE_MENU_CONFIG);
-    for (int i = 0; i < 4; i++) { st = press(st, PURRGO_ACTION_DOWN); }
-    CHECK(config_app_get_config_cursor() == 4);
+    for (int i = 0; i < 5; i++) { st = press(st, PURRGO_ACTION_DOWN); }
+    CHECK(config_app_get_config_cursor() == 5);
     st = press(st, PURRGO_ACTION_OK);
     CHECK(st == APP_STATE_MENU_ROUTE_SELECT);
     CHECK(fake_fs_open_dirs() == 1);
@@ -520,7 +520,7 @@ static void test_route_menu(void)
     /* Выбор каталога карт (DIR) после маршрутов снова показывает каталоги, а не файлы. */
     st = APP_STATE_MENU_CONFIG;
     purrgo_config_controller_on_enter(APP_STATE_MENU_CONFIG);
-    for (int k = 0; k < 3; k++) { st = press(st, PURRGO_ACTION_DOWN); }
+    for (int k = 0; k < 4; k++) { st = press(st, PURRGO_ACTION_DOWN); }
     st = press(st, PURRGO_ACTION_OK);
     CHECK(st == APP_STATE_MENU_DIR_SELECT);
     CHECK(config_app_get_dir_list(&list) == 0);               /* в fake-ФС нет подкаталогов */

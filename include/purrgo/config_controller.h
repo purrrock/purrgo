@@ -10,10 +10,10 @@
 
 
 /*
- * Число пунктов главного меню CONFIG. Порядок: POWER SOURCE, POWER OFF, TZ,
- * DIR, ROUTE, POI, LOG, MAP DETAILS, MAP LAYERS.
+ * Число пунктов главного меню CONFIG. Порядок: BOOKS, POWER SOURCE, POWER OFF,
+ * TZ, DIR, ROUTE, POI, LOG, MAP DETAILS, MAP LAYERS.
  */
-#define PURRGO_CONFIG_MENU_ITEMS 9
+#define PURRGO_CONFIG_MENU_ITEMS 10
 
 void purrgo_config_controller_init(void);
 
