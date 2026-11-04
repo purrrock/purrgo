@@ -14,10 +14,6 @@
  *
  * Отладочный TFT ST7789 удалён из проекта.
  */
-#if PURRGO_HW_DISPLAY_BACKEND != PURRGO_DISPLAY_BACKEND_EINK
-#error "Unsupported PurrGO display backend"
-#endif
-
 #include "display_eink.h"
 
 
