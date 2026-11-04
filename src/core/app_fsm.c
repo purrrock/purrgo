@@ -9,7 +9,7 @@
 #include "purrgo/purrgo_time.h"
 #include "purrgo/map_controller.h"
 #include "purrgo/trip_computer.h"
-#include "purrgo/config_controller.h"
+#include "purrgo/menu_controller.h"
 #include "purrgo/track_logger.h"
 #include "purrgo/logger.h"
 #include "purrgo/geo.h"
@@ -182,7 +182,7 @@ void purrgo_app_init(void) {
     purrgo_config_load();
 
     purrgo_map_controller_init();
-    purrgo_config_controller_init();
+    purrgo_menu_controller_init();
     purrgo_trip_computer_init();
 
     current_state = APP_STATE_MAP;
@@ -232,7 +232,7 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
         current_state = next_state;
         if (!is_book_state(current_state)) {
             book_mode_left();
-            purrgo_config_controller_on_enter(APP_STATE_MENU_CONFIG);
+            purrgo_menu_controller_on_enter(APP_STATE_MENU_MAIN);
         }
         ui_input_done(prev_state, redraw);
         return;
@@ -261,7 +261,7 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
                 break;
             default: break;
         }
-    } else if (current_state == APP_STATE_MENU_CONFIG || current_state == APP_STATE_MENU_DIR_SELECT || current_state == APP_STATE_MENU_MAP_LAYERS || current_state == APP_STATE_MENU_ROUTE_SELECT) {
+    } else if (purrgo_menu_controller_owns_state(current_state)) {
         switch (button) {
             case PURRGO_BTN_KEY1_SHORT:
             case PURRGO_BTN_KEY1_LONG:
@@ -292,8 +292,8 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
     render_gate_active = false;
 
     // 1 & 2. Dispatch to module based on state
-    if (current_state == APP_STATE_MENU_CONFIG || current_state == APP_STATE_MENU_DIR_SELECT || current_state == APP_STATE_MENU_MAP_LAYERS || current_state == APP_STATE_MENU_ROUTE_SELECT) {
-        handled = purrgo_config_controller_handle_button(current_state, mapped_button, &next_state);
+    if (purrgo_menu_controller_owns_state(current_state)) {
+        handled = purrgo_menu_controller_handle_button(current_state, mapped_button, &next_state);
         current_state = next_state;
         if (is_book_state(current_state)) {
             book_mode_entered();   // пункт BOOKS: читалка уже выключила GNSS и трек
@@ -318,8 +318,8 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
                 break;
 
             case APP_STATE_TRIP_COMPUTER:
-                current_state = APP_STATE_MENU_CONFIG;
-                purrgo_config_controller_on_enter(APP_STATE_MENU_CONFIG);
+                current_state = APP_STATE_MENU_MAIN;
+                purrgo_menu_controller_on_enter(APP_STATE_MENU_MAIN);
                 break;
 
             default:
@@ -599,12 +599,11 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
             purrgo_trip_computer_update(current_fix);
             break;
 
-        case APP_STATE_MENU_CONFIG:
+        case APP_STATE_MENU_MAIN:
         case APP_STATE_MENU_DIR_SELECT:
         case APP_STATE_MENU_MAP_LAYERS:
         case APP_STATE_MENU_ROUTE_SELECT:
-            purrgo_config_controller_update(current_fix);
-            break;
+            break;  // меню не требует периодического обновления
 
         case APP_STATE_BOOK_LIST:
         case APP_STATE_BOOK_READ:

@@ -2,7 +2,7 @@
 #include "purrgo/app_fsm.h"
 #include "ui/ui_map.h"
 #include "ui/ui_trip.h"
-#include "ui/ui_config.h"
+#include "ui/ui_menu_main.h"
 #include "ui/ui_dir_select.h"
 #include "ui/ui_map_layers.h"
 #include "ui/ui_book.h"
@@ -92,7 +92,7 @@ static void ui_draw_key_hints(gfx_context_t* gfx, purrgo_state_t state, bool mar
             k4 = "NXT";
             break;
 
-        case APP_STATE_MENU_CONFIG:
+        case APP_STATE_MENU_MAIN:
         case APP_STATE_MENU_DIR_SELECT:
         case APP_STATE_MENU_MAP_LAYERS:
         case APP_STATE_MENU_ROUTE_SELECT:
@@ -168,11 +168,11 @@ void purrgo_app_ui_render(
     display_set_mode(ui_display_mode(current_state));
 
     switch (current_state) {
-        case APP_STATE_MENU_CONFIG:
-            if (prev_state != APP_STATE_MENU_CONFIG) {
-                ui_menu_config_reset();
+        case APP_STATE_MENU_MAIN:
+            if (prev_state != APP_STATE_MENU_MAIN) {
+                ui_menu_main_reset();
             }
-            ui_render_menu_config(gfx);
+            ui_render_menu_main(gfx);
             break;
         case APP_STATE_TRIP_COMPUTER:
             if (prev_state != APP_STATE_TRIP_COMPUTER) {

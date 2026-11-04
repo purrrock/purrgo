@@ -3,7 +3,7 @@
 #include "purrgo/gfx_text.h"
 #include "purrgo/gfx_rect.h"
 #include "purrgo/config.h"
-#include "purrgo/config_controller.h"
+#include "purrgo/menu_controller.h"
 #include <string.h>
 #include "purrgo/fs_hal.h"
 #include "purrgo/pgo_text.h"
@@ -49,8 +49,8 @@ static void render_browser(gfx_context_t* gfx, const char* title, bool route_mod
      */
     purrgo_fs_dirent_t* dir_list;
 
-    int count = config_app_get_dir_list(&dir_list);
-    int cursor = config_app_get_dir_cursor();
+    int count = menu_app_get_dir_list(&dir_list);
+    int cursor = menu_app_get_dir_cursor();
 
     int16_t y_pos = DIR_LIST_Y0;
 

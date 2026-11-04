@@ -14,7 +14,7 @@
 #include "purrgo/app_fsm.h"
 #include "purrgo/app_ui.h"
 #include "purrgo/config.h"
-#include "purrgo/config_controller.h"
+#include "purrgo/menu_controller.h"
 #include "purrgo/display_hal.h"
 #include "purrgo/gfx_polygon.h"
 #include "purrgo/hardware_config.h"
@@ -104,21 +104,21 @@ static void test_menu_value_change_refreshes_row(void)
     CHECK(purrgo_app_get_state() == APP_STATE_TRIP_COMPUTER);
     render(&g);
     purrgo_app_handle_button(PURRGO_BTN_KEY4_SHORT);
-    CHECK(purrgo_app_get_state() == APP_STATE_MENU_CONFIG);
+    CHECK(purrgo_app_get_state() == APP_STATE_MENU_MAIN);
     render(&g);                                   /* вход: полное обновление экрана */
 
     /* Первая строка - BOOKS (режим чтения); вниз на вторую (источник питания). */
-    CHECK(config_app_get_config_cursor() == 0);
+    CHECK(menu_app_get_main_cursor() == 0);
     purrgo_app_handle_button(PURRGO_BTN_KEY2_SHORT);
-    CHECK(config_app_get_config_cursor() == 1);
+    CHECK(menu_app_get_main_cursor() == 1);
     render(&g);
 
     /* SEL на строке POWER: меняется значение, курсор на месте. */
-    const purrgo_power_source_t before = config_app_get_draft_power_source();
+    const purrgo_power_source_t before = menu_app_get_draft_power_source();
     pc_display_stats_reset();
     purrgo_app_handle_button(PURRGO_BTN_KEY3_SHORT);
-    CHECK(config_app_get_draft_power_source() != before);
-    CHECK(config_app_get_config_cursor() == 1);
+    CHECK(menu_app_get_draft_power_source() != before);
+    CHECK(menu_app_get_main_cursor() == 1);
     render(&g);
     pc_display_stats_t st = pc_display_stats_get();
     CHECK(st.fulls == 0);
@@ -128,7 +128,7 @@ static void test_menu_value_change_refreshes_row(void)
     /* Перемещение курсора: обновляются старая и новая строки. */
     pc_display_stats_reset();
     purrgo_app_handle_button(PURRGO_BTN_KEY2_SHORT);
-    CHECK(config_app_get_config_cursor() == 2);
+    CHECK(menu_app_get_main_cursor() == 2);
     render(&g);
     st = pc_display_stats_get();
     CHECK(st.partials == 1);
@@ -151,10 +151,10 @@ static void test_map_layers_toggle_refreshes_row(void)
     render(&g);
     purrgo_app_handle_button(PURRGO_BTN_KEY4_SHORT);
     render(&g);
-    CHECK(purrgo_app_get_state() == APP_STATE_MENU_CONFIG);
+    CHECK(purrgo_app_get_state() == APP_STATE_MENU_MAIN);
 
     /* Вниз до последней строки (MAP LAYERS) и войти. */
-    for (int i = 0; i < PURRGO_CONFIG_MENU_ITEMS - 1; i++) {
+    for (int i = 0; i < menu_app_get_main_count() - 1; i++) {
         purrgo_app_handle_button(PURRGO_BTN_KEY2_SHORT);
         render(&g);
     }
@@ -162,10 +162,10 @@ static void test_map_layers_toggle_refreshes_row(void)
     CHECK(purrgo_app_get_state() == APP_STATE_MENU_MAP_LAYERS);
     render(&g);
 
-    const uint16_t layers0 = config_app_get_draft_layers();
+    const uint16_t layers0 = menu_app_get_draft_layers();
     pc_display_stats_reset();
     purrgo_app_handle_button(PURRGO_BTN_KEY3_SHORT);    /* переключить слой под курсором */
-    CHECK(config_app_get_draft_layers() != layers0);
+    CHECK(menu_app_get_draft_layers() != layers0);
     render(&g);
     pc_display_stats_t st = pc_display_stats_get();
     CHECK(st.fulls == 0 && st.partials == 1);

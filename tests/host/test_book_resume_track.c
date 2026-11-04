@@ -11,7 +11,7 @@
 #include <string.h>
 #include "purrgo/app_fsm.h"
 #include "purrgo/config.h"
-#include "purrgo/config_controller.h"
+#include "purrgo/menu_controller.h"
 #include "purrgo/track_logger.h"
 #include "fake_fs.h"
 #include "fake_power.h"
@@ -76,7 +76,7 @@ static void scenario(bool with_gsa)
 
     purrgo_app_handle_button(PURRGO_BTN_KEY4_LONG);
     purrgo_app_handle_button(PURRGO_BTN_KEY4_SHORT);
-    CHECK(purrgo_app_get_state() == APP_STATE_MENU_CONFIG);
+    CHECK(purrgo_app_get_state() == APP_STATE_MENU_MAIN);
     purrgo_app_handle_button(PURRGO_BTN_KEY3_SHORT);     /* BOOKS */
     printf("in books: state=%d logger=%d\n", purrgo_app_get_state(), purrgo_logger_get_state());
     CHECK(purrgo_logger_get_state() == LOGGER_STATE_IDLE);
@@ -86,7 +86,7 @@ static void scenario(bool with_gsa)
 
     purrgo_app_handle_button(PURRGO_BTN_KEY4_SHORT);     /* выход */
     printf("left: state=%d\n", purrgo_app_get_state());
-    CHECK(purrgo_app_get_state() == APP_STATE_MENU_CONFIG);
+    CHECK(purrgo_app_get_state() == APP_STATE_MENU_MAIN);
 
     run_seconds(15, true);
     printf("after: logger=%d points=%zu file=%s\n", purrgo_logger_get_state(),

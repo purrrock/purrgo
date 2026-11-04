@@ -13,7 +13,7 @@
 #include <string.h>
 #include "purrgo/app_fsm.h"
 #include "purrgo/config.h"
-#include "purrgo/config_controller.h"
+#include "purrgo/menu_controller.h"
 #include "purrgo/gfx_renderer.h"
 #include "purrgo/route.h"
 #include "fake_fs.h"
@@ -400,15 +400,15 @@ static void test_config_key(void)
 static purrgo_state_t press(purrgo_state_t st, purrgo_action_t a)
 {
     purrgo_state_t next = st;
-    (void)purrgo_config_controller_handle_button(st, a, &next);
+    (void)purrgo_menu_controller_handle_button(st, a, &next);
     return next;
 }
 
 static const char *cur_name(void)
 {
     purrgo_fs_dirent_t *l;
-    int c = config_app_get_dir_list(&l);
-    int k = config_app_get_dir_cursor();
+    int c = menu_app_get_dir_list(&l);
+    int k = menu_app_get_dir_cursor();
     return (k >= 0 && k < c) ? l[k].name : "<none-cursor>";
 }
 
@@ -416,7 +416,7 @@ static void test_route_menu(void)
 {
     fake_fs_reset();
     purrgo_config_init();
-    purrgo_config_controller_init();
+    purrgo_menu_controller_init();
 
     /* 12 gpx (в т.ч. заглавное расширение), а также файлы, которые не показываются. */
     char name[32];
@@ -429,17 +429,17 @@ static void test_route_menu(void)
     put_route("gpx", "x");
 
     /* Пункт ROUTE в меню CONFIG (индекс 5) открывает выбор маршрута. */
-    purrgo_state_t st = APP_STATE_MENU_CONFIG;
-    purrgo_config_controller_on_enter(APP_STATE_MENU_CONFIG);
+    purrgo_state_t st = APP_STATE_MENU_MAIN;
+    purrgo_menu_controller_on_enter(APP_STATE_MENU_MAIN);
     for (int i = 0; i < 5; i++) { st = press(st, PURRGO_ACTION_DOWN); }
-    CHECK(config_app_get_config_cursor() == 5);
+    CHECK(menu_app_get_main_cursor() == 5);
     st = press(st, PURRGO_ACTION_OK);
     CHECK(st == APP_STATE_MENU_ROUTE_SELECT);
     CHECK(fake_fs_open_dirs() == 1);
 
     /* Первая запись - "(none)", далее файлы страницы: всего 10 записей. */
     purrgo_fs_dirent_t *list;
-    CHECK(config_app_get_dir_list(&list) == 10);
+    CHECK(menu_app_get_dir_list(&list) == 10);
     CHECK(cur_name()[0] == '\0');
 
     /* Проход вниз: none, r00..r11 строго по порядку (на границе страницы подгружается следующая). */
@@ -449,7 +449,7 @@ static void test_route_menu(void)
         CHECK(strcmp(cur_name(), name) == 0);
     }
     CHECK(st == APP_STATE_MENU_ROUTE_SELECT);
-    CHECK(config_app_get_dir_list(&list) == 3);              /* последняя страница: r09..r11 */
+    CHECK(menu_app_get_dir_list(&list) == 3);              /* последняя страница: r09..r11 */
     st = press(st, PURRGO_ACTION_DOWN);                      /* дальше конца не уходит */
     CHECK(strcmp(cur_name(), "r11.gpx") == 0);
 
@@ -461,7 +461,7 @@ static void test_route_menu(void)
     }
     st = press(st, PURRGO_ACTION_UP);
     CHECK(cur_name()[0] == '\0');
-    CHECK(config_app_get_dir_list(&list) == 10);
+    CHECK(menu_app_get_dir_list(&list) == 10);
     st = press(st, PURRGO_ACTION_UP);
     CHECK(cur_name()[0] == '\0');
 
@@ -469,7 +469,7 @@ static void test_route_menu(void)
     CHECK(!purrgo_layer_on(app_config.layers, PURRGO_LAYER_ROUTE));
     for (int k = 0; k < 4; k++) { st = press(st, PURRGO_ACTION_DOWN); }   /* r03 */
     st = press(st, PURRGO_ACTION_OK);
-    CHECK(st == APP_STATE_MENU_CONFIG);
+    CHECK(st == APP_STATE_MENU_MAIN);
     CHECK(strcmp(app_config.route_file, "r03.gpx") == 0);
     CHECK(purrgo_layer_on(app_config.layers, PURRGO_LAYER_ROUTE));
     CHECK(fake_fs_open_dirs() == 0);
@@ -486,14 +486,14 @@ static void test_route_menu(void)
     for (int k = 0; k < 11; k++) { st = press(st, PURRGO_ACTION_DOWN); }  /* r10 */
     CHECK(strcmp(cur_name(), "r10.gpx") == 0);
     st = press(st, PURRGO_ACTION_OK);
-    CHECK(st == APP_STATE_MENU_CONFIG);
+    CHECK(st == APP_STATE_MENU_MAIN);
     CHECK(strcmp(app_config.route_file, "r10.gpx") == 0);
 
     /* BACK без выбора ничего не меняет. */
     st = press(st, PURRGO_ACTION_OK);
     st = press(st, PURRGO_ACTION_DOWN);
     st = press(st, PURRGO_ACTION_MENU);
-    CHECK(st == APP_STATE_MENU_CONFIG);
+    CHECK(st == APP_STATE_MENU_MAIN);
     CHECK(strcmp(app_config.route_file, "r10.gpx") == 0);
     CHECK(fake_fs_open_dirs() == 0);
 
@@ -501,7 +501,7 @@ static void test_route_menu(void)
     st = press(st, PURRGO_ACTION_OK);
     CHECK(cur_name()[0] == '\0');
     st = press(st, PURRGO_ACTION_OK);
-    CHECK(st == APP_STATE_MENU_CONFIG);
+    CHECK(st == APP_STATE_MENU_MAIN);
     CHECK(app_config.route_file[0] == '\0');
     CHECK(purrgo_layer_on(app_config.layers, PURRGO_LAYER_ROUTE));
 
@@ -509,21 +509,21 @@ static void test_route_menu(void)
     fake_fs_reset();
     st = press(st, PURRGO_ACTION_OK);
     CHECK(st == APP_STATE_MENU_ROUTE_SELECT);
-    CHECK(config_app_get_dir_list(&list) == 1);
+    CHECK(menu_app_get_dir_list(&list) == 1);
     CHECK(cur_name()[0] == '\0');
     st = press(st, PURRGO_ACTION_DOWN);
-    CHECK(config_app_get_dir_cursor() == 0);
+    CHECK(menu_app_get_dir_cursor() == 0);
     st = press(st, PURRGO_ACTION_MENU);
-    CHECK(st == APP_STATE_MENU_CONFIG);
+    CHECK(st == APP_STATE_MENU_MAIN);
     CHECK(fake_fs_open_dirs() == 0);
 
     /* Выбор каталога карт (DIR) после маршрутов снова показывает каталоги, а не файлы. */
-    st = APP_STATE_MENU_CONFIG;
-    purrgo_config_controller_on_enter(APP_STATE_MENU_CONFIG);
+    st = APP_STATE_MENU_MAIN;
+    purrgo_menu_controller_on_enter(APP_STATE_MENU_MAIN);
     for (int k = 0; k < 4; k++) { st = press(st, PURRGO_ACTION_DOWN); }
     st = press(st, PURRGO_ACTION_OK);
     CHECK(st == APP_STATE_MENU_DIR_SELECT);
-    CHECK(config_app_get_dir_list(&list) == 0);               /* в fake-ФС нет подкаталогов */
+    CHECK(menu_app_get_dir_list(&list) == 0);               /* в fake-ФС нет подкаталогов */
     st = press(st, PURRGO_ACTION_MENU);
     CHECK(fake_fs_open_dirs() == 0);
 }
