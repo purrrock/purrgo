@@ -127,7 +127,7 @@ void ui_render_menu_config(gfx_context_t* gfx)
     purrgo_snprintf(
         buf,
         sizeof(buf),
-        "DIR: %s",
+        "MAP DIR: %s",
         app_config.map_dir
     );
     purrgo_utf8_to_pgo_inplace(buf); /* имя каталога с SD: UTF-8 -> PurrGO-256 */
