@@ -2,6 +2,10 @@
 #include "purrgo/config.h"
 #include "purrgo/hardware_config.h"
 #include "purrgo/pgo_text.h"
+#include "purrgo/purrgo_format.h"
+#include "purrgo/system_time.h"
+
+#include <string.h>
 
 /*
  * Мониторинг батареи (см. purrgo/battery.h).
@@ -167,4 +171,53 @@ void purrgo_battery_format(char* buf, size_t size)
     } else {
         purrgo_snprintf(buf, size, "--%%");
     }
+}
+
+/* ---- Монитор для строки статуса ----------------------------------------------- */
+
+static struct {
+    bool                  sampled;
+    uint32_t              sampled_ms;
+    purrgo_power_source_t src;          /* источник питания, для которого сделан замер */
+    char                  text[PURRGO_BATTERY_STATUS_TEXT_SIZE];
+} s_mon;
+
+/* Замер. true - текст изменился. */
+static bool monitor_sample(uint32_t now_ms)
+{
+    char text[sizeof(s_mon.text)];
+
+    purrgo_battery_format(text, sizeof(text));
+    s_mon.sampled = true;
+    s_mon.sampled_ms = now_ms;
+    s_mon.src = app_config.power_source;
+    if (strcmp(text, s_mon.text) == 0) {
+        return false;
+    }
+    memcpy(s_mon.text, text, sizeof(s_mon.text));
+    return true;
+}
+
+bool purrgo_battery_monitor_tick(uint32_t now_ms)
+{
+    const bool first = !s_mon.sampled;
+
+    if (!first && s_mon.src == app_config.power_source &&
+        (uint32_t)(now_ms - s_mon.sampled_ms) < PURRGO_BATTERY_STATUS_PERIOD_MS) {
+        return false;
+    }
+    return monitor_sample(now_ms) && !first;
+}
+
+const char* purrgo_battery_status_text(void)
+{
+    if (!s_mon.sampled || s_mon.src != app_config.power_source) {
+        (void)monitor_sample(purrgo_system_time_ms());
+    }
+    return s_mon.text;
+}
+
+void purrgo_battery_monitor_reset(void)
+{
+    memset(&s_mon, 0, sizeof(s_mon));
 }

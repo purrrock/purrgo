@@ -549,19 +549,10 @@ static void ui_update_status_bar(gfx_context_t* gfx, const purrgo_gnss_solution_
     /*
      * Заряд батареи, %: между статусом записи и масштабом, прижат к масштабу.
      * Если в строке не хватает места (длинный масштаб + ERR-REC + NO-FIX),
-     * заряд не рисуется. При питании 5 В вместо процентов выводится "5V".
-     * Данные - заглушка (purrgo/battery.h).
+     * заряд не рисуется. Текст ("85%", "5V", "--%") даёт общий монитор
+     * заряда, тот же, что и в строке статуса читалки (purrgo/battery.h).
      */
-    purrgo_battery_t bat;
-    char bat_str[8];
-    if (purrgo_battery_read(&bat) && bat.percent >= 0 && bat.percent <= 100) {
-        purrgo_snprintf(bat_str, sizeof(bat_str), "%d%%", (int)bat.percent);
-    } else if (bat.external) {
-        /* Питание 5 В: заряда батареи нет. */
-        purrgo_snprintf(bat_str, sizeof(bat_str), "5V");
-    } else {
-        purrgo_snprintf(bat_str, sizeof(bat_str), "--%%");
-    }
+    const char* bat_str = purrgo_battery_status_text();
     const int16_t rec_end_x = (int16_t)(next_x + get_string_width(rec_str));
     const int16_t bat_x = (int16_t)(scale_x - 6 - get_string_width(bat_str));
     if (bat_x >= rec_end_x + 4) {

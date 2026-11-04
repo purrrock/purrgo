@@ -4,7 +4,10 @@
  *     не больше PURRGO_MAP_MARKER_MIN_SHIFT_PX (3 px); большее смещение рисуется;
  *   - шаг ручного сдвига карты по вертикали больше, чем по горизонтали
  *     (1/2 высоты окна карты против 1/4 ширины);
- *   - заряд батареи (заглушка) в верхней строке карты и в <extensions> точки GPX.
+ *   - заряд батареи (заглушка) в верхней строке карты и в <extensions> точки GPX;
+ *   - общий монитор заряда (карта и читалка): опрос раз в период, первый замер -
+ *     база, смена источника питания подхватывается сразу, перерисовка статуса
+ *     на карте только при изменении текста.
  */
 #include <stdlib.h>
 #include <string.h>
@@ -20,6 +23,7 @@
 #include "purrgo/track_logger.h"
 #include "purrgo/ui/ui_dirty.h"
 #include "fake_fs.h"
+#include "fake_power.h"
 #include "test_common.h"
 
 static uint32_t g_now;
@@ -217,10 +221,54 @@ static void test_track_battery(void)
     }
 }
 
+static void test_battery_monitor(void)
+{
+    fake_power_reset();
+    memset(&app_config, 0, sizeof app_config);
+    app_config.power_source = PURRGO_POWER_SRC_ZINC_CARBON;   /* 3 x 1200 мВ = 25 % */
+    fake_power_set_battery_pin_mv(1800);                      /* делитель 1:1 */
+    purrgo_battery_monitor_reset();
+    g_now = 500000;
+
+    /* Первый замер - база, не изменение; повторные тики до конца периода ничего не меняют. */
+    CHECK(!purrgo_battery_monitor_tick(g_now));
+    CHECK(strcmp(purrgo_battery_status_text(), "25%") == 0);
+    fake_power_set_battery_pin_mv(2400);                      /* 100 % */
+    CHECK(!purrgo_battery_monitor_tick(g_now + PURRGO_BATTERY_STATUS_PERIOD_MS - 1u));
+    CHECK(strcmp(purrgo_battery_status_text(), "25%") == 0);
+
+    /* Период прошёл: текст изменился ровно один раз. */
+    CHECK(purrgo_battery_monitor_tick(g_now + PURRGO_BATTERY_STATUS_PERIOD_MS));
+    CHECK(strcmp(purrgo_battery_status_text(), "100%") == 0);
+    CHECK(!purrgo_battery_monitor_tick(g_now + 2u * PURRGO_BATTERY_STATUS_PERIOD_MS));
+
+    /* Смена источника питания в меню видна сразу, без ожидания периода. */
+    app_config.power_source = PURRGO_POWER_SRC_EXTERNAL_5V;
+    CHECK(strcmp(purrgo_battery_status_text(), "5V") == 0);
+
+    /* На карте изменение заряда перерисовывает строку статуса (с отсрочкой данных), на меню - нет. */
+    memset(&app_config, 0, sizeof app_config);
+    app_config.power_source = PURRGO_POWER_SRC_ZINC_CARBON;
+    fake_power_set_battery_pin_mv(1800);
+    g_now = 800000;
+    purrgo_app_init();
+    purrgo_app_ui_reset();
+    purrgo_app_tick(g_now);
+    purrgo_ui_dirty_clear(UI_DIRTY_SCREEN | UI_DIRTY_MAP | UI_DIRTY_STATUS);
+    CHECK(!purrgo_app_ui_needs_render(g_now));
+
+    fake_power_set_battery_pin_mv(2400);
+    g_now += PURRGO_BATTERY_STATUS_PERIOD_MS;
+    purrgo_app_tick(g_now);
+    CHECK(purrgo_ui_dirty_test(UI_DIRTY_STATUS));
+    CHECK(purrgo_app_ui_needs_render(g_now));
+}
+
 int main(void)
 {
     test_marker_threshold_and_battery_line();
     test_pan_step();
     test_track_battery();
+    test_battery_monitor();
     return test_finish("test_marker_pan_battery");
 }

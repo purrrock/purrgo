@@ -1,6 +1,7 @@
 #include "ui_book.h"
 #include "ui_rows.h"
 
+#include "purrgo/battery.h"
 #include "purrgo/book_reader.h"
 #include "purrgo/display_hal.h"
 #include "purrgo/gfx_rect.h"
@@ -174,11 +175,12 @@ void ui_render_book_read(gfx_context_t* gfx)
                         (unsigned)v.jump_percent, (unsigned)(v.jump_page + 1u),
                         (unsigned)v.page_count);
     } else {
-        /* Слева страница/всего, справа заряд батареи; процент прочитанного не выводится. */
+        /* Слева страница/всего, справа заряд батареи (общий монитор); процент прочитанного не выводится. */
         char left[24];
+        const char* bat = purrgo_battery_status_text();
         purrgo_snprintf(left, sizeof(left), "%u/%u", (unsigned)(v.page + 1u), (unsigned)v.page_count);
-        const int pad = (int)PGB_SCREEN_COLS - (int)strlen(left) - (int)strlen(v.battery);
-        purrgo_snprintf(status, sizeof(status), "%s%*s%s", left, (pad > 1) ? pad : 1, "", v.battery);
+        const int pad = (int)PGB_SCREEN_COLS - (int)strlen(left) - (int)strlen(bat);
+        purrgo_snprintf(status, sizeof(status), "%s%*s%s", left, (pad > 1) ? pad : 1, "", bat);
     }
 
     const uint32_t hash = body_hash(&v);
