@@ -37,3 +37,15 @@ bool purrgo_gnss_read_byte(uint8_t *byte)
 }
 
 #endif /* USE_MOCK_GNSS */
+
+/*
+ * Управление питанием GNSS на PC: приёмник эмулируется (serial_hal или mock),
+ * поэтому включать и выключать нечего.
+ */
+void purrgo_gnss_power_on(void)
+{
+}
+
+void purrgo_gnss_power_off(void)
+{
+}

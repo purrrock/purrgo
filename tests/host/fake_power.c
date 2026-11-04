@@ -8,12 +8,14 @@
 #include <stddef.h>
 
 static int s_seq, s_unmount_calls, s_standby_calls, s_unmount_seq, s_standby_seq;
+static int s_gnss_off_calls, s_gnss_off_seq;
 static void (*s_probe)(void);
 static uint16_t s_battery_pin_mv;
 
 void fake_power_reset(void)
 {
     s_seq = s_unmount_calls = s_standby_calls = s_unmount_seq = s_standby_seq = 0;
+    s_gnss_off_calls = s_gnss_off_seq = 0;
     s_probe = NULL;
     s_battery_pin_mv = 0;
 }
@@ -22,6 +24,16 @@ int fake_power_unmount_calls(void) { return s_unmount_calls; }
 int fake_power_standby_calls(void) { return s_standby_calls; }
 int fake_power_unmount_seq(void) { return s_unmount_seq; }
 int fake_power_standby_seq(void) { return s_standby_seq; }
+int fake_power_gnss_off_calls(void) { return s_gnss_off_calls; }
+int fake_power_gnss_off_seq(void) { return s_gnss_off_seq; }
+
+/* Замена purrgo_gnss_power_on/off() из платформенного gnss_io.c (в host-тесты он не входит). */
+void purrgo_gnss_power_on(void) {}
+void purrgo_gnss_power_off(void)
+{
+    s_gnss_off_calls++;
+    s_gnss_off_seq = ++s_seq;
+}
 
 void purrgo_platform_storage_unmount(void)
 {

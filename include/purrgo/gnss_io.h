@@ -31,4 +31,25 @@ void purrgo_gnss_init(void);
  */
 bool purrgo_gnss_read_byte(uint8_t *byte);
 
+/**
+ * @brief Включить GNSS-приёмник и настроить его заново.
+ *
+ * STM32: отпускает линию EN (PB0), заново инициализирует LPUART1 и приём
+ * через DMA, затем отправляет приёмнику настройку (скорость, набор NMEA).
+ * Повторный вызов при уже включённом GNSS ничего не делает.
+ * PC: заглушка.
+ */
+void purrgo_gnss_power_on(void);
+
+/**
+ * @brief Выключить GNSS-приёмник (EN = Low).
+ *
+ * STM32: останавливает приём (DMA), тянет EN (PB0) в Low, отключает LPUART1
+ * и переводит линию TX к модулю (PA2) в Low, RX (PA3) остаётся без подтяжки.
+ * После вызова purrgo_gnss_read_byte() возвращает false.
+ * Повторный вызов при уже выключенном GNSS ничего не делает.
+ * PC: заглушка.
+ */
+void purrgo_gnss_power_off(void);
+
 #endif /* PURRGO_GNSS_IO_H */

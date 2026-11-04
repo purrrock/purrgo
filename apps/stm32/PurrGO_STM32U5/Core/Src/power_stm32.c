@@ -24,6 +24,13 @@ void purrgo_platform_enter_standby(void)
      * без PU/PD-конфигурации PWR вывод плавал бы и будил МК случайно.
      */
     (void)HAL_PWREx_EnableGPIOPullUp(PWR_GPIO_A, PWR_GPIO_BIT_0);
+
+    /*
+     * GNSS_EN (PB0, Open Drain): в Standby вывод без PWR-подтяжки уходит в Hi-Z,
+     * и внутренняя подтяжка модуля снова включила бы GNSS. PWR удерживает PB0
+     * в Low. Проверить на железе: подтяжка PWR должна пересиливать подтяжку модуля.
+     */
+    (void)HAL_PWREx_EnableGPIOPullDown(PWR_GPIO_B, PWR_GPIO_BIT_0);
     HAL_PWREx_EnablePullUpPullDownConfig();
 
     HAL_PWR_EnableWakeUpPin(PWR_WAKEUP_PIN1_LOW_0);
