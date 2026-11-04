@@ -81,12 +81,15 @@ void ui_render_menu_config(gfx_context_t* gfx)
 
     /*
      * Порядок строк совпадает с CONFIG_CURSOR_* в config_controller.c:
-     * 0 POWER SRC, 1 POWER OFF, 2 TZ, 3 DIR, 4 ROUTE, 5 POI, 6 LOG,
-     * 7 MAP DETAILS, 8 MAP LAYERS.
+     * 0 BOOKS, 1 POWER SRC, 2 POWER OFF, 3 TZ, 4 DIR, 5 ROUTE, 6 POI,
+     * 7 LOG, 8 MAP DETAILS, 9 MAP LAYERS.
      */
     int row = 0;
 
     ui_rows_begin(&s_rows, CONFIG_ROW_Y0, CONFIG_ROW_STEP);
+
+    /* BOOKS (заглушка) */
+    draw_item(gfx, cursor, row++, "BOOKS");
 
     /* POWER SOURCE */
     purrgo_snprintf(

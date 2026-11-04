@@ -107,27 +107,32 @@ static void test_menu_value_change_refreshes_row(void)
     CHECK(purrgo_app_get_state() == APP_STATE_MENU_CONFIG);
     render(&g);                                   /* вход: полное обновление экрана */
 
-    /* SEL на первой строке (источник питания): меняется значение, курсор на месте. */
-    const purrgo_power_source_t before = config_app_get_draft_power_source();
+    /* Первая строка - BOOKS (заглушка); вниз на вторую (источник питания). */
     CHECK(config_app_get_config_cursor() == 0);
+    purrgo_app_handle_button(PURRGO_BTN_KEY2_SHORT);
+    CHECK(config_app_get_config_cursor() == 1);
+    render(&g);
+
+    /* SEL на строке POWER: меняется значение, курсор на месте. */
+    const purrgo_power_source_t before = config_app_get_draft_power_source();
     pc_display_stats_reset();
     purrgo_app_handle_button(PURRGO_BTN_KEY3_SHORT);
     CHECK(config_app_get_draft_power_source() != before);
-    CHECK(config_app_get_config_cursor() == 0);
+    CHECK(config_app_get_config_cursor() == 1);
     render(&g);
     pc_display_stats_t st = pc_display_stats_get();
     CHECK(st.fulls == 0);
     CHECK(st.partials == 1);
-    CHECK(st.has_region && st.last_y == 25 && st.last_h == 15);   /* ровно строка 0 */
+    CHECK(st.has_region && st.last_y == 40 && st.last_h == 15);   /* ровно строка 1 */
 
     /* Перемещение курсора: обновляются старая и новая строки. */
     pc_display_stats_reset();
     purrgo_app_handle_button(PURRGO_BTN_KEY2_SHORT);
-    CHECK(config_app_get_config_cursor() == 1);
+    CHECK(config_app_get_config_cursor() == 2);
     render(&g);
     st = pc_display_stats_get();
     CHECK(st.partials == 1);
-    CHECK(st.has_region && st.last_y == 25 && st.last_h == 30);   /* строки 0 и 1 */
+    CHECK(st.has_region && st.last_y == 40 && st.last_h == 30);   /* строки 1 и 2 */
 
     /* Без изменений - без обновления. */
     pc_display_stats_reset();

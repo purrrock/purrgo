@@ -99,15 +99,16 @@ static purrgo_power_source_t draft_power_source;
  * Индекс курсора в меню настроек (порядок совпадает с порядком пунктов на
  * экране, см. ui_config.c).
  */
-#define CONFIG_CURSOR_POWER_SRC     0
-#define CONFIG_CURSOR_POWER_OFF     1
-#define CONFIG_CURSOR_TZ            2
-#define CONFIG_CURSOR_DIR           3
-#define CONFIG_CURSOR_ROUTE         4
-#define CONFIG_CURSOR_POI           5
-#define CONFIG_CURSOR_LOG_MODE      6
-#define CONFIG_CURSOR_MAP_DETAILS   7
-#define CONFIG_CURSOR_MAP_LAYERS    8
+#define CONFIG_CURSOR_BOOKS         0
+#define CONFIG_CURSOR_POWER_SRC     1
+#define CONFIG_CURSOR_POWER_OFF     2
+#define CONFIG_CURSOR_TZ            3
+#define CONFIG_CURSOR_DIR           4
+#define CONFIG_CURSOR_ROUTE         5
+#define CONFIG_CURSOR_POI           6
+#define CONFIG_CURSOR_LOG_MODE      7
+#define CONFIG_CURSOR_MAP_DETAILS   8
+#define CONFIG_CURSOR_MAP_LAYERS    9
 
 _Static_assert(CONFIG_CURSOR_MAP_LAYERS + 1 == PURRGO_CONFIG_MENU_ITEMS,
                "PURRGO_CONFIG_MENU_ITEMS: число пунктов меню CONFIG");
@@ -119,7 +120,7 @@ _Static_assert(CONFIG_CURSOR_MAP_LAYERS + 1 == PURRGO_CONFIG_MENU_ITEMS,
 #define CONFIG_TZ_MIN_MINS          -720
 #define CONFIG_TZ_MAX_MINS          840
 
-static int config_cursor_idx = CONFIG_CURSOR_POWER_SRC;
+static int config_cursor_idx = CONFIG_CURSOR_BOOKS;
 
 /*
  * Состояние редактирования слоев карты.
@@ -421,7 +422,7 @@ void purrgo_config_controller_init(void)
     draft_power_source =
         app_config.power_source;
 
-    config_cursor_idx = CONFIG_CURSOR_POWER_SRC;
+    config_cursor_idx = CONFIG_CURSOR_BOOKS;
 }
 
 
@@ -449,7 +450,7 @@ void purrgo_config_controller_on_enter(
         draft_power_source =
             app_config.power_source;
 
-        config_cursor_idx = CONFIG_CURSOR_POWER_SRC;
+        config_cursor_idx = CONFIG_CURSOR_BOOKS;
     }
     else if (state == APP_STATE_MENU_MAP_LAYERS) {
         draft_layers = app_config.layers;
@@ -542,9 +543,16 @@ bool purrgo_config_controller_handle_button(
             case PURRGO_ACTION_OK:
 
                 /*
+                 * BOOKS: заглушка (читалка книг ещё не реализована).
+                 */
+                if (config_cursor_idx == CONFIG_CURSOR_BOOKS) {
+                    /* TODO: переход в режим чтения книг. */
+                }
+
+                /*
                  * POWER SOURCE.
                  */
-                if (config_cursor_idx == CONFIG_CURSOR_POWER_SRC) {
+                else if (config_cursor_idx == CONFIG_CURSOR_POWER_SRC) {
                     if (draft_power_source + 1 >= PURRGO_POWER_SRC_COUNT) {
                         draft_power_source = (purrgo_power_source_t)0;
                     }
