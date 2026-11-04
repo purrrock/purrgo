@@ -17,6 +17,8 @@ class FeatureRule:
 class LookupTables:
     """
     Rule table loaded from features.csv. Processes rules strictly top-to-bottom.
+    OSM_Tags is a comma-separated AND-list of key=value pairs;
+    the value "*" matches any value of the key (e.g. barrier=*,access=private).
     """
     RULES: List[FeatureRule] = []
 
@@ -95,7 +97,9 @@ class LookupTables:
         for rule in cls.RULES:
             match = True
             for k, v in rule.osm_tags:
-                if tags.get(k) != v:
+                tag_value = tags.get(k)
+                # "*" in features.csv means "any value of this key".
+                if tag_value is None or (v != "*" and tag_value != v):
                     match = False
                     break
             if match and rule.osm_tags:
