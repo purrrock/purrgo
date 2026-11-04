@@ -13,7 +13,7 @@
 #include "purrgo/app_fsm.h"
 #include "purrgo/battery.h"
 #include "purrgo/config.h"
-#include "purrgo/config_controller.h"
+#include "purrgo/menu_controller.h"
 #include "fake_fs.h"
 #include "fake_power.h"
 #include "test_common.h"
@@ -25,7 +25,7 @@ static const char* CFG = "PURRGO.CFG";
 static purrgo_state_t press(purrgo_state_t st, purrgo_action_t a)
 {
     purrgo_state_t next = st;
-    (void)purrgo_config_controller_handle_button(st, a, &next);
+    (void)purrgo_menu_controller_handle_button(st, a, &next);
     return next;
 }
 
@@ -83,57 +83,57 @@ static void test_menu(void)
     purrgo_config_init();
     app_config.power_source = PURRGO_POWER_SRC_LITHIUM;
 
-    purrgo_config_controller_on_enter(APP_STATE_MENU_CONFIG);
+    purrgo_menu_controller_on_enter(APP_STATE_MENU_MAIN);
 
     /* Первый пункт - BOOKS (режим чтения, см. test_book_reader.c), курсор стоит на нём. */
-    CHECK(config_app_get_config_cursor() == 0);
-    purrgo_state_t st = APP_STATE_MENU_CONFIG;
-    CHECK(config_app_get_draft_power_source() == PURRGO_POWER_SRC_LITHIUM);
+    CHECK(menu_app_get_main_cursor() == 0);
+    purrgo_state_t st = APP_STATE_MENU_MAIN;
+    CHECK(menu_app_get_draft_power_source() == PURRGO_POWER_SRC_LITHIUM);
 
     /* Второй пункт - источник питания. */
     st = press(st, PURRGO_ACTION_DOWN);
-    CHECK(config_app_get_config_cursor() == 1);
-    CHECK(config_app_get_draft_power_source() == PURRGO_POWER_SRC_LITHIUM);
+    CHECK(menu_app_get_main_cursor() == 1);
+    CHECK(menu_app_get_draft_power_source() == PURRGO_POWER_SRC_LITHIUM);
 
     /* OK перебирает источники по кругу: LITHIUM -> 5V -> ZINC -> ... */
     st = press(st, PURRGO_ACTION_OK);
-    CHECK(config_app_get_draft_power_source() == PURRGO_POWER_SRC_EXTERNAL_5V);
+    CHECK(menu_app_get_draft_power_source() == PURRGO_POWER_SRC_EXTERNAL_5V);
     st = press(st, PURRGO_ACTION_OK);
-    CHECK(config_app_get_draft_power_source() == PURRGO_POWER_SRC_ZINC_CARBON);
+    CHECK(menu_app_get_draft_power_source() == PURRGO_POWER_SRC_ZINC_CARBON);
     st = press(st, PURRGO_ACTION_OK);
-    CHECK(config_app_get_draft_power_source() == PURRGO_POWER_SRC_ALKALINE);
+    CHECK(menu_app_get_draft_power_source() == PURRGO_POWER_SRC_ALKALINE);
     st = press(st, PURRGO_ACTION_OK);
-    CHECK(config_app_get_draft_power_source() == PURRGO_POWER_SRC_NIMH);
-    CHECK(st == APP_STATE_MENU_CONFIG);
+    CHECK(menu_app_get_draft_power_source() == PURRGO_POWER_SRC_NIMH);
+    CHECK(st == APP_STATE_MENU_MAIN);
 
     /* До MENU конфиг не меняется. */
     CHECK(app_config.power_source == PURRGO_POWER_SRC_LITHIUM);
 
     /* Порядок остальных пунктов: 2 POWER OFF, 3 TZ, ..., 9 MAP LAYERS - последний. */
     st = press(st, PURRGO_ACTION_DOWN);
-    CHECK(config_app_get_config_cursor() == 2);
+    CHECK(menu_app_get_main_cursor() == 2);
     st = press(st, PURRGO_ACTION_DOWN);
-    CHECK(config_app_get_config_cursor() == 3);
-    const int16_t tz0 = config_app_get_draft_tz_offset();
+    CHECK(menu_app_get_main_cursor() == 3);
+    const int16_t tz0 = menu_app_get_draft_tz_offset();
     st = press(st, PURRGO_ACTION_OK);
-    CHECK(config_app_get_draft_tz_offset() == tz0 + 15);      /* пункт 3 - TZ */
+    CHECK(menu_app_get_draft_tz_offset() == tz0 + 15);      /* пункт 3 - TZ */
     for (int i = 0; i < 10; i++) {   /* с запасом: курсор упирается в последний пункт */
         st = press(st, PURRGO_ACTION_DOWN);
     }
-    CHECK(config_app_get_config_cursor() == PURRGO_CONFIG_MENU_ITEMS - 1);
-    CHECK(PURRGO_CONFIG_MENU_ITEMS == 10);
+    CHECK(menu_app_get_main_cursor() == menu_app_get_main_count() - 1);
+    CHECK(menu_app_get_main_count() == 10);
     st = press(st, PURRGO_ACTION_OK);                          /* MAP LAYERS */
     CHECK(st == APP_STATE_MENU_MAP_LAYERS);
     st = press(st, PURRGO_ACTION_MENU);                        /* назад в CONFIG */
-    CHECK(st == APP_STATE_MENU_CONFIG);
+    CHECK(st == APP_STATE_MENU_MAIN);
 
     /* Новый вход в меню: черновик заново из конфига, курсор на первом пункте. */
-    purrgo_config_controller_on_enter(APP_STATE_MENU_CONFIG);
-    CHECK(config_app_get_config_cursor() == 0);
-    CHECK(config_app_get_draft_power_source() == PURRGO_POWER_SRC_LITHIUM);
+    purrgo_menu_controller_on_enter(APP_STATE_MENU_MAIN);
+    CHECK(menu_app_get_main_cursor() == 0);
+    CHECK(menu_app_get_draft_power_source() == PURRGO_POWER_SRC_LITHIUM);
 
     /* Выбор 5V и MENU: применяется и сохраняется. */
-    st = APP_STATE_MENU_CONFIG;
+    st = APP_STATE_MENU_MAIN;
     st = press(st, PURRGO_ACTION_DOWN);                        /* BOOKS -> POWER */
     st = press(st, PURRGO_ACTION_OK);                          /* LITHIUM -> 5V */
     st = press(st, PURRGO_ACTION_MENU);

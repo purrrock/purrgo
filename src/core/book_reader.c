@@ -540,7 +540,7 @@ static bool handle_list(purrgo_btn_t b, purrgo_state_t *next)
         return true;
     case 4:
         leave();
-        *next = APP_STATE_MENU_CONFIG;
+        *next = APP_STATE_MENU_MAIN;
         return true;
     default:
         return false;
@@ -561,7 +561,7 @@ static bool handle_read(purrgo_btn_t b, purrgo_state_t *next)
         }
         if (key == 4) {
             leave();
-            *next = APP_STATE_MENU_CONFIG;
+            *next = APP_STATE_MENU_MAIN;
             return true;
         }
         return false;
@@ -615,7 +615,7 @@ static bool handle_read(purrgo_btn_t b, purrgo_state_t *next)
         return true;
     case 4:
         leave();
-        *next = APP_STATE_MENU_CONFIG;
+        *next = APP_STATE_MENU_MAIN;
         return true;
     default:
         return false;

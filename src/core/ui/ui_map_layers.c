@@ -1,7 +1,7 @@
 #include "ui_map_layers.h"
 #include "purrgo/app_fsm.h"
 #include "purrgo/gfx_text.h"
-#include "purrgo/config_controller.h"
+#include "purrgo/menu_controller.h"
 #include "purrgo/purrgo_format.h"
 #include "purrgo/display_hal.h"
 #include "purrgo/hardware_config.h"
@@ -42,11 +42,11 @@ void ui_render_menu_map_layers(gfx_context_t* gfx) {
     gfx_clear(gfx);
     gfx_set_color(gfx, 0, 3);
 
-    int cursor = config_app_get_map_layers_cursor();
+    int cursor = menu_app_get_map_layers_cursor();
 
     gfx_draw_string(gfx, 10, 10, "MAP LAYERS");
 
-    const uint16_t layers = config_app_get_draft_layers();
+    const uint16_t layers = menu_app_get_draft_layers();
 
     ui_rows_begin(&s_rows, LAYER_LIST_Y0, LAYER_ROW_H);
 

@@ -11,7 +11,7 @@
 #include "purrgo/app_fsm.h"
 #include "purrgo/track_logger.h"
 #include "purrgo/config.h"
-#include "purrgo/config_controller.h"
+#include "purrgo/menu_controller.h"
 #include "purrgo/ui/ui_dirty.h"
 #include "fake_fs.h"
 
@@ -231,15 +231,15 @@ static void test_config_layers(void) {
 
     /* меню MAP LAYERS: OK переключает пункт под курсором, MENU применяет и сохраняет */
     purrgo_state_t next = APP_STATE_MENU_MAP_LAYERS;
-    purrgo_config_controller_on_enter(APP_STATE_MENU_MAP_LAYERS);
-    CHECK(config_app_get_draft_layers() == saved);
-    CHECK(purrgo_config_controller_handle_button(APP_STATE_MENU_MAP_LAYERS, PURRGO_ACTION_OK, &next));   /* Landuse */
-    CHECK(purrgo_config_controller_handle_button(APP_STATE_MENU_MAP_LAYERS, PURRGO_ACTION_UP, &next));   /* перенос на последний: Track */
-    CHECK(config_app_get_map_layers_cursor() == PURRGO_LAYER_COUNT - 1);
-    CHECK(purrgo_config_controller_handle_button(APP_STATE_MENU_MAP_LAYERS, PURRGO_ACTION_OK, &next));
+    purrgo_menu_controller_on_enter(APP_STATE_MENU_MAP_LAYERS);
+    CHECK(menu_app_get_draft_layers() == saved);
+    CHECK(purrgo_menu_controller_handle_button(APP_STATE_MENU_MAP_LAYERS, PURRGO_ACTION_OK, &next));   /* Landuse */
+    CHECK(purrgo_menu_controller_handle_button(APP_STATE_MENU_MAP_LAYERS, PURRGO_ACTION_UP, &next));   /* перенос на последний: Track */
+    CHECK(menu_app_get_map_layers_cursor() == PURRGO_LAYER_COUNT - 1);
+    CHECK(purrgo_menu_controller_handle_button(APP_STATE_MENU_MAP_LAYERS, PURRGO_ACTION_OK, &next));
     CHECK(app_config.layers == saved);                                    /* до MENU конфиг не меняется */
-    CHECK(purrgo_config_controller_handle_button(APP_STATE_MENU_MAP_LAYERS, PURRGO_ACTION_MENU, &next));
-    CHECK(next == APP_STATE_MENU_CONFIG);
+    CHECK(purrgo_menu_controller_handle_button(APP_STATE_MENU_MAP_LAYERS, PURRGO_ACTION_MENU, &next));
+    CHECK(next == APP_STATE_MENU_MAIN);
     CHECK(!layer(PURRGO_LAYER_LANDUSE) && !layer(PURRGO_LAYER_TRACK));
     CHECK(layer(PURRGO_LAYER_WATER) && !layer(PURRGO_LAYER_ROADS));
     d = fake_fs_data(CFG, &n);

@@ -25,7 +25,7 @@
 #include "purrgo/app_ui.h"
 #include "purrgo/book_reader.h"
 #include "purrgo/config.h"
-#include "purrgo/config_controller.h"
+#include "purrgo/menu_controller.h"
 #include "purrgo/display_hal.h"
 #include "purrgo/font5x7.h"
 #include "purrgo/pc_display_stats.h"
@@ -226,7 +226,7 @@ static void test_enter_whole_book(void)
 
     /* Выход: меню CONFIG, GNSS включён. */
     st = press(st, PURRGO_BTN_KEY4_SHORT, &redraw);
-    CHECK(redraw && st == APP_STATE_MENU_CONFIG);
+    CHECK(redraw && st == APP_STATE_MENU_MAIN);
     CHECK(!purrgo_book_reader_is_active());
     CHECK(fake_power_gnss_on_calls() == 1);
     CHECK(fake_power_gnss_on_seq() > fake_power_gnss_off_seq());
@@ -273,7 +273,7 @@ static void test_windowed_book(void)
     CHECK(page_is(299));
 
     st = press(st, PURRGO_BTN_KEY4_SHORT, NULL);
-    CHECK(st == APP_STATE_MENU_CONFIG);
+    CHECK(st == APP_STATE_MENU_MAIN);
     CHECK(fake_fs_open_handles() == 0);
 
     /* Буфер, в который не помещается индекс (больше половины буфера): ошибка, а не порча памяти. */
@@ -347,7 +347,7 @@ static void test_position_save_policy(void)
     st = press(st, PURRGO_BTN_KEY2_LONG, NULL);
     CHECK(purrgo_book_reader_position_dirty());
     st = press(st, PURRGO_BTN_KEY4_SHORT, NULL);
-    CHECK(st == APP_STATE_MENU_CONFIG);
+    CHECK(st == APP_STATE_MENU_MAIN);
     CHECK(!purrgo_book_reader_position_dirty());
     CHECK(file_has("PURRGO.CFG", "BOOK_PAGE=35"));
 
@@ -513,7 +513,7 @@ static void test_list(void)
 
     /* Из списка выход в CONFIG: GNSS включён. */
     st = press(st, PURRGO_BTN_KEY4_LONG, NULL);
-    CHECK(st == APP_STATE_MENU_CONFIG && fake_power_gnss_on_calls() == 1);
+    CHECK(st == APP_STATE_MENU_MAIN && fake_power_gnss_on_calls() == 1);
 
     /* Пустой каталог. */
     reset_all();
@@ -590,7 +590,7 @@ static void test_jump_mode(void)
     st = press(st, PURRGO_BTN_KEY4_SHORT, NULL);
     CHECK(st == APP_STATE_BOOK_READ);
     st = press(st, PURRGO_BTN_KEY4_SHORT, NULL);
-    CHECK(st == APP_STATE_MENU_CONFIG);
+    CHECK(st == APP_STATE_MENU_MAIN);
 
     /* Книга из одной страницы: переход по процентам бессмыслен и не включается. */
     reset_all();
@@ -648,7 +648,7 @@ static void test_lz4_fixtures_and_errors(void)
     CHECK(st == APP_STATE_BOOK_READ && !v.open && v.error == PGB_ERR_META_CRC);
     CHECK(fake_fs_open_handles() == 0);
     st = press(st, PURRGO_BTN_KEY4_SHORT, NULL);
-    CHECK(st == APP_STATE_MENU_CONFIG);
+    CHECK(st == APP_STATE_MENU_MAIN);
 
     /* Повреждена одна страница (индекс в порядке): остальные страницы читаются. */
     reset_all();
@@ -717,8 +717,8 @@ static void test_fsm_and_screen(void)
     /* Карта -> Trip -> CONFIG; первый пункт - BOOKS. */
     purrgo_app_handle_button(PURRGO_BTN_KEY4_LONG);
     purrgo_app_handle_button(PURRGO_BTN_KEY4_SHORT);
-    CHECK(purrgo_app_get_state() == APP_STATE_MENU_CONFIG);
-    CHECK(config_app_get_config_cursor() == 0);
+    CHECK(purrgo_app_get_state() == APP_STATE_MENU_MAIN);
+    CHECK(menu_app_get_main_cursor() == 0);
     render(&g);
 
     /* BOOKS: книги в конфиге нет - список; GNSS выключен. */
@@ -796,9 +796,9 @@ static void test_fsm_and_screen(void)
     /* Выход: CONFIG, GNSS включён, позиция записана, курсор меню на BOOKS. */
     purrgo_app_handle_button(PURRGO_BTN_KEY2_SHORT);
     purrgo_app_handle_button(PURRGO_BTN_KEY4_SHORT);
-    CHECK(purrgo_app_get_state() == APP_STATE_MENU_CONFIG);
+    CHECK(purrgo_app_get_state() == APP_STATE_MENU_MAIN);
     CHECK(fake_power_gnss_on_calls() == 1);
-    CHECK(config_app_get_config_cursor() == 0);
+    CHECK(menu_app_get_main_cursor() == 0);
     CHECK(file_has("PURRGO.CFG", "BOOK_PAGE=1"));
     pc_display_stats_reset();
     render(&g);
@@ -809,7 +809,7 @@ static void test_fsm_and_screen(void)
     CHECK(purrgo_app_get_state() == APP_STATE_BOOK_READ);
     CHECK(page_is(1));
     purrgo_app_handle_button(PURRGO_BTN_KEY4_LONG);
-    CHECK(purrgo_app_get_state() == APP_STATE_MENU_CONFIG);
+    CHECK(purrgo_app_get_state() == APP_STATE_MENU_MAIN);
 
     /* Назад в навигатор: MENU, карта. */
     purrgo_app_handle_button(PURRGO_BTN_KEY4_SHORT);

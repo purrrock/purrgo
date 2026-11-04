@@ -29,7 +29,7 @@
 | `include/purrgo/pgb.h`, `src/core/pgb.c` | разбор PGB; для читалки добавлено чтение страницы из образа книги в RAM (`pgb_page_read_mem`, `pgb_page_locate`, `pgb_meta_check_mem`) |
 | `include/purrgo/book_reader.h`, `src/core/book_reader.c` | логика режима: список книг, предзагрузка в RAM, навигация, позиция чтения |
 | `src/core/ui/ui_book.c` | экраны списка книг и страницы |
-| `src/core/app_fsm.c`, `app_ui.c`, `config_controller.c` | состояния `APP_STATE_BOOK_LIST` и `APP_STATE_BOOK_READ`, вход из меню |
+| `src/core/app_fsm.c`, `app_ui.c`, `menu_controller.c, menu_main.c` | состояния `APP_STATE_BOOK_LIST` и `APP_STATE_BOOK_READ`, вход из меню |
 | `tests/host/test_book_reader.c`, `test_pgb.c` | host-тесты |
 
 ## Что делает режим
