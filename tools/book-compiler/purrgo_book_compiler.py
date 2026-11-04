@@ -102,6 +102,7 @@ PGO_CHAR_MAP, PGO_TO_UNICODE = _load_char_map()
 # результат всегда состоит из символов, которые кодируются одним байтом.
 FOLD: dict[str, str] = {
     "\u2026": "...",   # …
+    "\u00a9": "(c)",   # ©
     "\u00d7": "x",     # ×
     "\u2022": "*", "\u2023": "*", "\u25cf": "*", "\u25aa": "*",   # маркеры списков
     "\u00b7": ".", "\u2219": ".",
@@ -614,6 +615,7 @@ def wrap_text(text: str, width: int, indent: int = 0,
 
 def blocks_to_lines(blocks: list[Block], width: int = DEFAULT_COLS, indent: int = 0,
                     collapse_blank: bool = False,
+                    blank_between_paragraphs: bool = False,
                     hyphenator: Callable[[str], list[str]] | None = None) -> list[str]:
     if not 0 <= indent < width:
         raise ValueError(f"--indent должен быть от 0 до {width - 1}.")
@@ -645,6 +647,8 @@ def blocks_to_lines(blocks: list[Block], width: int = DEFAULT_COLS, indent: int 
             lines.extend(wrap_text(text, width, 0, hyphenator))
         else:
             lines.extend(wrap_text(text, width, indent, hyphenator))
+            if blank_between_paragraphs:
+                blank_pending = True
 
     while lines and lines[0] == "":
         lines.pop(0)
@@ -1072,6 +1076,7 @@ class Options:
     reflow: str = "auto"
     indent: int = 2
     collapse_blank: bool = False
+    blank_between_paragraphs: bool = False
     hyphenate: str | None = None
     cols: int = DEFAULT_COLS
     rows: int = DEFAULT_ROWS
@@ -1109,7 +1114,8 @@ def render_document(doc: Document, path: Path, opts: Options) -> BookResult:
     if opts.compression not in COMPRESSION_NAMES:
         raise ValueError(f"Неизвестный способ сжатия: {opts.compression!r} (lz4 или none).")
     hyphenator = make_hyphenator(opts.hyphenate or None)
-    lines = blocks_to_lines(doc.blocks, opts.cols, opts.indent, opts.collapse_blank, hyphenator)
+    lines = blocks_to_lines(doc.blocks, opts.cols, opts.indent, opts.collapse_blank,
+                            opts.blank_between_paragraphs, hyphenator)
     pages = paginate(lines, opts.rows, opts.cols)
 
     notes = list(doc.notes)
@@ -1151,6 +1157,8 @@ def build_parser() -> argparse.ArgumentParser:
                         help="Отступ первой строки абзаца в пробелах (по умолчанию 2, 0 - без отступа).")
     parser.add_argument("--collapse-blank", action="store_true",
                         help="Сворачивать несколько пустых строк подряд в одну.")
+    parser.add_argument("--blank-between-paragraphs", action="store_true",
+                        help="Разделять абзацы пустой строкой (по умолчанию отключено).")
     parser.add_argument("--hyphenate", metavar="LANG",
                         help="Расставлять переносы по словарю pyphen (например ru_RU, en_US).")
     parser.add_argument("--compression", choices=tuple(COMPRESSION_NAMES), default="lz4",
@@ -1167,7 +1175,8 @@ def build_parser() -> argparse.ArgumentParser:
 def options_from_args(args: argparse.Namespace) -> Options:
     return Options(
         encoding=args.encoding, title=args.title, author=args.author, reflow=args.reflow,
-        indent=args.indent, collapse_blank=args.collapse_blank, hyphenate=args.hyphenate,
+        indent=args.indent, collapse_blank=args.collapse_blank,
+        blank_between_paragraphs=args.blank_between_paragraphs, hyphenate=args.hyphenate,
         cols=args.cols, rows=args.rows, compression=args.compression,
     )
 
@@ -1310,6 +1319,7 @@ class BookCompilerGui:
         self.v_reflow = tk.StringVar(value=opts.reflow)
         self.v_indent = tk.StringVar(value=str(opts.indent))
         self.v_collapse = tk.BooleanVar(value=opts.collapse_blank)
+        self.v_blank_par = tk.BooleanVar(value=opts.blank_between_paragraphs)
         self.v_hyphen = tk.StringVar(value=opts.hyphenate or "")
         self.v_compression = tk.StringVar(value=opts.compression)
         self.v_spaces = tk.BooleanVar(value=False)
@@ -1381,14 +1391,16 @@ class BookCompilerGui:
                     command=self._on_option_changed).grid(row=2, column=1, sticky="w", padx=(6, 0), pady=(4, 0))
         ttk.Checkbutton(conv, text="Сворачивать пустые строки", variable=self.v_collapse,
                         command=self._on_option_changed).grid(row=3, column=0, columnspan=2, sticky="w", pady=(4, 0))
-        ttk.Label(conv, text="Переносы (pyphen):").grid(row=4, column=0, sticky="w", pady=(4, 0))
+        ttk.Checkbutton(conv, text="Разделять абзацы пустой строкой", variable=self.v_blank_par,
+                        command=self._on_option_changed).grid(row=4, column=0, columnspan=2, sticky="w", pady=(4, 0))
+        ttk.Label(conv, text="Переносы (pyphen):").grid(row=5, column=0, sticky="w", pady=(4, 0))
         self.combo_hyphen = ttk.Combobox(conv, textvariable=self.v_hyphen, width=14, values=HYPHEN_LANGUAGES)
-        self.combo_hyphen.grid(row=4, column=1, sticky="w", padx=(6, 0), pady=(4, 0))
+        self.combo_hyphen.grid(row=5, column=1, sticky="w", padx=(6, 0), pady=(4, 0))
         self.hyphen_hint = ttk.Label(conv, text="", foreground="#a00000", wraplength=330, justify="left")
-        self.hyphen_hint.grid(row=5, column=0, columnspan=2, sticky="w")
-        ttk.Label(conv, text="Сжатие страниц:").grid(row=6, column=0, sticky="w", pady=(4, 0))
+        self.hyphen_hint.grid(row=6, column=0, columnspan=2, sticky="w")
+        ttk.Label(conv, text="Сжатие страниц:").grid(row=7, column=0, sticky="w", pady=(4, 0))
         ttk.Combobox(conv, textvariable=self.v_compression, state="readonly", width=14,
-                     values=tuple(COMPRESSION_NAMES)).grid(row=6, column=1, sticky="w", padx=(6, 0), pady=(4, 0))
+                     values=tuple(COMPRESSION_NAMES)).grid(row=7, column=1, sticky="w", padx=(6, 0), pady=(4, 0))
 
         # -- результат
         res = ttk.LabelFrame(left, text="Результат", padding=8)
@@ -1544,7 +1556,8 @@ class BookCompilerGui:
         return Options(
             encoding=self.v_encoding.get(), title=self.v_title.get().strip() or None,
             author=self.v_author.get().strip() or None, reflow=self.v_reflow.get(), indent=indent,
-            collapse_blank=self.v_collapse.get(), hyphenate=self.v_hyphen.get().strip() or None,
+            collapse_blank=self.v_collapse.get(),
+            blank_between_paragraphs=self.v_blank_par.get(), hyphenate=self.v_hyphen.get().strip() or None,
             compression=self.v_compression.get(),
         )
 
