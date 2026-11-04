@@ -816,6 +816,110 @@ static void test_fsm_and_screen(void)
     CHECK(purrgo_app_get_state() == APP_STATE_MAP);
 }
 
+/* Строка статуса (инверсная): текст str с ячейки cx, белые символы на чёрном. */
+static bool status_text_at(int cx, const char *str)
+{
+    for (int i = 0; str[i] != '\0'; i++) {
+        for (int col = 0; col < 5; col++) {
+            for (int row = 0; row < 7; row++) {
+                const int want = ((font5x7[(unsigned char)str[i]][col] >> row) & 1) ? WHITE : BLACK;
+                if (px(1 + (cx + i) * 6 + col, row) != want) { return false; }
+            }
+        }
+    }
+    return true;
+}
+
+/*
+ * Строка статуса: страница/всего слева, заряд батареи справа (без процента
+ * прочитанного); заряд опрашивается раз в минуту и меняет только строку статуса;
+ * если на экране ничего не изменилось, дисплей не обновляется.
+ */
+static void test_status_battery_and_idle_refresh(void)
+{
+    reset_all();
+    gfx_context_t g;
+    memset(g_fb, 0, sizeof g_fb);
+    put_book(BOOKS_DIR "/ALPHA.PGB", 50, "Alpha", "Author A", 0);
+
+    memset(&app_config, 0, sizeof app_config);
+    purrgo_app_init();
+    purrgo_app_ui_reset();
+    CHECK(gfx_init(&g, W, H, g_fb, cb_draw, cb_read));
+    app_config.power_source = PURRGO_POWER_SRC_ZINC_CARBON;   /* 3 x 1200 мВ = 25 % */
+    fake_power_set_battery_pin_mv(1800);                      /* делитель 1:1 */
+    run_ticks(1000);
+
+    purrgo_app_handle_button(PURRGO_BTN_KEY4_LONG);
+    purrgo_app_handle_button(PURRGO_BTN_KEY4_SHORT);
+    render(&g);
+    purrgo_app_handle_button(PURRGO_BTN_KEY3_SHORT);           /* BOOKS: список */
+    render(&g);
+    purrgo_app_handle_button(PURRGO_BTN_KEY3_SHORT);           /* открыть книгу */
+    CHECK(purrgo_app_get_state() == APP_STATE_BOOK_READ);
+    render(&g);
+
+    /* "1/50" слева, "25%" у правого края (процента прочитанного нет). */
+    CHECK(status_text_at(0, "1/50"));
+    CHECK(status_text_at(26, "25%"));
+
+    /* Батарея заряжена, но замер раз в минуту: до минуты ничего не меняется и перерисовки нет. */
+    fake_power_set_battery_pin_mv(2400);                       /* 100 % */
+    run_ticks(50000);
+    CHECK(!purrgo_app_ui_needs_render(g_now));
+
+    /* Минута прошла: заряд изменился - обновляется только строка статуса. */
+    run_ticks(20000);
+    CHECK(purrgo_app_ui_needs_render(g_now));
+    pc_display_stats_reset();
+    render(&g);
+    {
+        pc_display_stats_t ds = pc_display_stats_get();
+        CHECK(ds.fulls == 0 && ds.partials == 1);
+        CHECK(ds.last_y == 0 && ds.last_h == 8 && ds.last_w == W);
+    }
+    CHECK(status_text_at(25, "100%"));
+    CHECK(glyph_at(0, 0, 'P'));                                /* текст страницы цел */
+
+    /* Значение не изменилось: новых перерисовок нет, сколько бы времени ни прошло. */
+    for (int i = 0; i < 5; i++) {
+        run_ticks(61000);
+        CHECK(!purrgo_app_ui_needs_render(g_now));
+    }
+
+    /* Принудительный проход при неизменном экране: ни рисования, ни обновления дисплея. */
+    pc_display_stats_reset();
+    purrgo_ui_dirty_mark(UI_DIRTY_SCREEN);
+    render(&g);
+    {
+        pc_display_stats_t ds = pc_display_stats_get();
+        CHECK(ds.fulls == 0 && ds.partials == 0);
+    }
+
+    /* Перелистывание: обновляется весь экран. */
+    purrgo_app_handle_button(PURRGO_BTN_KEY2_SHORT);
+    pc_display_stats_reset();
+    render(&g);
+    {
+        pc_display_stats_t ds = pc_display_stats_get();
+        CHECK(ds.fulls == 0 && ds.partials == 1);
+        CHECK(ds.last_y == 0 && ds.last_h == H);
+    }
+
+    /* Переход по процентам: подсказка внизу - весь экран, смена процента - только строка статуса. */
+    purrgo_app_handle_button(PURRGO_BTN_KEY3_SHORT);
+    pc_display_stats_reset();
+    render(&g);
+    CHECK(pc_display_stats_get().last_h == H);
+    purrgo_app_handle_button(PURRGO_BTN_KEY2_SHORT);
+    pc_display_stats_reset();
+    render(&g);
+    {
+        pc_display_stats_t ds = pc_display_stats_get();
+        CHECK(ds.partials == 1 && ds.last_y == 0 && ds.last_h == 8);
+    }
+}
+
 int main(void)
 {
     test_enter_whole_book();
@@ -826,5 +930,6 @@ int main(void)
     test_jump_mode();
     test_lz4_fixtures_and_errors();
     test_fsm_and_screen();
+    test_status_battery_and_idle_refresh();
     return test_finish("test_book_reader");
 }

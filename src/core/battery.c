@@ -1,6 +1,7 @@
 #include "purrgo/battery.h"
 #include "purrgo/config.h"
 #include "purrgo/hardware_config.h"
+#include "purrgo/pgo_text.h"
 
 /*
  * Мониторинг батареи (см. purrgo/battery.h).
@@ -150,4 +151,20 @@ bool purrgo_battery_read(purrgo_battery_t* out)
         out->percent = (int8_t)PURRGO_BATTERY_STUB_PERCENT;
     }
     return out->percent >= 0;
+}
+
+void purrgo_battery_format(char* buf, size_t size)
+{
+    if (buf == NULL || size == 0u) {
+        return;
+    }
+
+    purrgo_battery_t bat;
+    if (purrgo_battery_read(&bat) && bat.percent >= 0 && bat.percent <= 100) {
+        purrgo_snprintf(buf, size, "%d%%", (int)bat.percent);
+    } else if (bat.external) {
+        purrgo_snprintf(buf, size, "5V");
+    } else {
+        purrgo_snprintf(buf, size, "--%%");
+    }
 }

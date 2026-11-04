@@ -118,19 +118,87 @@ static void draw_message(gfx_context_t* gfx, int row, const char* text)
     gfx_draw_string(gfx, 1, (int16_t)(CELL_H + row * CELL_H), text);
 }
 
+/* Что нарисовано на экране чтения в прошлый раз. */
+static struct {
+    bool     valid;
+    uint32_t body_hash;    /* всё, кроме строки статуса */
+    char     status[48];
+} s_read_frame;
+
+void ui_book_read_reset(void)
+{
+    s_read_frame.valid = false;
+}
+
+static uint32_t fnv1a(uint32_t h, const void* data, size_t len)
+{
+    const uint8_t* p = (const uint8_t*)data;
+    for (size_t i = 0; i < len; i++) {
+        h = (h ^ p[i]) * 16777619u;
+    }
+    return h;
+}
+
+/* Хэш всего, что рисуется ниже строки статуса (текст, ошибки, подсказка перехода). */
+static uint32_t body_hash(const purrgo_book_view_t* v)
+{
+    uint32_t h = 2166136261u;
+    const uint8_t flags[4] = { (uint8_t)v->open, (uint8_t)v->error, (uint8_t)v->page_error,
+                               (uint8_t)v->jump };
+
+    h = fnv1a(h, flags, sizeof(flags));
+    if (!v->open) {
+        h = fnv1a(h, v->file, strlen(v->file));
+    } else if (v->text != NULL) {
+        h = fnv1a(h, v->text, v->text_len);
+    } else {
+        h = fnv1a(h, &v->page, sizeof(v->page));   /* текст страницы недоступен: сообщение с номером */
+    }
+    return h;
+}
+
 void ui_render_book_read(gfx_context_t* gfx)
 {
     purrgo_book_view_t v;
+    char status[sizeof(s_read_frame.status)];
     char buf[48];
 
     purrgo_book_reader_get_view(&v);
 
+    /* Строка статуса. */
+    if (!v.open) {
+        purrgo_snprintf(status, sizeof(status), "BOOK ERROR");
+    } else if (v.jump) {
+        /* Переход по процентам: что получится и как подтвердить. */
+        purrgo_snprintf(status, sizeof(status), "GO TO %u%% (p.%u/%u)",
+                        (unsigned)v.jump_percent, (unsigned)(v.jump_page + 1u),
+                        (unsigned)v.page_count);
+    } else {
+        /* Слева страница/всего, справа заряд батареи; процент прочитанного не выводится. */
+        char left[24];
+        purrgo_snprintf(left, sizeof(left), "%u/%u", (unsigned)(v.page + 1u), (unsigned)v.page_count);
+        const int pad = (int)PGB_SCREEN_COLS - (int)strlen(left) - (int)strlen(v.battery);
+        purrgo_snprintf(status, sizeof(status), "%s%*s%s", left, (pad > 1) ? pad : 1, "", v.battery);
+    }
+
+    const uint32_t hash = body_hash(&v);
+    if (s_read_frame.valid && hash == s_read_frame.body_hash) {
+        if (strcmp(status, s_read_frame.status) == 0) {
+            return;   /* на экране ничего не изменилось: ни рисования, ни обновления дисплея */
+        }
+        /* Изменилась только строка статуса (заряд, процент перехода): обновляется одна строка. */
+        draw_status(gfx, status);
+        memcpy(s_read_frame.status, status, sizeof(status));
+        display_refresh_region(0, 0, PURRGO_HW_DISPLAY_WIDTH_PX, CELL_H);
+        return;
+    }
+
     gfx_set_color(gfx, BLACK, WHITE);
     gfx_clear(gfx);
+    draw_status(gfx, status);
 
     if (!v.open) {
         /* Книга не открылась: причина и подсказка кнопок. */
-        draw_status(gfx, "BOOK ERROR");
         purrgo_snprintf(buf, sizeof(buf), "%s", v.file);
         purrgo_utf8_to_pgo_inplace(buf);
         buf[PURRGO_BOOK_AUTHOR_COLS] = '\0';
@@ -139,21 +207,6 @@ void ui_render_book_read(gfx_context_t* gfx)
         draw_message(gfx, 6, "K3 - book list");
         draw_message(gfx, 7, "K4 - exit");
     } else {
-        if (v.jump) {
-            /* Переход по процентам: что получится и как подтвердить. */
-            purrgo_snprintf(buf, sizeof(buf), "GO TO %u%% (p.%u/%u)",
-                            (unsigned)v.jump_percent, (unsigned)(v.jump_page + 1u),
-                            (unsigned)v.page_count);
-        } else {
-            char left[24];
-            char right[8];
-            purrgo_snprintf(left, sizeof(left), "%u/%u", (unsigned)(v.page + 1u), (unsigned)v.page_count);
-            purrgo_snprintf(right, sizeof(right), "%u%%", (unsigned)v.percent);
-            const int pad = (int)PGB_SCREEN_COLS - (int)strlen(left) - (int)strlen(right);
-            purrgo_snprintf(buf, sizeof(buf), "%s%*s%s", left, (pad > 1) ? pad : 1, "", right);
-        }
-        draw_status(gfx, buf);
-
         if (v.text != NULL) {
             draw_page_text(gfx, v.text, v.text_len);
         } else {
@@ -171,6 +224,10 @@ void ui_render_book_read(gfx_context_t* gfx)
             gfx_set_color(gfx, BLACK, WHITE);
         }
     }
+
+    s_read_frame.valid = true;
+    s_read_frame.body_hash = hash;
+    memcpy(s_read_frame.status, status, sizeof(status));
 
     /* Текст меняется по всей площади: обновляется весь экран (1 bit - частичное обновление). */
     display_refresh_region(0, 0, PURRGO_HW_DISPLAY_WIDTH_PX, PURRGO_HW_DISPLAY_HEIGHT_PX);
