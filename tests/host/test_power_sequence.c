@@ -142,6 +142,8 @@ static void test_power_off_sequence(void)
     CHECK(fake_power_unmount_calls() == 1);
     CHECK(fake_power_standby_calls() == 1);
     CHECK(fake_power_unmount_seq() < fake_power_standby_seq());
+    CHECK(fake_power_gnss_off_calls() == 1);                      /* GNSS выключен по EN */
+    CHECK(fake_power_gnss_off_seq() < fake_power_unmount_seq());  /* ... до размонтирования */
 
     CHECK(g_at_unmount.open_handles == 0);                       /* карта и трек закрыты */
     CHECK(g_at_unmount.logger_state != LOGGER_STATE_RECORDING);   /* логгер остановлен */

@@ -6,11 +6,12 @@
  * src/core/power.c). Order:
  *   1. render the final "POWER OFF" screen into the framebuffer;
  *   2. stop the track logger (flush and close the track file);
- *   3. save the configuration;
- *   4. close the persistent map files;
- *   5. purrgo_platform_storage_unmount();
- *   6. push the final screen to the display and put the display to sleep;
- *   7. purrgo_platform_enter_standby().
+ *   3. switch the GNSS receiver off (purrgo_gnss_power_off(), EN low);
+ *   4. save the configuration;
+ *   5. close the persistent map files;
+ *   6. purrgo_platform_storage_unmount();
+ *   7. push the final screen to the display and put the display to sleep;
+ *   8. purrgo_platform_enter_standby().
  *
  * On hardware the function does not return (the last step never returns);
  * on the PC the last step exits the process.

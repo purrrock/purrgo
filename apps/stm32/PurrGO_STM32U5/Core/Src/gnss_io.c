@@ -95,6 +95,13 @@ static bool gnss_cfg_retry_done = false;
  */
 static volatile uint16_t gnss_last_head = 0U;
 
+/*
+ * GNSS включён (EN отпущен, LPUART1 и DMA работают). После сброса МК EN High
+ * (MX_GPIO_Init), поэтому по умолчанию true. Пока false, purrgo_gnss_read_byte()
+ * ничего не отдаёт.
+ */
+static volatile bool gnss_powered = true;
+
 /* Узел и очередь linked-list: узел обязан быть выровнен по 4 байтам. */
 static DMA_NodeTypeDef gnss_rx_node __attribute__((aligned(32)));
 static DMA_QListTypeDef gnss_rx_queue;
@@ -216,6 +223,74 @@ void purrgo_gnss_init(void)
 }
 
 /**
+ * @brief Выключить GNSS по EN.
+ *
+ * Порядок: остановить приём (DMA) -> EN Low -> выключить LPUART1 (HAL сводит
+ * PA2/PA3 в Analog без подтяжки) -> PA2 (TX в сторону модуля) в Low. Иначе
+ * модуль мог бы подпитываться через защитные диоды линии UART.
+ */
+void purrgo_gnss_power_off(void)
+{
+    GPIO_InitTypeDef gpio = {0};
+
+    if (!gnss_powered)
+    {
+        return;
+    }
+    gnss_powered = false;
+
+    /* 1. Остановить приём; HAL_UART_AbortReceive() останавливает и DMA. */
+    (void)HAL_UART_AbortReceive(&hlpuart1);
+    gnss_rx_error_flag = false;
+
+    /* 2. EN в Low: модуль выключен (линия EN - Open Drain). */
+    HAL_GPIO_WritePin(GNSS_EN_GPIO_Port, GNSS_EN_Pin, GPIO_PIN_RESET);
+
+    /* 3. LPUART1 выключен; PA2/PA3 -> Analog, без подтяжек. */
+    (void)HAL_UART_DeInit(&hlpuart1);
+
+    /* 4. PA2 (TX в сторону модуля) в Low. PA3 (RX) остаётся Analog без подтяжки. */
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_RESET);
+    gpio.Pin = GPIO_PIN_2;
+    gpio.Mode = GPIO_MODE_OUTPUT_PP;
+    gpio.Pull = GPIO_NOPULL;
+    gpio.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(GPIOA, &gpio);
+
+    PURRGO_LOG("GNSS: power off (EN low)\r\n");
+}
+
+/**
+ * @brief Включить GNSS и настроить его заново.
+ *
+ * Порядок: EN отпущен (подтяжка внутри модуля, High) -> LPUART1 заново
+ * инициализирован (PA2/PA3 снова AF) -> purrgo_gnss_init() (DMA-приём и
+ * настройка приёмника). Модуль после включения загружается не сразу, поэтому
+ * первая настройка может потеряться; её повторяет PURRGO_GNSS_CONFIG_RETRY_MS.
+ */
+void purrgo_gnss_power_on(void)
+{
+    if (gnss_powered)
+    {
+        return;
+    }
+
+    /* 1. EN: отпустить линию (Open Drain, High). */
+    HAL_GPIO_WritePin(GNSS_EN_GPIO_Port, GNSS_EN_Pin, GPIO_PIN_SET);
+
+    /* 2. LPUART1 заново: MspInit возвращает PA2/PA3 в AF8 (PA3 с подтяжкой). */
+    MX_LPUART1_UART_Init();
+
+    /* 3. DMA-приём и настройка приёмника (скорость, набор NMEA). */
+    gnss_powered = true;
+    gnss_last_head = 0U;
+    purrgo_gnss_init();
+    purrgo_gnss_monitor_init();
+
+    PURRGO_LOG("GNSS: power on (EN released)\r\n");
+}
+
+/**
  * @brief Принудительно вернуть канал GPDMA в состояние READY.
  *
  * Нужен, если DMA застрял в ABORT/SUSPEND/ERROR (например, вторая ошибка UART
@@ -285,6 +360,12 @@ bool purrgo_gnss_read_byte(uint8_t *byte)
     uint16_t head;
 
     if (byte == NULL)
+    {
+        return false;
+    }
+
+    /* GNSS выключен по EN: LPUART1 и DMA остановлены. */
+    if (!gnss_powered)
     {
         return false;
     }

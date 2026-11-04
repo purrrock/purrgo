@@ -2,6 +2,7 @@
 #include "purrgo/app_ui.h"
 #include "purrgo/config.h"
 #include "purrgo/display_hal.h"
+#include "purrgo/gnss_io.h"
 #include "purrgo/logger.h"
 #include "purrgo/map.h"
 #include "purrgo/track_logger.h"
@@ -24,17 +25,23 @@ void purrgo_system_power_off(void)
     /* 2. Остановить запись трека: сброс буфера и закрытие файла. */
     purrgo_logger_stop();
 
-    /* 3. Сохранить конфигурацию (временный файл, sync, replace). */
+    /*
+     * 3. Выключить GNSS по EN. Трек уже закрыт, а дальше идут сохранение
+     * данных и медленный refresh e-ink: приёмнику незачем работать всё это время.
+     */
+    purrgo_gnss_power_off();
+
+    /* 4. Сохранить конфигурацию (временный файл, sync, replace). */
     (void)purrgo_config_save();
 
-    /* 4. Закрыть файлы карты: освободить структуры ФС до размонтирования. */
+    /* 5. Закрыть файлы карты: освободить структуры ФС до размонтирования. */
     purrgo_map_shutdown();
 
-    /* 5. Размонтировать носитель (платформа). */
+    /* 6. Размонтировать носитель (платформа). */
     purrgo_platform_storage_unmount();
 
     /*
-     * 6. Вывести финальный экран (на e-ink изображение остаётся без питания)
+     * 7. Вывести финальный экран (на e-ink изображение остаётся без питания)
      * и перевести дисплей в спящий режим.
      */
     if (power_off_screen) {
@@ -44,6 +51,6 @@ void purrgo_system_power_off(void)
     display_sleep();
     PURRGO_LOG("Display off\r\n");
 
-    /* 7. Низкое энергопотребление (платформа). На железе не возвращается. */
+    /* 8. Низкое энергопотребление (платформа). На железе не возвращается. */
     purrgo_platform_enter_standby();
 }
