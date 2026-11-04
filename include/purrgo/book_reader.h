@@ -53,7 +53,7 @@
 
 /* Через сколько мс без перелистывания позиция записывается на SD. */
 #ifndef PURRGO_BOOK_SAVE_TIMEOUT_MS
-#define PURRGO_BOOK_SAVE_TIMEOUT_MS 30000u
+#define PURRGO_BOOK_SAVE_TIMEOUT_MS 60000u
 #endif
 
 /* Книг в списке (лишние файлы каталога не показываются). */
