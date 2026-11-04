@@ -207,4 +207,6 @@ Code;PG_class;STYLE;LOD;Layer;OSM_Tags;Description;Enabled;Icon
 31;POI_SMALL;DARK_GRAY_CIRCLE;0;pois;natural=saddle;Перевал;1;ромб
 24;POI_SMALL;DARK_GRAY_CIRCLE;0;pois;natural=hot_spring;Горячий источник;1;крепость
 18;POI_SMALL;DARK_GRAY_CIRCLE;0;pois;highway=rest_area;Зона отдыха;1;палатка
-36;POI_SMALL;DARK_GRAY_CIRCLE;0;pois;bariier=gate;Запрет;1;диагональный крест
+36;POI_SMALL;DARK_GRAY_CIRCLE;0;pois;barrier=*,access=private;Запрет (барьер, доступ: private);1;диагональный крест
+36;POI_SMALL;DARK_GRAY_CIRCLE;0;pois;barrier=*,access=no;Запрет (барьер, доступ: no);1;диагональный крест
+36;POI_SMALL;DARK_GRAY_CIRCLE;0;pois;barrier=*,access=permit;Запрет (барьер, доступ: permit);1;диагональный крест

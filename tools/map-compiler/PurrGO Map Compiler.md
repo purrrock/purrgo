@@ -122,6 +122,9 @@ Rules are evaluated from top to bottom:
 
 **the first matching enabled rule wins.**
 
+`OSM_Tags` is a comma-separated list of `key=value` pairs that must all match.
+The value `*` matches any value of the key, e.g. `barrier=*,access=private`.
+
 The detailed semantics of the feature codes and generated map format are defined in:
 
 ```text

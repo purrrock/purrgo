@@ -95,13 +95,21 @@ def _resolve_name(tags: dict, rule=None, is_poi: bool = False) -> str:
     Если у POI названия нет, в качестве названия используется значение
     тега типа из правила (например shop=clothes -> "clothes").
     Фолбэк не проходит через стоп-слова (иначе "marketplace" -> "Place market").
+
+    Исключение: барьеры (правила с тегом barrier=...) без названия остаются
+    безымянными — тип барьера (gate, bollard, ...) в название не подставляется.
     """
     for key in _NAME_TAG_PRIORITY:
         value = tags.get(key)
         if value and value.strip():
             return _sanitize_name_cached(value)
 
-    if is_poi and rule is not None and rule.osm_tags:
+    if (
+        is_poi
+        and rule is not None
+        and rule.osm_tags
+        and not any(k == 'barrier' for k, _ in rule.osm_tags)
+    ):
         type_name = rule.osm_tags[0][1]
         if len(type_name) > 22:
             type_name = type_name[:20].rstrip('_') + ".."
