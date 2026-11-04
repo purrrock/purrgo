@@ -4,6 +4,7 @@
 #include "purrgo/config.h"
 #include "purrgo/purrgo_format.h"
 #include "purrgo/power.h"
+#include "purrgo/book_reader.h"
 #include <string.h>
 
 
@@ -543,10 +544,12 @@ bool purrgo_config_controller_handle_button(
             case PURRGO_ACTION_OK:
 
                 /*
-                 * BOOKS: заглушка (читалка книг ещё не реализована).
+                 * BOOKS: режим чтения. Читалка останавливает трек и GNSS и
+                 * сама решает, куда перейти: на последнюю открытую книгу или
+                 * в список книг.
                  */
                 if (config_cursor_idx == CONFIG_CURSOR_BOOKS) {
-                    /* TODO: переход в режим чтения книг. */
+                    *next_state_out = purrgo_book_reader_enter();
                 }
 
                 /*

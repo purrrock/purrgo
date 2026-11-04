@@ -70,7 +70,8 @@ typedef enum {
     PGB_ERR_BUFFER,        /* буфер для страницы мал */
     PGB_ERR_PAGE_DATA,     /* недопустимое содержимое страницы */
     PGB_ERR_CANCELLED,     /* проверка прервана пользователем */
-    PGB_ERR_DECOMPRESS     /* блок LZ4 повреждён или не даёт ровно raw_size байт */
+    PGB_ERR_DECOMPRESS,    /* блок LZ4 повреждён или не даёт ровно raw_size байт */
+    PGB_ERR_NOT_CACHED     /* нужные байты файла не входят в переданный образ в памяти */
 } pgb_status_t;
 
 /* Короткое ASCII-описание статуса (для журнала и экрана ошибки). Никогда не NULL. */
@@ -170,6 +171,34 @@ pgb_status_t pgb_index_entry_check(const pgb_header_t *header, uint32_t number,
  * завершающего LF, не больше rows строк, каждая не длиннее cols байт.
  */
 pgb_status_t pgb_page_check_text(const pgb_header_t *header, const uint8_t *text, size_t len);
+
+/* ---- Образ книги в памяти (читалка: предзагрузка книги в RAM) -------------- */
+
+/*
+ * Читалка держит в RAM начало файла (`prefix`: заголовок + метаданные + индекс,
+ * data_offset байт) и непрерывное окно данных страниц: байты файла
+ * [data_base, data_base + data_len). Все функции ниже работают только с этими
+ * буферами и файла не касаются; содержимое по-прежнему считается недоверенным.
+ */
+
+/* meta_crc32 по prefix (data_offset байт); PGB_OK или PGB_ERR_META_CRC. */
+pgb_status_t pgb_meta_check_mem(const pgb_header_t *header, const uint8_t *prefix);
+
+/*
+ * Запись индекса страницы `number` из prefix, проверенная вместе со следующей
+ * (как в pgb_page_read). Нужна, чтобы узнать, какой диапазон файла занимает страница.
+ */
+pgb_status_t pgb_page_locate(const pgb_header_t *header, const uint8_t *prefix,
+                             uint32_t number, pgb_index_entry_t *entry);
+
+/*
+ * Страница `number` из образа в памяти; сжатая страница распаковывается прямо из
+ * окна данных (scratch не нужен). Если байты страницы не лежат целиком в окне,
+ * возвращается PGB_ERR_NOT_CACHED (читалка подгружает другое окно).
+ */
+pgb_status_t pgb_page_read_mem(const pgb_header_t *header, const uint8_t *prefix,
+                               const uint8_t *data, uint32_t data_base, uint32_t data_len,
+                               uint32_t number, uint8_t *buf, size_t buf_size, size_t *out_len);
 
 /* ---- Работа с файлом ------------------------------------------------------ */
 

@@ -17,6 +17,7 @@ typedef struct {
     int16_t last_y;
     int16_t last_w;
     int16_t last_h;
+    int mode;             /* режим, выбранный последним display_set_mode() (display_mode_t) */
 } pc_display_stats_t;
 
 void pc_display_stats_reset(void);

@@ -85,11 +85,9 @@ static void test_menu(void)
 
     purrgo_config_controller_on_enter(APP_STATE_MENU_CONFIG);
 
-    /* Первый пункт - BOOKS (заглушка), курсор стоит на нём; OK ничего не меняет. */
+    /* Первый пункт - BOOKS (режим чтения, см. test_book_reader.c), курсор стоит на нём. */
     CHECK(config_app_get_config_cursor() == 0);
     purrgo_state_t st = APP_STATE_MENU_CONFIG;
-    st = press(st, PURRGO_ACTION_OK);
-    CHECK(st == APP_STATE_MENU_CONFIG);
     CHECK(config_app_get_draft_power_source() == PURRGO_POWER_SRC_LITHIUM);
 
     /* Второй пункт - источник питания. */

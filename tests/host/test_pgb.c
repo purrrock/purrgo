@@ -14,7 +14,8 @@
  * все виды повреждений, мутации страниц без выхода за буферы), разбор заголовка,
  * открытие, геометрия, размер файла, содержимое всех страниц, повреждения
  * (каждый бит области заголовок + метаданные + индекс, каждый байт данных),
- * подмена индекса при пересчитанных CRC, полная проверка файла, ошибки ФС.
+ * подмена индекса при пересчитанных CRC, полная проверка файла, ошибки ФС,
+ * образ книги в памяти (pgb_page_read_mem, окно данных, meta_crc32 по образу).
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -695,12 +696,97 @@ static void test_verify_file(void)
 static void test_status_text(void)
 {
     int ok = 1;
-    for (int s = PGB_OK; s <= PGB_ERR_DECOMPRESS; s++) {
+    for (int s = PGB_OK; s <= PGB_ERR_NOT_CACHED; s++) {
         const char *t = pgb_status_text((pgb_status_t)s);
         if (!t || !t[0]) { ok = 0; }
     }
     CHECK(ok);
     CHECK(pgb_status_text((pgb_status_t)99) != NULL);
+}
+
+/*
+ * Образ книги в памяти (читалка): страницы из RAM совпадают с pgb_page_read();
+ * окно данных - граница в байт; повреждения не выходят за буферы; meta_crc32
+ * по образу.
+ */
+static void test_memory_image(void)
+{
+    pgb_header_t h;
+    CHECK(pgb_header_decode(DATA, SIZE, &h) == PGB_OK);
+    CHECK(pgb_meta_check_mem(&h, DATA) == PGB_OK);
+    CHECK(pgb_meta_check_mem(NULL, DATA) == PGB_ERR_IO);
+
+    /* Каждый бит области заголовок + метаданные + индекс ловится по meta_crc32. */
+    {
+        uint8_t copy[MAX_FILE];
+        memcpy(copy, DATA, SIZE);
+        int missed = 0;
+        for (uint32_t i = 0; i < h.data_offset; i++) {
+            if (i >= 32 && i < 40) { continue; }   /* сами поля CRC считаются нулевыми */
+            for (int bit = 0; bit < 8; bit++) {
+                copy[i] ^= (uint8_t)(1u << bit);
+                if (pgb_meta_check_mem(&h, copy) == PGB_OK) { missed++; }
+                copy[i] ^= (uint8_t)(1u << bit);
+            }
+        }
+        CHECK(missed == 0);
+    }
+
+    for (uint32_t n = 0; n < h.page_count; n++) {
+        uint8_t ref[1024], mem[1024];
+        size_t ref_len = 0, mem_len = 0;
+        pgb_index_entry_t e;
+        CHECK(pgb_page_locate(&h, DATA, n, &e) == PGB_OK);
+
+        pgb_book_t book;
+        CHECK(pgb_open(BOOK, 29, 32, &book) == PGB_OK);
+        CHECK(pgb_page_read(&book, n, ref, sizeof ref, &ref_len) == PGB_OK);
+        pgb_close(&book);
+
+        /* Целиком книга, ровно окно страницы, окно короче на байт с любого края. */
+        CHECK(pgb_page_read_mem(&h, DATA, DATA + h.data_offset, h.data_offset, SIZE - h.data_offset,
+                                n, mem, sizeof mem, &mem_len) == PGB_OK);
+        CHECK(mem_len == ref_len && memcmp(mem, ref, ref_len) == 0);
+        CHECK(pgb_page_read_mem(&h, DATA, DATA + e.offset, e.offset, e.stored_size,
+                                n, mem, sizeof mem, &mem_len) == PGB_OK);
+        CHECK(mem_len == ref_len && memcmp(mem, ref, ref_len) == 0);
+        CHECK(pgb_page_read_mem(&h, DATA, DATA + e.offset + 1u, e.offset + 1u, e.stored_size - 1u,
+                                n, mem, sizeof mem, &mem_len) == PGB_ERR_NOT_CACHED && mem_len == 0);
+        CHECK(pgb_page_read_mem(&h, DATA, DATA + e.offset, e.offset, e.stored_size - 1u,
+                                n, mem, sizeof mem, &mem_len) == PGB_ERR_NOT_CACHED);
+        CHECK(pgb_page_read_mem(&h, DATA, DATA, 0xFFFFFFF0u, 0x20u,
+                                n, mem, sizeof mem, &mem_len) == PGB_ERR_NOT_CACHED);   /* без переполнения */
+        CHECK(pgb_page_read_mem(&h, DATA, DATA, h.data_offset, 0u,
+                                n, mem, sizeof mem, &mem_len) == PGB_ERR_NOT_CACHED);
+        /* Буфер меньше страницы. */
+        CHECK(pgb_page_read_mem(&h, DATA, DATA + h.data_offset, h.data_offset, SIZE - h.data_offset,
+                                n, mem, (size_t)e.raw_size - 1u, &mem_len) == PGB_ERR_BUFFER);
+    }
+    uint8_t buf[1024];
+    size_t len = 0;
+    CHECK(pgb_page_read_mem(&h, DATA, DATA + h.data_offset, h.data_offset, SIZE - h.data_offset,
+                            h.page_count, buf, sizeof buf, &len) == PGB_ERR_PAGE_NUMBER);
+    pgb_index_entry_t e;
+    CHECK(pgb_page_locate(&h, DATA, h.page_count, &e) == PGB_ERR_PAGE_NUMBER);
+    CHECK(pgb_page_read_mem(NULL, DATA, DATA, 0, 0, 0, buf, sizeof buf, &len) == PGB_ERR_IO);
+    CHECK(pgb_page_read_mem(&h, DATA, DATA, h.data_offset, 0, 0, buf, sizeof buf, NULL) == PGB_ERR_IO);
+    CHECK(strcmp(pgb_status_text(PGB_ERR_NOT_CACHED), "unknown error") != 0);
+
+    /* Каждый байт данных страниц портится: ошибка или иной текст, но не выход за буфер (ASan/UBSan). */
+    {
+        uint8_t copy[MAX_FILE];
+        memcpy(copy, DATA, SIZE);
+        for (uint32_t i = h.data_offset; i < SIZE; i++) {
+            copy[i] ^= 0xFFu;
+            for (uint32_t n = 0; n < h.page_count; n++) {
+                size_t l = 0;
+                pgb_status_t st = pgb_page_read_mem(&h, DATA, copy + h.data_offset, h.data_offset,
+                                                    SIZE - h.data_offset, n, buf, sizeof buf, &l);
+                CHECK(st == PGB_OK ? (l > 0 && l <= sizeof buf) : l == 0);
+            }
+            copy[i] ^= 0xFFu;
+        }
+    }
 }
 
 int main(void)
@@ -721,6 +807,7 @@ int main(void)
         test_meta_corruption();
         test_tampered_index();
         test_verify_file();
+        test_memory_image();
         if (g_fx->compressed) {
             test_lz4_fuzz();
             test_lz4_page_corruption();

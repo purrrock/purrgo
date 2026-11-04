@@ -49,6 +49,9 @@ uint16_t purrgo_layers_default(void);
 /* Максимальная длина имени GPX-файла маршрута в каталоге ROUTES (с завершающим нулём). */
 #define PURRGO_ROUTE_NAME_MAX 96
 
+/* Максимальная длина имени файла книги .PGB в каталоге BOOKS (с завершающим нулём). */
+#define PURRGO_BOOK_NAME_MAX 96
+
 typedef struct {
     int16_t tz_offset_minutes;
     track_logger_mode_t log_mode;
@@ -96,6 +99,18 @@ typedef struct {
      * (меню CONFIG, ключ POWER_SRC в PURRGO.CFG).
      */
     purrgo_power_source_t power_source;
+
+    /*
+     * Позиция чтения: последняя открытая книга (имя файла без пути, пустая
+     * строка - нет), её file_crc32 из заголовка PGB и номер страницы с нуля.
+     * Ключи BOOK_FILE, BOOK_CRC (hex), BOOK_PAGE в PURRGO.CFG. Если у файла с
+     * тем же именем другой CRC (книгу перекомпилировали), позиция недействительна.
+     * В RAM обновляется при каждом перелистывании, на SD пишется читалкой
+     * по тайм-ауту бездействия и при выходе (book_reader.h).
+     */
+    char     book_file[PURRGO_BOOK_NAME_MAX];
+    uint32_t book_crc32;
+    uint32_t book_page;
 } purrgo_config_t;
 
 

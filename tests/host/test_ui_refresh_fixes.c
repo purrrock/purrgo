@@ -107,7 +107,7 @@ static void test_menu_value_change_refreshes_row(void)
     CHECK(purrgo_app_get_state() == APP_STATE_MENU_CONFIG);
     render(&g);                                   /* вход: полное обновление экрана */
 
-    /* Первая строка - BOOKS (заглушка); вниз на вторую (источник питания). */
+    /* Первая строка - BOOKS (режим чтения); вниз на вторую (источник питания). */
     CHECK(config_app_get_config_cursor() == 0);
     purrgo_app_handle_button(PURRGO_BTN_KEY2_SHORT);
     CHECK(config_app_get_config_cursor() == 1);

@@ -19,7 +19,9 @@ typedef enum {
     APP_STATE_MENU_CONFIG,    // Главное меню настроек: Список параметров (Часовой пояс, выбор директории)
     APP_STATE_MENU_DIR_SELECT, // Подсостояние: Файловый браузер для выбора каталога с векторными картами
     APP_STATE_MENU_MAP_LAYERS, // Подсостояние: Экран настройки видимости слоев карты
-    APP_STATE_MENU_ROUTE_SELECT // Подсостояние: Выбор GPX-файла маршрута из каталога ROUTES
+    APP_STATE_MENU_ROUTE_SELECT, // Подсостояние: Выбор GPX-файла маршрута из каталога ROUTES
+    APP_STATE_BOOK_LIST,      // Читалка: список книг из каталога BOOKS (GNSS и запись трека выключены)
+    APP_STATE_BOOK_READ       // Читалка: страница книги, 1-bit (см. book_reader.h)
 } purrgo_state_t;
 
 // Аппаратные кнопки устройства

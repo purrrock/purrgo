@@ -14,6 +14,7 @@
 #include "purrgo/logger.h"
 #include "purrgo/geo.h"
 #include "purrgo/hardware_config.h"
+#include "purrgo/book_reader.h"
 
 #define PURRGO_GNSS_MARKER_UPDATE_DISTANCE_M 5
 
@@ -98,6 +99,45 @@ static void logger_schedule_retry(uint32_t now_ms) {
     next_logger_retry_ms = now_ms + delay_ms;
 }
 
+static bool is_book_state(purrgo_state_t state) {
+    return state == APP_STATE_BOOK_LIST || state == APP_STATE_BOOK_READ;
+}
+
+// Решение приёмника "нет фикса": позиция, курс и скорость невалидны.
+static void gnss_solution_invalidate(void) {
+    internal_gnss_solution.valid = false;
+    internal_gnss_solution.course_valid = false;
+    internal_gnss_solution.speed_knots = 0;
+    internal_gnss_solution.fix_quality = 0;
+    internal_gnss_solution.fix_type = 1;
+}
+
+/*
+ * Вход в режим чтения: читалка уже остановила трек и GNSS. Здесь сбрасывается
+ * состояние навигатора: фикса нет, накопленная перерисовка по данным не нужна.
+ */
+static void book_mode_entered(void) {
+    gnss_solution_invalidate();
+    prev_fix = internal_gnss_solution;
+    last_rendered_pos_valid = false;
+    shown_pos_valid = false;
+    data_redraw_pending = false;
+}
+
+/*
+ * Выход из режима чтения: GNSS уже включён читалкой. Приёмнику нужно время на
+ * фикс, поэтому таймаут молчания отсчитывается заново, а карта перерисуется
+ * при возврате на неё.
+ */
+static void book_mode_left(void) {
+    const uint32_t now = purrgo_system_time_ms();
+    last_rmc_ms = now;
+    last_tick_ms = now;
+    last_gnss_update_ms = now;
+    data_redraw_pending = false;
+    purrgo_ui_dirty_mark(UI_DIRTY_MAP);
+}
+
 void purrgo_app_init(void) {
     next_logger_retry_ms = 0;
     purrgo_gnss_parser_init(&gnss_parser);
@@ -164,6 +204,24 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
     const purrgo_state_t prev_state = current_state;
     purrgo_state_t next_state = current_state;
 
+    /*
+     * Читалка: кнопки (короткие и длинные) разбирает сама читалка, а не общая
+     * схема "кнопка -> действие". Выход из читалки - в меню CONFIG.
+     */
+    if (is_book_state(current_state)) {
+        render_gate_active = false;
+        const bool redraw = purrgo_book_reader_handle_button(current_state, button, &next_state);
+        current_state = next_state;
+        if (!is_book_state(current_state)) {
+            book_mode_left();
+            purrgo_config_controller_on_enter(APP_STATE_MENU_CONFIG);
+        }
+        if (redraw || current_state != prev_state) {
+            purrgo_ui_dirty_mark(UI_DIRTY_SCREEN);
+        }
+        return;
+    }
+
     // Map new keys to legacy actions/buttons based on state
     purrgo_action_t mapped_button = PURRGO_ACTION_NONE;
 
@@ -221,6 +279,9 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
     if (current_state == APP_STATE_MENU_CONFIG || current_state == APP_STATE_MENU_DIR_SELECT || current_state == APP_STATE_MENU_MAP_LAYERS || current_state == APP_STATE_MENU_ROUTE_SELECT) {
         handled = purrgo_config_controller_handle_button(current_state, mapped_button, &next_state);
         current_state = next_state;
+        if (is_book_state(current_state)) {
+            book_mode_entered();   // пункт BOOKS: читалка уже выключила GNSS и трек
+        }
     } else if (current_state == APP_STATE_MAP) {
         handled = purrgo_map_controller_handle_button(mapped_button);
     } else if (current_state == APP_STATE_TRIP_COMPUTER) {
@@ -305,15 +366,14 @@ static void gnss_check_fix_timeout(uint32_t now_ms) {
     if (internal_gnss_solution.valid &&
         (uint32_t)(now_ms - last_rmc_ms) > PURRGO_GNSS_FIX_TIMEOUT_MS) {
         PURRGO_LOGW("GNSS fix timeout\r\n");
-        internal_gnss_solution.valid = false;
-        internal_gnss_solution.course_valid = false;
-        internal_gnss_solution.speed_knots = 0;
-        internal_gnss_solution.fix_quality = 0;
-        internal_gnss_solution.fix_type = 1;
+        gnss_solution_invalidate();
     }
 }
 
 void purrgo_app_tick(uint32_t current_time_ms) {
+    // Читалка: запись позиции чтения на SD по тайм-ауту бездействия.
+    purrgo_book_reader_tick(current_time_ms);
+
     gnss_check_fix_timeout(current_time_ms);
 
     // Накопленные изменения данных выводим не чаще минимального интервала.
@@ -351,6 +411,14 @@ void purrgo_app_tick(uint32_t current_time_ms) {
 
 void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
     bool pos_changed_significantly = false;
+
+    /*
+     * В режиме чтения GNSS выключен, трек не пишется, а экран не зависит от
+     * времени и позиции: любая перерисовка здесь только тратит заряд.
+     */
+    if (is_book_state(current_state)) {
+        return;
+    }
 
     /*
      * Эталонная позиция для сравнения: на карте - позиция, на которой реально
@@ -526,5 +594,9 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
         case APP_STATE_MENU_ROUTE_SELECT:
             purrgo_config_controller_update(current_fix);
             break;
+
+        case APP_STATE_BOOK_LIST:
+        case APP_STATE_BOOK_READ:
+            break;  // обработано выше (ранний выход)
     }
 }

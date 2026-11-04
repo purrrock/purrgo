@@ -57,5 +57,7 @@ const char* purrgo_fs_get_maps_path(void);
 const char* purrgo_fs_get_tracks_path(void);
 /* Каталог пользовательских маршрутов (GPX). */
 const char* purrgo_fs_get_routes_path(void);
+/* Каталог электронных книг (*.PGB, формат tools/book-compiler/PGB-format.md). */
+const char* purrgo_fs_get_books_path(void);
 
 #endif // PURRGO_FS_HAL_H

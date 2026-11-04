@@ -16,6 +16,9 @@ int fake_power_standby_seq(void);
 /* Вызовы purrgo_gnss_power_off() и порядковый номер последнего вызова. */
 int fake_power_gnss_off_calls(void);
 int fake_power_gnss_off_seq(void);
+/* Вызовы purrgo_gnss_power_on() и порядковый номер последнего вызова. */
+int fake_power_gnss_on_calls(void);
+int fake_power_gnss_on_seq(void);
 /* Напряжение на выводе АЦП, которое вернёт purrgo_platform_battery_pin_mv() (по умолчанию 0). */
 void fake_power_set_battery_pin_mv(uint16_t mv);
 #endif
