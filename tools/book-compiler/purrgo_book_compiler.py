@@ -3,14 +3,22 @@
 """
 Конвертер книг (txt / FB2 / EPUB) в бинарный формат электронных книг PGB 1.0 для PurrGO.
 
-Зависимости: только стандартная библиотека Python 3.10+.
-Необязательно: пакет `pyphen` (нужен только для --hyphenate).
+Запуск без параметров открывает графический интерфейс (tkinter) с предпросмотром страниц;
+с параметрами работает в командной строке.
+
+Зависимости: стандартная библиотека Python 3.10+ (для GUI в Linux: python3-tk).
+Необязательно:
+  - пакет `lz4`: лучшее сжатие страниц (режим HC); без него работает встроенный кодер LZ4;
+  - пакет `pyphen`: расстановка переносов по словарю (--hyphenate).
 
 Примеры:
+    python purrgo_book_compiler.py                                # графический интерфейс
+    python purrgo_book_compiler.py --gui book.fb2                 # GUI с уже открытой книгой
     python purrgo_book_compiler.py book.txt                       # -> book.pgb
     python purrgo_book_compiler.py book.fb2 BOOK.PGB --verify
-    python purrgo_book_compiler.py book.epub --indent 2
+    python purrgo_book_compiler.py book.epub --indent 2 --hyphenate ru_RU
     python purrgo_book_compiler.py book.txt --encoding cp1251 --title "Название" --author "Автор"
+    python purrgo_book_compiler.py book.txt --compression none    # без сжатия
     python purrgo_book_compiler.py book.pgb                       # проверка готового файла
 """
 
@@ -46,6 +54,7 @@ DEFAULT_ROWS = 32
 MAX_TITLE_BYTES = 200
 MAX_AUTHOR_BYTES = 100
 COMPRESSION_NONE = 0
+COMPRESSION_LZ4 = 1      # сырой LZ4 Block на каждую страницу (не LZ4 Frame)
 
 FILE_CRC_OFFSET = 32
 META_CRC_OFFSET = 36
@@ -680,6 +689,194 @@ def encode_meta(value: str, limit: int, what: str, notes: list[str]) -> bytes:
 
 
 # --------------------------------------------------------------------------
+# LZ4 Block (сырой блок без заголовка кадра) - сжатие отдельных страниц
+# --------------------------------------------------------------------------
+LZ4_MINMATCH = 4
+LZ4_LASTLITERALS = 5      # последние 5 байт блока всегда литералы
+LZ4_MFLIMIT = 12          # совпадение не может начинаться в последних 12 байтах блока
+LZ4_MAX_OFFSET = 65535
+_LZ4_CHAIN_DEPTH = 48
+
+try:  # необязательно: пакет lz4 даёт лучшее сжатие (режим HC), без него работает встроенный кодер
+    import lz4.block as _lz4_block
+except ImportError:  # pragma: no cover - зависит от окружения
+    _lz4_block = None
+
+
+def lz4_library_available() -> bool:
+    return _lz4_block is not None
+
+
+def _lz4_put_length(out: bytearray, value: int) -> None:
+    while value >= 255:
+        out.append(255)
+        value -= 255
+    out.append(value)
+
+
+def lz4_compress_block_py(data: bytes) -> bytes:
+    """Встроенный кодер LZ4 Block (цепочки хешей, жадный выбор с отложенным шагом).
+
+    Результат - обычный сырой LZ4 Block, его распаковывает любой декодер. Ратио чуть
+    хуже режима HC пакета lz4, но зависимостей нет и результат детерминирован.
+    """
+    size = len(data)
+    out = bytearray()
+    anchor = 0
+
+    if size > LZ4_MFLIMIT:
+        match_start_limit = size - LZ4_MFLIMIT   # последняя допустимая позиция начала совпадения
+        match_end_limit = size - LZ4_LASTLITERALS
+        chains: dict[bytes, list[int]] = {}
+
+        def insert(pos: int) -> None:
+            chains.setdefault(data[pos:pos + 4], []).append(pos)
+
+        def find(pos: int) -> tuple[int, int]:
+            candidates = chains.get(data[pos:pos + 4])
+            best_len = 0
+            best_off = 0
+            if not candidates:
+                return 0, 0
+            max_len = match_end_limit - pos
+            for cand in reversed(candidates[-_LZ4_CHAIN_DEPTH:]):
+                offset = pos - cand
+                if offset > LZ4_MAX_OFFSET:
+                    break
+                length = 4
+                while length < max_len and data[cand + length] == data[pos + length]:
+                    length += 1
+                if length > best_len:
+                    best_len, best_off = length, offset
+            return best_len, best_off
+
+        pos = 0
+        while pos <= match_start_limit:
+            length, offset = find(pos)
+            if length >= LZ4_MINMATCH:
+                if pos + 1 <= match_start_limit:
+                    next_len, _ = find(pos + 1)
+                    if next_len > length + 1:
+                        insert(pos)
+                        pos += 1
+                        continue
+                literals = pos - anchor
+                token_lit = min(literals, 15)
+                token_match = min(length - LZ4_MINMATCH, 15)
+                out.append((token_lit << 4) | token_match)
+                if literals >= 15:
+                    _lz4_put_length(out, literals - 15)
+                out += data[anchor:pos]
+                out += offset.to_bytes(2, "little")
+                if length - LZ4_MINMATCH >= 15:
+                    _lz4_put_length(out, length - LZ4_MINMATCH - 15)
+                for covered in range(pos, min(pos + length, match_start_limit + 1)):
+                    insert(covered)
+                pos += length
+                anchor = pos
+            else:
+                insert(pos)
+                pos += 1
+
+    literals = size - anchor
+    out.append(min(literals, 15) << 4)
+    if literals >= 15:
+        _lz4_put_length(out, literals - 15)
+    out += data[anchor:]
+    return bytes(out)
+
+
+def lz4_compress_block(data: bytes) -> bytes:
+    """Сжимает блок: пакет lz4 (HC, уровень 12), если установлен, иначе встроенный кодер."""
+    if _lz4_block is not None:
+        return _lz4_block.compress(data, mode="high_compression", compression=12, store_size=False)
+    return lz4_compress_block_py(data)
+
+
+def lz4_decompress_block(src: bytes, raw_size: int) -> bytes:
+    """Строгий декодер LZ4 Block: на выходе ровно raw_size байт, весь src израсходован.
+
+    Независим от пакета lz4 и ведёт себя так же, как декодер прошивки (pgb_lz4_decode).
+    """
+    out = bytearray()
+    pos = 0
+    size = len(src)
+    while True:
+        if pos >= size:
+            raise ValueError("LZ4: данные оборваны (нет токена)")
+        token = src[pos]
+        pos += 1
+        literals = token >> 4
+        if literals == 15:
+            while True:
+                if pos >= size:
+                    raise ValueError("LZ4: обрыв в длине литералов")
+                extra = src[pos]
+                pos += 1
+                literals += extra
+                if literals > raw_size:
+                    raise ValueError("LZ4: литералов больше, чем размер страницы")
+                if extra != 255:
+                    break
+        if literals > raw_size - len(out) or literals > size - pos:
+            raise ValueError("LZ4: литералы выходят за границы")
+        out += src[pos:pos + literals]
+        pos += literals
+        if pos == size:
+            break                      # последняя последовательность - только литералы
+        if size - pos < 2:
+            raise ValueError("LZ4: обрыв в смещении")
+        offset = src[pos] | (src[pos + 1] << 8)
+        pos += 2
+        if offset == 0 or offset > len(out):
+            raise ValueError("LZ4: недопустимое смещение совпадения")
+        match = token & 15
+        if match == 15:
+            while True:
+                if pos >= size:
+                    raise ValueError("LZ4: обрыв в длине совпадения")
+                extra = src[pos]
+                pos += 1
+                match += extra
+                if match > raw_size:
+                    raise ValueError("LZ4: совпадение длиннее страницы")
+                if extra != 255:
+                    break
+        match += LZ4_MINMATCH
+        if match > raw_size - len(out):
+            raise ValueError("LZ4: совпадение выходит за размер страницы")
+        if offset >= match:
+            start = len(out) - offset
+            out += out[start:start + match]
+        else:
+            for _ in range(match):
+                out.append(out[-offset])
+    if len(out) != raw_size:
+        raise ValueError(f"LZ4: распаковано {len(out)} байт вместо {raw_size}")
+    return bytes(out)
+
+
+def compress_page(page: bytes, compression: int) -> bytes:
+    """Данные страницы для записи в файл. Если сжатие не уменьшает размер, страница хранится как есть."""
+    if compression == COMPRESSION_LZ4:
+        packed = lz4_compress_block(page)
+        if len(packed) < len(page):
+            return packed
+    return page
+
+
+def decompress_page(stored: bytes, raw_size: int, compression: int) -> bytes:
+    if len(stored) == raw_size:
+        return stored                       # страница хранится без сжатия
+    if compression != COMPRESSION_LZ4 or len(stored) > raw_size:
+        raise ValueError("размер данных страницы не соответствует способу сжатия")
+    return lz4_decompress_block(stored, raw_size)
+
+
+COMPRESSION_NAMES = {"none": COMPRESSION_NONE, "lz4": COMPRESSION_LZ4}
+
+
+# --------------------------------------------------------------------------
 # Сборка и проверка PGB
 # --------------------------------------------------------------------------
 def crc32_zeroed(data: bytes | bytearray, end: int | None = None) -> int:
@@ -693,14 +890,18 @@ def crc32_zeroed(data: bytes | bytearray, end: int | None = None) -> int:
 
 
 def build_pgb(pages: list[bytes], title: bytes, author: bytes,
-              cols: int = DEFAULT_COLS, rows: int = DEFAULT_ROWS) -> bytes:
+              cols: int = DEFAULT_COLS, rows: int = DEFAULT_ROWS,
+              compression: int = COMPRESSION_LZ4) -> bytes:
     if not pages:
         raise ValueError("В книге должна быть хотя бы одна страница.")
     if not (1 <= cols <= 255 and 1 <= rows <= 255):
         raise ValueError("cols и rows должны быть в диапазоне 1..255.")
+    if compression not in (COMPRESSION_NONE, COMPRESSION_LZ4):
+        raise ValueError(f"Неизвестный способ сжатия: {compression}.")
     if len(title) > MAX_TITLE_BYTES or len(author) > MAX_AUTHOR_BYTES:
         raise ValueError("Название или автор слишком длинные.")
 
+    stored_pages = [compress_page(page, compression) for page in pages]
     page_count = len(pages)
     meta_offset = HEADER_SIZE
     index_offset = meta_offset + len(title) + len(author)
@@ -708,9 +909,9 @@ def build_pgb(pages: list[bytes], title: bytes, author: bytes,
 
     index = bytearray()
     offset = data_offset
-    for page in pages:
-        index += INDEX_STRUCT.pack(offset, len(page), len(page))
-        offset += len(page)
+    for raw, stored in zip(pages, stored_pages):
+        index += INDEX_STRUCT.pack(offset, len(stored), len(raw))
+        offset += len(stored)
         if offset > UINT32_MAX:
             raise ValueError("Размер файла превышает диапазон uint32.")
     file_size = offset
@@ -718,20 +919,25 @@ def build_pgb(pages: list[bytes], title: bytes, author: bytes,
     header = HEADER_STRUCT.pack(
         MAGIC, VERSION_MAJOR, VERSION_MINOR, HEADER_SIZE, 0,
         page_count, meta_offset, index_offset, data_offset, file_size, 0, 0,
-        cols, rows, COMPRESSION_NONE, 0, len(title), len(author), b"\x00" * 16,
+        cols, rows, compression, 0, len(title), len(author), b"\x00" * 16,
     )
     result = bytearray(header)
     result += title
     result += author
     result += index
-    for page in pages:
-        result += page
+    for stored in stored_pages:
+        result += stored
     if len(result) != file_size:
         raise AssertionError(f"Размер собранного файла {len(result)} != {file_size}")
 
     struct.pack_into("<I", result, META_CRC_OFFSET, crc32_zeroed(result, data_offset))
     struct.pack_into("<I", result, FILE_CRC_OFFSET, crc32_zeroed(result))
     return bytes(result)
+
+
+def _iter_pages(data: bytes, page_count: int, index_offset: int):
+    for number in range(page_count):
+        yield number, INDEX_STRUCT.unpack_from(data, index_offset + number * INDEX_ENTRY_SIZE)
 
 
 def verify_pgb(data: bytes) -> dict:
@@ -751,7 +957,7 @@ def verify_pgb(data: bytes) -> dict:
         raise ValueError(f"Неверный header_size: {header_size}.")
     if flags != 0:
         raise ValueError(f"Неподдерживаемые flags: 0x{flags:04X}.")
-    if compression != COMPRESSION_NONE:
+    if compression not in (COMPRESSION_NONE, COMPRESSION_LZ4):
         raise ValueError(f"Неподдерживаемый способ сжатия: {compression}.")
     if reserved0 != 0 or any(reserved1):
         raise ValueError("Зарезервированные поля заголовка должны быть нулевыми.")
@@ -781,23 +987,31 @@ def verify_pgb(data: bytes) -> dict:
 
     limit = max_page_bytes(cols, rows)
     expected = data_offset
-    total = 0
-    for number in range(page_count):
-        page_offset, stored, raw = INDEX_STRUCT.unpack_from(data, index_offset + number * INDEX_ENTRY_SIZE)
+    raw_total = 0
+    stored_total = 0
+    packed_pages = 0
+    for number, (page_offset, stored, raw) in _iter_pages(data, page_count, index_offset):
         label = f"Страница {number + 1}"
         if stored == 0 or raw == 0:
             raise ValueError(f"{label}: нулевой размер.")
-        if stored != raw:
-            raise ValueError(f"{label}: stored_size != raw_size при отсутствии сжатия.")
         if raw > limit:
             raise ValueError(f"{label}: размер {raw} превышает {limit}.")
+        if compression == COMPRESSION_NONE and stored != raw:
+            raise ValueError(f"{label}: stored_size != raw_size при отсутствии сжатия.")
+        if stored > raw:
+            raise ValueError(f"{label}: stored_size больше raw_size.")
         if page_offset != expected:
             raise ValueError(f"{label}: page_offset={page_offset}, ожидалось {expected}; промежуток или перекрытие.")
         end = page_offset + stored
         if end > file_size:
             raise ValueError(f"{label}: страница выходит за файл.")
 
-        page = data[page_offset:end]
+        try:
+            page = decompress_page(data[page_offset:end], raw, compression)
+        except ValueError as exc:
+            raise ValueError(f"{label}: {exc}") from exc
+        if stored < raw:
+            packed_pages += 1
         if any((b < 0x20 and b != 0x0A) or b == 0x7F for b in page):
             raise ValueError(f"{label}: запрещённый управляющий символ в тексте.")
         if page.endswith(b"\n"):
@@ -808,7 +1022,8 @@ def verify_pgb(data: bytes) -> dict:
         if any(len(line) > cols for line in lines):
             raise ValueError(f"{label}: строка длиннее {cols} байт.")
         expected = end
-        total += raw
+        raw_total += raw
+        stored_total += stored
 
     if expected != file_size:
         raise ValueError("Конец последней страницы не совпадает с file_size.")
@@ -818,7 +1033,10 @@ def verify_pgb(data: bytes) -> dict:
     return {
         "pages": page_count,
         "file_size": file_size,
-        "text_size": total,
+        "text_size": raw_total,
+        "stored_size": stored_total,
+        "packed_pages": packed_pages,
+        "compression": compression,
         "crc32": file_crc,
         "cols": cols,
         "rows": rows,
@@ -829,49 +1047,44 @@ def verify_pgb(data: bytes) -> dict:
 
 def extract_all_pages_text(data: bytes) -> list[str]:
     fields = HEADER_STRUCT.unpack_from(data, 0)
-    page_count, index_offset = fields[5], fields[7]
+    page_count, index_offset, compression = fields[5], fields[7], fields[14]
     pages = []
-    for number in range(page_count):
-        offset, stored, _raw = INDEX_STRUCT.unpack_from(data, index_offset + number * INDEX_ENTRY_SIZE)
-        pages.append(pgo_bytes_to_text(data[offset:offset + stored]))
+    for _number, (offset, stored, raw) in _iter_pages(data, page_count, index_offset):
+        pages.append(pgo_bytes_to_text(decompress_page(data[offset:offset + stored], raw, compression)))
     return pages
 
 
-# --------------------------------------------------------------------------
-# Командная строка
-# --------------------------------------------------------------------------
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description="Конвертер txt / FB2 / EPUB в формат электронных книг PurrGO PGB 1.0 и проверка PGB."
-    )
-    parser.add_argument("input", type=Path,
-                        help="Исходная книга (.txt, .fb2, .fb2.zip, .epub) или готовый .pgb для проверки.")
-    parser.add_argument("output", type=Path, nargs="?", default=None,
-                        help="Выходной .pgb (по умолчанию - имя входного файла с расширением .pgb).")
-    parser.add_argument("--encoding", choices=("auto", "utf-8", "cp1251", "cp866"), default="auto",
-                        help="Кодировка txt (по умолчанию auto: UTF-8, иначе CP1251; CP866 только явно).")
-    parser.add_argument("--title", help="Название книги (по умолчанию из метаданных или имя файла).")
-    parser.add_argument("--author", help="Автор (по умолчанию из метаданных FB2/EPUB).")
-    parser.add_argument("--reflow", choices=("auto", "on", "off"), default="auto",
-                        help="txt: склеивать строки с жёсткими переносами в абзацы (по умолчанию auto).")
-    parser.add_argument("--indent", type=int, default=2,
-                        help="Отступ первой строки абзаца в пробелах (по умолчанию 2, 0 - без отступа).")
-    parser.add_argument("--collapse-blank", action="store_true",
-                        help="Сворачивать несколько пустых строк подряд в одну.")
-    parser.add_argument("--hyphenate", metavar="LANG",
-                        help="Расставлять переносы по словарю pyphen (например ru_RU, en_US).")
-    parser.add_argument("--cols", type=int, default=DEFAULT_COLS, help=argparse.SUPPRESS)
-    parser.add_argument("--rows", type=int, default=DEFAULT_ROWS, help=argparse.SUPPRESS)
-    parser.add_argument("--verify", action="store_true",
-                        help="Перечитать записанный файл, проверить и показать первую и последнюю страницы.")
-    return parser
+def describe_compression(stats: dict) -> str:
+    if stats["compression"] == COMPRESSION_NONE:
+        return "нет"
+    ratio = 100.0 * stats["stored_size"] / stats["text_size"]
+    return f"LZ4 Block, данные страниц {ratio:.0f}% от текста ({stats['packed_pages']} из {stats['pages']} стр. сжаты)"
 
 
-def _print_page_preview(pages_text: list[str]) -> None:
-    bar = "=" * 40
-    print(f"\n{bar}\n ПЕРВАЯ СТРАНИЦА \n{bar}\n{pages_text[0]}\n{bar}")
-    if len(pages_text) > 1:
-        print(f"\n{bar}\n ПОСЛЕДНЯЯ СТРАНИЦА ({len(pages_text)} из {len(pages_text)}) \n{bar}\n{pages_text[-1]}\n{bar}")
+# --------------------------------------------------------------------------
+# Конвейер: источник -> документ -> строки -> страницы -> PGB
+# --------------------------------------------------------------------------
+@dataclass
+class Options:
+    encoding: str = "auto"
+    title: str | None = None
+    author: str | None = None
+    reflow: str = "auto"
+    indent: int = 2
+    collapse_blank: bool = False
+    hyphenate: str | None = None
+    cols: int = DEFAULT_COLS
+    rows: int = DEFAULT_ROWS
+    compression: str = "lz4"
+
+
+@dataclass
+class BookResult:
+    data: bytes
+    pages: list[bytes]       # страницы в PurrGO-256 до сжатия
+    lines: list[str]
+    stats: dict
+    notes: list[str]
 
 
 def _default_title(path: Path) -> str:
@@ -886,8 +1099,109 @@ def _default_output(path: Path) -> Path:
     return path.with_name(_default_title(path) + ".pgb")
 
 
+def load_document(path: Path, opts: Options) -> Document:
+    """Первая стадия: чтение и разбор источника (зависит только от файла, кодировки и reflow)."""
+    return read_document(path, opts.encoding, opts.reflow)
+
+
+def render_document(doc: Document, path: Path, opts: Options) -> BookResult:
+    """Вторая стадия: переносы, страницы, сжатие, сборка и проверка PGB."""
+    if opts.compression not in COMPRESSION_NAMES:
+        raise ValueError(f"Неизвестный способ сжатия: {opts.compression!r} (lz4 или none).")
+    hyphenator = make_hyphenator(opts.hyphenate or None)
+    lines = blocks_to_lines(doc.blocks, opts.cols, opts.indent, opts.collapse_blank, hyphenator)
+    pages = paginate(lines, opts.rows, opts.cols)
+
+    notes = list(doc.notes)
+    title = opts.title if opts.title else (doc.title or _default_title(path))
+    author = opts.author if opts.author is not None and opts.author != "" else doc.author
+    title_bytes = encode_meta(title, MAX_TITLE_BYTES, "Название", notes)
+    author_bytes = encode_meta(author, MAX_AUTHOR_BYTES, "Автор", notes)
+
+    data = build_pgb(pages, title_bytes, author_bytes, opts.cols, opts.rows, COMPRESSION_NAMES[opts.compression])
+    stats = verify_pgb(data)
+    if opts.compression == "lz4" and not lz4_library_available():
+        notes.append("Сжатие: встроенный кодер LZ4 (пакет lz4 не установлен, с ним файл получится меньше)")
+    return BookResult(data=data, pages=pages, lines=lines, stats=stats, notes=notes)
+
+
+def compile_book(path: Path, opts: Options) -> BookResult:
+    return render_document(load_document(path, opts), path, opts)
+
+
+# --------------------------------------------------------------------------
+# Командная строка
+# --------------------------------------------------------------------------
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Конвертер txt / FB2 / EPUB в формат электронных книг PurrGO PGB 1.0 и проверка PGB. "
+                    "Без параметров открывается графический интерфейс с предпросмотром.",
+    )
+    parser.add_argument("input", type=Path, nargs="?", default=None,
+                        help="Исходная книга (.txt, .fb2, .fb2.zip, .epub) или готовый .pgb для проверки.")
+    parser.add_argument("output", type=Path, nargs="?", default=None,
+                        help="Выходной .pgb (по умолчанию - имя входного файла с расширением .pgb).")
+    parser.add_argument("--encoding", choices=("auto", "utf-8", "cp1251", "cp866"), default="auto",
+                        help="Кодировка txt (по умолчанию auto: UTF-8, иначе CP1251; CP866 только явно).")
+    parser.add_argument("--title", help="Название книги (по умолчанию из метаданных или имя файла).")
+    parser.add_argument("--author", help="Автор (по умолчанию из метаданных FB2/EPUB).")
+    parser.add_argument("--reflow", choices=("auto", "on", "off"), default="auto",
+                        help="txt: склеивать строки с жёсткими переносами (как в книгах Project Gutenberg) в абзацы.")
+    parser.add_argument("--indent", type=int, default=2,
+                        help="Отступ первой строки абзаца в пробелах (по умолчанию 2, 0 - без отступа).")
+    parser.add_argument("--collapse-blank", action="store_true",
+                        help="Сворачивать несколько пустых строк подряд в одну.")
+    parser.add_argument("--hyphenate", metavar="LANG",
+                        help="Расставлять переносы по словарю pyphen (например ru_RU, en_US).")
+    parser.add_argument("--compression", choices=tuple(COMPRESSION_NAMES), default="lz4",
+                        help="Сжатие страниц: lz4 (LZ4 Block, по умолчанию) или none.")
+    parser.add_argument("--cols", type=int, default=DEFAULT_COLS, help=argparse.SUPPRESS)
+    parser.add_argument("--rows", type=int, default=DEFAULT_ROWS, help=argparse.SUPPRESS)
+    parser.add_argument("--verify", action="store_true",
+                        help="Перечитать записанный файл, проверить и показать первую и последнюю страницы.")
+    parser.add_argument("--gui", action="store_true",
+                        help="Открыть графический интерфейс (входной файл, если указан, загружается сразу).")
+    return parser
+
+
+def options_from_args(args: argparse.Namespace) -> Options:
+    return Options(
+        encoding=args.encoding, title=args.title, author=args.author, reflow=args.reflow,
+        indent=args.indent, collapse_blank=args.collapse_blank, hyphenate=args.hyphenate,
+        cols=args.cols, rows=args.rows, compression=args.compression,
+    )
+
+
+def _print_page_preview(pages_text: list[str]) -> None:
+    bar = "=" * 40
+    print(f"\n{bar}\n ПЕРВАЯ СТРАНИЦА \n{bar}\n{pages_text[0]}\n{bar}")
+    if len(pages_text) > 1:
+        print(f"\n{bar}\n ПОСЛЕДНЯЯ СТРАНИЦА ({len(pages_text)} из {len(pages_text)}) \n{bar}\n{pages_text[-1]}\n{bar}")
+
+
+def _print_stats(stats: dict) -> None:
+    print(f"Название: {stats['title']}")
+    if stats["author"]:
+        print(f"Автор: {stats['author']}")
+    print(f"Страниц: {stats['pages']} ({stats['cols']}x{stats['rows']})")
+    print(f"Текст: {stats['text_size']} байт")
+    print(f"Сжатие: {describe_compression(stats)}")
+    print(f"Размер PGB: {stats['file_size']} байт")
+    print(f"CRC-32: 0x{stats['crc32']:08X}")
+
+
 def main(argv: Iterable[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    if not arguments:
+        return run_gui()
+
+    parser = build_parser()
+    args = parser.parse_args(arguments)
+    if args.gui:
+        return run_gui(args.input, options_from_args(args))
+    if args.input is None:
+        parser.error("не указан входной файл")
+
     try:
         if args.input.suffix.lower() == ".pgb":
             try:
@@ -897,52 +1211,30 @@ def main(argv: Iterable[str] | None = None) -> int:
                 return 2
             stats = verify_pgb(raw_pgb)
             print(f"Успешно проверен файл: {args.input}")
-            print(f"Название: {stats['title']}")
-            print(f"Автор: {stats['author']}")
-            print(f"Страниц: {stats['pages']} ({stats['cols']}x{stats['rows']})")
-            print(f"Размер PGB: {stats['file_size']} байт")
-            print(f"CRC-32: 0x{stats['crc32']:08X}")
+            _print_stats(stats)
             print("Формат и CRC соответствуют спецификации PGB 1.0: OK")
             _print_page_preview(extract_all_pages_text(raw_pgb))
             return 0
 
         output_path = args.output if args.output is not None else _default_output(args.input)
-        hyphenator = make_hyphenator(args.hyphenate)
-
-        doc = read_document(args.input, args.encoding, args.reflow)
-        lines = blocks_to_lines(doc.blocks, args.cols, args.indent, args.collapse_blank, hyphenator)
-        pages = paginate(lines, args.rows, args.cols)
-
-        notes = list(doc.notes)
-        title = args.title if args.title is not None else (doc.title or _default_title(args.input))
-        author = args.author if args.author is not None else doc.author
-        title_bytes = encode_meta(title, MAX_TITLE_BYTES, "Название", notes)
-        author_bytes = encode_meta(author, MAX_AUTHOR_BYTES, "Автор", notes)
-
-        pgb_data = build_pgb(pages, title_bytes, author_bytes, args.cols, args.rows)
-        stats = verify_pgb(pgb_data)
+        result = compile_book(args.input, options_from_args(args))
         try:
             output_path.parent.mkdir(parents=True, exist_ok=True)
-            output_path.write_bytes(pgb_data)
+            output_path.write_bytes(result.data)
         except OSError as exc:
             raise ValueError(f"Не удалось записать {output_path}: {exc}") from exc
 
-        for note in notes:
+        for note in result.notes:
             print(note)
+        stats = result.stats
         if args.verify:
             written = output_path.read_bytes()
             stats = verify_pgb(written)
             print(f"Создан и проверен файл: {output_path}")
         else:
             print(f"Создан файл: {output_path}")
-        print(f"Название: {stats['title']}")
-        if stats["author"]:
-            print(f"Автор: {stats['author']}")
-        print(f"Страниц: {stats['pages']}")
-        print(f"Строк текста: {len(lines)}")
-        print(f"Текст: {stats['text_size']} байт")
-        print(f"Размер PGB: {stats['file_size']} байт")
-        print(f"CRC-32: 0x{stats['crc32']:08X}")
+        print(f"Строк текста: {len(result.lines)}")
+        _print_stats(stats)
         print("Сборка и проверка структуры выполнены успешно.")
         if args.verify:
             _print_page_preview(extract_all_pages_text(written))
@@ -951,6 +1243,518 @@ def main(argv: Iterable[str] | None = None) -> int:
     except (ValueError, RuntimeError, OSError) as exc:
         print(f"Ошибка: {exc}", file=sys.stderr)
         return 2
+
+
+# --------------------------------------------------------------------------
+# Графический интерфейс (tkinter): настройки слева, предпросмотр страниц справа
+# --------------------------------------------------------------------------
+try:
+    import queue
+    import threading
+    import tkinter as tk
+    from tkinter import filedialog, messagebox, ttk
+    from tkinter import font as tkfont
+except ImportError:  # tkinter не установлен (в Linux: sudo apt install python3-tk)
+    tk = None  # type: ignore[assignment]
+
+PREFERRED_MONO_FONTS = ("Consolas", "DejaVu Sans Mono", "Liberation Mono", "Cascadia Mono",
+                        "Courier New", "Menlo", "Monaco")
+HYPHEN_LANGUAGES = ("", "ru_RU", "uk_UA", "be_BY", "en_US", "en_GB", "de_DE", "fr_FR")
+BOOK_FILETYPES = [
+    ("Книги", "*.txt *.fb2 *.zip *.epub"),
+    ("Текст", "*.txt"), ("FB2", "*.fb2 *.zip"), ("EPUB", "*.epub"),
+    ("Все файлы", "*.*"),
+]
+
+
+def _format_size(size: int) -> str:
+    if size >= 1024 * 1024:
+        return f"{size / (1024 * 1024):.2f} МБ"
+    if size >= 1024:
+        return f"{size / 1024:.1f} КБ"
+    return f"{size} байт"
+
+
+class BookCompilerGui:
+    """Окно конвертера. Обработка идёт в фоновом потоке, предпросмотр обновляется после правки настроек."""
+
+    REBUILD_DELAY_MS = 400
+
+    def __init__(self, initial: Path | None = None, options: Options | None = None) -> None:
+        if tk is None:
+            raise RuntimeError("tkinter не установлен")
+        self.root = tk.Tk()
+        self.root.title("PurrGO Book Compiler")
+        self.root.minsize(900, 640)
+
+        self.results: "queue.Queue[tuple]" = queue.Queue()
+        self.busy = False
+        self.pending = False
+        self.rebuild_job: str | None = None
+        self.cache: tuple[tuple, Document] | None = None
+        self.result: BookResult | None = None
+        self.view_mode = False          # показан открытый .pgb, а не результат конвертации
+        self.pages_text: list[str] = []
+        self.page_index = 0
+        self.output_edited = False
+        self._suspend = False           # запрет перезапуска обработки при программной правке полей
+        self._slider_busy = False
+        self._output_from_dialog = ""
+
+        opts = options or Options()
+        self.v_input = tk.StringVar()
+        self.v_output = tk.StringVar()
+        self.v_title = tk.StringVar(value=opts.title or "")
+        self.v_author = tk.StringVar(value=opts.author or "")
+        self.v_encoding = tk.StringVar(value=opts.encoding)
+        self.v_reflow = tk.StringVar(value=opts.reflow)
+        self.v_indent = tk.StringVar(value=str(opts.indent))
+        self.v_collapse = tk.BooleanVar(value=opts.collapse_blank)
+        self.v_hyphen = tk.StringVar(value=opts.hyphenate or "")
+        self.v_compression = tk.StringVar(value=opts.compression)
+        self.v_spaces = tk.BooleanVar(value=False)
+        self.v_font_size = tk.StringVar(value="12" if self.root.winfo_screenheight() >= 900 else "10")
+        self.v_page = tk.StringVar(value="1")
+
+        self._build_widgets()
+        self._bind_events()
+        self._poll()
+        if initial is not None:
+            self.set_input(initial)
+
+    # ---- построение окна ----------------------------------------------------
+    def _mono_font_family(self) -> str:
+        available = set(tkfont.families(self.root))
+        for name in PREFERRED_MONO_FONTS:
+            if name in available:
+                return name
+        return tkfont.nametofont("TkFixedFont").actual("family")
+
+    def _build_widgets(self) -> None:
+        root = self.root
+        root.columnconfigure(1, weight=1)
+        root.rowconfigure(0, weight=1)
+
+        left = ttk.Frame(root, padding=10)
+        left.grid(row=0, column=0, sticky="ns")
+        right = ttk.Frame(root, padding=(0, 10, 10, 10))
+        right.grid(row=0, column=1, sticky="nsew")
+        right.columnconfigure(0, weight=1)
+        right.rowconfigure(1, weight=1)
+
+        # -- файлы
+        files = ttk.LabelFrame(left, text="Файлы", padding=8)
+        files.grid(row=0, column=0, sticky="ew")
+        files.columnconfigure(0, weight=1)
+        ttk.Label(files, text="Книга (txt, FB2, EPUB):").grid(row=0, column=0, columnspan=2, sticky="w")
+        ttk.Entry(files, textvariable=self.v_input, width=42).grid(row=1, column=0, sticky="ew")
+        ttk.Button(files, text="Обзор…", command=self.choose_input).grid(row=1, column=1, padx=(6, 0))
+        ttk.Label(files, text="Сохранить как (.pgb):").grid(row=2, column=0, columnspan=2, sticky="w", pady=(8, 0))
+        self.entry_output = ttk.Entry(files, textvariable=self.v_output, width=42)
+        self.entry_output.grid(row=3, column=0, sticky="ew")
+        ttk.Button(files, text="Обзор…", command=self.choose_output).grid(row=3, column=1, padx=(6, 0))
+
+        # -- метаданные
+        meta = ttk.LabelFrame(left, text="Метаданные", padding=8)
+        meta.grid(row=1, column=0, sticky="ew", pady=(8, 0))
+        meta.columnconfigure(1, weight=1)
+        ttk.Label(meta, text="Название:").grid(row=0, column=0, sticky="w")
+        ttk.Entry(meta, textvariable=self.v_title).grid(row=0, column=1, sticky="ew", padx=(6, 0))
+        ttk.Label(meta, text="Автор:").grid(row=1, column=0, sticky="w", pady=(4, 0))
+        ttk.Entry(meta, textvariable=self.v_author).grid(row=1, column=1, sticky="ew", padx=(6, 0), pady=(4, 0))
+        self.meta_hint = ttk.Label(meta, text="Пусто - из метаданных книги или имя файла", foreground="#666666",
+                                   wraplength=330, justify="left")
+        self.meta_hint.grid(row=2, column=0, columnspan=2, sticky="w", pady=(4, 0))
+
+        # -- преобразование текста
+        conv = ttk.LabelFrame(left, text="Преобразование текста", padding=8)
+        conv.grid(row=2, column=0, sticky="ew", pady=(8, 0))
+        conv.columnconfigure(1, weight=1)
+        ttk.Label(conv, text="Кодировка txt:").grid(row=0, column=0, sticky="w")
+        ttk.Combobox(conv, textvariable=self.v_encoding, state="readonly", width=14,
+                     values=("auto", "utf-8", "cp1251", "cp866")).grid(row=0, column=1, sticky="w", padx=(6, 0))
+        ttk.Label(conv, text="Склейка строк txt:").grid(row=1, column=0, sticky="w", pady=(4, 0))
+        ttk.Combobox(conv, textvariable=self.v_reflow, state="readonly", width=14,
+                     values=("auto", "on", "off")).grid(row=1, column=1, sticky="w", padx=(6, 0), pady=(4, 0))
+        ttk.Label(conv, text="Отступ абзаца:").grid(row=2, column=0, sticky="w", pady=(4, 0))
+        ttk.Spinbox(conv, textvariable=self.v_indent, from_=0, to=8, width=5, wrap=False,
+                    command=self._on_option_changed).grid(row=2, column=1, sticky="w", padx=(6, 0), pady=(4, 0))
+        ttk.Checkbutton(conv, text="Сворачивать пустые строки", variable=self.v_collapse,
+                        command=self._on_option_changed).grid(row=3, column=0, columnspan=2, sticky="w", pady=(4, 0))
+        ttk.Label(conv, text="Переносы (pyphen):").grid(row=4, column=0, sticky="w", pady=(4, 0))
+        self.combo_hyphen = ttk.Combobox(conv, textvariable=self.v_hyphen, width=14, values=HYPHEN_LANGUAGES)
+        self.combo_hyphen.grid(row=4, column=1, sticky="w", padx=(6, 0), pady=(4, 0))
+        self.hyphen_hint = ttk.Label(conv, text="", foreground="#a00000", wraplength=330, justify="left")
+        self.hyphen_hint.grid(row=5, column=0, columnspan=2, sticky="w")
+        ttk.Label(conv, text="Сжатие страниц:").grid(row=6, column=0, sticky="w", pady=(4, 0))
+        ttk.Combobox(conv, textvariable=self.v_compression, state="readonly", width=14,
+                     values=tuple(COMPRESSION_NAMES)).grid(row=6, column=1, sticky="w", padx=(6, 0), pady=(4, 0))
+
+        # -- результат
+        res = ttk.LabelFrame(left, text="Результат", padding=8)
+        res.grid(row=3, column=0, sticky="ew", pady=(8, 0))
+        res.columnconfigure(0, weight=1)
+        self.info = ttk.Label(res, text="Выберите книгу", justify="left", wraplength=360)
+        self.info.grid(row=0, column=0, sticky="w")
+        self.progress = ttk.Progressbar(res, mode="indeterminate", length=200)
+        self.notes = ttk.Label(res, text="", foreground="#555555", justify="left", wraplength=360)
+        self.notes.grid(row=2, column=0, sticky="w", pady=(6, 0))
+
+        buttons = ttk.Frame(left)
+        buttons.grid(row=4, column=0, sticky="ew", pady=(10, 0))
+        buttons.columnconfigure(0, weight=1)
+        self.btn_save = ttk.Button(buttons, text="Сохранить PGB", command=self.save, state="disabled")
+        self.btn_save.grid(row=0, column=0, sticky="ew")
+        ttk.Button(buttons, text="Открыть PGB…", command=self.open_pgb).grid(row=0, column=1, padx=(6, 0))
+        self.status = ttk.Label(left, text="", wraplength=380, justify="left")
+        self.status.grid(row=5, column=0, sticky="w", pady=(8, 0))
+
+        # -- предпросмотр
+        nav = ttk.Frame(right)
+        nav.grid(row=0, column=0, sticky="ew")
+        nav.columnconfigure(5, weight=1)
+        self.btn_first = ttk.Button(nav, text="|<", width=3, command=lambda: self.show_page(0))
+        self.btn_prev = ttk.Button(nav, text="<", width=3, command=lambda: self.show_page(self.page_index - 1))
+        self.entry_page = ttk.Spinbox(nav, textvariable=self.v_page, width=7, from_=1, to=1, wrap=False,
+                                      command=self._on_page_entered)
+        self.lbl_total = ttk.Label(nav, text="из 0")
+        self.btn_next = ttk.Button(nav, text=">", width=3, command=lambda: self.show_page(self.page_index + 1))
+        self.btn_last = ttk.Button(nav, text=">|", width=3, command=lambda: self.show_page(len(self.pages_text) - 1))
+        self.btn_first.grid(row=0, column=0)
+        self.btn_prev.grid(row=0, column=1, padx=(2, 8))
+        self.entry_page.grid(row=0, column=2)
+        self.lbl_total.grid(row=0, column=3, padx=(4, 8))
+        self.btn_next.grid(row=0, column=4)
+        self.btn_last.grid(row=0, column=5, sticky="w", padx=(2, 0))
+        ttk.Checkbutton(nav, text="пробелы как ·", variable=self.v_spaces,
+                        command=lambda: self.show_page(self.page_index)).grid(row=0, column=6, padx=(8, 0))
+        ttk.Label(nav, text="Шрифт:").grid(row=0, column=7, padx=(12, 2))
+        ttk.Spinbox(nav, textvariable=self.v_font_size, from_=8, to=28, width=3, wrap=False,
+                    command=self._apply_font).grid(row=0, column=8)
+
+        stage = ttk.Frame(right)
+        stage.grid(row=1, column=0, sticky="nsew", pady=(8, 0))
+        stage.columnconfigure(0, weight=1)
+        stage.rowconfigure(1, weight=1)
+        holder = ttk.Frame(stage)
+        holder.grid(row=0, column=0, rowspan=2)
+
+        family = self._mono_font_family()
+        self.mono = tkfont.Font(family=family, size=int(self.v_font_size.get()))
+        self.ruler = tk.Label(holder, font=self.mono, anchor="w", justify="left", padx=7, fg="#888888",
+                              text=self._ruler_text(DEFAULT_COLS))
+        self.ruler.grid(row=0, column=0, sticky="w")
+        self.text = tk.Text(holder, width=DEFAULT_COLS, height=DEFAULT_ROWS, wrap="none", font=self.mono,
+                            relief="solid", borderwidth=1, padx=6, pady=4, background="#ffffff",
+                            foreground="#000000", state="disabled", cursor="arrow", takefocus=1,
+                            spacing1=0, spacing2=0, spacing3=0)
+        self.text.grid(row=1, column=0)
+        self.slider = ttk.Scale(right, from_=1, to=1, orient="horizontal", command=self._on_slider)
+        self.slider.grid(row=2, column=0, sticky="ew", pady=(8, 0))
+        self._set_nav_state(False)
+
+        if "pyphen" not in sys.modules:
+            try:
+                import pyphen  # noqa: F401
+            except ImportError:
+                self.combo_hyphen.state(["disabled"])
+                self.hyphen_hint.config(text="Переносы по словарю: python -m pip install pyphen")
+
+    @staticmethod
+    def _ruler_text(cols: int) -> str:
+        return "".join(str((i + 1) % 10) for i in range(cols))
+
+    def _bind_events(self) -> None:
+        for var in (self.v_title, self.v_author, self.v_encoding, self.v_reflow, self.v_indent,
+                    self.v_hyphen, self.v_compression):
+            var.trace_add("write", lambda *_: self._on_option_changed())
+        self.v_output.trace_add("write", lambda *_: self._on_output_typed())
+        self.v_input.trace_add("write", lambda *_: None)
+        self.entry_page.bind("<Return>", lambda _e: self._on_page_entered())
+        self.entry_page.bind("<FocusOut>", lambda _e: self._on_page_entered())
+
+        self.root.bind("<Left>", lambda _e: self._key_nav(-1))
+        self.root.bind("<Right>", lambda _e: self._key_nav(1))
+        self.root.bind("<Prior>", lambda _e: self._key_nav(-10))
+        self.root.bind("<Next>", lambda _e: self._key_nav(10))
+        self.root.bind("<Home>", lambda _e: self._key_nav(None, first=True))
+        self.root.bind("<End>", lambda _e: self._key_nav(None, last=True))
+        self.text.bind("<MouseWheel>", lambda e: self.show_page(self.page_index + (-1 if e.delta > 0 else 1)))
+        self.text.bind("<Button-4>", lambda _e: self.show_page(self.page_index - 1))
+        self.text.bind("<Button-5>", lambda _e: self.show_page(self.page_index + 1))
+        self.text.bind("<Button-1>", lambda _e: self.text.focus_set())
+
+    def _key_nav(self, delta: int | None, first: bool = False, last: bool = False) -> None:
+        focus = self.root.focus_get()
+        if isinstance(focus, (tk.Entry, ttk.Entry, tk.Spinbox, ttk.Spinbox, ttk.Combobox)):
+            return
+        if first:
+            self.show_page(0)
+        elif last:
+            self.show_page(len(self.pages_text) - 1)
+        elif delta is not None:
+            self.show_page(self.page_index + delta)
+
+    # ---- файлы -------------------------------------------------------------
+    def choose_input(self) -> None:
+        name = filedialog.askopenfilename(title="Выберите книгу", filetypes=BOOK_FILETYPES)
+        if name:
+            self.set_input(Path(name))
+
+    def choose_output(self) -> None:
+        initial = Path(self.v_output.get()) if self.v_output.get() else None
+        name = filedialog.asksaveasfilename(
+            title="Сохранить PGB", defaultextension=".pgb", filetypes=[("PGB", "*.pgb *.PGB"), ("Все файлы", "*.*")],
+            initialdir=str(initial.parent) if initial else None, initialfile=initial.name if initial else None)
+        if name:
+            self.output_edited = True
+            self.v_output.set(name)
+            self._output_from_dialog = name
+
+    def _on_output_typed(self) -> None:
+        if not self._suspend:
+            self.output_edited = True
+
+    def set_input(self, path: Path) -> None:
+        self._suspend = True
+        try:
+            self.v_input.set(str(path))
+            if not self.output_edited:
+                self.v_output.set(str(_default_output(path)))
+            self.v_title.set("")
+            self.v_author.set("")
+        finally:
+            self._suspend = False
+        self.view_mode = False
+        self.cache = None
+        self.status.config(text="")
+        self.request_build(immediate=True)
+
+    # ---- обработка ----------------------------------------------------------
+    def _on_option_changed(self) -> None:
+        if self._suspend or not self.v_input.get().strip():
+            return
+        self.request_build()
+
+    def collect_options(self) -> Options:
+        try:
+            indent = max(0, min(8, int(self.v_indent.get())))
+        except ValueError:
+            indent = 2
+        return Options(
+            encoding=self.v_encoding.get(), title=self.v_title.get().strip() or None,
+            author=self.v_author.get().strip() or None, reflow=self.v_reflow.get(), indent=indent,
+            collapse_blank=self.v_collapse.get(), hyphenate=self.v_hyphen.get().strip() or None,
+            compression=self.v_compression.get(),
+        )
+
+    def request_build(self, immediate: bool = False) -> None:
+        if self.rebuild_job is not None:
+            self.root.after_cancel(self.rebuild_job)
+            self.rebuild_job = None
+        self.rebuild_job = self.root.after(0 if immediate else self.REBUILD_DELAY_MS, self._start_build)
+
+    def _start_build(self) -> None:
+        self.rebuild_job = None
+        if self.busy:
+            self.pending = True
+            return
+        path_text = self.v_input.get().strip()
+        if not path_text:
+            return
+        self.pending = False
+        self.busy = True
+        self.view_mode = False
+        self.btn_save.state(["disabled"])
+        self.progress.grid(row=1, column=0, sticky="w", pady=(6, 0))
+        self.progress.start(12)
+        self.status.config(text="Обработка…", foreground="")
+        opts = self.collect_options()
+        threading.Thread(target=self._worker, args=(Path(path_text), opts, self.cache), daemon=True).start()
+
+    def _worker(self, path: Path, opts: Options, cache: tuple[tuple, Document] | None) -> None:
+        try:
+            key = (str(path), path.stat().st_mtime_ns, opts.encoding, opts.reflow)
+            if cache is not None and cache[0] == key:
+                doc = cache[1]
+            else:
+                doc = load_document(path, opts)
+            result = render_document(doc, path, opts)
+            self.results.put(("ok", key, doc, result))
+        except Exception as exc:  # noqa: BLE001 - любая ошибка показывается пользователю
+            self.results.put(("error", str(exc) or exc.__class__.__name__))
+
+    def _poll(self) -> None:
+        try:
+            while True:
+                self._handle(self.results.get_nowait())
+        except queue.Empty:
+            pass
+        self.root.after(60, self._poll)
+
+    def _handle(self, message: tuple) -> None:
+        self.busy = False
+        self.progress.stop()
+        self.progress.grid_remove()
+        if message[0] == "ok":
+            _kind, key, doc, result = message
+            self.cache = (key, doc)
+            if self.pending:
+                self.request_build(immediate=True)
+                return
+            self.result = result
+            self.view_mode = False
+            self._show_result(doc, result)
+        else:
+            if self.pending:
+                self.request_build(immediate=True)
+                return
+            self.result = None
+            self._set_pages([])
+            self.btn_save.state(["disabled"])
+            self.info.config(text="Не удалось преобразовать книгу")
+            self.notes.config(text="")
+            self.status.config(text=f"Ошибка: {message[1]}", foreground="#b00020")
+
+    def _show_result(self, doc: Document, result: BookResult) -> None:
+        stats = result.stats
+        ratio = 100.0 * stats["file_size"] / max(1, stats["text_size"])
+        self.info.config(text=(
+            f"Страниц: {stats['pages']}   строк: {len(result.lines)}\n"
+            f"Текст: {_format_size(stats['text_size'])}  →  PGB: {_format_size(stats['file_size'])} ({ratio:.0f}%)\n"
+            f"Сжатие: {describe_compression(stats)}\n"
+            f"Название: {stats['title']}\nАвтор: {stats['author'] or '-'}"))
+        self.notes.config(text="\n".join(result.notes))
+        hint = " / ".join(x for x in (doc.title, doc.author) if x)
+        self.meta_hint.config(text=("В книге: " + hint) if hint else "Пусто - из метаданных книги или имя файла")
+        self.status.config(text="Предпросмотр обновлён. Проверьте текст и сохраните.", foreground="")
+        self._set_pages([pgo_bytes_to_text(page) for page in result.pages])
+        self.btn_save.state(["!disabled"])
+
+    def save(self) -> None:
+        if self.result is None or self.view_mode or self.busy:
+            return
+        target = self.v_output.get().strip()
+        if not target:
+            self.choose_output()
+            target = self.v_output.get().strip()
+            if not target:
+                return
+        path = Path(target)
+        if path.exists() and target != self._output_from_dialog:
+            if not messagebox.askyesno("Файл существует", f"Заменить {path}?"):
+                return
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(self.result.data)
+            verify_pgb(path.read_bytes())
+        except (OSError, ValueError) as exc:
+            self.status.config(text=f"Ошибка записи: {exc}", foreground="#b00020")
+            return
+        self.status.config(text=f"Сохранено: {path} ({len(self.result.data)} байт), проверка CRC и страниц: OK",
+                           foreground="#006400")
+
+    def open_pgb(self) -> None:
+        name = filedialog.askopenfilename(title="Открыть PGB", filetypes=[("PGB", "*.pgb *.PGB"), ("Все файлы", "*.*")])
+        if name:
+            self.load_pgb(Path(name))
+
+    def load_pgb(self, path: Path) -> None:
+        try:
+            raw = path.read_bytes()
+            stats = verify_pgb(raw)
+            pages = extract_all_pages_text(raw)
+        except (OSError, ValueError) as exc:
+            self.status.config(text=f"Не удалось открыть {path.name}: {exc}", foreground="#b00020")
+            return
+        self.view_mode = True
+        self.result = None
+        self.btn_save.state(["disabled"])
+        self.info.config(text=(
+            f"Просмотр PGB: {path.name}\n"
+            f"Страниц: {stats['pages']} ({stats['cols']}x{stats['rows']})\n"
+            f"Текст: {_format_size(stats['text_size'])}  →  PGB: {_format_size(stats['file_size'])}\n"
+            f"Сжатие: {describe_compression(stats)}\n"
+            f"Название: {stats['title']}\nАвтор: {stats['author'] or '-'}\nCRC-32: 0x{stats['crc32']:08X}"))
+        self.notes.config(text="")
+        self.status.config(text="Файл проверен (структура, оба CRC, страницы). Для новой конвертации выберите книгу.",
+                           foreground="#006400")
+        self._set_pages(pages)
+
+    # ---- предпросмотр -------------------------------------------------------
+    def _apply_font(self) -> None:
+        try:
+            size = max(8, min(28, int(self.v_font_size.get())))
+        except ValueError:
+            size = 12
+        self.mono.configure(size=size)
+
+    def _set_nav_state(self, enabled: bool) -> None:
+        state = ["!disabled"] if enabled else ["disabled"]
+        for widget in (self.btn_first, self.btn_prev, self.btn_next, self.btn_last, self.entry_page, self.slider):
+            widget.state(state)
+
+    def _set_pages(self, pages: list[str]) -> None:
+        self.pages_text = pages
+        total = len(pages)
+        self.lbl_total.config(text=f"из {total}")
+        self.entry_page.config(to=max(1, total))
+        self.slider.config(to=max(1, total))
+        self._set_nav_state(total > 0)
+        keep = min(self.page_index, max(0, total - 1))
+        self.show_page(keep)
+
+    def show_page(self, index: int) -> None:
+        total = len(self.pages_text)
+        self.text.config(state="normal")
+        self.text.delete("1.0", "end")
+        if total == 0:
+            self.page_index = 0
+            self.v_page.set("1")
+            self.text.config(state="disabled")
+            return
+        index = max(0, min(total - 1, index))
+        self.page_index = index
+        text = self.pages_text[index]
+        if self.v_spaces.get():
+            text = text.replace(" ", "·")
+        self.text.insert("1.0", text)
+        self.text.config(state="disabled")
+        self.v_page.set(str(index + 1))
+        self._slider_busy = True
+        self.slider.set(index + 1)
+        self._slider_busy = False
+
+    def _on_page_entered(self) -> None:
+        try:
+            self.show_page(int(self.v_page.get()) - 1)
+        except ValueError:
+            self.show_page(self.page_index)
+
+    def _on_slider(self, value: str) -> None:
+        if self._slider_busy or not self.pages_text:
+            return
+        index = int(round(float(value))) - 1
+        if index != self.page_index:
+            self.show_page(index)
+
+    # ---- запуск -------------------------------------------------------------
+    def run(self) -> int:
+        self.root.mainloop()
+        return 0
+
+
+def run_gui(initial: Path | None = None, options: Options | None = None) -> int:
+    if tk is None:
+        print("Графический интерфейс недоступен: не найден tkinter "
+              "(в Linux: sudo apt install python3-tk). Запустите с параметрами, см. --help.", file=sys.stderr)
+        return 2
+    try:
+        app = BookCompilerGui(initial, options)
+    except tk.TclError as exc:
+        print(f"Не удалось открыть окно ({exc}). Запустите с параметрами, см. --help.", file=sys.stderr)
+        return 2
+    return app.run()
 
 
 if __name__ == "__main__":

@@ -29,6 +29,7 @@ const char *pgb_status_text(pgb_status_t status)
     case PGB_ERR_BUFFER:      return "buffer too small";
     case PGB_ERR_PAGE_DATA:   return "bad page data";
     case PGB_ERR_CANCELLED:   return "cancelled";
+    case PGB_ERR_DECOMPRESS:  return "bad compressed page";
     default:                  return "unknown error";
     }
 }
@@ -111,8 +112,8 @@ pgb_status_t pgb_header_decode(const uint8_t *buf, size_t len, pgb_header_t *hea
     if (rd16(buf + 8) != PGB_HEADER_SIZE) {
         return PGB_ERR_HEADER;
     }
-    /* flags, compression, reserved0 */
-    if (rd16(buf + 10) != 0u || buf[42] != PGB_COMPRESSION_NONE || buf[43] != 0u) {
+    /* flags, compression (0 - нет, 1 - LZ4 Block), reserved0 */
+    if (rd16(buf + 10) != 0u || buf[42] > PGB_COMPRESSION_LZ4 || buf[43] != 0u) {
         return PGB_ERR_UNSUPPORTED;
     }
     for (size_t i = 48u; i < PGB_HEADER_SIZE; i++) {
@@ -131,6 +132,7 @@ pgb_status_t pgb_header_decode(const uint8_t *buf, size_t len, pgb_header_t *hea
     h.meta_crc32    = rd32(buf + 36);
     h.cols          = buf[40];
     h.rows          = buf[41];
+    h.compression   = buf[42];
     h.title_length  = rd16(buf + 44);
     h.author_length = rd16(buf + 46);
 
@@ -159,6 +161,88 @@ pgb_status_t pgb_header_decode(const uint8_t *buf, size_t len, pgb_header_t *hea
     return PGB_OK;
 }
 
+/*
+ * Строгий декодер LZ4 Block (https://github.com/lz4/lz4/blob/dev/doc/lz4_Block_format.md).
+ * Страница приходит с SD-карты, то есть из недоверенных данных: каждая длина и
+ * каждое смещение проверяются до обращения к памяти, переполнений size_t нет
+ * (длины растут порциями по 255 и ограничиваются размером выходного буфера).
+ */
+bool pgb_lz4_decode(const uint8_t *src, size_t src_len, uint8_t *dst, size_t dst_len)
+{
+    size_t ip = 0u;
+    size_t op = 0u;
+
+    if (src == NULL || dst == NULL) {
+        return false;
+    }
+    for (;;) {
+        if (ip >= src_len) {
+            return false;                       /* нет токена: блок оборван */
+        }
+        const uint8_t token = src[ip++];
+
+        size_t literals = (size_t)(token >> 4);
+        if (literals == 15u) {
+            uint8_t extra;
+            do {
+                if (ip >= src_len) {
+                    return false;
+                }
+                extra = src[ip++];
+                literals += extra;
+                if (literals > dst_len) {
+                    return false;
+                }
+            } while (extra == 255u);
+        }
+        if (literals > dst_len - op || literals > src_len - ip) {
+            return false;
+        }
+        if (literals > 0u) {
+            memcpy(dst + op, src + ip, literals);
+            op += literals;
+            ip += literals;
+        }
+        if (ip == src_len) {
+            break;                              /* последняя последовательность: только литералы */
+        }
+
+        if (src_len - ip < 2u) {
+            return false;
+        }
+        const size_t offset = (size_t)src[ip] | ((size_t)src[ip + 1u] << 8);
+        ip += 2u;
+        if (offset == 0u || offset > op) {
+            return false;
+        }
+
+        size_t match = (size_t)(token & 0x0Fu);
+        if (match == 15u) {
+            uint8_t extra;
+            do {
+                if (ip >= src_len) {
+                    return false;
+                }
+                extra = src[ip++];
+                match += extra;
+                if (match > dst_len) {
+                    return false;
+                }
+            } while (extra == 255u);
+        }
+        match += 4u;                            /* MINMATCH */
+        if (match > dst_len - op) {
+            return false;
+        }
+        /* Копирование вперёд побайтно: при offset < match области перекрываются намеренно. */
+        for (size_t i = 0u; i < match; i++) {
+            dst[op + i] = dst[op + i - offset];
+        }
+        op += match;
+    }
+    return op == dst_len;
+}
+
 void pgb_index_entry_decode(const uint8_t *buf, pgb_index_entry_t *entry)
 {
     entry->offset      = rd32(buf);
@@ -170,7 +254,12 @@ pgb_status_t pgb_index_entry_check(const pgb_header_t *header, uint32_t number,
                                    const pgb_index_entry_t *entry,
                                    const pgb_index_entry_t *next)
 {
-    if (entry->stored_size == 0u || entry->raw_size == 0u || entry->stored_size != entry->raw_size) {
+    if (entry->stored_size == 0u || entry->raw_size == 0u) {
+        return PGB_ERR_INDEX;
+    }
+    /* Без сжатия размеры равны; с LZ4 страница либо сжата (stored < raw), либо хранится как есть. */
+    if (header->compression == PGB_COMPRESSION_NONE ? (entry->stored_size != entry->raw_size)
+                                                    : (entry->stored_size > entry->raw_size)) {
         return PGB_ERR_INDEX;
     }
     if (entry->raw_size > PGB_MAX_PAGE_BYTES(header->cols, header->rows)) {
@@ -285,6 +374,7 @@ pgb_status_t pgb_read_info(const char *path, pgb_info_t *info)
     info->file_crc32 = header.file_crc32;
     info->cols = header.cols;
     info->rows = header.rows;
+    info->compression = header.compression;
     return PGB_OK;
 }
 
@@ -302,6 +392,10 @@ static pgb_status_t open_checked(pgb_book_t *book, uint8_t expected_cols, uint8_
     }
     const pgb_header_t *h = &book->header;
     if (h->cols != expected_cols || h->rows != expected_rows) {
+        return PGB_ERR_GEOMETRY;
+    }
+    /* Сжатая страница распаковывается через book->scratch. */
+    if (h->compression != PGB_COMPRESSION_NONE && PGB_MAX_PAGE_BYTES(h->cols, h->rows) > PGB_SCRATCH_SIZE) {
         return PGB_ERR_GEOMETRY;
     }
     status = check_file_size(file, h->file_size);
@@ -392,8 +486,22 @@ pgb_status_t pgb_page_read(pgb_book_t *book, uint32_t number,
     if (buf_size < entry.raw_size) {
         return PGB_ERR_BUFFER;
     }
-    if (!read_exact(book->file, entry.offset, buf, entry.stored_size)) {
-        return PGB_ERR_IO;
+    if (entry.stored_size == entry.raw_size) {
+        /* Страница хранится без сжатия. */
+        if (!read_exact(book->file, entry.offset, buf, entry.stored_size)) {
+            return PGB_ERR_IO;
+        }
+    } else {
+        /* stored_size < raw_size гарантирует проверка записи индекса; scratch не меньше страницы. */
+        if (entry.stored_size > sizeof(book->scratch)) {
+            return PGB_ERR_INDEX;
+        }
+        if (!read_exact(book->file, entry.offset, book->scratch, entry.stored_size)) {
+            return PGB_ERR_IO;
+        }
+        if (!pgb_lz4_decode(book->scratch, entry.stored_size, buf, entry.raw_size)) {
+            return PGB_ERR_DECOMPRESS;
+        }
     }
     status = pgb_page_check_text(h, buf, entry.raw_size);
     if (status != PGB_OK) {

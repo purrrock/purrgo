@@ -32,6 +32,7 @@
 #define PGB_MAX_TITLE         200u
 #define PGB_MAX_AUTHOR        100u
 #define PGB_COMPRESSION_NONE  0u
+#define PGB_COMPRESSION_LZ4   1u   /* LZ4 Block (без кадра) на каждую страницу, см. PGB-format.md, раздел 8 */
 
 /* Геометрия текущего экрана 176x264 при ячейке 6x8 (одна строка занята статусом). */
 #define PGB_SCREEN_COLS       29u
@@ -40,6 +41,15 @@
 /* Наибольший размер страницы в байтах: rows строк по cols символов и rows-1 байт LF. */
 #define PGB_MAX_PAGE_BYTES(cols, rows) ((uint32_t)(cols) * (uint32_t)(rows) + (uint32_t)(rows) - 1u)
 #define PGB_SCREEN_MAX_PAGE_BYTES PGB_MAX_PAGE_BYTES(PGB_SCREEN_COLS, PGB_SCREEN_ROWS) /* 959 */
+
+/*
+ * Буфер для сжатых данных страницы внутри pgb_book_t. Сжатая страница короче
+ * распакованной (не больше PGB_SCREEN_MAX_PAGE_BYTES - 1 байт). Книги с
+ * большей геометрией pgb_open() отклоняет (PGB_ERR_GEOMETRY), если они сжаты.
+ */
+#ifndef PGB_SCRATCH_SIZE
+#define PGB_SCRATCH_SIZE      PGB_SCREEN_MAX_PAGE_BYTES
+#endif
 
 /* Столько байт с начала файла достаточно для заголовка, названия и автора. */
 #define PGB_INFO_READ_SIZE    512u
@@ -59,7 +69,8 @@ typedef enum {
     PGB_ERR_PAGE_NUMBER,   /* номер страницы вне книги */
     PGB_ERR_BUFFER,        /* буфер для страницы мал */
     PGB_ERR_PAGE_DATA,     /* недопустимое содержимое страницы */
-    PGB_ERR_CANCELLED      /* проверка прервана пользователем */
+    PGB_ERR_CANCELLED,     /* проверка прервана пользователем */
+    PGB_ERR_DECOMPRESS     /* блок LZ4 повреждён или не даёт ровно raw_size байт */
 } pgb_status_t;
 
 /* Короткое ASCII-описание статуса (для журнала и экрана ошибки). Никогда не NULL. */
@@ -77,6 +88,7 @@ typedef struct {
     uint16_t author_length;
     uint8_t  cols;
     uint8_t  rows;
+    uint8_t  compression;  /* PGB_COMPRESSION_NONE или PGB_COMPRESSION_LZ4 */
 } pgb_header_t;
 
 typedef struct {
@@ -93,6 +105,7 @@ typedef struct {
     uint32_t file_crc32;  /* идентификатор книги для сохранённой позиции чтения */
     uint8_t  cols;
     uint8_t  rows;
+    uint8_t  compression;
 } pgb_info_t;
 
 /* Открытая книга. Файл остаётся открытым до pgb_close(). */
@@ -101,6 +114,7 @@ typedef struct {
     pgb_header_t   header;
     char           title[PGB_MAX_TITLE + 1u];
     char           author[PGB_MAX_AUTHOR + 1u];
+    uint8_t        scratch[PGB_SCRATCH_SIZE];   /* сжатые данные страницы */
 } pgb_book_t;
 
 /* ---- Чистые функции (без файла) ------------------------------------------ */
@@ -129,6 +143,15 @@ uint32_t pgb_crc_value(const pgb_crc_t *crc);
  * CRC и размер файла на диске здесь не проверяются.
  */
 pgb_status_t pgb_header_decode(const uint8_t *buf, size_t len, pgb_header_t *header);
+
+/*
+ * Строгий декодер сырого LZ4 Block. true только если на выходе ровно dst_len
+ * байт, использован весь вход (src_len байт) и блок корректен: смещения от 1 до
+ * числа уже полученных байт, длины не выходят за буферы, блок оканчивается
+ * последовательностью из одних литералов. Ни чтения за src, ни записи за dst.
+ * Буферы src и dst не должны пересекаться.
+ */
+bool pgb_lz4_decode(const uint8_t *src, size_t src_len, uint8_t *dst, size_t dst_len);
 
 /* Разбор записи индекса (PGB_INDEX_ENTRY_SIZE байт). */
 void pgb_index_entry_decode(const uint8_t *buf, pgb_index_entry_t *entry);
@@ -163,7 +186,8 @@ pgb_status_t pgb_open(const char *path, uint8_t expected_cols, uint8_t expected_
                       pgb_book_t *book);
 
 /*
- * Читает страницу `number` (с нуля) в buf. Размер текста возвращается в *out_len.
+ * Читает страницу `number` (с нуля) в buf; сжатая страница распаковывается.
+ * Размер текста возвращается в *out_len.
  * Текст не заканчивается нулём. Для любой страницы нужен буфер не более
  * PGB_MAX_PAGE_BYTES(cols, rows) байт.
  */
