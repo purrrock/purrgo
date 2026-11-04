@@ -215,6 +215,9 @@ void purrgo_app_ui_render(
             ui_render_book_list(gfx);
             break;
         case APP_STATE_BOOK_READ:
+            if (prev_state != APP_STATE_BOOK_READ || s_full_refresh_requested) {
+                ui_book_read_reset();   /* экран мог быть перерисован другим режимом */
+            }
             ui_render_book_read(gfx);
             break;
         default:

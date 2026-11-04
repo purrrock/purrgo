@@ -2,6 +2,7 @@
 #define PURRGO_BATTERY_H
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 /*
@@ -60,6 +61,14 @@ uint32_t purrgo_battery_pack_mv_from_pin(uint32_t pin_mv);
  * и когда нет данных.
  */
 bool purrgo_battery_read(purrgo_battery_t* out);
+
+/*
+ * Текст заряда для строки статуса (не длиннее 4 символов + NUL): "85%",
+ * "5V" при внешнем питании, "--%" если заряд неизвестен. Читает батарею сама
+ * (purrgo_battery_read()), поэтому вызывать её чаще нужной частоты обновления
+ * не следует. size >= 6 вмещает любое значение.
+ */
+void purrgo_battery_format(char* buf, size_t size);
 
 /*
  * Заряд в процентах (0..100) по напряжению батареи из PURRGO_BATTERY_CELLS

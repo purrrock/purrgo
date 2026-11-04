@@ -374,6 +374,12 @@ void purrgo_app_tick(uint32_t current_time_ms) {
     // Читалка: запись позиции чтения на SD по тайм-ауту бездействия.
     purrgo_book_reader_tick(current_time_ms);
 
+    // Читалка: заряд в строке статуса опрашивается раз в минуту; перерисовка только при изменении.
+    if (current_state == APP_STATE_BOOK_READ &&
+        purrgo_book_reader_battery_tick(current_time_ms)) {
+        purrgo_ui_dirty_mark(UI_DIRTY_SCREEN);
+    }
+
     gnss_check_fix_timeout(current_time_ms);
 
     // Накопленные изменения данных выводим не чаще минимального интервала.

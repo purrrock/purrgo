@@ -56,6 +56,11 @@
 #define PURRGO_BOOK_SAVE_TIMEOUT_MS 60000u
 #endif
 
+/* Период опроса батареи на экране чтения, мс (в строке статуса показывается последнее измеренное). */
+#ifndef PURRGO_BOOK_BATTERY_PERIOD_MS
+#define PURRGO_BOOK_BATTERY_PERIOD_MS 60000u
+#endif
+
 /* Книг в списке (лишние файлы каталога не показываются). */
 #define PURRGO_BOOK_LIST_MAX     48
 /* Ширина названия и автора в списке, символов. */
@@ -84,6 +89,7 @@ typedef struct {
     uint32_t      page;         /* текущая страница, с нуля */
     uint32_t      page_count;
     uint8_t       percent;      /* 0..100, по номеру страницы */
+    char          battery[8];   /* заряд для строки статуса: "85%", "5V", "--%"; обновляется раз в минуту */
     bool          jump;         /* включён переход по процентам */
     uint8_t       jump_percent;
     uint32_t      jump_page;
@@ -108,6 +114,13 @@ bool purrgo_book_reader_handle_button(purrgo_state_t state, purrgo_btn_t button,
 
 /* Вызывается из главного цикла: записывает позицию по тайм-ауту бездействия. */
 void purrgo_book_reader_tick(uint32_t now_ms);
+
+/*
+ * Вызывается из главного цикла на экране чтения: опрашивает батарею не чаще
+ * PURRGO_BOOK_BATTERY_PERIOD_MS (первый замер - при открытии книги). true -
+ * показываемое в статусе значение изменилось и экран нужно перерисовать.
+ */
+bool purrgo_book_reader_battery_tick(uint32_t now_ms);
 
 /* Записать позицию на SD сейчас, если она ещё не записана. true - записана или записывать нечего. */
 bool purrgo_book_reader_flush(void);

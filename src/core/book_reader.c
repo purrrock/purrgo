@@ -1,5 +1,6 @@
 #include "purrgo/book_reader.h"
 
+#include "purrgo/battery.h"
 #include "purrgo/fs_hal.h"
 #include "purrgo/gnss_io.h"
 #include "purrgo/logger.h"
@@ -56,6 +57,11 @@ static struct {
     /* запись позиции */
     bool          pos_dirty;
     uint32_t      pos_changed_ms;
+
+    /* батарея в строке статуса: замер не чаще раза в минуту */
+    bool          bat_sampled;
+    uint32_t      bat_sampled_ms;
+    char          battery[8];
 } s = { .ram = s_default_ram, .ram_size = sizeof(s_default_ram) };
 
 /* ---- Вспомогательное ------------------------------------------------------- */
@@ -150,6 +156,34 @@ static void remember_position(void)
     app_config.book_crc32 = s.hdr.file_crc32;
     app_config.book_page = s.page;
     position_changed();
+}
+
+/* ---- Батарея ----------------------------------------------------------------- */
+
+/* Замер батареи. true - текст для статуса изменился. */
+static bool battery_sample(uint32_t now_ms)
+{
+    char text[sizeof(s.battery)];
+
+    purrgo_battery_format(text, sizeof(text));
+    s.bat_sampled = true;
+    s.bat_sampled_ms = now_ms;
+    if (strcmp(text, s.battery) == 0) {
+        return false;
+    }
+    memcpy(s.battery, text, sizeof(s.battery));
+    return true;
+}
+
+bool purrgo_book_reader_battery_tick(uint32_t now_ms)
+{
+    if (!s.active || !s.open) {
+        return false;
+    }
+    if (s.bat_sampled && (uint32_t)(now_ms - s.bat_sampled_ms) < PURRGO_BOOK_BATTERY_PERIOD_MS) {
+        return false;
+    }
+    return battery_sample(now_ms);
 }
 
 /* ---- Книга в RAM ------------------------------------------------------------- */
@@ -321,6 +355,7 @@ static bool open_book(const char *file)
     s.open = true;
     s.page = page;
     s.jump = false;
+    (void)battery_sample(purrgo_system_time_ms());   /* первый замер - при открытии книги */
     (void)fetch_page(page);
     remember_position();
     PURRGO_LOGI("book %s: %u pages, page %u, window %u..%u of %u%s\r\n", file,
@@ -658,6 +693,7 @@ void purrgo_book_reader_get_view(purrgo_book_view_t *v)
     v->page = s.page;
     v->page_count = s.hdr.page_count;
     v->percent = percent_of(s.page, s.hdr.page_count);
+    memcpy(v->battery, s.battery, sizeof(v->battery));
     v->jump = s.jump;
     v->jump_percent = s.jump_percent;
     v->jump_page = page_of_percent(s.jump_percent, s.hdr.page_count);
@@ -688,6 +724,9 @@ void purrgo_book_reader_reset(void)
     s.error = PGB_OK;
     s.pos_dirty = false;
     s.pos_changed_ms = 0u;
+    s.bat_sampled = false;
+    s.bat_sampled_ms = 0u;
+    s.battery[0] = '\0';
     s.file[0] = '\0';
     s.page = 0u;
 }
