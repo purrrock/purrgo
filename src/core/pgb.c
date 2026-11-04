@@ -30,6 +30,7 @@ const char *pgb_status_text(pgb_status_t status)
     case PGB_ERR_PAGE_DATA:   return "bad page data";
     case PGB_ERR_CANCELLED:   return "cancelled";
     case PGB_ERR_DECOMPRESS:  return "bad compressed page";
+    case PGB_ERR_NOT_CACHED:  return "page not in memory";
     default:                  return "unknown error";
     }
 }
@@ -504,6 +505,77 @@ pgb_status_t pgb_page_read(pgb_book_t *book, uint32_t number,
         }
     }
     status = pgb_page_check_text(h, buf, entry.raw_size);
+    if (status != PGB_OK) {
+        return status;
+    }
+    *out_len = entry.raw_size;
+    return PGB_OK;
+}
+
+/* ---- Образ книги в памяти ---------------------------------------------------- */
+
+pgb_status_t pgb_meta_check_mem(const pgb_header_t *header, const uint8_t *prefix)
+{
+    if (header == NULL || prefix == NULL) {
+        return PGB_ERR_IO;
+    }
+    pgb_crc_t crc;
+    pgb_crc_init(&crc);
+    pgb_crc_feed(&crc, prefix, header->data_offset);
+    return (pgb_crc_value(&crc) == header->meta_crc32) ? PGB_OK : PGB_ERR_META_CRC;
+}
+
+pgb_status_t pgb_page_locate(const pgb_header_t *header, const uint8_t *prefix,
+                             uint32_t number, pgb_index_entry_t *entry)
+{
+    if (header == NULL || prefix == NULL || entry == NULL) {
+        return PGB_ERR_IO;
+    }
+    if (number >= header->page_count) {
+        return PGB_ERR_PAGE_NUMBER;
+    }
+    const bool has_next = (number + 1u) < header->page_count;
+    /* Индекс целиком лежит в prefix: index_offset + page_count * 8 == data_offset (проверено заголовком). */
+    const uint8_t *p = prefix + header->index_offset + (size_t)number * PGB_INDEX_ENTRY_SIZE;
+    pgb_index_entry_t next = { 0u, 0u, 0u };
+    pgb_index_entry_decode(p, entry);
+    if (has_next) {
+        pgb_index_entry_decode(p + PGB_INDEX_ENTRY_SIZE, &next);
+    }
+    return pgb_index_entry_check(header, number, entry, has_next ? &next : NULL);
+}
+
+pgb_status_t pgb_page_read_mem(const pgb_header_t *header, const uint8_t *prefix,
+                               const uint8_t *data, uint32_t data_base, uint32_t data_len,
+                               uint32_t number, uint8_t *buf, size_t buf_size, size_t *out_len)
+{
+    if (header == NULL || prefix == NULL || buf == NULL || out_len == NULL ||
+        (data == NULL && data_len != 0u)) {
+        return PGB_ERR_IO;
+    }
+    *out_len = 0u;
+
+    pgb_index_entry_t entry;
+    pgb_status_t status = pgb_page_locate(header, prefix, number, &entry);
+    if (status != PGB_OK) {
+        return status;
+    }
+    if (buf_size < entry.raw_size) {
+        return PGB_ERR_BUFFER;
+    }
+    /* Страница должна целиком лежать в окне [data_base, data_base + data_len). */
+    const uint64_t win_end = (uint64_t)data_base + data_len;
+    if (entry.offset < data_base || (uint64_t)entry.offset + entry.stored_size > win_end) {
+        return PGB_ERR_NOT_CACHED;
+    }
+    const uint8_t *stored = data + (entry.offset - data_base);
+
+    if (entry.stored_size == entry.raw_size) {
+        memcpy(buf, stored, entry.stored_size);
+    } else if (!pgb_lz4_decode(stored, entry.stored_size, buf, entry.raw_size)) {
+        return PGB_ERR_DECOMPRESS;
+    }
+    status = pgb_page_check_text(header, buf, entry.raw_size);
     if (status != PGB_OK) {
         return status;
     }

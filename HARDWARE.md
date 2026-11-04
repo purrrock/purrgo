@@ -147,6 +147,8 @@ microSD используется как основное внешнее хран
 
 Пользовательские маршруты - GPX-файлы в `/PURRGO/ROUTES/` (имя файла до 95 символов, расширение `.gpx`). Файл выбирается в меню CONFIG: пункт ROUTE. Из файла используются точки `<trkpt>` и `<rtept>`; `<wpt>` игнорируются.
 
+Электронные книги - файлы `.PGB` в `/PURRGO/BOOKS/` (каталог создаётся при монтировании карты; в списке до 48 книг, имя файла до 95 байт). Режим чтения включается в меню CONFIG: пункт BOOKS. Формат книг: [`tools/book-compiler/PGB-format.md`](tools/book-compiler/PGB-format.md), описание режима: [`E-books.md`](E-books.md).
+
 Формат карт описан в [`docs/purrgo_map_specification_v3.md`](docs/purrgo_map_specification_v3.md).
 
 ---

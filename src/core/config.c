@@ -13,9 +13,10 @@
 
 /*
  * Буфер записи: наихудший случай - около 250 байт полей и слоёв плюс MAP_DIR
- * (до PURRGO_FS_MAX_PATH + 31 символов) и ROUTE_FILE (до PURRGO_ROUTE_NAME_MAX).
+ * (до PURRGO_FS_MAX_PATH + 31 символов), ROUTE_FILE (до PURRGO_ROUTE_NAME_MAX)
+ * и позиция чтения (BOOK_FILE до PURRGO_BOOK_NAME_MAX, BOOK_CRC, BOOK_PAGE).
  */
-#define CONFIG_SAVE_MAX_SIZE 704
+#define CONFIG_SAVE_MAX_SIZE 1024
 
 
 purrgo_config_t app_config;
@@ -120,6 +121,37 @@ static int32_t parse_int32(const char* str)
 }
 
 
+/* Шестнадцатеричное 32-битное значение (CRC); 0 при пустой строке или ошибке. */
+static bool parse_hex32(const char* str, uint32_t* out)
+{
+    uint64_t res = 0;
+    int digits = 0;
+
+    while (*str == ' ' || *str == '\t') {
+        str++;
+    }
+    for (; digits < 8; digits++, str++) {
+        char c = *str;
+        uint32_t d;
+        if (c >= '0' && c <= '9') {
+            d = (uint32_t)(c - '0');
+        } else if (c >= 'A' && c <= 'F') {
+            d = (uint32_t)(c - 'A') + 10u;
+        } else if (c >= 'a' && c <= 'f') {
+            d = (uint32_t)(c - 'a') + 10u;
+        } else {
+            break;
+        }
+        res = (res << 4) | d;
+    }
+    if (digits == 0 || (*str != '\0' && *str != ' ' && *str != '\t')) {
+        return false;
+    }
+    *out = (uint32_t)res;
+    return true;
+}
+
+
 void purrgo_config_init(void)
 {
     /* Полный сброс: поля, которых нет в списке ниже, тоже обнуляются. */
@@ -176,6 +208,13 @@ void purrgo_config_init(void)
      * Маршрут по умолчанию не выбран.
      */
     app_config.route_file[0] = '\0';
+
+    /*
+     * Книга не открывалась.
+     */
+    app_config.book_file[0] = '\0';
+    app_config.book_crc32 = 0;
+    app_config.book_page = 0;
 
     /*
      * Последние координаты.
@@ -366,6 +405,34 @@ bool purrgo_config_load(void)
             }
 
             /*
+             * Позиция чтения: файл книги (только имя), CRC файла и страница.
+             */
+            else if (strcmp(key, "BOOK_FILE") == 0) {
+                if (strchr(val, '/') == NULL && strchr(val, '\\') == NULL &&
+                    val[0] != '.' &&
+                    strlen(val) < sizeof(app_config.book_file)) {
+                    purrgo_snprintf(
+                        app_config.book_file,
+                        sizeof(app_config.book_file),
+                        "%s",
+                        val
+                    );
+                }
+            }
+            else if (strcmp(key, "BOOK_CRC") == 0) {
+                uint32_t crc;
+                if (parse_hex32(val, &crc)) {
+                    app_config.book_crc32 = crc;
+                }
+            }
+            else if (strcmp(key, "BOOK_PAGE") == 0) {
+                int32_t page = parse_int32(val);
+                if (page >= 0) {
+                    app_config.book_page = (uint32_t)page;
+                }
+            }
+
+            /*
              * Последняя широта.
              */
             else if (strcmp(key, "LAST_LAT_1E7") == 0) {
@@ -548,7 +615,10 @@ bool purrgo_config_save(void)
 
         "LOG_MODE=%d\n"
         "MAP_DETAILS=%d\n"
-        "POWER_SRC=%d\n",
+        "POWER_SRC=%d\n"
+        "BOOK_FILE=%.*s\n"
+        "BOOK_CRC=%08X\n"
+        "BOOK_PAGE=%u\n",
 
         (int)app_config.tz_offset_minutes,
 
@@ -570,7 +640,14 @@ bool purrgo_config_save(void)
 
         (int)app_config.map_details,
 
-        (int)app_config.power_source
+        (int)app_config.power_source,
+
+        (int)(sizeof(app_config.book_file) - 1),
+        app_config.book_file,
+
+        (unsigned)app_config.book_crc32,
+
+        (unsigned)app_config.book_page
     );
 
     /*

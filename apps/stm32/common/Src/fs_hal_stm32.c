@@ -324,6 +324,10 @@ const char* purrgo_fs_get_routes_path(void) {
     return "0:/PURRGO/ROUTES";
 }
 
+const char* purrgo_fs_get_books_path(void) {
+    return "0:/PURRGO/BOOKS";
+}
+
 purrgo_file_t* purrgo_fs_open(const char* filepath, fs_mode_t mode) {
     if (!filepath) return NULL;
     BYTE ff_mode = 0;

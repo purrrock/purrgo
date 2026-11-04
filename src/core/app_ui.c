@@ -5,6 +5,7 @@
 #include "ui/ui_config.h"
 #include "ui/ui_dir_select.h"
 #include "ui/ui_map_layers.h"
+#include "ui/ui_book.h"
 #include "purrgo/ui/ui_dirty.h"
 
 #include "purrgo/gfx_text.h"
@@ -98,6 +99,13 @@ static void ui_draw_key_hints(gfx_context_t* gfx, purrgo_state_t state, bool mar
             k1 = "\x18";
             k2 = "\x19";
             k3 = "SEL";
+            k4 = "BCK";
+            break;
+
+        case APP_STATE_BOOK_LIST:
+            k1 = "\x18";
+            k2 = "\x19";
+            k3 = "OPN";
             k4 = "BCK";
             break;
 
@@ -200,6 +208,15 @@ void purrgo_app_ui_render(
             }
             ui_render_menu_map_layers(gfx);
             break;
+        case APP_STATE_BOOK_LIST:
+            if (prev_state != APP_STATE_BOOK_LIST) {
+                ui_book_list_reset();
+            }
+            ui_render_book_list(gfx);
+            break;
+        case APP_STATE_BOOK_READ:
+            ui_render_book_read(gfx);
+            break;
         default:
             break;
     }
@@ -210,7 +227,10 @@ void purrgo_app_ui_render(
      * computer обновляет весь экран. Раньше на каждом проходе меню подсказки
      * расширяли окно частичного обновления от изменившейся строки до низа экрана.
      */
-    ui_draw_key_hints(gfx, current_state, current_state != prev_state);
+    /* Экран чтения целиком занят текстом (33 строки): подсказок кнопок на нём нет. */
+    if (current_state != APP_STATE_BOOK_READ) {
+        ui_draw_key_hints(gfx, current_state, current_state != prev_state);
+    }
 
     if (current_state != prev_state || s_full_refresh_requested) {
         display_refresh();

@@ -13,17 +13,21 @@ static int pending_has_region = 0;
 
 static pc_display_stats_t s_stats;
 
+static int s_mode;
+
 void pc_display_stats_reset(void) {
     s_stats = (pc_display_stats_t){0};
 }
 
 pc_display_stats_t pc_display_stats_get(void) {
-    return s_stats;
+    pc_display_stats_t st = s_stats;
+    st.mode = s_mode;
+    return st;
 }
 
 void display_set_mode(display_mode_t mode) {
-    /* Эмулятору и host-тестам режим панели не нужен. */
-    (void)mode;
+    /* Эмулятору режим панели не нужен; host-тесты проверяют выбранный режим. */
+    s_mode = (int)mode;
 }
 
 void display_refresh(void) {
