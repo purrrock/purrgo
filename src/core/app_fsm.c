@@ -15,6 +15,7 @@
 #include "purrgo/geo.h"
 #include "purrgo/hardware_config.h"
 #include "purrgo/book_reader.h"
+#include "purrgo/battery.h"
 
 #define PURRGO_GNSS_MARKER_UPDATE_DISTANCE_M 5
 
@@ -27,19 +28,11 @@
 #endif
 
 /*
- * Политика перерисовки по данным GNSS (скорость, высота, спутники, смещение
- * маркера, минуты). Нажатия кнопок и смена валидности фикса перерисовывают
- * экран сразу. Остальные изменения копятся и выводятся не чаще, чем раз в
- * PURRGO_UI_MIN_DATA_REDRAW_MS, и только если значение изменилось заметно.
+ * Политика перерисовки по данным (GNSS, заряд батареи) - purrgo/ui/ui_dirty.h:
+ * нажатия кнопок и смена валидности фикса перерисовывают экран сразу, остальные
+ * изменения копятся и выводятся не чаще PURRGO_UI_MIN_DATA_REDRAW_MS. Здесь
+ * только пороги, при которых изменение данных GNSS считается заметным.
  */
-#ifndef PURRGO_UI_MIN_DATA_REDRAW_MS
-#if (PURRGO_HW_DISPLAY_BACKEND == PURRGO_DISPLAY_BACKEND_EINK)
-#define PURRGO_UI_MIN_DATA_REDRAW_MS 5000U
-#else
-#define PURRGO_UI_MIN_DATA_REDRAW_MS 1000U
-#endif
-#endif
-
 #define PURRGO_UI_SPEED_THRESHOLD_KNOTS_100 100   /* 1 уз ~ 1,85 км/ч */
 #define PURRGO_UI_ALT_THRESHOLD_M           5
 
@@ -59,8 +52,6 @@ static uint32_t last_rmc_ms = 0;
 static uint32_t last_tick_ms = 0;
 
 // Политика перерисовки
-static bool data_redraw_pending = false;
-static uint32_t last_data_redraw_ms = 0;
 static bool render_gate_active = false;
 static uint32_t render_not_before_ms = 0;
 static int32_t shown_speed_knots_100 = 0;
@@ -103,6 +94,26 @@ static bool is_book_state(purrgo_state_t state) {
     return state == APP_STATE_BOOK_LIST || state == APP_STATE_BOOK_READ;
 }
 
+// Экраны, на которых в строке статуса выводится заряд батареи.
+static bool state_shows_battery(purrgo_state_t state) {
+    return state == APP_STATE_MAP || state == APP_STATE_BOOK_READ;
+}
+
+/*
+ * Общий итог обработки кнопки для всех режимов: перерисовка нужна, если
+ * контроллер принял кнопку (changed) или экран сменился; возврат на карту -
+ * ещё и полная перерисовка карты.
+ */
+static void ui_input_done(purrgo_state_t prev_state, bool changed) {
+    if (!changed && current_state == prev_state) {
+        return;
+    }
+    purrgo_ui_dirty_mark(UI_DIRTY_SCREEN);
+    if (current_state == APP_STATE_MAP && prev_state != APP_STATE_MAP) {
+        purrgo_ui_dirty_mark(UI_DIRTY_MAP);
+    }
+}
+
 // Решение приёмника "нет фикса": позиция, курс и скорость невалидны.
 static void gnss_solution_invalidate(void) {
     internal_gnss_solution.valid = false;
@@ -121,7 +132,7 @@ static void book_mode_entered(void) {
     prev_fix = internal_gnss_solution;
     last_rendered_pos_valid = false;
     shown_pos_valid = false;
-    data_redraw_pending = false;
+    purrgo_ui_dirty_defer_cancel();
 }
 
 /*
@@ -134,7 +145,7 @@ static void book_mode_left(void) {
     last_rmc_ms = now;
     last_tick_ms = now;
     last_gnss_update_ms = now;
-    data_redraw_pending = false;
+    purrgo_ui_dirty_defer_cancel();
     purrgo_ui_dirty_mark(UI_DIRTY_MAP);
 }
 
@@ -146,8 +157,8 @@ void purrgo_app_init(void) {
     last_gnss_update_ms = purrgo_system_time_ms();
     last_rmc_ms = last_gnss_update_ms;
     last_tick_ms = last_gnss_update_ms;
-    last_data_redraw_ms = last_gnss_update_ms;
-    data_redraw_pending = false;
+    purrgo_ui_dirty_throttle_reset(last_gnss_update_ms);
+    purrgo_battery_monitor_reset();
     render_gate_active = false;
     shown_pos_valid = false;
     logger_start_failures = 0;
@@ -216,9 +227,7 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
             book_mode_left();
             purrgo_config_controller_on_enter(APP_STATE_MENU_CONFIG);
         }
-        if (redraw || current_state != prev_state) {
-            purrgo_ui_dirty_mark(UI_DIRTY_SCREEN);
-        }
+        ui_input_done(prev_state, redraw);
         return;
     }
 
@@ -290,10 +299,7 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
 
     if (handled) {
         // Контроллер принял кнопку: состояние экрана могло измениться.
-        purrgo_ui_dirty_mark(UI_DIRTY_SCREEN);
-        if (current_state == APP_STATE_MAP && prev_state != APP_STATE_MAP) {
-            purrgo_ui_dirty_mark(UI_DIRTY_MAP);
-        }
+        ui_input_done(prev_state, true);
         return;
     }
 
@@ -317,12 +323,7 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
     }
 
     // Переход между экранами всегда требует перерисовки.
-    if (current_state != prev_state) {
-        purrgo_ui_dirty_mark(UI_DIRTY_SCREEN);
-        if (current_state == APP_STATE_MAP) {
-            purrgo_ui_dirty_mark(UI_DIRTY_MAP);
-        }
-    }
+    ui_input_done(prev_state, false);
 }
 
 void purrgo_app_notify_marker_rendered(const purrgo_gnss_solution_t* rendered_fix) {
@@ -374,21 +375,20 @@ void purrgo_app_tick(uint32_t current_time_ms) {
     // Читалка: запись позиции чтения на SD по тайм-ауту бездействия.
     purrgo_book_reader_tick(current_time_ms);
 
-    // Читалка: заряд в строке статуса опрашивается раз в минуту; перерисовка только при изменении.
-    if (current_state == APP_STATE_BOOK_READ &&
-        purrgo_book_reader_battery_tick(current_time_ms)) {
-        purrgo_ui_dirty_mark(UI_DIRTY_SCREEN);
+    /*
+     * Заряд батареи в строке статуса (карта и читалка): общий монитор, опрос
+     * раз в PURRGO_BATTERY_STATUS_PERIOD_MS. Перерисовка только при изменении
+     * текста и только там, где заряд виден; идёт через общую отсрочку данных.
+     */
+    if (purrgo_battery_monitor_tick(current_time_ms) && state_shows_battery(current_state)) {
+        purrgo_ui_dirty_mark(UI_DIRTY_STATUS);
+        purrgo_ui_dirty_defer();
     }
 
     gnss_check_fix_timeout(current_time_ms);
 
     // Накопленные изменения данных выводим не чаще минимального интервала.
-    if (data_redraw_pending &&
-        (uint32_t)(current_time_ms - last_data_redraw_ms) >= PURRGO_UI_MIN_DATA_REDRAW_MS) {
-        data_redraw_pending = false;
-        last_data_redraw_ms = current_time_ms;
-        purrgo_ui_dirty_mark(UI_DIRTY_SCREEN);
-    }
+    purrgo_ui_dirty_tick(current_time_ms);
 
     if (current_time_ms - last_gnss_update_ms >= 1000U) {
         last_gnss_update_ms = current_time_ms;
@@ -465,9 +465,7 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
      *     и учитывается только при заметном изменении значения.
      */
     if (current_fix->valid != prev_fix.valid) {
-        purrgo_ui_dirty_mark(UI_DIRTY_SCREEN);
-        data_redraw_pending = false;
-        last_data_redraw_ms = purrgo_system_time_ms();
+        purrgo_ui_dirty_now(purrgo_system_time_ms());
     }
 
     bool data_changed = pos_changed_significantly ||
@@ -488,7 +486,7 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
     }
 
     if (data_changed) {
-        data_redraw_pending = true;
+        purrgo_ui_dirty_defer();
         // Отправленные на экран значения запоминаем в момент постановки в очередь.
         shown_speed_knots_100 = current_fix->speed_knots;
         shown_alt_m = current_fix->alt_m;
@@ -576,7 +574,7 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
                      * чаще PURRGO_UI_MIN_DATA_REDRAW_MS, как остальные данные.
                      */
                     if (current_state == APP_STATE_MAP) {
-                        data_redraw_pending = true;
+                        purrgo_ui_dirty_defer();
                     }
                 }
             }

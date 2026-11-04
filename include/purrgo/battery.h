@@ -71,6 +71,33 @@ bool purrgo_battery_read(purrgo_battery_t* out);
 void purrgo_battery_format(char* buf, size_t size);
 
 /*
+ * Монитор заряда для строки статуса - единый для карты и читалки.
+ *
+ * Опрашивает батарею не чаще PURRGO_BATTERY_STATUS_PERIOD_MS и хранит готовый
+ * текст (\"85%\", \"5V\", \"--%\"). Экраны текст не считают, а берут из
+ * purrgo_battery_status_text(); тик вызывает purrgo_app_tick() в любом режиме.
+ * Смена источника питания в меню подхватывается сразу, без ожидания периода.
+ */
+#ifndef PURRGO_BATTERY_STATUS_PERIOD_MS
+#define PURRGO_BATTERY_STATUS_PERIOD_MS 60000u
+#endif
+
+/* Размер буфера текста заряда вместе с NUL. */
+#define PURRGO_BATTERY_STATUS_TEXT_SIZE 8
+
+/*
+ * Периодический опрос. true - показываемый текст изменился (первый замер после
+ * сброса не считается изменением: экраны всё равно рисуются целиком).
+ */
+bool purrgo_battery_monitor_tick(uint32_t now_ms);
+
+/* Текст заряда для строки статуса: последний замер (при первом обращении - замер сейчас). */
+const char* purrgo_battery_status_text(void);
+
+/* Забыть замер (инициализация приложения, тесты). */
+void purrgo_battery_monitor_reset(void);
+
+/*
  * Заряд в процентах (0..100) по напряжению батареи из PURRGO_BATTERY_CELLS
  * элементов и кривой разряда источника src. Для PURRGO_POWER_SRC_EXTERNAL_5V
  * и неизвестного src возвращает -1.
