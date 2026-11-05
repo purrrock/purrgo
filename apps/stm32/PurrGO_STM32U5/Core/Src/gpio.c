@@ -74,12 +74,12 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : GNSS_EN_Pin */
-  GPIO_InitStruct.Pin = GNSS_EN_Pin;
+  /*Configure GPIO pins : GNSS_EN_Pin EINK_CS_Pin EINK_DC_Pin EINK_RST_Pin */
+  GPIO_InitStruct.Pin = GNSS_EN_Pin|EINK_CS_Pin|EINK_DC_Pin|EINK_RST_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GNSS_EN_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pin : EINK_BUSY_Pin */
   GPIO_InitStruct.Pin = EINK_BUSY_Pin;
@@ -105,13 +105,6 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   HAL_GPIO_Init(GNSS_PPS_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : EINK_CS_Pin EINK_DC_Pin EINK_RST_Pin */
-  GPIO_InitStruct.Pin = EINK_CS_Pin|EINK_DC_Pin|EINK_RST_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
   HAL_NVIC_SetPriority(EXTI8_IRQn, 0, 0);
