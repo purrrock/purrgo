@@ -33,6 +33,16 @@ void purrgo_platform_enter_standby(void)
     (void)HAL_PWREx_EnableGPIOPullDown(PWR_GPIO_B, PWR_GPIO_BIT_0);
     HAL_PWREx_EnablePullUpPullDownConfig();
 
+    /*
+     * Диагностика EN (TODO.md: «Удержание EN в Low на время Standby МК»):
+     * убедиться, что PWR-подтяжка PB0 действительно включена перед WFI.
+     * Ожидается: PDCRB.0 = 1, PUCRB.0 = 0, APC = 1, ODR.0 = 0.
+     */
+    PURRGO_LOG("STBY: PWR PDCRB.0=%u PUCRB.0=%u APC=%u, GPIOB ODR.0=%u\r\n",
+               (unsigned)(PWR->PDCRB & 1U), (unsigned)(PWR->PUCRB & 1U),
+               (unsigned)((PWR->APCR & PWR_APCR_APC) ? 1U : 0U),
+               (unsigned)(GPIOB->ODR & 1U));
+
     HAL_PWR_EnableWakeUpPin(PWR_WAKEUP_PIN1_LOW_0);
 
     /* Сбросить флаг пробуждения, если он уже установлен. */
