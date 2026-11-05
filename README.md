@@ -57,18 +57,7 @@ PurrGO **не выполняет turn-by-turn route calculation**. Это нав
 
 ## Release hardware
 
-| Компонент | Release |
-|---|---|
-| MCU | STM32U585CIU6 |
-| GNSS | G10A F30 |
-| Display | Waveshare 2.7inch e-Paper HAT |
-| Display resolution | 176 × 264 |
-| Display | 4 gray levels, SPI |
-| Storage | microSD |
-| Battery | 3 × AAA |
-| Controls | физические кнопки |
-
-Для разработки GNSS используется **GY-NEO6MV2**.
+ MCU  STM32U585CIU6
 
 Подробности аппаратной части находятся в [`HARDWARE.md`](HARDWARE.md).
 
@@ -80,6 +69,9 @@ PurrGO **не выполняет turn-by-turn route calculation**. Это нав
 
 ```text
 OSM data
+   │
+   ▼
+Map Optimizer
    │
    ▼
 Map compiler
