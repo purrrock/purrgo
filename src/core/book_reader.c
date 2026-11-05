@@ -45,8 +45,11 @@ static struct {
 
     /* страница */
     uint32_t      page;
-    uint8_t       text[PGB_SCREEN_MAX_PAGE_BYTES];
-    size_t        text_len;
+    uint8_t       page_buf[PGB_SCREEN_MAX_PAGE_BYTES];   /* текст или картинка */
+    size_t        page_len;
+    bool          page_is_image;
+    uint16_t      img_w;
+    uint16_t      img_h;
     pgb_status_t  page_error;
 
     /* переход по процентам */
@@ -163,7 +166,8 @@ static void close_book(void)
     s.open = false;
     s.win_start = 0u;
     s.win_len = 0u;
-    s.text_len = 0u;
+    s.page_len = 0u;
+    s.page_is_image = false;
     s.page_error = PGB_OK;
     s.jump = false;
 }
@@ -229,17 +233,28 @@ static pgb_status_t load_window_for_page(uint32_t page)
     return load_window(start, len) ? PGB_OK : PGB_ERR_IO;
 }
 
-/* Читает страницу в s.text; при выходе за окно подгружает окно с SD. */
+/* Читает страницу в s.page_buf; при выходе за окно подгружает окно с SD. */
 static bool fetch_page(uint32_t page)
 {
     pgb_status_t st = PGB_ERR_NOT_CACHED;
 
+    s.page_len = 0u;
+    s.page_is_image = false;
     for (int attempt = 0; attempt < 2; attempt++) {
         st = pgb_page_read_mem(&s.hdr, s.ram, s.ram + s.hdr.data_offset, s.win_start, s.win_len,
-                               page, s.text, sizeof(s.text), &s.text_len);
+                               page, s.page_buf, sizeof(s.page_buf), &s.page_len);
         if (st == PGB_OK) {
-            s.page_error = PGB_OK;
-            return true;
+            /* Тип страницы - по записи индекса (она уже проверена при чтении). */
+            pgb_index_entry_t e;
+            if (pgb_page_locate(&s.hdr, s.ram, page, &e) == PGB_OK) {
+                s.page_is_image = PGB_ENTRY_IS_IMAGE(&e);
+                s.img_w = e.width;
+                s.img_h = e.height;
+                s.page_error = PGB_OK;
+                return true;
+            }
+            st = PGB_ERR_INDEX;
+            break;
         }
         if (st != PGB_ERR_NOT_CACHED || s.fp == NULL || attempt != 0) {
             break;
@@ -249,7 +264,7 @@ static bool fetch_page(uint32_t page)
             break;
         }
     }
-    s.text_len = 0u;
+    s.page_len = 0u;
     s.page_error = st;
     PURRGO_LOGW("book page %u: %s\r\n", (unsigned)page, pgb_status_text(st));
     return false;
@@ -275,7 +290,7 @@ static bool open_book(const char *file)
     }
 
     /* Полная проверка заголовка, размера файла и meta_crc32. */
-    static pgb_book_t s_pgb;   /* ~1,4 КБ: не на стеке */
+    static pgb_book_t s_pgb;   /* ~6 КБ (scratch под страницу-картинку): не на стеке */
     pgb_book_t *book = &s_pgb;
     pgb_status_t st = pgb_open(path, PGB_SCREEN_COLS, PGB_SCREEN_ROWS, book);
     if (st != PGB_OK) {
@@ -372,7 +387,8 @@ static void fill_item(purrgo_book_item_t *it)
 
     if (make_path(path, sizeof(path), it->file) &&
         pgb_read_info(path, &info) == PGB_OK &&
-        info.cols == PGB_SCREEN_COLS && info.rows == PGB_SCREEN_ROWS) {
+        info.cols == PGB_SCREEN_COLS && info.rows == PGB_SCREEN_ROWS &&
+        info.img_w == PGB_IMG_WINDOW_W && info.img_h == PGB_IMG_WINDOW_H) {
         copy_trunc(it->title, PURRGO_BOOK_TITLE_COLS, info.title);
         copy_trunc(it->author, PURRGO_BOOK_AUTHOR_COLS, info.author);
         it->page_count = info.page_count;
@@ -661,9 +677,15 @@ void purrgo_book_reader_get_view(purrgo_book_view_t *v)
     v->jump = s.jump;
     v->jump_percent = s.jump_percent;
     v->jump_page = page_of_percent(s.jump_percent, s.hdr.page_count);
-    if (s.page_error == PGB_OK && s.text_len > 0u) {
-        v->text = s.text;
-        v->text_len = s.text_len;
+    if (s.page_error == PGB_OK && s.page_len > 0u) {
+        if (s.page_is_image) {
+            v->image = s.page_buf;
+            v->image_w = s.img_w;
+            v->image_h = s.img_h;
+        } else {
+            v->text = s.page_buf;
+            v->text_len = s.page_len;
+        }
     }
 }
 

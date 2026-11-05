@@ -8,7 +8,7 @@
 #include "purrgo/fs_hal.h"
 
 /*
- * Чтение электронных книг PGB 1.0 (tools/book-compiler/PGB-format.md).
+ * Чтение электронных книг PGB 1.1 (tools/book-compiler/PGB-format.md).
  *
  * Модуль не зависит от платформы: файл читается через fs_hal.h. Все поля
  * заголовка и индекса декодируются из байтов (little-endian), в C-структуру
@@ -26,26 +26,47 @@
  */
 
 #define PGB_HEADER_SIZE       64u
-#define PGB_INDEX_ENTRY_SIZE  8u
+#define PGB_INDEX_ENTRY_SIZE  12u
 #define PGB_VERSION_MAJOR     1u
-#define PGB_VERSION_MINOR     0u
+#define PGB_VERSION_MINOR     1u
 #define PGB_MAX_TITLE         200u
 #define PGB_MAX_AUTHOR        100u
 #define PGB_COMPRESSION_NONE  0u
 #define PGB_COMPRESSION_LZ4   1u   /* LZ4 Block (без кадра) на каждую страницу, см. PGB-format.md, раздел 8 */
 
-/* Геометрия текущего экрана 176x264 при ячейке 6x8 (одна строка занята статусом). */
+/*
+ * Геометрия читалки на экране 176x264 (PGB-format.md, раздел 2).
+ *   - сверху строка статуса 8 px;
+ *   - текст: 24 строки по 29 символов, ячейка символа 6x8 px, шаг строк 10 px
+ *     (между строками 2 px пустых), первая строка на PGB_TEXT_TOP_PX;
+ *   - картинка: 1 bit на пиксель, вписана в окно 176x256 под строкой статуса.
+ */
 #define PGB_SCREEN_COLS       29u
-#define PGB_SCREEN_ROWS       32u
+#define PGB_SCREEN_ROWS       24u
+#define PGB_STATUS_H_PX       8u
+#define PGB_LINE_PITCH_PX     10u
+#define PGB_TEXT_TOP_PX       17u   /* (264 - 8 - (23 * 10 + 8)) / 2 пустых px сверху и снизу */
+#define PGB_IMG_WINDOW_W      176u
+#define PGB_IMG_WINDOW_H      256u
 
-/* Наибольший размер страницы в байтах: rows строк по cols символов и rows-1 байт LF. */
+/* Наибольший размер текстовой страницы в байтах: rows строк по cols символов и rows-1 байт LF. */
 #define PGB_MAX_PAGE_BYTES(cols, rows) ((uint32_t)(cols) * (uint32_t)(rows) + (uint32_t)(rows) - 1u)
-#define PGB_SCREEN_MAX_PAGE_BYTES PGB_MAX_PAGE_BYTES(PGB_SCREEN_COLS, PGB_SCREEN_ROWS) /* 959 */
+#define PGB_SCREEN_MAX_TEXT_BYTES PGB_MAX_PAGE_BYTES(PGB_SCREEN_COLS, PGB_SCREEN_ROWS) /* 719 */
+
+/* Байт в строке картинки шириной w пикселей (строки выровнены по байту). */
+#define PGB_IMG_ROW_BYTES(w) (((uint32_t)(w) + 7u) / 8u)
+/* Размер картинки w x h пикселей в байтах (так же, как raw_size страницы-картинки). */
+#define PGB_MAX_IMAGE_BYTES(w, h) (PGB_IMG_ROW_BYTES(w) * (uint32_t)(h))
+#define PGB_SCREEN_MAX_IMAGE_BYTES PGB_MAX_IMAGE_BYTES(PGB_IMG_WINDOW_W, PGB_IMG_WINDOW_H) /* 5632 */
+
+/* Буфер под любую страницу (текст или картинка) книги для экрана читалки. */
+#define PGB_SCREEN_MAX_PAGE_BYTES PGB_SCREEN_MAX_IMAGE_BYTES
 
 /*
  * Буфер для сжатых данных страницы внутри pgb_book_t. Сжатая страница короче
- * распакованной (не больше PGB_SCREEN_MAX_PAGE_BYTES - 1 байт). Книги с
- * большей геометрией pgb_open() отклоняет (PGB_ERR_GEOMETRY), если они сжаты.
+ * распакованной, то есть не больше PGB_SCREEN_MAX_PAGE_BYTES - 1 байт. Книги, у
+ * которых страница может быть больше, pgb_open() отклоняет (PGB_ERR_GEOMETRY),
+ * если они сжаты.
  */
 #ifndef PGB_SCRATCH_SIZE
 #define PGB_SCRATCH_SIZE      PGB_SCREEN_MAX_PAGE_BYTES
@@ -59,16 +80,16 @@ typedef enum {
     PGB_ERR_IO,            /* файл не открылся, ошибка или короткое чтение */
     PGB_ERR_MAGIC,         /* не PGB-файл */
     PGB_ERR_VERSION,       /* неизвестная версия формата */
-    PGB_ERR_UNSUPPORTED,   /* флаги, сжатие или зарезервированные поля, которых нет в 1.0 */
+    PGB_ERR_UNSUPPORTED,   /* флаги, сжатие или зарезервированные поля, которых нет в 1.1 */
     PGB_ERR_HEADER,        /* несогласованные размеры и смещения в заголовке */
-    PGB_ERR_GEOMETRY,      /* cols/rows книги не совпадают с экраном */
+    PGB_ERR_GEOMETRY,      /* cols/rows или окно картинок книги не совпадают с экраном */
     PGB_ERR_SIZE,          /* фактический размер файла не равен file_size */
     PGB_ERR_META_CRC,      /* повреждены заголовок, метаданные или индекс */
     PGB_ERR_FILE_CRC,      /* повреждён файл (полная проверка) */
     PGB_ERR_INDEX,         /* запись индекса некорректна или не стыкуется с соседями */
     PGB_ERR_PAGE_NUMBER,   /* номер страницы вне книги */
     PGB_ERR_BUFFER,        /* буфер для страницы мал */
-    PGB_ERR_PAGE_DATA,     /* недопустимое содержимое страницы */
+    PGB_ERR_PAGE_DATA,     /* недопустимое содержимое страницы (текст или картинка) */
     PGB_ERR_CANCELLED,     /* проверка прервана пользователем */
     PGB_ERR_DECOMPRESS,    /* блок LZ4 повреждён или не даёт ровно raw_size байт */
     PGB_ERR_NOT_CACHED     /* нужные байты файла не входят в переданный образ в памяти */
@@ -87,16 +108,27 @@ typedef struct {
     uint32_t meta_crc32;
     uint16_t title_length;
     uint16_t author_length;
+    uint16_t img_w;        /* окно картинок: наибольшая ширина и высота, пикселей */
+    uint16_t img_h;
     uint8_t  cols;
     uint8_t  rows;
     uint8_t  compression;  /* PGB_COMPRESSION_NONE или PGB_COMPRESSION_LZ4 */
 } pgb_header_t;
 
+/*
+ * Запись индекса. Страница-картинка: width и height больше нуля, raw_size ==
+ * PGB_MAX_IMAGE_BYTES(width, height). Текстовая страница: width == height == 0.
+ */
 typedef struct {
     uint32_t offset;       /* абсолютное смещение страницы в файле */
     uint16_t stored_size;  /* размер в файле */
-    uint16_t raw_size;     /* размер текста страницы */
+    uint16_t raw_size;     /* размер страницы после распаковки */
+    uint16_t width;        /* ширина картинки в пикселях, 0 - текстовая страница */
+    uint16_t height;       /* высота картинки в пикселях, 0 - текстовая страница */
 } pgb_index_entry_t;
+
+/* Страница-картинка (1 bit на пиксель, строки по PGB_IMG_ROW_BYTES, MSB слева, 1 - чёрный). */
+#define PGB_ENTRY_IS_IMAGE(e) ((e)->width != 0u)
 
 /* Сведения для списка книг. Строки в PurrGO-256, завершены нулём. */
 typedef struct {
@@ -104,6 +136,8 @@ typedef struct {
     char     author[PGB_MAX_AUTHOR + 1u];
     uint32_t page_count;
     uint32_t file_crc32;  /* идентификатор книги для сохранённой позиции чтения */
+    uint16_t img_w;
+    uint16_t img_h;
     uint8_t  cols;
     uint8_t  rows;
     uint8_t  compression;
@@ -172,6 +206,12 @@ pgb_status_t pgb_index_entry_check(const pgb_header_t *header, uint32_t number,
  */
 pgb_status_t pgb_page_check_text(const pgb_header_t *header, const uint8_t *text, size_t len);
 
+/*
+ * Проверка страницы-картинки: len == PGB_MAX_IMAGE_BYTES(width, height), а биты
+ * выравнивания в конце каждой строки (правее width) равны нулю.
+ */
+pgb_status_t pgb_page_check_image(const uint8_t *bits, size_t len, uint16_t width, uint16_t height);
+
 /* ---- Образ книги в памяти (читалка: предзагрузка книги в RAM) -------------- */
 
 /*
@@ -186,7 +226,8 @@ pgb_status_t pgb_meta_check_mem(const pgb_header_t *header, const uint8_t *prefi
 
 /*
  * Запись индекса страницы `number` из prefix, проверенная вместе со следующей
- * (как в pgb_page_read). Нужна, чтобы узнать, какой диапазон файла занимает страница.
+ * (как в pgb_page_read). Нужна, чтобы узнать, какой диапазон файла занимает
+ * страница и что на ней: текст или картинка (PGB_ENTRY_IS_IMAGE, width, height).
  */
 pgb_status_t pgb_page_locate(const pgb_header_t *header, const uint8_t *prefix,
                              uint32_t number, pgb_index_entry_t *entry);
@@ -207,7 +248,8 @@ pgb_status_t pgb_read_info(const char *path, pgb_info_t *info);
 
 /*
  * Открывает книгу и проверяет её: заголовок, геометрию (expected_cols x
- * expected_rows - обычно PGB_SCREEN_COLS x PGB_SCREEN_ROWS), размер файла и
+ * expected_rows - обычно PGB_SCREEN_COLS x PGB_SCREEN_ROWS - и окно картинок
+ * PGB_IMG_WINDOW_W x PGB_IMG_WINDOW_H), размер файла и
  * meta_crc32. Читает заголовок, метаданные и индекс последовательно
  * (для книги в 3 МБ около 28 КБ). При ошибке файл закрыт, book->file == NULL.
  */
@@ -216,9 +258,10 @@ pgb_status_t pgb_open(const char *path, uint8_t expected_cols, uint8_t expected_
 
 /*
  * Читает страницу `number` (с нуля) в buf; сжатая страница распаковывается.
- * Размер текста возвращается в *out_len.
- * Текст не заканчивается нулём. Для любой страницы нужен буфер не более
- * PGB_MAX_PAGE_BYTES(cols, rows) байт.
+ * Размер возвращается в *out_len. Это текст (не заканчивается нулём) или
+ * картинка (PGB_ENTRY_IS_IMAGE в записи индекса, см. pgb_page_locate); тип
+ * страницы проверяется по записи индекса. Для любой страницы хватает буфера
+ * PGB_SCREEN_MAX_PAGE_BYTES.
  */
 pgb_status_t pgb_page_read(pgb_book_t *book, uint32_t number,
                            uint8_t *buf, size_t buf_size, size_t *out_len);

@@ -117,7 +117,7 @@ pgb_status_t pgb_header_decode(const uint8_t *buf, size_t len, pgb_header_t *hea
     if (rd16(buf + 10) != 0u || buf[42] > PGB_COMPRESSION_LZ4 || buf[43] != 0u) {
         return PGB_ERR_UNSUPPORTED;
     }
-    for (size_t i = 48u; i < PGB_HEADER_SIZE; i++) {
+    for (size_t i = 52u; i < PGB_HEADER_SIZE; i++) {
         if (buf[i] != 0u) {
             return PGB_ERR_UNSUPPORTED;
         }
@@ -136,8 +136,14 @@ pgb_status_t pgb_header_decode(const uint8_t *buf, size_t len, pgb_header_t *hea
     h.compression   = buf[42];
     h.title_length  = rd16(buf + 44);
     h.author_length = rd16(buf + 46);
+    h.img_w         = rd16(buf + 48);
+    h.img_h         = rd16(buf + 50);
 
-    if (h.page_count == 0u || h.cols == 0u || h.rows == 0u) {
+    if (h.page_count == 0u || h.cols == 0u || h.rows == 0u || h.img_w == 0u || h.img_h == 0u) {
+        return PGB_ERR_HEADER;
+    }
+    /* Размер картинки окна должен помещаться в raw_size (uint16). */
+    if (PGB_MAX_IMAGE_BYTES(h.img_w, h.img_h) > 0xFFFFu) {
         return PGB_ERR_HEADER;
     }
     if (h.title_length > PGB_MAX_TITLE || h.author_length > PGB_MAX_AUTHOR) {
@@ -249,6 +255,8 @@ void pgb_index_entry_decode(const uint8_t *buf, pgb_index_entry_t *entry)
     entry->offset      = rd32(buf);
     entry->stored_size = rd16(buf + 4);
     entry->raw_size    = rd16(buf + 6);
+    entry->width       = rd16(buf + 8);
+    entry->height      = rd16(buf + 10);
 }
 
 pgb_status_t pgb_index_entry_check(const pgb_header_t *header, uint32_t number,
@@ -263,7 +271,15 @@ pgb_status_t pgb_index_entry_check(const pgb_header_t *header, uint32_t number,
                                                     : (entry->stored_size > entry->raw_size)) {
         return PGB_ERR_INDEX;
     }
-    if (entry->raw_size > PGB_MAX_PAGE_BYTES(header->cols, header->rows)) {
+    if ((entry->width == 0u) != (entry->height == 0u)) {
+        return PGB_ERR_INDEX;   /* размеры картинки задаются обоими полями или ни одним */
+    }
+    if (PGB_ENTRY_IS_IMAGE(entry)) {
+        if (entry->width > header->img_w || entry->height > header->img_h ||
+            entry->raw_size != PGB_MAX_IMAGE_BYTES(entry->width, entry->height)) {
+            return PGB_ERR_INDEX;
+        }
+    } else if (entry->raw_size > PGB_MAX_PAGE_BYTES(header->cols, header->rows)) {
         return PGB_ERR_INDEX;
     }
     if (entry->offset < header->data_offset || (number == 0u && entry->offset != header->data_offset)) {
@@ -303,6 +319,34 @@ pgb_status_t pgb_page_check_text(const pgb_header_t *header, const uint8_t *text
         }
     }
     return PGB_OK;
+}
+
+pgb_status_t pgb_page_check_image(const uint8_t *bits, size_t len, uint16_t width, uint16_t height)
+{
+    if (width == 0u || height == 0u || len != PGB_MAX_IMAGE_BYTES(width, height)) {
+        return PGB_ERR_PAGE_DATA;
+    }
+    const uint32_t row_bytes = PGB_IMG_ROW_BYTES(width);
+    const uint32_t pad = row_bytes * 8u - width;   /* неиспользуемые младшие биты последнего байта строки */
+    if (pad != 0u) {
+        const uint8_t mask = (uint8_t)((1u << pad) - 1u);
+        for (uint32_t y = 0u; y < height; y++) {
+            if ((bits[y * row_bytes + row_bytes - 1u] & mask) != 0u) {
+                return PGB_ERR_PAGE_DATA;
+            }
+        }
+    }
+    return PGB_OK;
+}
+
+/* Содержимое страницы после распаковки: текст или картинка по записи индекса. */
+static pgb_status_t check_page_data(const pgb_header_t *header, const pgb_index_entry_t *entry,
+                                    const uint8_t *data)
+{
+    if (PGB_ENTRY_IS_IMAGE(entry)) {
+        return pgb_page_check_image(data, entry->raw_size, entry->width, entry->height);
+    }
+    return pgb_page_check_text(header, data, entry->raw_size);
 }
 
 /* ---- Файл ------------------------------------------------------------------- */
@@ -375,6 +419,8 @@ pgb_status_t pgb_read_info(const char *path, pgb_info_t *info)
     info->file_crc32 = header.file_crc32;
     info->cols = header.cols;
     info->rows = header.rows;
+    info->img_w = header.img_w;
+    info->img_h = header.img_h;
     info->compression = header.compression;
     return PGB_OK;
 }
@@ -392,11 +438,14 @@ static pgb_status_t open_checked(pgb_book_t *book, uint8_t expected_cols, uint8_
         return status;
     }
     const pgb_header_t *h = &book->header;
-    if (h->cols != expected_cols || h->rows != expected_rows) {
+    if (h->cols != expected_cols || h->rows != expected_rows ||
+        h->img_w != PGB_IMG_WINDOW_W || h->img_h != PGB_IMG_WINDOW_H) {
         return PGB_ERR_GEOMETRY;
     }
-    /* Сжатая страница распаковывается через book->scratch. */
-    if (h->compression != PGB_COMPRESSION_NONE && PGB_MAX_PAGE_BYTES(h->cols, h->rows) > PGB_SCRATCH_SIZE) {
+    /* Сжатая страница (текст или картинка) распаковывается через book->scratch. */
+    if (h->compression != PGB_COMPRESSION_NONE &&
+        (PGB_MAX_PAGE_BYTES(h->cols, h->rows) > PGB_SCRATCH_SIZE ||
+         PGB_MAX_IMAGE_BYTES(h->img_w, h->img_h) > PGB_SCRATCH_SIZE)) {
         return PGB_ERR_GEOMETRY;
     }
     status = check_file_size(file, h->file_size);
@@ -474,8 +523,8 @@ pgb_status_t pgb_page_read(pgb_book_t *book, uint32_t number,
     if (!read_exact(book->file, entry_offset, raw, raw_len)) {
         return PGB_ERR_IO;
     }
-    pgb_index_entry_t entry = { 0u, 0u, 0u };
-    pgb_index_entry_t next = { 0u, 0u, 0u };
+    pgb_index_entry_t entry = { 0u, 0u, 0u, 0u, 0u };
+    pgb_index_entry_t next = { 0u, 0u, 0u, 0u, 0u };
     pgb_index_entry_decode(raw, &entry);
     if (has_next) {
         pgb_index_entry_decode(raw + PGB_INDEX_ENTRY_SIZE, &next);
@@ -504,7 +553,7 @@ pgb_status_t pgb_page_read(pgb_book_t *book, uint32_t number,
             return PGB_ERR_DECOMPRESS;
         }
     }
-    status = pgb_page_check_text(h, buf, entry.raw_size);
+    status = check_page_data(h, &entry, buf);
     if (status != PGB_OK) {
         return status;
     }
@@ -537,7 +586,7 @@ pgb_status_t pgb_page_locate(const pgb_header_t *header, const uint8_t *prefix,
     const bool has_next = (number + 1u) < header->page_count;
     /* Индекс целиком лежит в prefix: index_offset + page_count * 8 == data_offset (проверено заголовком). */
     const uint8_t *p = prefix + header->index_offset + (size_t)number * PGB_INDEX_ENTRY_SIZE;
-    pgb_index_entry_t next = { 0u, 0u, 0u };
+    pgb_index_entry_t next = { 0u, 0u, 0u, 0u, 0u };
     pgb_index_entry_decode(p, entry);
     if (has_next) {
         pgb_index_entry_decode(p + PGB_INDEX_ENTRY_SIZE, &next);
@@ -575,7 +624,7 @@ pgb_status_t pgb_page_read_mem(const pgb_header_t *header, const uint8_t *prefix
     } else if (!pgb_lz4_decode(stored, entry.stored_size, buf, entry.raw_size)) {
         return PGB_ERR_DECOMPRESS;
     }
-    status = pgb_page_check_text(header, buf, entry.raw_size);
+    status = check_page_data(header, &entry, buf);
     if (status != PGB_OK) {
         return status;
     }

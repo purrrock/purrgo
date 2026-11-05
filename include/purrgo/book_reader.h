@@ -18,7 +18,8 @@
  *     заново по первому фиксу;
  *   - дисплей работает в режиме 1 bit (DISPLAY_MODE_MONO);
  *   - книги лежат в каталоге purrgo_fs_get_books_path() (0:/PURRGO/BOOKS, файлы с расширением .PGB),
- *     формат - tools/book-compiler/PGB-format.md, разбор - pgb.h;
+ *     формат - tools/book-compiler/PGB-format.md (PGB 1.1: 24 строки текста и страницы-картинки
+ *     1 bit), разбор - pgb.h;
  *   - при открытии книга предзагружается в RAM (см. ниже), перелистывание не
  *     обращается к SD;
  *   - позиция чтения (имя файла, file_crc32, страница) хранится в app_config
@@ -89,6 +90,10 @@ typedef struct {
     uint32_t      jump_page;
     const uint8_t *text;        /* текст страницы (PurrGO-256, строки через LF), NULL - нет */
     size_t        text_len;
+    const uint8_t *image;       /* страница-картинка: 1 bit на пиксель, PGB_IMG_ROW_BYTES(image_w) байт на строку,
+                                   MSB слева, 1 - чёрный; NULL - не картинка (тогда см. text) */
+    uint16_t      image_w;
+    uint16_t      image_h;
 } purrgo_book_view_t;
 
 /*

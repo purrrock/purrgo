@@ -3,6 +3,7 @@
 
 Запуск из корня репозитория:  python3 -m unittest tests/test_book_compiler.py
 """
+import base64
 import contextlib
 import io
 import struct
@@ -173,7 +174,7 @@ class Pagination(unittest.TestCase):
         text = "\n".join("слово " * 6 for _ in range(100))
         for page in page_texts(compile_text(text)):
             lines = page.split("\n")
-            self.assertLessEqual(len(lines), 32)
+            self.assertLessEqual(len(lines), 24)
             self.assertTrue(all(len(l) <= 29 for l in lines))
 
     def test_empty_book_rejected(self):
@@ -208,7 +209,7 @@ class Container(unittest.TestCase):
 
     def test_verify_ok_and_metadata(self):
         stats = bc.verify_pgb(self.data)
-        self.assertEqual((stats["title"], stats["author"], stats["cols"], stats["rows"]), ("T", "A", 29, 32))
+        self.assertEqual((stats["title"], stats["author"], stats["cols"], stats["rows"]), ("T", "A", 29, 24))
 
     def test_meta_is_right_after_header(self):
         self.assertEqual(self.data[64:66], b"TA")
@@ -311,6 +312,245 @@ class Inputs(unittest.TestCase):
                 self.assertEqual(bc.main([str(out)]), 0)
 
 
+def _gradient_png(width: int, height: int, mode: str = "RGB") -> bytes:
+    from PIL import Image
+    img = Image.new(mode, (width, height))
+    px = img.load()
+    for y in range(height):
+        for x in range(width):
+            v = (x * 255) // max(1, width - 1)
+            px[x, y] = v if mode == "L" else ((v, v, v, 255) if mode == "RGBA" else (v, v, v))
+    buf = io.BytesIO()
+    img.save(buf, "PNG")
+    return buf.getvalue()
+
+
+def _need_pillow(test: unittest.TestCase) -> None:
+    if not bc.image_support_available():
+        test.skipTest("Pillow не установлен")
+
+
+class Images(unittest.TestCase):
+    def setUp(self):
+        _need_pillow(self)
+
+    def test_fit_size(self):
+        self.assertEqual(bc.fit_size(600, 900, 176, 256, False), (171, 256))
+        self.assertEqual(bc.fit_size(1000, 200, 176, 256, False), (176, 35))
+        self.assertEqual(bc.fit_size(100, 50, 176, 256, False), (100, 50))      # без увеличения
+        self.assertEqual(bc.fit_size(100, 50, 176, 256, True), (176, 88))       # с увеличением
+        w, h = bc.fit_size(1, 5000, 176, 256, False)
+        self.assertTrue(1 <= w <= 176 and 1 <= h <= 256)
+
+    def test_pack_mask_msb_first_and_zero_padding(self):
+        mask = bytes([1, 0, 0, 0, 0, 0, 0, 1,  1, 1, 0, 0, 0, 0, 0, 0,  0, 0, 1, 0, 0, 0, 0, 0,  0, 0, 0, 0, 0, 0, 0, 0,
+                      1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
+        bits = bc.pack_mask(mask[:2 * 12], 12, 2)
+        self.assertEqual(len(bits), 4)
+        self.assertEqual(bits[0], 0b10000001)
+        self.assertEqual(bits[1], 0b11000000 & 0xF0)    # биты 8..11 строки, выравнивание нулевое
+        page = bc.ImagePage(12, 2, bits)
+        self.assertEqual([page.pixel(x, 0) for x in range(12)], list(mask[:12]))
+        self.assertEqual(bits[1] & 0x0F, 0)
+
+    def test_dithers_black_white_and_gray(self):
+        white, black, gray = bytes([255]) * 400, bytes([0]) * 400, bytes([128]) * 400
+        for mode, func in bc._DITHERS.items():
+            self.assertEqual(sum(func(white, 20, 20)), 0, mode)
+            self.assertEqual(sum(func(black, 20, 20)), 400, mode)
+            if mode != "none":   # порог: ровно 128 - уже белый
+                dark = sum(func(gray, 20, 20))
+                self.assertTrue(120 <= dark <= 280, (mode, dark))       # серый - примерно половина чёрных точек
+
+    def test_image_to_page_fits_window_and_is_deterministic(self):
+        data = _gradient_png(600, 900)
+        page = bc.image_to_page(data)
+        self.assertEqual((page.width, page.height), (171, 256))
+        again = bc.image_to_page(data, "fs")
+        self.assertEqual(page.bits, again.bits)
+        left = sum(page.pixel(x, y) for y in range(256) for x in range(20))
+        right = sum(page.pixel(x, y) for y in range(256) for x in range(150, 171))
+        self.assertGreater(left, right * 3)       # слева тёмный край градиента, справа светлый
+
+    def test_small_image_skipped_and_transparency_is_white(self):
+        with self.assertRaises(bc.ImageSkipped):
+            bc.image_to_page(_gradient_png(30, 30))
+        from PIL import Image
+        img = Image.new("RGBA", (100, 100), (0, 0, 0, 0))     # полностью прозрачная
+        buf = io.BytesIO()
+        img.save(buf, "PNG")
+        page = bc.image_to_page(buf.getvalue(), "none")
+        self.assertEqual(sum(page.bits), 0)
+
+    def test_bad_image_data(self):
+        with self.assertRaises(ValueError):
+            bc.image_to_page(b"not an image")
+
+    def test_png_preview_is_valid(self):
+        from PIL import Image
+        page = bc.image_to_page(_gradient_png(200, 100))
+        img = Image.open(io.BytesIO(page.to_png()))
+        self.assertEqual(img.size, (page.width, page.height))
+        self.assertEqual(img.mode, "1")
+        for x, y in ((0, 0), (page.width - 1, page.height - 1), (page.width // 2, 5)):
+            self.assertEqual(img.getpixel((x, y)) == 0, bool(page.pixel(x, y)))
+
+    def test_paginate_gives_image_its_own_page(self):
+        lines = ["текст"] * 30 + [bc.ImageMark("k")] + ["после"]
+        pages = bc.paginate(lines)
+        self.assertEqual([isinstance(p, bc.ImageMark) for p in pages], [False, False, True, False])
+        self.assertEqual(pages[0].count(b"\n") + 1, 24)
+
+    def test_build_and_verify_with_image_pages(self):
+        img = bc.image_to_page(_gradient_png(300, 400))
+        text = b"abc\ndef"
+        for mode in (bc.COMPRESSION_NONE, bc.COMPRESSION_LZ4):
+            data = bc.build_pgb([img, text, img], b"T", b"A", compression=mode)
+            stats = bc.verify_pgb(data)
+            self.assertEqual((stats["pages"], stats["image_pages"], stats["img_w"], stats["img_h"]), (3, 2, 176, 256))
+            pages = bc.extract_all_pages(data)
+            self.assertEqual(pages[0], img)
+            self.assertEqual(pages[1], bc.pgo_bytes_to_text(text))
+            self.assertEqual(bc.extract_all_pages_text(data)[0], f"[картинка {img.width}x{img.height}]")
+
+    def test_verify_rejects_bad_image_entries(self):
+        img = bc.image_to_page(_gradient_png(300, 400))
+        good = bc.build_pgb([img, b"x"], b"T", b"A", compression=bc.COMPRESSION_NONE)
+        index = struct.unpack_from("<I", good, 20)[0]
+
+        def reseal(data: bytearray) -> bytes:
+            data_offset = struct.unpack_from("<I", data, 24)[0]
+            struct.pack_into("<I", data, bc.META_CRC_OFFSET, bc.crc32_zeroed(data, data_offset))
+            struct.pack_into("<I", data, bc.FILE_CRC_OFFSET, bc.crc32_zeroed(data))
+            return bytes(data)
+
+        for field_offset, value in ((8, 0), (10, 0), (8, 177), (10, 257), (8, img.width - 8)):
+            bad = bytearray(good)
+            struct.pack_into("<H", bad, index + field_offset, value)
+            with self.assertRaises(ValueError, msg=(field_offset, value)):
+                bc.verify_pgb(reseal(bad))
+        # ненулевой бит выравнивания строки
+        odd = bc.ImagePage(13, 2, bytes([0xFF, 0xF8, 0xFF, 0xF8]))
+        bc.verify_pgb(bc.build_pgb([odd], b"T", b"A"))
+        with self.assertRaises(ValueError):
+            bc.verify_pgb(bc.build_pgb([bc.ImagePage(13, 2, bytes([0xFF, 0xF8, 0xFF, 0xF9]))], b"T", b"A"))
+
+    def test_fb2_with_cover_and_illustrations(self):
+        big, small = _gradient_png(400, 300), _gradient_png(20, 20)
+        b64 = lambda raw: base64.b64encode(raw).decode()
+        fb2 = ('<?xml version="1.0" encoding="utf-8"?><FictionBook xmlns="http://www.gribuser.ru/xml/fictionbook/2.0" '
+               'xmlns:l="http://www.w3.org/1999/xlink"><description><title-info><book-title>К</book-title>'
+               '<coverpage><image l:href="#c"/></coverpage></title-info></description><body><section>'
+               '<p>Один.</p><image l:href="#i"/><p>Два <image l:href="#s"/> текст.</p><image l:href="#c"/></section></body>'
+               f'<binary id="c" content-type="image/png">{b64(big)}</binary>'
+               f'<binary id="i" content-type="image/png">{b64(big)}</binary>'
+               f'<binary id="s" content-type="image/png">{b64(small)}</binary></FictionBook>').encode()
+        doc = bc.fb2_to_document(fb2)
+        self.assertEqual(doc.cover, "c")
+        self.assertEqual([b.text for b in doc.blocks if b.kind == "i"], ["i", "s", "c"])
+        result = bc.render_document(doc, Path("x.fb2"), bc.Options())
+        kinds = ["img" if isinstance(p, bc.ImagePage) else "txt" for p in result.pages]
+        self.assertEqual(kinds, ["img", "txt", "img", "txt", "img"])       # обложка, текст, картинка, текст, картинка; маленькая пропущена
+        self.assertTrue(any("маленьких" in n for n in result.notes))
+        no_img = bc.render_document(doc, Path("x.fb2"), bc.Options(images=False))
+        self.assertEqual(["img" if isinstance(p, bc.ImagePage) else "txt" for p in no_img.pages], ["img", "txt"])
+        none = bc.render_document(doc, Path("x.fb2"), bc.Options(images=False, cover=False))
+        self.assertEqual(len(none.pages), 1)
+
+    def test_epub_cover_dedup_and_illustration(self):
+        big = _gradient_png(500, 700)
+        opf = ('<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="2.0"><metadata '
+               'xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>Книга</dc:title><meta name="cover" content="cov"/></metadata>'
+               '<manifest><item id="cov" href="img/cover.png" media-type="image/png"/>'
+               '<item id="c0" href="cover.xhtml" media-type="application/xhtml+xml"/>'
+               '<item id="c1" href="text/c1.xhtml" media-type="application/xhtml+xml"/></manifest>'
+               '<spine><itemref idref="c0"/><itemref idref="c1"/></spine></package>')
+        container = ('<?xml version="1.0"?><container xmlns="urn:oasis:names:tc:opendocument:xmlns:container">'
+                     '<rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>')
+        cover_page = ('<html xmlns="http://www.w3.org/1999/xhtml"><body><svg xmlns="http://www.w3.org/2000/svg" '
+                      'xmlns:xlink="http://www.w3.org/1999/xlink"><image xlink:href="img/cover.png"/></svg></body></html>')
+        chapter = ('<html xmlns="http://www.w3.org/1999/xhtml"><body><p>Текст.</p><div><img src="../img/ill.png"/></div>'
+                   '<p>Ещё.</p><img src="../img/missing.png"/></body></html>')
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "book.epub"
+            with zipfile.ZipFile(path, "w") as z:
+                z.writestr("META-INF/container.xml", container)
+                z.writestr("OEBPS/content.opf", opf)
+                z.writestr("OEBPS/cover.xhtml", cover_page)
+                z.writestr("OEBPS/text/c1.xhtml", chapter)
+                z.writestr("OEBPS/img/cover.png", big)
+                z.writestr("OEBPS/img/ill.png", big)
+            doc = bc.epub_to_document(path)
+        self.assertEqual(doc.cover, "OEBPS/img/cover.png")
+        self.assertEqual([b.text for b in doc.blocks if b.kind == "i"], ["OEBPS/img/ill.png"])   # дубль обложки убран
+        result = bc.render_document(doc, path, bc.Options())
+        self.assertEqual(["img" if isinstance(p, bc.ImagePage) else "txt" for p in result.pages],
+                         ["img", "txt", "img", "txt"])
+
+    def test_custom_cover_file_and_cli(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cover = Path(tmp) / "cover.png"
+            cover.write_bytes(_gradient_png(300, 300))
+            src = Path(tmp) / "book.txt"
+            src.write_text("Привет, мир!\n", encoding="utf-8")
+            out = Path(tmp) / "BOOK.PGB"
+            shots = Path(tmp) / "shots"
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(bc.main([str(src), str(out), "--cover", str(cover), "--dither", "atkinson",
+                                          "--save-images", str(shots)]), 0)
+            stats = bc.verify_pgb(out.read_bytes())
+            self.assertEqual((stats["pages"], stats["image_pages"]), (2, 1))
+            self.assertEqual([p.name for p in shots.iterdir()], ["page_0001.png"])
+            self.assertEqual(bc.main([str(src), str(out), "--cover", str(Path(tmp) / "nope.png")]), 2)
+
+    def test_without_pillow_images_are_skipped(self):
+        doc = bc.Document(blocks=[bc.Block("p", "Текст"), bc.Block("i", "k")], images={"k": _gradient_png(200, 200)},
+                          cover="k")
+        saved = bc._PilImage
+        bc._PilImage = None
+        try:
+            result = bc.render_document(doc, Path("x.fb2"), bc.Options())
+        finally:
+            bc._PilImage = saved
+        self.assertEqual(len(result.pages), 1)
+        self.assertTrue(any("Pillow" in n for n in result.notes))
+
+    def test_gui_shows_image_pages(self):
+        if bc.tk is None:
+            self.skipTest("tkinter не установлен")
+        with tempfile.TemporaryDirectory() as tmp:
+            cover = Path(tmp) / "cover.png"
+            cover.write_bytes(_gradient_png(300, 400))
+            src = Path(tmp) / "book.txt"
+            src.write_text("Текст книги\n", encoding="utf-8")
+            try:
+                app = bc.BookCompilerGui(src, bc.Options(cover_file=cover))
+            except bc.tk.TclError:
+                self.skipTest("нет дисплея")
+            try:
+                import time
+                end = time.time() + 30
+                while (app.busy or app.pending or app.rebuild_job or app.result is None) and time.time() < end:
+                    app.root.update()
+                    time.sleep(0.01)
+                self.assertIsInstance(app.pages[0], bc.ImagePage)
+                app.show_page(0)
+                self.assertTrue(app.image_label.winfo_ismapped() or app.image_label.winfo_manager() == "grid")
+                self.assertEqual(app.text.winfo_manager(), "")
+                app.show_page(1)
+                self.assertEqual(app.text.winfo_manager(), "grid")
+                self.assertIn("Текст книги", app.text.get("1.0", "end"))
+                app.v_dither.set("atkinson")
+                app.clear_cover()
+                end = time.time() + 30
+                while (app.busy or app.pending or app.rebuild_job) and time.time() < end:
+                    app.root.update()
+                    time.sleep(0.01)
+                self.assertEqual(len(app.pages), 1)
+            finally:
+                app.root.destroy()
+
+
 class Gui(unittest.TestCase):
     """Проверяется только при наличии tkinter и дисплея (в CI без экрана пропускается)."""
 
@@ -334,15 +574,15 @@ class Gui(unittest.TestCase):
                     app.root.update()
                 wait()
                 self.assertIsNotNone(app.result)
-                self.assertGreater(len(app.pages_text), 1)
+                self.assertGreater(len(app.pages), 1)
                 self.assertIn("Строка номер 0", app.text.get("1.0", "end"))
                 app.show_page(1)
                 self.assertEqual(app.v_page.get(), "2")
-                pages_before = len(app.pages_text)
+                pages_before = len(app.pages)
                 app.v_compression.set("none")
                 wait()
                 self.assertEqual(app.result.stats["compression"], bc.COMPRESSION_NONE)
-                self.assertEqual(len(app.pages_text), pages_before)
+                self.assertEqual(len(app.pages), pages_before)
                 app.v_output.set(str(Path(tmp) / "out.pgb"))
                 app.save()
                 bc.verify_pgb((Path(tmp) / "out.pgb").read_bytes())

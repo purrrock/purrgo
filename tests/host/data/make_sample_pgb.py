@@ -11,11 +11,18 @@
   sample_raw.pgb  без сжатия.
 
 Содержимое (названия и текст детерминированы):
-  строки 1..160     «Строка NNN» + (для NNN % 10 != 0) пробел и NNN % 10 символов 'x';
-  строки 161..192   32 строки по 29 случайных символов [A-Za-z0-9] (LCG, seed 12345) -
+  строки 1..120     «Строка NNN» + (для NNN % 10 != 0) пробел и NNN % 10 символов 'x';
+  строки 121..144   24 строки по 29 случайных символов [A-Za-z0-9] (LCG, seed 12345) -
                     такая страница не сжимается и хранится в сжатой книге как есть;
-  строки 193..202   «Хвост NN».
-Страницы: 6 по 32 строки и 7-я из 10 строк. Название «Тест PGB», автор «Автор».
+  строки 145..154   «Хвост NN».
+Страницы: 6 по 24 строки и 7-я из 10 строк. Название «Тест PGB», автор «Автор».
+
+Отдельная книга sample_img.pgb (LZ4, кодер пакета lz4) со страницами-картинками, 4 страницы:
+  0  картинка 176x256: диагональные полосы, чёрный пиксель, если ((x + y) // 8) % 2 == 0;
+  1  текст «Between» / «images»;
+  2  картинка 13x5 (нечётная ширина, биты выравнивания нулевые): чёрный пиксель - бит 16 LCG (seed 777);
+  3  картинка 100x60: то же, LCG seed 4242 (не сжимается, хранится как есть).
+Название «Image book», автор «Pic».
 """
 import sys
 from pathlib import Path
@@ -29,11 +36,11 @@ ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
 
 def sample_lines() -> list[str]:
     lines = []
-    for i in range(1, 161):
+    for i in range(1, 121):
         tail = (" " + "x" * (i % 10)) if i % 10 else ""
         lines.append(f"Строка {i:03d}{tail}")
     state = 12345
-    for _ in range(32):
+    for _ in range(24):
         chars = []
         for _ in range(29):
             state = (state * 1664525 + 1013904223) & 0xFFFFFFFF
@@ -42,6 +49,29 @@ def sample_lines() -> list[str]:
     for i in range(1, 11):
         lines.append(f"Хвост {i:02d}")
     return lines
+
+
+def lcg_image(width: int, height: int, seed: int) -> "bc.ImagePage":
+    mask = bytearray()
+    state = seed
+    for _ in range(width * height):
+        state = (state * 1664525 + 1013904223) & 0xFFFFFFFF
+        mask.append((state >> 16) & 1)
+    return bc.ImagePage(width, height, bc.pack_mask(bytes(mask), width, height))
+
+
+def stripes_image(width: int, height: int) -> "bc.ImagePage":
+    mask = bytes(1 if ((x + y) // 8) % 2 == 0 else 0 for y in range(height) for x in range(width))
+    return bc.ImagePage(width, height, bc.pack_mask(mask, width, height))
+
+
+def build_images() -> bytes:
+    pages = [stripes_image(176, 256), b"Between\nimages", lcg_image(13, 5, 777), lcg_image(100, 60, 4242)]
+    notes: list[str] = []
+    data = bc.build_pgb(pages, bc.encode_meta("Image book", 200, "t", notes),
+                        bc.encode_meta("Pic", 100, "a", notes), compression=bc.COMPRESSION_LZ4)
+    bc.verify_pgb(data)
+    return data
 
 
 def build(compression: int) -> bytes:
@@ -67,6 +97,7 @@ def main() -> None:
     finally:
         bc.lz4_compress_block = original
     outputs["sample_raw.pgb"] = build(bc.COMPRESSION_NONE)
+    outputs["sample_img.pgb"] = build_images()
     for name, data in outputs.items():
         (here / name).write_bytes(data)
         stats = bc.verify_pgb(data)
