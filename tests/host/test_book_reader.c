@@ -31,6 +31,7 @@
 #include "purrgo/pc_display_stats.h"
 #include "purrgo/pgb.h"
 #include "purrgo/track_logger.h"
+#include "ui_book.h"
 #include "purrgo/ui/ui_dirty.h"
 #include "fake_fs.h"
 #include "fake_power.h"
@@ -63,7 +64,9 @@ static gfx_color_t cb_read(void *fb, int16_t x, int16_t y)
 }
 static int px(int x, int y) { return g_fb[y * W + x] - 1; }
 
-/* ---- Генератор книги PGB 1.0 без сжатия ------------------------------------- */
+/* ---- Генератор книги PGB 1.1 без сжатия ------------------------------------- */
+
+#define ENTRY 12u   /* запись индекса PGB 1.1: offset, stored, raw, width, height */
 
 static void wr16(uint8_t *p, uint32_t v) { p[0] = (uint8_t)v; p[1] = (uint8_t)(v >> 8); }
 static void wr32(uint8_t *p, uint32_t v) { wr16(p, v & 0xFFFFu); wr16(p + 2, v >> 16); }
@@ -96,7 +99,7 @@ static uint32_t build_book(uint32_t pages, const char *title, const char *author
 {
     const uint32_t tl = (uint32_t)strlen(title), al = (uint32_t)strlen(author);
     const uint32_t index_off = 64u + tl + al;
-    const uint32_t data_off = index_off + 8u * pages;
+    const uint32_t data_off = index_off + ENTRY * pages;
     uint32_t pos = data_off;
 
     memset(g_book, 0, 64);
@@ -107,17 +110,20 @@ static uint32_t build_book(uint32_t pages, const char *title, const char *author
         size_t len = make_page(i, txt);
         if (tweak && i == pages - 1u) { txt[0] = 'Q'; }
         memcpy(g_book + pos, txt, len);
-        wr32(g_book + index_off + 8u * i, pos);
-        wr16(g_book + index_off + 8u * i + 4, (uint32_t)len);
-        wr16(g_book + index_off + 8u * i + 6, (uint32_t)len);
+        wr32(g_book + index_off + ENTRY * i, pos);
+        wr16(g_book + index_off + ENTRY * i + 4, (uint32_t)len);
+        wr16(g_book + index_off + ENTRY * i + 6, (uint32_t)len);
+        wr16(g_book + index_off + ENTRY * i + 8, 0);    /* текстовая страница: width = height = 0 */
+        wr16(g_book + index_off + ENTRY * i + 10, 0);
         pos += (uint32_t)len;
     }
     memcpy(g_book, "PGB1", 4);
-    wr16(g_book + 4, 1); wr16(g_book + 6, 0); wr16(g_book + 8, 64); wr16(g_book + 10, 0);
+    wr16(g_book + 4, 1); wr16(g_book + 6, 1); wr16(g_book + 8, 64); wr16(g_book + 10, 0);
     wr32(g_book + 12, pages); wr32(g_book + 16, 64); wr32(g_book + 20, index_off);
     wr32(g_book + 24, data_off); wr32(g_book + 28, pos);
-    g_book[40] = 29; g_book[41] = 32; g_book[42] = 0;
+    g_book[40] = 29; g_book[41] = 24; g_book[42] = 0;
     wr16(g_book + 44, tl); wr16(g_book + 46, al);
+    wr16(g_book + 48, 176); wr16(g_book + 50, 256);   /* окно картинок */
 
     pgb_crc_t c;
     pgb_crc_init(&c); pgb_crc_feed(&c, g_book, data_off);
@@ -637,7 +643,7 @@ static void test_lz4_fixtures_and_errors(void)
     /* Повреждённый индекс: открытие отклоняется по meta_crc32, выход без зависаний. */
     reset_all();
     uint32_t size = build_book(10, "Alpha", "A", 0);
-    g_book[70 + 8 * 3] ^= 0x40;   /* байт в индексе (CRC не пересчитан) */
+    g_book[70 + (int)ENTRY * 3] ^= 0x40;   /* байт в индексе (CRC не пересчитан) */
     fake_fs_put_bin(BOOK_A, g_book, size);
     snprintf(app_config.book_file, sizeof app_config.book_file, "ALPHA.PGB");
     purrgo_state_t st = purrgo_book_reader_enter();
@@ -655,7 +661,7 @@ static void test_lz4_fixtures_and_errors(void)
     size = build_book(10, "Alpha", "A", 0);
     {
         uint32_t index_off = 64u + 5u + 1u;
-        uint32_t off = (uint32_t)g_book[index_off + 8u * 4u] | ((uint32_t)g_book[index_off + 8u * 4u + 1u] << 8);
+        uint32_t off = (uint32_t)g_book[index_off + ENTRY * 4u] | ((uint32_t)g_book[index_off + ENTRY * 4u + 1u] << 8);
         g_book[off] = 0x01;   /* управляющий код в тексте страницы 4 */
         pgb_crc_t c;
         pgb_crc_init(&c); pgb_crc_feed(&c, g_book, size);
@@ -687,11 +693,11 @@ static void run_ticks(uint32_t ms)
 
 static bool glyph_at(int cx, int cy, unsigned char ch)
 {
-    /* Символ ch в ячейке (cx, cy) с началом x = 1 + cx * 6, y = 8 + cy * 8. */
+    /* Символ ch в ячейке (cx, cy): x = 1 + cx * 6, y = PGB_TEXT_TOP_PX + cy * PGB_LINE_PITCH_PX (шаг строк 10 px). */
     for (int col = 0; col < 5; col++) {
         for (int row = 0; row < 8; row++) {
             const int want = ((font5x7[ch][col] >> row) & 1) ? BLACK : WHITE;
-            if (px(1 + cx * 6 + col, 8 + cy * 8 + row) != want) { return false; }
+            if (px(1 + cx * 6 + col, (int)PGB_TEXT_TOP_PX + cy * (int)PGB_LINE_PITCH_PX + row) != want) { return false; }
         }
     }
     return true;
@@ -743,13 +749,13 @@ static void test_fsm_and_screen(void)
     CHECK(pc_display_stats_get().mode == DISPLAY_MODE_MONO);
     CHECK(pc_display_stats_get().fulls == 1);
 
-    /* Страница 0 книги Beta: статус инверсный, текст "PAGE 0" с y = 8, x = 1. */
+    /* Страница 0 книги Beta: статус инверсный, текст "PAGE 0" с y = PGB_TEXT_TOP_PX, x = 1. */
     CHECK(px(0, 0) == BLACK && px(175, 7) == BLACK);            /* строка статуса залита */
     CHECK(glyph_at(0, 0, 'P') && glyph_at(1, 0, 'A') && glyph_at(5, 0, '0'));
     CHECK(px(100, 9) == WHITE);                                 /* дальше строки фон белый */
     {
-        /* Последняя строка экрана - текст книги, а не подсказки кнопок: при 8 строках на странице 0
-         * (3 + 0 % 6 = 3 строки) ниже пусто, но область не залита подсказкой. */
+        /* Последняя строка экрана - текст книги, а не подсказки кнопок: на странице 0 всего
+         * 3 + 0 % 6 = 3 строки, ниже пусто, но область не залита подсказкой. */
         int dark = 0;
         for (int x = 0; x < W; x++) { dark += (px(x, H - 1) == BLACK); }
         CHECK(dark == 0);
@@ -920,6 +926,251 @@ static void test_status_battery_and_idle_refresh(void)
     }
 }
 
+/* ---- Страницы-картинки ------------------------------------------------------------ */
+
+/* Страница i: i % 3 == 0 - текст, 1 - картинка 176x256, 2 - картинка 50x40 (ширина не кратна 8). */
+static bool img_black(unsigned page, unsigned x, unsigned y) { return ((x * 3u + y * 5u + page) % 7u) < 3u; }
+
+static void img_dims(uint32_t i, unsigned *w, unsigned *h)
+{
+    *w = (i % 3u == 1u) ? 176u : (i % 3u == 2u) ? 50u : 0u;
+    *h = (i % 3u == 1u) ? 256u : (i % 3u == 2u) ? 40u : 0u;
+}
+
+/* bad_pad != 0 ставит ненулевой бит выравнивания в первой картинке 50x40. */
+static uint32_t build_image_book(uint32_t pages, int bad_pad)
+{
+    const char *title = "Pics", *author = "P";
+    const uint32_t tl = (uint32_t)strlen(title), al = (uint32_t)strlen(author);
+    const uint32_t index_off = 64u + tl + al;
+    const uint32_t data_off = index_off + ENTRY * pages;
+    uint32_t pos = data_off;
+    int pad_done = 0;
+
+    memset(g_book, 0, 64);
+    memcpy(g_book + 64, title, tl);
+    memcpy(g_book + 64 + tl, author, al);
+    for (uint32_t i = 0; i < pages; i++) {
+        unsigned w, h;
+        img_dims(i, &w, &h);
+        size_t len;
+        if (w == 0u) {
+            len = make_page(i, g_book + pos);
+        } else {
+            const unsigned rb = PGB_IMG_ROW_BYTES(w);
+            len = (size_t)rb * h;
+            memset(g_book + pos, 0, len);
+            for (unsigned y = 0; y < h; y++) {
+                for (unsigned x = 0; x < w; x++) {
+                    if (img_black(i, x, y)) { g_book[pos + y * rb + x / 8u] |= (uint8_t)(0x80u >> (x % 8u)); }
+                }
+            }
+            if (bad_pad && w == 50u && !pad_done) { g_book[pos + rb - 1u] |= 0x01u; pad_done = 1; }
+        }
+        wr32(g_book + index_off + ENTRY * i, pos);
+        wr16(g_book + index_off + ENTRY * i + 4, (uint32_t)len);
+        wr16(g_book + index_off + ENTRY * i + 6, (uint32_t)len);
+        wr16(g_book + index_off + ENTRY * i + 8, w);
+        wr16(g_book + index_off + ENTRY * i + 10, h);
+        pos += (uint32_t)len;
+    }
+    memcpy(g_book, "PGB1", 4);
+    wr16(g_book + 4, 1); wr16(g_book + 6, 1); wr16(g_book + 8, 64); wr16(g_book + 10, 0);
+    wr32(g_book + 12, pages); wr32(g_book + 16, 64); wr32(g_book + 20, index_off);
+    wr32(g_book + 24, data_off); wr32(g_book + 28, pos);
+    g_book[40] = 29; g_book[41] = 24; g_book[42] = 0;
+    wr16(g_book + 44, tl); wr16(g_book + 46, al);
+    wr16(g_book + 48, 176); wr16(g_book + 50, 256);
+
+    pgb_crc_t c;
+    pgb_crc_init(&c); pgb_crc_feed(&c, g_book, data_off);
+    wr32(g_book + 36, pgb_crc_value(&c));
+    pgb_crc_init(&c); pgb_crc_feed(&c, g_book, pos);
+    wr32(g_book + 32, pgb_crc_value(&c));
+    return pos;
+}
+
+/* Что показывает читалка на странице i: текст make_page() или картинка с нужными пикселями. */
+static bool shown_page_is(uint32_t i)
+{
+    purrgo_book_view_t v;
+    unsigned w, h;
+    purrgo_book_reader_get_view(&v);
+    img_dims(i, &w, &h);
+    if (!v.open || v.page != i || v.page_error != PGB_OK) { return false; }
+    if (w == 0u) { return page_is(i) && v.image == NULL; }
+    if (v.text != NULL || v.image == NULL || v.image_w != w || v.image_h != h) { return false; }
+    for (unsigned y = 0; y < h; y++) {
+        for (unsigned x = 0; x < w; x++) {
+            const int bit = (v.image[y * PGB_IMG_ROW_BYTES(w) + x / 8u] >> (7u - x % 8u)) & 1;
+            if (bit != (int)img_black(i, x, y)) { return false; }
+        }
+    }
+    return true;
+}
+
+static void test_image_pages(void)
+{
+    gfx_context_t g;
+    purrgo_state_t st;
+    bool redraw = false;
+
+    reset_all();
+    fake_fs_put_bin(BOOK_A, g_book, build_image_book(5, 0));
+    snprintf(app_config.book_file, sizeof app_config.book_file, "ALPHA.PGB");
+    app_config.book_crc32 = 0;
+    st = purrgo_book_reader_enter();
+    CHECK(st == APP_STATE_BOOK_READ && shown_page_is(0));
+    CHECK(fake_fs_open_handles() == 0);
+
+    memset(g_fb, 0, sizeof g_fb);
+    CHECK(gfx_init(&g, W, H, g_fb, cb_draw, cb_read));
+    display_set_mode(DISPLAY_MODE_MONO);
+
+    /* Страница 1: картинка 176x256 на весь экран под строкой статуса. */
+    st = press(st, PURRGO_BTN_KEY2_SHORT, &redraw);
+    CHECK(redraw && shown_page_is(1));
+    ui_book_read_reset();
+    pc_display_stats_reset();
+    ui_render_book_read(&g);
+    display_flush();
+    CHECK(pc_display_stats_get().partials + pc_display_stats_get().fulls >= 1 && pc_display_stats_get().last_h == H);
+    CHECK(px(0, 0) == BLACK && px(175, 7) == BLACK);               /* строка статуса */
+    {
+        int bad = 0;
+        for (int y = 0; y < 256; y++) {
+            for (int x = 0; x < 176; x++) {
+                if (px(x, 8 + y) != (img_black(1, (unsigned)x, (unsigned)y) ? BLACK : WHITE)) { bad++; }
+            }
+        }
+        CHECK(bad == 0);
+    }
+
+    /* Страница 2: картинка 50x40 по центру окна 176x256, вокруг белый фон. */
+    st = press(st, PURRGO_BTN_KEY2_SHORT, &redraw);
+    CHECK(redraw && shown_page_is(2));
+    ui_render_book_read(&g);
+    {
+        const int x0 = (176 - 50) / 2, y0 = 8 + (256 - 40) / 2;
+        int bad = 0, outside_dark = 0;
+        for (int y = 8; y < H; y++) {
+            for (int x = 0; x < W; x++) {
+                const bool inside = x >= x0 && x < x0 + 50 && y >= y0 && y < y0 + 40;
+                const int want = inside ? (img_black(2, (unsigned)(x - x0), (unsigned)(y - y0)) ? BLACK : WHITE) : WHITE;
+                if (px(x, y) != want) { bad++; }
+                if (!inside && px(x, y) == BLACK) { outside_dark++; }
+            }
+        }
+        CHECK(bad == 0 && outside_dark == 0);
+    }
+
+    /* Следующий кадр без изменений ничего не рисует; переход по процентам рисует подсказку поверх картинки. */
+    display_flush();    /* обновление предыдущего кадра */
+    pc_display_stats_reset();
+    ui_render_book_read(&g);
+    display_flush();
+    CHECK(pc_display_stats_get().partials == 0 && pc_display_stats_get().fulls == 0);
+    st = press(st, PURRGO_BTN_KEY3_SHORT, &redraw);
+    ui_render_book_read(&g);
+    {
+        int dark = 0;
+        for (int x = 0; x < W; x++) { dark += (px(x, H - 1) == BLACK); }
+        CHECK(dark > W / 2);
+    }
+    st = press(st, PURRGO_BTN_KEY4_SHORT, NULL);                    /* отмена */
+
+    /* Страница 3 - снова текст: картинка не остаётся на экране. */
+    st = press(st, PURRGO_BTN_KEY2_SHORT, &redraw);
+    CHECK(redraw && shown_page_is(3));
+    ui_render_book_read(&g);
+    {
+        int dark_low = 0;
+        for (int y = 200; y < H; y++) {
+            for (int x = 0; x < W; x++) { dark_low += (px(x, y) == BLACK); }
+        }
+        CHECK(dark_low == 0);
+    }
+    st = press(st, PURRGO_BTN_KEY2_SHORT, NULL);
+    CHECK(shown_page_is(4));
+    (void)press(st, PURRGO_BTN_KEY4_SHORT, NULL);
+
+    /* Повреждённая картинка (ненулевой бит выравнивания): страница с ошибкой, соседние читаются. */
+    reset_all();
+    fake_fs_put_bin(BOOK_A, g_book, build_image_book(5, 1));
+    snprintf(app_config.book_file, sizeof app_config.book_file, "ALPHA.PGB");
+    st = purrgo_book_reader_enter();
+    st = press(st, PURRGO_BTN_KEY2_SHORT, NULL);
+    CHECK(shown_page_is(1));
+    st = press(st, PURRGO_BTN_KEY2_SHORT, NULL);
+    {
+        purrgo_book_view_t v;
+        purrgo_book_reader_get_view(&v);
+        CHECK(v.page == 2 && v.text == NULL && v.image == NULL && v.page_error == PGB_ERR_PAGE_DATA);
+    }
+    memset(g_fb, 0, sizeof g_fb);
+    CHECK(gfx_init(&g, W, H, g_fb, cb_draw, cb_read));
+    ui_book_read_reset();
+    ui_render_book_read(&g);                                        /* сообщение об ошибке, без падения */
+    st = press(st, PURRGO_BTN_KEY2_SHORT, NULL);
+    CHECK(shown_page_is(3));
+    (void)press(st, PURRGO_BTN_KEY4_SHORT, NULL);
+
+    /* Книга больше RAM-буфера: окно данных с картинками подгружается, страницы верны вперёд и назад. */
+    reset_all();
+    static uint8_t small_ram[14000];
+    purrgo_book_reader_set_ram(small_ram, sizeof small_ram);
+    {
+        const uint32_t size = build_image_book(10, 0);
+        CHECK(size > sizeof small_ram);
+        fake_fs_put_bin(BOOK_A, g_book, size);
+    }
+    snprintf(app_config.book_file, sizeof app_config.book_file, "ALPHA.PGB");
+    st = purrgo_book_reader_enter();
+    CHECK(st == APP_STATE_BOOK_READ && shown_page_is(0));
+    CHECK(fake_fs_open_handles() == 1);                             /* окно меньше книги: файл открыт */
+    int ok = 1;
+    for (uint32_t i = 1; i < 10; i++) {
+        st = press(st, PURRGO_BTN_KEY2_SHORT, NULL);
+        if (!shown_page_is(i)) { ok = 0; }
+    }
+    for (uint32_t i = 9; i-- > 0;) {
+        st = press(st, PURRGO_BTN_KEY1_SHORT, NULL);
+        if (!shown_page_is(i)) { ok = 0; }
+    }
+    CHECK(ok);
+    (void)press(st, PURRGO_BTN_KEY4_SHORT, NULL);
+    purrgo_book_reader_set_ram(NULL, 0);
+}
+
+/* Шаг строк текста 10 px: строки на PGB_TEXT_TOP_PX + n * 10, между ними 2 px пустых, нижний край свободен. */
+static void test_line_pitch(void)
+{
+    gfx_context_t g;
+    reset_all();
+    put_book(BOOK_A, 3, "Alpha", "A", 0);        /* страница 0: 3 строки */
+    snprintf(app_config.book_file, sizeof app_config.book_file, "ALPHA.PGB");
+    (void)purrgo_book_reader_enter();
+    memset(g_fb, 0, sizeof g_fb);
+    CHECK(gfx_init(&g, W, H, g_fb, cb_draw, cb_read));
+    ui_book_read_reset();
+    ui_render_book_read(&g);
+
+    CHECK(PGB_SCREEN_ROWS == 24u && PGB_LINE_PITCH_PX == 10u);
+    CHECK(PGB_TEXT_TOP_PX - PGB_STATUS_H_PX == (unsigned)H - PGB_TEXT_TOP_PX - (23u * PGB_LINE_PITCH_PX + 8u));   /* поля сверху и снизу равны */
+    CHECK(PGB_TEXT_TOP_PX + 23u * PGB_LINE_PITCH_PX + 8u <= (unsigned)H);   /* 24-я строка помещается */
+    CHECK(glyph_at(0, 0, 'P') && glyph_at(1, 0, 'A') && glyph_at(2, 0, 'G') && glyph_at(3, 0, 'E'));
+    CHECK(glyph_at(0, 1, 'L') && glyph_at(1, 1, '1'));              /* вторая строка - на 10 px ниже первой */
+    CHECK(glyph_at(0, 2, 'L') && glyph_at(1, 2, '2'));
+    for (int cy = 0; cy < 2; cy++) {                                /* промежуток 2 px под строкой (кроме подчёркиваний) пуст */
+        for (int gap = 8; gap < 10; gap++) {
+            int dark = 0;
+            for (int x = 0; x < W; x++) { dark += (px(x, (int)PGB_TEXT_TOP_PX + cy * 10 + gap) == BLACK); }
+            CHECK(dark == 0);
+        }
+    }
+    (void)press(APP_STATE_BOOK_READ, PURRGO_BTN_KEY4_SHORT, NULL);
+}
+
 int main(void)
 {
     test_enter_whole_book();
@@ -930,6 +1181,8 @@ int main(void)
     test_jump_mode();
     test_lz4_fixtures_and_errors();
     test_fsm_and_screen();
+    test_image_pages();
+    test_line_pitch();
     test_status_battery_and_idle_refresh();
     return test_finish("test_book_reader");
 }

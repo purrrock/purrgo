@@ -6,9 +6,12 @@
  *   sample.pgb      - LZ4 Block, кодер пакета lz4 (HC);
  *   sample_py.pgb   - LZ4 Block, встроенный кодер конвертера;
  *   sample_raw.pgb  - без сжатия.
- * Во всех трёх одно и то же: 202 строки, 7 страниц, название «Тест PGB», автор
+ * Во всех трёх одно и то же: 154 строки, 7 страниц, название «Тест PGB», автор
  * «Автор»; страница 6 (индекс 5) - случайный текст, в сжатых книгах она хранится
  * как есть.
+ *
+ * Четвёртая книга sample_img.pgb: страницы-картинки (176x256, 13x5, 100x60) и одна
+ * текстовая страница между ними, LZ4.
  *
  * Проверяется: CRC (вектор zlib и обнуление полей CRC), декодер LZ4 (векторы,
  * все виды повреждений, мутации страниц без выхода за буферы), разбор заголовка,
@@ -35,7 +38,8 @@
 
 /* Заголовок 64 байта, название 8, автор 5, затем индекс из PAGES записей. */
 #define OFF_INDEX 77u
-#define OFF_DATA  (OFF_INDEX + 8u * PAGES)
+#define ENTRY     12u   /* запись индекса: offset u32, stored u16, raw u16, width u16, height u16 */
+#define OFF_DATA  (OFF_INDEX + ENTRY * PAGES)
 
 typedef struct {
     const char *file;
@@ -85,22 +89,24 @@ static void wr32(uint8_t *p, uint32_t v)
 }
 
 /* Запись индекса страницы n: смещение, размер в файле, размер текста. */
-static uint32_t entry_offset(const uint8_t *d, uint32_t n) { return rd32(d + OFF_INDEX + 8u * n); }
-static uint32_t entry_stored(const uint8_t *d, uint32_t n) { return rd16(d + OFF_INDEX + 8u * n + 4u); }
-static uint32_t entry_raw(const uint8_t *d, uint32_t n)    { return rd16(d + OFF_INDEX + 8u * n + 6u); }
+static uint32_t entry_offset(const uint8_t *d, uint32_t n) { return rd32(d + OFF_INDEX + ENTRY * n); }
+static uint32_t entry_stored(const uint8_t *d, uint32_t n) { return rd16(d + OFF_INDEX + ENTRY * n + 4u); }
+static uint32_t entry_raw(const uint8_t *d, uint32_t n)    { return rd16(d + OFF_INDEX + ENTRY * n + 6u); }
 
 /* Пересчёт обоих CRC после намеренной порчи (проверка логики индекса, а не CRC). */
-static void reseal(uint8_t *data, uint32_t size)
+static void reseal_at(uint8_t *data, uint32_t size, uint32_t data_offset)
 {
     pgb_crc_t meta;
     pgb_crc_init(&meta);
-    pgb_crc_feed(&meta, data, OFF_DATA);
+    pgb_crc_feed(&meta, data, data_offset);
     wr32(data + 36, pgb_crc_value(&meta));
     pgb_crc_t all;
     pgb_crc_init(&all);
     pgb_crc_feed(&all, data, size);
     wr32(data + 32, pgb_crc_value(&all));
 }
+
+static void reseal(uint8_t *data, uint32_t size) { reseal_at(data, size, OFF_DATA); }
 
 /* ---- Ожидаемое содержимое (то же, что строит make_sample_pgb.py) ----------- */
 typedef struct { unsigned n; uint32_t lcg; } line_gen_t;
@@ -112,7 +118,7 @@ static size_t next_line(line_gen_t *g, uint8_t *out)
     static const uint8_t word2[] = { 0x95, 0xA2, 0xAE, 0xB1, 0xB2, ' ' };         /* «Хвост » */
     size_t len = 0;
     unsigned n = ++g->n;
-    if (n <= 160u) {
+    if (n <= 120u) {
         memcpy(out, word1, sizeof(word1));
         len = sizeof(word1);
         out[len++] = (uint8_t)('0' + (n / 100u) % 10u);
@@ -122,13 +128,13 @@ static size_t next_line(line_gen_t *g, uint8_t *out)
             out[len++] = ' ';
             for (unsigned i = 0; i < n % 10u; i++) { out[len++] = 'x'; }
         }
-    } else if (n <= 192u) {
+    } else if (n <= 144u) {
         for (unsigned i = 0; i < 29u; i++) {
             g->lcg = g->lcg * 1664525u + 1013904223u;
             out[len++] = (uint8_t)alphabet[(g->lcg >> 16) % 62u];
         }
     } else {
-        unsigned k = n - 192u;
+        unsigned k = n - 144u;
         memcpy(out, word2, sizeof(word2));
         len = sizeof(word2);
         out[len++] = (uint8_t)('0' + (k / 10u) % 10u);
@@ -273,7 +279,8 @@ static void test_header_decode(void)
 {
     pgb_header_t h;
     CHECK(pgb_header_decode(DATA, SIZE, &h) == PGB_OK);
-    CHECK(h.page_count == PAGES && h.cols == 29u && h.rows == 32u);
+    CHECK(h.page_count == PAGES && h.cols == 29u && h.rows == 24u);
+    CHECK(h.img_w == 176u && h.img_h == 256u);
     CHECK(h.compression == (g_fx->compressed ? PGB_COMPRESSION_LZ4 : PGB_COMPRESSION_NONE));
     CHECK(h.title_length == 8u && h.author_length == 5u);
     CHECK(h.meta_offset == 64u && h.index_offset == OFF_INDEX && h.data_offset == OFF_DATA);
@@ -287,13 +294,19 @@ static void test_header_decode(void)
     CHECK(pgb_header_decode(NULL, 64, &h) == PGB_ERR_HEADER);
     MUTATE(PGB_ERR_MAGIC,       m[0] = 'X');
     MUTATE(PGB_ERR_VERSION,     m[4] = 2);
-    MUTATE(PGB_ERR_VERSION,     m[6] = 1);
+    MUTATE(PGB_ERR_VERSION,     m[6] = 0);           /* PGB 1.0 (старый формат) отклоняется */
+    MUTATE(PGB_ERR_VERSION,     m[6] = 2);
     MUTATE(PGB_ERR_HEADER,      m[8] = 65);
     MUTATE(PGB_ERR_UNSUPPORTED, m[10] = 1);
     MUTATE(PGB_ERR_UNSUPPORTED, m[42] = 2);          /* неизвестное сжатие */
     MUTATE(PGB_ERR_UNSUPPORTED, m[42] = 255);
     MUTATE(PGB_ERR_UNSUPPORTED, m[43] = 1);          /* reserved0 */
     MUTATE(PGB_ERR_UNSUPPORTED, m[63] = 1);          /* reserved1 */
+    MUTATE(PGB_ERR_UNSUPPORTED, m[52] = 1);
+    MUTATE(PGB_ERR_HEADER,      m[48] = 0; m[49] = 0);                    /* img_w */
+    MUTATE(PGB_ERR_HEADER,      m[50] = 0; m[51] = 0);                    /* img_h */
+    MUTATE(PGB_ERR_HEADER,      m[48] = 0xFF; m[49] = 0xFF; m[50] = 0xFF; m[51] = 0xFF);   /* окно больше uint16 */
+    MUTATE(PGB_OK,              m[48] = 100; m[49] = 0);                  /* другое окно - решает pgb_open */
     MUTATE(PGB_ERR_HEADER,      wr32(m + 12, 0));    /* page_count */
     MUTATE(PGB_ERR_HEADER,      m[40] = 0);          /* cols */
     MUTATE(PGB_ERR_HEADER,      m[41] = 0);          /* rows */
@@ -325,7 +338,8 @@ static void test_open_and_info(void)
     CHECK(pgb_read_info(BOOK, &info) == PGB_OK);
     CHECK(strcmp(info.title, "\x92\xA5\xB1\xB2 PGB") == 0);
     CHECK(strcmp(info.author, "\x80\xA2\xB2\xAE\xB0") == 0);
-    CHECK(info.page_count == PAGES && info.cols == 29u && info.rows == 32u);
+    CHECK(info.page_count == PAGES && info.cols == 29u && info.rows == 24u);
+    CHECK(info.img_w == 176u && info.img_h == 256u);
     CHECK(info.compression == (g_fx->compressed ? PGB_COMPRESSION_LZ4 : PGB_COMPRESSION_NONE));
     CHECK(info.file_crc32 == rd32(DATA + 32));
     CHECK(fake_fs_open_handles() == 0);
@@ -335,12 +349,12 @@ static void test_open_and_info(void)
     CHECK(fake_fs_max_read_end() <= PGB_INFO_READ_SIZE);
 
     CHECK(pgb_open(BOOK, 29, 31, &b) == PGB_ERR_GEOMETRY && b.file == NULL);
-    CHECK(pgb_open(BOOK, 30, 32, &b) == PGB_ERR_GEOMETRY);
+    CHECK(pgb_open(BOOK, 30, 24, &b) == PGB_ERR_GEOMETRY);
     CHECK(fake_fs_open_handles() == 0);
 
-    CHECK(pgb_open("0:/nope.pgb", 29, 32, &b) == PGB_ERR_IO);
+    CHECK(pgb_open("0:/nope.pgb", 29, 24, &b) == PGB_ERR_IO);
     CHECK(pgb_read_info("0:/nope.pgb", &info) == PGB_ERR_IO);
-    CHECK(pgb_open(NULL, 29, 32, &b) == PGB_ERR_IO);
+    CHECK(pgb_open(NULL, 29, 24, &b) == PGB_ERR_IO);
 }
 
 /* ---- Чтение страниц --------------------------------------------------------- */
@@ -353,7 +367,7 @@ static void test_read_all_pages(void)
     uint8_t page[PGB_SCREEN_MAX_PAGE_BYTES];
     line_gen_t gen = { 0, 12345u };
     int content_ok = 1;
-    static const unsigned expected_lines[PAGES] = { 32, 32, 32, 32, 32, 32, 10 };
+    static const unsigned expected_lines[PAGES] = { 24, 24, 24, 24, 24, 24, 10 };
     for (uint32_t p = 0; p < PAGES; p++) {
         size_t len = 0;
         CHECK(pgb_page_read(&b, p, page, sizeof(page), &len) == PGB_OK);
@@ -372,7 +386,7 @@ static void test_read_all_pages(void)
         CHECK(lines_here == expected_lines[p]);
     }
     CHECK(content_ok);
-    CHECK(gen.n == 202u);
+    CHECK(gen.n == 154u);
 
     /* Какие страницы сжаты: случайная (индекс 5) хранится как есть, остальные сжаты. */
     unsigned packed = 0;
@@ -560,8 +574,8 @@ static void test_lz4_decoded_text_is_checked(void)
         memcpy(data, DATA, SIZE);
         uint32_t off = entry_offset(data, 6);
         memcpy(data + off, block, sizeof(block));
-        data[OFF_INDEX + 8u * 6u + 4u] = 7; data[OFF_INDEX + 8u * 6u + 5u] = 0;
-        data[OFF_INDEX + 8u * 6u + 6u] = 20; data[OFF_INDEX + 8u * 6u + 7u] = 0;
+        data[OFF_INDEX + ENTRY * 6u + 4u] = 7; data[OFF_INDEX + ENTRY * 6u + 5u] = 0;
+        data[OFF_INDEX + ENTRY * 6u + 6u] = 20; data[OFF_INDEX + ENTRY * 6u + 7u] = 0;
         uint32_t size = off + 7u;
         wr32(data + 28, size);
         reseal(data, size);
@@ -587,7 +601,7 @@ static void test_tampered_index(void)
 
     /* Индекс подменён, CRC пересчитаны: открытие проходит, но стыковка страниц нарушена. */
     memcpy(data, DATA, SIZE);
-    wr32(data + OFF_INDEX + 8, entry_offset(DATA, 1) + 1u);
+    wr32(data + OFF_INDEX + ENTRY, entry_offset(DATA, 1) + 1u);
     reseal(data, SIZE);
     put(data, SIZE);
     CHECK(open_fixture(&b) == PGB_OK);
@@ -607,10 +621,10 @@ static void test_tampered_index(void)
     /* нулевые размеры, raw_size изменён, размер больше допустимого, stored > raw */
     for (int variant = 0; variant < 4; variant++) {
         memcpy(data, DATA, SIZE);
-        uint8_t *entry = data + OFF_INDEX + 8u * 3u;
+        uint8_t *entry = data + OFF_INDEX + ENTRY * 3u;
         if (variant == 0) { entry[4] = 0; entry[5] = 0; entry[6] = 0; entry[7] = 0; }
         if (variant == 1) { entry[6] ^= 1; }
-        if (variant == 2) { entry[4] = 0xC0; entry[5] = 0x03; entry[6] = 0xC0; entry[7] = 0x03; }   /* 960 */
+        if (variant == 2) { entry[4] = 0xC0; entry[5] = 0x03; entry[6] = 0xC0; entry[7] = 0x03; }   /* 960 > 719 */
         if (variant == 3) { entry[6] = (uint8_t)(entry[6] - 1u); entry[7] = entry[7]; }              /* raw на 1 меньше */
         reseal(data, SIZE);
         put(data, SIZE);
@@ -623,8 +637,8 @@ static void test_tampered_index(void)
 
     /* последняя страница выходит за file_size */
     memcpy(data, DATA, SIZE);
-    data[OFF_INDEX + 8u * 6u + 4u] += 1;
-    data[OFF_INDEX + 8u * 6u + 6u] += 1;
+    data[OFF_INDEX + ENTRY * 6u + 4u] += 1;
+    data[OFF_INDEX + ENTRY * 6u + 6u] += 1;
     reseal(data, SIZE);
     put(data, SIZE);
     CHECK(open_fixture(&b) == PGB_OK);
@@ -649,18 +663,30 @@ static void test_lz4_flag_and_geometry(void)
     CHECK(pgb_page_read(&b, 0, page, sizeof(page), &len) == PGB_OK);
     pgb_close(&b);
 
-    data[40] = 40;     /* cols = 40: страница могла бы быть длиннее scratch */
+    data[40] = 255;    /* cols = 255: страница (255 x 24 + 23 байта) могла бы быть длиннее scratch */
     reseal(data, SIZE);
     put(data, SIZE);
-    CHECK(pgb_open(BOOK, 40, 32, &b) == PGB_ERR_GEOMETRY && b.file == NULL);
+    CHECK(pgb_open(BOOK, 255, 24, &b) == PGB_ERR_GEOMETRY && b.file == NULL);
 
     /* без сжатия геометрия шире экрана допустима (scratch не нужен) */
     memcpy(data, DATA, SIZE);
-    data[40] = 40;
+    data[40] = 255;
     reseal(data, SIZE);
     put(data, SIZE);
-    CHECK(pgb_open(BOOK, 40, 32, &b) == PGB_OK);
+    CHECK(pgb_open(BOOK, 255, 24, &b) == PGB_OK);
     pgb_close(&b);
+
+    /* окно картинок должно совпадать с экраном читалки */
+    memcpy(data, DATA, SIZE);
+    data[48] = 100;    /* img_w = 100 */
+    reseal(data, SIZE);
+    put(data, SIZE);
+    CHECK(open_fixture(&b) == PGB_ERR_GEOMETRY && b.file == NULL);
+    memcpy(data, DATA, SIZE);
+    data[50] = 0; data[51] = 2;    /* img_h = 512 */
+    reseal(data, SIZE);
+    put(data, SIZE);
+    CHECK(open_fixture(&b) == PGB_ERR_GEOMETRY && b.file == NULL);
     CHECK(fake_fs_open_handles() == 0);
 }
 
@@ -739,7 +765,7 @@ static void test_memory_image(void)
         CHECK(pgb_page_locate(&h, DATA, n, &e) == PGB_OK);
 
         pgb_book_t book;
-        CHECK(pgb_open(BOOK, 29, 32, &book) == PGB_OK);
+        CHECK(pgb_open(BOOK, 29, 24, &book) == PGB_OK);
         CHECK(pgb_page_read(&book, n, ref, sizeof ref, &ref_len) == PGB_OK);
         pgb_close(&book);
 
@@ -789,9 +815,180 @@ static void test_memory_image(void)
     }
 }
 
+
+/* ---- Страницы-картинки (sample_img.pgb) -------------------------------------- */
+
+#define IMG_BOOK_PAGES 4u
+#define IMG_OFF_DATA   (OFF_INDEX + ENTRY * IMG_BOOK_PAGES)   /* название «Image book» 10, автор «Pic» 3 */
+
+static uint8_t g_img[MAX_FILE];
+static uint32_t g_img_size;
+
+static int load_image_fixture(void)
+{
+    char path[256];
+    snprintf(path, sizeof(path), TEST_DATA_DIR "/sample_img.pgb");
+    FILE *f = fopen(path, "rb");
+    if (!f) { printf("не найден %s (python3 tests/host/data/make_sample_pgb.py)\n", path); return 0; }
+    g_img_size = (uint32_t)fread(g_img, 1, MAX_FILE, f);
+    fclose(f);
+    return g_img_size > 0u && g_img_size < MAX_FILE;
+}
+
+/* Картинки sample_img.pgb: 0 - полосы 176x256, 2 - шум 13x5 (seed 777), 3 - шум 100x60 (seed 4242). */
+static int expected_black(unsigned page, unsigned w, unsigned x, unsigned y)
+{
+    if (page == 0u) { return ((x + y) / 8u) % 2u == 0u; }
+    uint32_t state = (page == 2u) ? 777u : 4242u;
+    for (unsigned i = 0; i <= y * w + x; i++) { state = state * 1664525u + 1013904223u; }
+    return (int)((state >> 16) & 1u);
+}
+
+static int image_matches(const uint8_t *bits, unsigned page, unsigned w, unsigned h)
+{
+    const unsigned row_bytes = PGB_IMG_ROW_BYTES(w);
+    for (unsigned y = 0; y < h; y++) {
+        for (unsigned x = 0; x < w; x++) {
+            const int got = (bits[y * row_bytes + x / 8u] >> (7u - x % 8u)) & 1;
+            if (got != expected_black(page, w, x, y)) { return 0; }
+        }
+    }
+    return 1;
+}
+
+static void put_img(const uint8_t *data, uint32_t size) { put(data, size); }
+
+static void test_image_pages(void)
+{
+    static const struct { uint16_t w, h; } dims[IMG_BOOK_PAGES] = { { 176, 256 }, { 0, 0 }, { 13, 5 }, { 100, 60 } };
+    uint8_t page[PGB_SCREEN_MAX_PAGE_BYTES];
+    size_t len = 0;
+    pgb_book_t b;
+    pgb_header_t h;
+
+    CHECK(PGB_SCREEN_MAX_PAGE_BYTES == 5632u && PGB_SCREEN_MAX_TEXT_BYTES == 719u);
+    CHECK(PGB_IMG_ROW_BYTES(176) == 22u && PGB_IMG_ROW_BYTES(13) == 2u && PGB_IMG_ROW_BYTES(8) == 1u);
+
+    CHECK(pgb_header_decode(g_img, g_img_size, &h) == PGB_OK);
+    CHECK(h.page_count == IMG_BOOK_PAGES && h.img_w == 176u && h.img_h == 256u && h.data_offset == IMG_OFF_DATA);
+
+    put_img(g_img, g_img_size);
+    CHECK(pgb_open(BOOK, PGB_SCREEN_COLS, PGB_SCREEN_ROWS, &b) == PGB_OK);
+    CHECK(pgb_verify_file(&b, NULL, NULL) == PGB_OK);
+
+    for (uint32_t p = 0; p < IMG_BOOK_PAGES; p++) {
+        pgb_index_entry_t e;
+        CHECK(pgb_page_locate(&h, g_img, p, &e) == PGB_OK);
+        CHECK(e.width == dims[p].w && e.height == dims[p].h);
+        CHECK(PGB_ENTRY_IS_IMAGE(&e) == (dims[p].w != 0u));
+        CHECK(pgb_page_read(&b, p, page, sizeof(page), &len) == PGB_OK);
+        CHECK(len == e.raw_size);
+        if (dims[p].w != 0u) {
+            CHECK(len == PGB_MAX_IMAGE_BYTES(dims[p].w, dims[p].h));
+            CHECK(image_matches(page, p, dims[p].w, dims[p].h));
+        } else {
+            CHECK(len == 14u && memcmp(page, "Between\nimages", 14) == 0);
+        }
+        /* то же из образа в памяти */
+        uint8_t mem[PGB_SCREEN_MAX_PAGE_BYTES];
+        size_t mem_len = 0;
+        CHECK(pgb_page_read_mem(&h, g_img, g_img + h.data_offset, h.data_offset, g_img_size - h.data_offset,
+                                p, mem, sizeof(mem), &mem_len) == PGB_OK);
+        CHECK(mem_len == len && memcmp(mem, page, len) == 0);
+        /* буфер меньше страницы */
+        CHECK(pgb_page_read(&b, p, page, e.raw_size - 1u, &len) == PGB_ERR_BUFFER);
+    }
+    /* Полосы сжимаются, шум хранится как есть. */
+    CHECK(rd16(g_img + OFF_INDEX + 4u) < rd16(g_img + OFF_INDEX + 6u) / 4u);
+    CHECK(rd16(g_img + OFF_INDEX + ENTRY * 3u + 4u) == rd16(g_img + OFF_INDEX + ENTRY * 3u + 6u));
+    pgb_close(&b);
+
+    /* Список книг видит окно картинок. */
+    pgb_info_t info;
+    CHECK(pgb_read_info(BOOK, &info) == PGB_OK && info.img_w == 176u && info.img_h == 256u && info.page_count == 4u);
+
+    /* Проверка картинок: без повреждений каждая картинка проходит pgb_page_check_image(). */
+    CHECK(pgb_page_check_image(g_img + 0, 0, 0, 0) == PGB_ERR_PAGE_DATA);
+    {
+        uint8_t px[4] = { 0xFF, 0xF8, 0xFF, 0xF8 };                  /* 13x2, биты выравнивания нулевые */
+        CHECK(pgb_page_check_image(px, 4, 13, 2) == PGB_OK);
+        CHECK(pgb_page_check_image(px, 3, 13, 2) == PGB_ERR_PAGE_DATA);   /* размер не тот */
+        px[3] = 0xF9;
+        CHECK(pgb_page_check_image(px, 4, 13, 2) == PGB_ERR_PAGE_DATA);   /* бит выравнивания */
+        CHECK(pgb_page_check_image(px, 4, 16, 2) == PGB_OK);              /* ширина кратна 8: выравнивания нет */
+    }
+
+    /* Порча записей индекса при пересчитанных CRC: открытие проходит, чтение страницы - нет. */
+    static const struct { uint32_t page, field; uint16_t value; pgb_status_t want; } bad[] = {
+        { 0, 8, 0, PGB_ERR_INDEX },       /* width = 0 при height != 0 */
+        { 0, 10, 0, PGB_ERR_INDEX },      /* height = 0 при width != 0 */
+        { 0, 8, 177, PGB_ERR_INDEX },     /* шире окна */
+        { 0, 10, 257, PGB_ERR_INDEX },    /* выше окна */
+        { 0, 8, 100, PGB_ERR_INDEX },     /* raw_size не соответствует размерам */
+        { 1, 8, 5, PGB_ERR_INDEX },       /* текстовая страница с width != 0, height == 0 */
+        { 1, 10, 5, PGB_ERR_INDEX },
+        { 3, 10, 59, PGB_ERR_INDEX },
+    };
+    for (size_t i = 0; i < sizeof(bad) / sizeof(bad[0]); i++) {
+        uint8_t data[MAX_FILE];
+        memcpy(data, g_img, g_img_size);
+        data[OFF_INDEX + ENTRY * bad[i].page + bad[i].field] = (uint8_t)bad[i].value;
+        data[OFF_INDEX + ENTRY * bad[i].page + bad[i].field + 1u] = (uint8_t)(bad[i].value >> 8);
+        reseal_at(data, g_img_size, IMG_OFF_DATA);
+        put_img(data, g_img_size);
+        CHECK(pgb_open(BOOK, PGB_SCREEN_COLS, PGB_SCREEN_ROWS, &b) == PGB_OK);
+        CHECK(pgb_page_read(&b, bad[i].page, page, sizeof(page), &len) == bad[i].want && len == 0u);
+        pgb_close(&b);
+        CHECK(pgb_page_locate(&h, data, bad[i].page, &(pgb_index_entry_t){ 0 }) == bad[i].want);
+    }
+
+    /* Ненулевой бит выравнивания в странице 13x5 (хранится как есть): PGB_ERR_PAGE_DATA. */
+    {
+        uint8_t data[MAX_FILE];
+        memcpy(data, g_img, g_img_size);
+        const uint32_t off = rd32(data + OFF_INDEX + ENTRY * 2u);
+        data[off + 1u] |= 0x01u;     /* младший бит первого ряда: правее ширины 13 */
+        reseal_at(data, g_img_size, IMG_OFF_DATA);
+        put_img(data, g_img_size);
+        CHECK(pgb_open(BOOK, PGB_SCREEN_COLS, PGB_SCREEN_ROWS, &b) == PGB_OK);
+        CHECK(pgb_page_read(&b, 2, page, sizeof(page), &len) == PGB_ERR_PAGE_DATA && len == 0u);
+        CHECK(pgb_page_read(&b, 3, page, sizeof(page), &len) == PGB_OK);
+        pgb_close(&b);
+        CHECK(pgb_page_read_mem(&h, data, data + IMG_OFF_DATA, IMG_OFF_DATA, g_img_size - IMG_OFF_DATA,
+                                2, page, sizeof(page), &len) == PGB_ERR_PAGE_DATA);
+    }
+
+    /* Каждый байт данных страниц портится: ошибка или иное содержимое, но без выхода за буферы (ASan/UBSan). */
+    {
+        uint8_t copy[MAX_FILE];
+        memcpy(copy, g_img, g_img_size);
+        for (uint32_t i = IMG_OFF_DATA; i < g_img_size; i++) {
+            copy[i] ^= 0xFFu;
+            for (uint32_t n = 0; n < IMG_BOOK_PAGES; n++) {
+                size_t l = 0;
+                pgb_status_t st = pgb_page_read_mem(&h, g_img, copy + IMG_OFF_DATA, IMG_OFF_DATA,
+                                                    g_img_size - IMG_OFF_DATA, n, page, sizeof(page), &l);
+                CHECK(st == PGB_OK ? (l > 0u && l <= sizeof(page)) : l == 0u);
+            }
+            copy[i] ^= 0xFFu;
+        }
+    }
+
+    /* Сжатая картинка с окном 176x256 не помещается в scratch меньшего размера: проверено при открытии. */
+    {
+        uint8_t data[MAX_FILE];
+        memcpy(data, g_img, g_img_size);
+        data[48] = 100;
+        reseal_at(data, g_img_size, IMG_OFF_DATA);
+        put_img(data, g_img_size);
+        CHECK(pgb_open(BOOK, PGB_SCREEN_COLS, PGB_SCREEN_ROWS, &b) == PGB_ERR_GEOMETRY && b.file == NULL);
+    }
+    CHECK(fake_fs_open_handles() == 0);
+}
+
 int main(void)
 {
-    if (!load_fixtures()) { return 1; }
+    if (!load_fixtures() || !load_image_fixture()) { return 1; }
 
     test_crc();
     test_lz4_vectors();
@@ -817,5 +1014,7 @@ int main(void)
             test_lz4_flag_and_geometry();
         }
     }
+    printf("-- sample_img.pgb\n");
+    test_image_pages();
     return test_finish("test_pgb");
 }

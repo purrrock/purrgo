@@ -7,14 +7,17 @@
 #include "purrgo/gfx_rect.h"
 #include "purrgo/gfx_text.h"
 #include "purrgo/hardware_config.h"
+#include "purrgo/pgb.h"
 #include "purrgo/pgo_text.h"
 #include "purrgo/purrgo_format.h"
 
 #include <string.h>
 
-/* Ячейка символа 6x8, как в gfx_text.c и PGB-format.md. */
+/* Ячейка символа 6x8, как в gfx_text.c и PGB-format.md; шаг строк книги и положение текста - в pgb.h. */
 #define CELL_W 6
 #define CELL_H 8
+#define LINE_PITCH ((int)PGB_LINE_PITCH_PX)
+#define TEXT_TOP   ((int)PGB_TEXT_TOP_PX)
 
 /* Список книг. */
 #define LIST_Y0       25
@@ -97,7 +100,7 @@ static void draw_status(gfx_context_t* gfx, const char* text)
     gfx_set_color(gfx, BLACK, WHITE);
 }
 
-/* Текст страницы: строки через LF, 6x8 пикселей на символ, начиная под строкой статуса. */
+/* Текст страницы: строки через LF, ячейка 6x8 px, шаг строк 10 px, первая строка на TEXT_TOP. */
 static void draw_page_text(gfx_context_t* gfx, const uint8_t* text, size_t len)
 {
     int col = 0;
@@ -109,8 +112,35 @@ static void draw_page_text(gfx_context_t* gfx, const uint8_t* text, size_t len)
             col = 0;
             continue;
         }
-        gfx_draw_char(gfx, (int16_t)(1 + col * CELL_W), (int16_t)(CELL_H + row * CELL_H), (char)text[i]);
+        gfx_draw_char(gfx, (int16_t)(1 + col * CELL_W), (int16_t)(TEXT_TOP + row * LINE_PITCH), (char)text[i]);
         col++;
+    }
+}
+
+/*
+ * Страница-картинка: 1 bit на пиксель (1 - чёрный), по центру окна 176x256 под строкой
+ * статуса. Экран уже очищен в белый, поэтому рисуются только чёрные пиксели.
+ */
+static void draw_page_image(gfx_context_t* gfx, const uint8_t* bits, uint16_t w, uint16_t h)
+{
+    const int x0 = ((int)PGB_IMG_WINDOW_W - (int)w) / 2;
+    const int y0 = (int)PGB_STATUS_H_PX + ((int)PGB_IMG_WINDOW_H - (int)h) / 2;
+    const uint32_t row_bytes = PGB_IMG_ROW_BYTES(w);
+
+    gfx_set_color(gfx, BLACK, WHITE);
+    for (uint16_t y = 0; y < h; y++) {
+        const uint8_t* row = bits + (size_t)y * row_bytes;
+        for (uint16_t bx = 0; bx < row_bytes; bx++) {
+            uint8_t b = row[bx];
+            if (b == 0u) {
+                continue;
+            }
+            for (int bit = 0; bit < 8; bit++) {
+                if (b & (0x80u >> bit)) {
+                    gfx_draw_pixel(gfx, (int16_t)(x0 + bx * 8 + bit), (int16_t)(y0 + y));
+                }
+            }
+        }
     }
 }
 
@@ -140,7 +170,7 @@ static uint32_t fnv1a(uint32_t h, const void* data, size_t len)
     return h;
 }
 
-/* Хэш всего, что рисуется ниже строки статуса (текст, ошибки, подсказка перехода). */
+/* Хэш всего, что рисуется ниже строки статуса (текст, картинка, ошибки, подсказка перехода). */
 static uint32_t body_hash(const purrgo_book_view_t* v)
 {
     uint32_t h = 2166136261u;
@@ -152,6 +182,10 @@ static uint32_t body_hash(const purrgo_book_view_t* v)
         h = fnv1a(h, v->file, strlen(v->file));
     } else if (v->text != NULL) {
         h = fnv1a(h, v->text, v->text_len);
+    } else if (v->image != NULL) {
+        const uint16_t dim[2] = { v->image_w, v->image_h };
+        h = fnv1a(h, dim, sizeof(dim));
+        h = fnv1a(h, v->image, (size_t)PGB_IMG_ROW_BYTES(v->image_w) * v->image_h);
     } else {
         h = fnv1a(h, &v->page, sizeof(v->page));   /* текст страницы недоступен: сообщение с номером */
     }
@@ -211,13 +245,15 @@ void ui_render_book_read(gfx_context_t* gfx)
     } else {
         if (v.text != NULL) {
             draw_page_text(gfx, v.text, v.text_len);
+        } else if (v.image != NULL) {
+            draw_page_image(gfx, v.image, v.image_w, v.image_h);
         } else {
             purrgo_snprintf(buf, sizeof(buf), "PAGE %u: %s", (unsigned)(v.page + 1u),
                             pgb_status_text(v.page_error));
             draw_message(gfx, 1, buf);
         }
         if (v.jump) {
-            /* Экран занят текстом, поэтому подсказка поверх нижней строки страницы. */
+            /* Экран занят текстом или картинкой, поэтому подсказка поверх нижней строки страницы. */
             gfx_set_color(gfx, WHITE, BLACK);
             gfx_fill_rect(gfx, 0, (int16_t)(PURRGO_HW_DISPLAY_HEIGHT_PX - CELL_H),
                           PURRGO_HW_DISPLAY_WIDTH_PX, CELL_H);
@@ -231,6 +267,6 @@ void ui_render_book_read(gfx_context_t* gfx)
     s_read_frame.body_hash = hash;
     memcpy(s_read_frame.status, status, sizeof(status));
 
-    /* Текст меняется по всей площади: обновляется весь экран (1 bit - частичное обновление). */
+    /* Страница меняется по всей площади: обновляется весь экран (1 bit - частичное обновление). */
     display_refresh_region(0, 0, PURRGO_HW_DISPLAY_WIDTH_PX, PURRGO_HW_DISPLAY_HEIGHT_PX);
 }
