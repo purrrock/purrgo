@@ -118,6 +118,17 @@ int main(void)
   while (1) {}
 #endif
 
+  /*
+   * Диагностика причины запуска: SBF = 1 - выход из Standby, WUF1 = 1 - будила
+   * кнопка K1 (WKUP1). Если после «Entering STANDBY mode.» в логе снова идёт
+   * загрузка, значит МК не остался в Standby, а проснулся.
+   */
+  PURRGO_LOG("BOOT: SBF=%u WUF1=%u RCC_CSR=0x%08lX PA0=%u\r\n",
+             (unsigned)(__HAL_PWR_GET_FLAG(PWR_FLAG_SBF) ? 1U : 0U),
+             (unsigned)(__HAL_PWR_GET_FLAG(PWR_WAKEUP_FLAG1) ? 1U : 0U),
+             (unsigned long)RCC->CSR,
+             (unsigned)HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0));
+
   purrgo_stm32_init();
 
   /* USER CODE END 2 */
