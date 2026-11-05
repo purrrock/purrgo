@@ -29,6 +29,12 @@
  *
  * Releasing a button after a LONG event does not generate a SHORT
  * event.
+ *
+ * Additionally, while the tracker-with-display-off mode is active
+ * (purrgo_app_tracker_mode_active()), holding K1 and K4 together for
+ * PURRGO_BTN_COMBO_HOLD_MS generates one PURRGO_BTN_COMBO_K1_K4 event
+ * (the way out of that mode). Releasing the buttons afterwards does not
+ * generate SHORT events.
  */
 
 #include "buttons.h"
@@ -167,6 +173,16 @@ static purrgo_button_hw_t buttons[] =
  *   KEY4_LONG
  */
 static purrgo_btn_t event_queue[PURRGO_BUTTON_EVENT_QUEUE_SIZE];
+
+/*
+ * K1+K4 combination: indices of the physical buttons in buttons[] and a
+ * flag that is set once the combination event has been generated and
+ * cleared when both buttons are released.
+ */
+#define COMBO_BUTTON_A 0U   /* K1 */
+#define COMBO_BUTTON_B 3U   /* K4 */
+
+static bool combo_generated = false;
 
 static size_t event_queue_head = 0U;
 static size_t event_queue_tail = 0U;
@@ -335,6 +351,10 @@ static void queue_event(purrgo_btn_t event)
             PURRGO_LOG("BUTTON KEY4 LONG\r\n");
             break;
 
+        case PURRGO_BTN_COMBO_K1_K4:
+            PURRGO_LOG("BUTTON K1+K4 COMBO\r\n");
+            break;
+
         default:
             break;
     }
@@ -452,6 +472,53 @@ static void update_button(
 }
 
 
+/*
+ * Detect the K1+K4 combination.
+ *
+ * It is active only in the tracker-with-display-off mode, so ordinary
+ * K1/K4 presses in all other screens are never affected. Once generated,
+ * the combination marks both buttons as "LONG already generated" so their
+ * release does not produce SHORT events.
+ */
+static void update_combo(uint32_t now)
+{
+    purrgo_button_hw_t *a = &buttons[COMBO_BUTTON_A];
+    purrgo_button_hw_t *b = &buttons[COMBO_BUTTON_B];
+
+    if (a->stable_state == GPIO_PIN_SET && b->stable_state == GPIO_PIN_SET)
+    {
+        combo_generated = false;
+        return;
+    }
+
+    if (combo_generated ||
+        a->stable_state != GPIO_PIN_RESET ||
+        b->stable_state != GPIO_PIN_RESET ||
+        !purrgo_app_tracker_mode_active())
+    {
+        return;
+    }
+
+    /*
+     * The hold time is counted from the press of the later button.
+     */
+    {
+        uint32_t later_start =
+            ((int32_t)(a->press_start_time - b->press_start_time) > 0)
+                ? a->press_start_time
+                : b->press_start_time;
+
+        if ((uint32_t)(now - later_start) >= PURRGO_BTN_COMBO_HOLD_MS)
+        {
+            combo_generated = true;
+            a->long_event_generated = true;
+            b->long_event_generated = true;
+            queue_event(PURRGO_BTN_COMBO_K1_K4);
+        }
+    }
+}
+
+
 void purrgo_stm32_buttons_init(void)
 {
     uint32_t now;
@@ -488,6 +555,7 @@ void purrgo_stm32_buttons_init(void)
     event_queue_head = 0U;
     event_queue_tail = 0U;
     event_queue_count = 0U;
+    combo_generated = false;
 
     PURRGO_LOG("BUTTONS INIT\r\n");
 }
@@ -510,6 +578,8 @@ void purrgo_stm32_buttons_update(void)
     {
         update_button(&buttons[i], i, now);
     }
+
+    update_combo(now);
 }
 
 

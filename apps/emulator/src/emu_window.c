@@ -153,6 +153,10 @@ void emu_window_process_events(bool* quit) {
                 case SDLK_4:
                     key_press_times[3] = SDL_GetTicks();
                     break;
+                case SDLK_5:
+                    /* Эмуляция одновременного K1+K4 (выход из режима трекера). */
+                    handle_button_press(PURRGO_BTN_COMBO_K1_K4);
+                    break;
             }
         } else if (e.type == SDL_KEYUP) {
              switch (e.key.keysym.sym) {

@@ -109,19 +109,24 @@ static void test_menu(void)
     /* До MENU конфиг не меняется. */
     CHECK(app_config.power_source == PURRGO_POWER_SRC_LITHIUM);
 
-    /* Порядок остальных пунктов: 2 POWER OFF, 3 TZ, ..., 9 MAP LAYERS - последний. */
+    /*
+     * Порядок остальных пунктов: 2 POWER OFF, 3 TRACKER (SCREEN OFF), 4 TZ, ...,
+     * 10 MAP LAYERS - последний.
+     */
     st = press(st, PURRGO_ACTION_DOWN);
     CHECK(menu_app_get_main_cursor() == 2);
     st = press(st, PURRGO_ACTION_DOWN);
-    CHECK(menu_app_get_main_cursor() == 3);
+    CHECK(menu_app_get_main_cursor() == 3);                 /* TRACKER: OK не нажимаем */
+    st = press(st, PURRGO_ACTION_DOWN);
+    CHECK(menu_app_get_main_cursor() == 4);
     const int16_t tz0 = menu_app_get_draft_tz_offset();
     st = press(st, PURRGO_ACTION_OK);
-    CHECK(menu_app_get_draft_tz_offset() == tz0 + 15);      /* пункт 3 - TZ */
+    CHECK(menu_app_get_draft_tz_offset() == tz0 + 15);      /* пункт 4 - TZ */
     for (int i = 0; i < 10; i++) {   /* с запасом: курсор упирается в последний пункт */
         st = press(st, PURRGO_ACTION_DOWN);
     }
     CHECK(menu_app_get_main_cursor() == menu_app_get_main_count() - 1);
-    CHECK(menu_app_get_main_count() == 10);
+    CHECK(menu_app_get_main_count() == 11);
     st = press(st, PURRGO_ACTION_OK);                          /* MAP LAYERS */
     CHECK(st == APP_STATE_MENU_MAP_LAYERS);
     st = press(st, PURRGO_ACTION_MENU);                        /* назад в CONFIG */

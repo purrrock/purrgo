@@ -21,7 +21,9 @@ typedef enum {
     APP_STATE_MENU_MAP_LAYERS, // Подсостояние: Экран настройки видимости слоев карты
     APP_STATE_MENU_ROUTE_SELECT, // Подсостояние: Выбор GPX-файла маршрута из каталога ROUTES
     APP_STATE_BOOK_LIST,      // Читалка: список книг из каталога BOOKS (GNSS и запись трека выключены)
-    APP_STATE_BOOK_READ       // Читалка: страница книги, 1-bit (см. book_reader.h)
+    APP_STATE_BOOK_READ,      // Читалка: страница книги, 1-bit (см. book_reader.h)
+    APP_STATE_TRACKER_SCREEN_OFF // Трекер с отключённым дисплеем: запись трека как в EXPEDITION, экран не обновляется;
+                                 // выход - одновременное нажатие K1 и K4 (PURRGO_BTN_COMBO_K1_K4)
 } purrgo_state_t;
 
 // Аппаратные кнопки устройства
@@ -45,10 +47,26 @@ typedef enum {
     PURRGO_BTN_KEY1_LONG,
     PURRGO_BTN_KEY2_LONG,
     PURRGO_BTN_KEY3_LONG,
-    PURRGO_BTN_KEY4_LONG
+    PURRGO_BTN_KEY4_LONG,
+    /*
+     * Одновременное удержание K1 и K4. Формирует только платформенный драйвер
+     * кнопок и только в режиме APP_STATE_TRACKER_SCREEN_OFF (выход из режима);
+     * в остальных состояниях FSM это событие игнорирует.
+     */
+    PURRGO_BTN_COMBO_K1_K4
 } purrgo_btn_t;
 
 #define PURRGO_BTN_LONG_PRESS_MS 500
+
+/*
+ * Сколько K1 и K4 должны удерживаться вместе (от нажатия последней из них),
+ * чтобы выйти из режима трекера с отключённым дисплеем. Небольшая выдержка
+ * защищает от случайного выхода в кармане/рюкзаке; 0 - выход сразу после
+ * антидребезга.
+ */
+#ifndef PURRGO_BTN_COMBO_HOLD_MS
+#define PURRGO_BTN_COMBO_HOLD_MS 1000
+#endif
 
 // Инициализация конечного автомата
 void purrgo_app_init(void);
@@ -77,6 +95,12 @@ void purrgo_app_notify_marker_rendered(const purrgo_gnss_solution_t* rendered_fi
 
 // Получение текущего состояния для слоя диспетчеризации отрисовки (gfx_renderer)
 purrgo_state_t purrgo_app_get_state(void);
+
+/*
+ * true, пока включён режим трекера с отключённым дисплеем. Платформенный драйвер
+ * кнопок формирует PURRGO_BTN_COMBO_K1_K4 только в этом режиме.
+ */
+bool purrgo_app_tracker_mode_active(void);
 
 /* purrgo_map_scale_t определён в map_types.h */
 

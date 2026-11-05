@@ -101,6 +101,17 @@ static void power_off_select(purrgo_state_t* next)
 }
 
 
+/*
+ * TRACKER: режим трекера с отключённым дисплеем. Запись трека как в EXPEDITION,
+ * на экране предупреждение, дальше экран не обновляется. Выход - K1+K4 вместе.
+ * Побочные эффекты входа (режим логгера) выполняет FSM (app_fsm.c).
+ */
+static void tracker_select(purrgo_state_t* next)
+{
+    *next = APP_STATE_TRACKER_SCREEN_OFF;
+}
+
+
 /* TZ: шаг 15 минут, после максимума - снова минимум. */
 #define TZ_STEP_MINS   15
 #define TZ_MIN_MINS    -720
@@ -226,6 +237,7 @@ static const menu_item_t main_items[] = {
     { .title = "BOOKS", .on_select = books_select },
     { .format = power_src_format, .on_select = power_src_select },
     { .title = "POWER OFF", .on_select = power_off_select },
+    { .title = "TRACKER (SCREEN OFF)", .on_select = tracker_select },
     { .format = tz_format, .on_select = tz_select },
     { .format = map_dir_format, .on_select = map_dir_select },
     { .format = route_format, .on_select = route_select },
