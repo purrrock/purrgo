@@ -37,6 +37,44 @@ static display_mode_t ui_display_mode(purrgo_state_t state)
     return (state == APP_STATE_MAP) ? DISPLAY_MODE_GRAY4 : DISPLAY_MODE_MONO;
 }
 
+/*
+ * Экран-предупреждение режима трекера с отключённым дисплеем. Рисуется один раз
+ * при входе в режим; после этого экран не обновляется (e-ink хранит картинку
+ * без питания). Шрифт 6x8 px, строка - не более 29 символов.
+ */
+static void ui_draw_centered(gfx_context_t* gfx, int16_t y, const char* text)
+{
+    const int16_t w = (int16_t)(6 * strlen(text));
+
+    gfx_draw_string(gfx, (int16_t)((PURRGO_HW_DISPLAY_WIDTH_PX - w) / 2), y, text);
+}
+
+static void ui_render_tracker_off(gfx_context_t* gfx)
+{
+    gfx_set_color(gfx, BLACK, WHITE);
+    gfx_clear(gfx);
+
+    /* Инверсные полосы сверху и снизу. */
+    gfx_set_color(gfx, WHITE, BLACK);
+    gfx_fill_rect(gfx, 0, 0, PURRGO_HW_DISPLAY_WIDTH_PX, 9);
+    ui_draw_centered(gfx, 1, "TRACKER MODE");
+    gfx_fill_rect(gfx, 0, (int16_t)(PURRGO_HW_DISPLAY_HEIGHT_PX - 9),
+                  PURRGO_HW_DISPLAY_WIDTH_PX, 9);
+    ui_draw_centered(gfx, (int16_t)(PURRGO_HW_DISPLAY_HEIGHT_PX - 8), "TRACKER MODE");
+
+    gfx_set_color(gfx, BLACK, WHITE);
+    gfx_draw_rect(gfx, 8, 40, (int16_t)(PURRGO_HW_DISPLAY_WIDTH_PX - 16), 90);
+
+    ui_draw_centered(gfx, 56, "TRACK RECORDING");
+    ui_draw_centered(gfx, 68, "IN PROGRESS");
+    ui_draw_centered(gfx, 92, "SCREEN IS OFF");
+    ui_draw_centered(gfx, 104, "(NOT UPDATED)");
+
+    ui_draw_centered(gfx, 160, "TO EXIT PRESS");
+    ui_draw_centered(gfx, 172, "K1 + K4");
+    ui_draw_centered(gfx, 184, "TOGETHER");
+}
+
 bool purrgo_app_ui_is_power_off(void)
 {
     return s_power_off_screen;
@@ -220,6 +258,9 @@ void purrgo_app_ui_render(
             }
             ui_render_book_read(gfx);
             break;
+        case APP_STATE_TRACKER_SCREEN_OFF:
+            ui_render_tracker_off(gfx);
+            break;
         default:
             break;
     }
@@ -230,8 +271,12 @@ void purrgo_app_ui_render(
      * computer обновляет весь экран. Раньше на каждом проходе меню подсказки
      * расширяли окно частичного обновления от изменившейся строки до низа экрана.
      */
-    /* Экран чтения целиком занят текстом (33 строки): подсказок кнопок на нём нет. */
-    if (current_state != APP_STATE_BOOK_READ) {
+    /*
+     * Экран чтения целиком занят текстом (33 строки), экран трекера - своим
+     * предупреждением: подсказок кнопок на них нет.
+     */
+    if (current_state != APP_STATE_BOOK_READ &&
+        current_state != APP_STATE_TRACKER_SCREEN_OFF) {
         ui_draw_key_hints(gfx, current_state, current_state != prev_state);
     }
 

@@ -156,6 +156,41 @@ static void book_mode_left(void) {
     purrgo_ui_dirty_mark(UI_DIRTY_MAP);
 }
 
+/*
+ * Вход в режим трекера с отключённым дисплеем: запись трека идёт как в режиме
+ * EXPEDITION независимо от настройки LOG. Настройка в app_config не меняется:
+ * по выходу логгеру возвращается выбранный пользователем режим. Экран один раз
+ * перерисовывается в предупреждение (purrgo_app_ui_render), дальше не меняется.
+ */
+static void tracker_mode_entered(void) {
+    purrgo_logger_set_mode(LOGGER_MODE_EXPEDITION);
+    render_gate_active = false;
+    purrgo_ui_dirty_defer_cancel();
+}
+
+/*
+ * Выход из режима трекера: логгеру возвращается режим из настроек (при OFF
+ * запись останавливается), приёмник работал всё время, поэтому таймаут фикса
+ * отсчитывается заново, а карта перерисуется полностью.
+ */
+static void tracker_mode_left(void) {
+    const uint32_t now = purrgo_system_time_ms();
+
+    purrgo_logger_set_mode(app_config.log_mode);
+    last_rmc_ms = now;
+    last_tick_ms = now;
+    last_gnss_update_ms = now;
+    last_rendered_pos_valid = false;
+    shown_pos_valid = false;
+    purrgo_ui_dirty_defer_cancel();
+    purrgo_ui_dirty_mark(UI_DIRTY_MAP);
+    purrgo_ui_dirty_mark(UI_DIRTY_STATUS);
+}
+
+bool purrgo_app_tracker_mode_active(void) {
+    return current_state == APP_STATE_TRACKER_SCREEN_OFF;
+}
+
 void purrgo_app_init(void) {
     next_logger_retry_ms = 0;
     purrgo_gnss_parser_init(&gnss_parser);
@@ -221,6 +256,25 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
     bool handled = false;
     const purrgo_state_t prev_state = current_state;
     purrgo_state_t next_state = current_state;
+
+    /*
+     * Трекер с отключённым дисплеем: единственное действие - выход по
+     * одновременному нажатию K1 и K4. Остальные кнопки (случайные нажатия в
+     * кармане) игнорируются и экран не перерисовывают.
+     */
+    if (current_state == APP_STATE_TRACKER_SCREEN_OFF) {
+        if (button == PURRGO_BTN_COMBO_K1_K4) {
+            current_state = APP_STATE_MAP;
+            tracker_mode_left();
+            ui_input_done(prev_state, true);
+        }
+        return;
+    }
+
+    /* Комбинация K1+K4 имеет смысл только в режиме трекера. */
+    if (button == PURRGO_BTN_COMBO_K1_K4) {
+        return;
+    }
 
     /*
      * Читалка: кнопки (короткие и длинные) разбирает сама читалка, а не общая
@@ -297,6 +351,8 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
         current_state = next_state;
         if (is_book_state(current_state)) {
             book_mode_entered();   // пункт BOOKS: читалка уже выключила GNSS и трек
+        } else if (current_state == APP_STATE_TRACKER_SCREEN_OFF) {
+            tracker_mode_entered();   // пункт меню TRACKER: трек как EXPEDITION, экран отключается
         }
     } else if (current_state == APP_STATE_MAP) {
         handled = purrgo_map_controller_handle_button(mapped_button);
@@ -422,6 +478,73 @@ void purrgo_app_tick(uint32_t current_time_ms) {
     }
 }
 
+/*
+ * Обслуживание трек-логгера: старт/повторные попытки, запись точек.
+ * Вызывается раз в секунду из purrgo_app_update() на всех экранах, кроме читалки.
+ */
+static void track_logger_service(const purrgo_gnss_solution_t* current_fix) {
+    {
+        const uint32_t now = purrgo_system_time_ms();
+        track_logger_state_t logger_state = purrgo_logger_get_state();
+        track_logger_mode_t logger_mode = purrgo_logger_get_mode();
+
+        /*
+         * Сбой записи во время сессии (RECORDING -> ERROR): планируем
+         * повторную попытку с нарастающей паузой.
+         */
+        if (logger_state == LOGGER_STATE_ERROR && prev_logger_state == LOGGER_STATE_RECORDING) {
+            logger_schedule_retry(now);
+        }
+
+        /*
+         * Счётчик неудач сбрасывается, только когда запись непрерывно идёт
+         * достаточно долго; иначе "переоткрылся и сразу упал" давал бы
+         * повторные попытки каждую секунду.
+         */
+        if (logger_state == LOGGER_STATE_RECORDING) {
+            if (prev_logger_state != LOGGER_STATE_RECORDING) {
+                logger_recording_since_ms = now;
+            } else if (logger_start_failures != 0 &&
+                       (uint32_t)(now - logger_recording_since_ms) >= PURRGO_LOGGER_STABLE_MS) {
+                logger_start_failures = 0;
+            }
+        }
+        prev_logger_state = logger_state;
+
+        if (current_fix->valid) {
+            if (logger_mode != LOGGER_MODE_OFF &&
+                (logger_state == LOGGER_STATE_IDLE || logger_state == LOGGER_STATE_ERROR)) {
+                if (logger_start_failures == 0 || (int32_t)(now - next_logger_retry_ms) >= 0) {
+                    if (purrgo_logger_start(current_fix)) {
+                        PURRGO_LOG("Track logging started\n\r");
+                        logger_state = purrgo_logger_get_state();
+                        prev_logger_state = logger_state;
+                        logger_recording_since_ms = now;
+                    } else {
+                        logger_schedule_retry(now);
+                    }
+                }
+            }
+
+            if (logger_state == LOGGER_STATE_RECORDING) {
+                // Передаем координаты в фильтр (он сам решит, записывать ли точку)
+                if (purrgo_logger_add_point(current_fix)) {
+                    purrgo_ui_dirty_mark(UI_DIRTY_TRACK);
+                    /*
+                     * Сам флаг TRACK экран не перерисовывает: без этого новые
+                     * отрезки ждали бы, пока маркёр сместится или сменится
+                     * минута. Перерисовка ставится в очередь и выводится не
+                     * чаще PURRGO_UI_MIN_DATA_REDRAW_MS, как остальные данные.
+                     */
+                    if (current_state == APP_STATE_MAP) {
+                        purrgo_ui_dirty_defer();
+                    }
+                }
+            }
+        }
+    }
+}
+
 void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
     bool pos_changed_significantly = false;
 
@@ -430,6 +553,18 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
      * времени и позиции: любая перерисовка здесь только тратит заряд.
      */
     if (is_book_state(current_state)) {
+        return;
+    }
+
+    /*
+     * Трекер с отключённым дисплеем: работает только запись трека. Всё, что
+     * могло бы вызвать перерисовку (смена фикса, минуты, смещение маркера,
+     * состояние логгера), пропускается: каждое обновление e-ink - это расход
+     * заряда, а экран всё равно не должен меняться.
+     */
+    if (current_state == APP_STATE_TRACKER_SCREEN_OFF) {
+        prev_fix = *current_fix;
+        track_logger_service(current_fix);
         return;
     }
 
@@ -526,68 +661,7 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
     }
 
 
-// === БЛОК ТРЕК-ЛОГГЕРА ===
-    {
-        const uint32_t now = purrgo_system_time_ms();
-        track_logger_state_t logger_state = purrgo_logger_get_state();
-        track_logger_mode_t logger_mode = purrgo_logger_get_mode();
-
-        /*
-         * Сбой записи во время сессии (RECORDING -> ERROR): планируем
-         * повторную попытку с нарастающей паузой.
-         */
-        if (logger_state == LOGGER_STATE_ERROR && prev_logger_state == LOGGER_STATE_RECORDING) {
-            logger_schedule_retry(now);
-        }
-
-        /*
-         * Счётчик неудач сбрасывается, только когда запись непрерывно идёт
-         * достаточно долго; иначе "переоткрылся и сразу упал" давал бы
-         * повторные попытки каждую секунду.
-         */
-        if (logger_state == LOGGER_STATE_RECORDING) {
-            if (prev_logger_state != LOGGER_STATE_RECORDING) {
-                logger_recording_since_ms = now;
-            } else if (logger_start_failures != 0 &&
-                       (uint32_t)(now - logger_recording_since_ms) >= PURRGO_LOGGER_STABLE_MS) {
-                logger_start_failures = 0;
-            }
-        }
-        prev_logger_state = logger_state;
-
-        if (current_fix->valid) {
-            if (logger_mode != LOGGER_MODE_OFF &&
-                (logger_state == LOGGER_STATE_IDLE || logger_state == LOGGER_STATE_ERROR)) {
-                if (logger_start_failures == 0 || (int32_t)(now - next_logger_retry_ms) >= 0) {
-                    if (purrgo_logger_start(current_fix)) {
-                        PURRGO_LOG("Track logging started\n\r");
-                        logger_state = purrgo_logger_get_state();
-                        prev_logger_state = logger_state;
-                        logger_recording_since_ms = now;
-                    } else {
-                        logger_schedule_retry(now);
-                    }
-                }
-            }
-
-            if (logger_state == LOGGER_STATE_RECORDING) {
-                // Передаем координаты в фильтр (он сам решит, записывать ли точку)
-                if (purrgo_logger_add_point(current_fix)) {
-                    purrgo_ui_dirty_mark(UI_DIRTY_TRACK);
-                    /*
-                     * Сам флаг TRACK экран не перерисовывает: без этого новые
-                     * отрезки ждали бы, пока маркёр сместится или сменится
-                     * минута. Перерисовка ставится в очередь и выводится не
-                     * чаще PURRGO_UI_MIN_DATA_REDRAW_MS, как остальные данные.
-                     */
-                    if (current_state == APP_STATE_MAP) {
-                        purrgo_ui_dirty_defer();
-                    }
-                }
-            }
-        }
-    }
-// ============================================
+    track_logger_service(current_fix);
 
     // Диспетчеризация фоновой логики приложения в зависимости от активного экрана
     switch (current_state) {
@@ -607,6 +681,7 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
 
         case APP_STATE_BOOK_LIST:
         case APP_STATE_BOOK_READ:
+        case APP_STATE_TRACKER_SCREEN_OFF:
             break;  // обработано выше (ранний выход)
     }
 }
