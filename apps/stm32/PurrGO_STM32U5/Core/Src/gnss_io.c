@@ -96,7 +96,7 @@ static bool gnss_cfg_retry_done = false;
 static volatile uint16_t gnss_last_head = 0U;
 
 /*
- * GNSS включён (EN отпущен, LPUART1 и DMA работают). После сброса МК EN High
+ * GNSS включён (EN в High, LPUART1 и DMA работают). После сброса МК EN High
  * (MX_GPIO_Init), поэтому по умолчанию true. Пока false, purrgo_gnss_read_byte()
  * ничего не отдаёт.
  */
@@ -243,7 +243,7 @@ void purrgo_gnss_power_off(void)
     (void)HAL_UART_AbortReceive(&hlpuart1);
     gnss_rx_error_flag = false;
 
-    /* 2. EN в Low: модуль выключен (линия EN - Open Drain). */
+    /* 2. EN в Low: модуль выключен (PB0 - Push-Pull). */
     HAL_GPIO_WritePin(GNSS_EN_GPIO_Port, GNSS_EN_Pin, GPIO_PIN_RESET);
 
     /* 3. LPUART1 выключен; PA2/PA3 -> Analog, без подтяжек. */
@@ -263,7 +263,7 @@ void purrgo_gnss_power_off(void)
 /**
  * @brief Включить GNSS и настроить его заново.
  *
- * Порядок: EN отпущен (подтяжка внутри модуля, High) -> LPUART1 заново
+ * Порядок: EN в High (Push-Pull) -> LPUART1 заново
  * инициализирован (PA2/PA3 снова AF) -> purrgo_gnss_init() (DMA-приём и
  * настройка приёмника). Модуль после включения загружается не сразу, поэтому
  * первая настройка может потеряться; её повторяет PURRGO_GNSS_CONFIG_RETRY_MS.
@@ -275,7 +275,7 @@ void purrgo_gnss_power_on(void)
         return;
     }
 
-    /* 1. EN: отпустить линию (Open Drain, High). */
+    /* 1. EN в High (Push-Pull): модуль включён. */
     HAL_GPIO_WritePin(GNSS_EN_GPIO_Port, GNSS_EN_Pin, GPIO_PIN_SET);
 
     /* 2. LPUART1 заново: MspInit возвращает PA2/PA3 в AF8 (PA3 с подтяжкой). */
@@ -287,7 +287,7 @@ void purrgo_gnss_power_on(void)
     purrgo_gnss_init();
     purrgo_gnss_monitor_init();
 
-    PURRGO_LOG("GNSS: power on (EN released)\r\n");
+    PURRGO_LOG("GNSS: power on (EN high)\r\n");
 }
 
 /**

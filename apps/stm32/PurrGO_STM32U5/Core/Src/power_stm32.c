@@ -26,9 +26,10 @@ void purrgo_platform_enter_standby(void)
     (void)HAL_PWREx_EnableGPIOPullUp(PWR_GPIO_A, PWR_GPIO_BIT_0);
 
     /*
-     * GNSS_EN (PB0, Open Drain): в Standby вывод без PWR-подтяжки уходит в Hi-Z,
-     * и внутренняя подтяжка модуля снова включила бы GNSS. PWR удерживает PB0
-     * в Low. Проверить на железе: подтяжка PWR должна пересиливать подтяжку модуля.
+     * GNSS_EN (PB0, Push-Pull, без подтяжки в Run): в Standby вывод без
+     * PWR-подтяжки уходит в Hi-Z, и внутренняя подтяжка модуля снова включила
+     * бы GNSS. PWR удерживает PB0 в Low. Проверить на железе: подтяжка PWR
+     * должна пересиливать подтяжку модуля.
      */
     (void)HAL_PWREx_EnableGPIOPullDown(PWR_GPIO_B, PWR_GPIO_BIT_0);
     HAL_PWREx_EnablePullUpPullDownConfig();
