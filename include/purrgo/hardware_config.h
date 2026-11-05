@@ -89,7 +89,7 @@
 #define PURRGO_HW_BATT_DIV_R_BOTTOM_OHM  997000u
 #endif
 #ifndef PURRGO_HW_BATT_CAL_PERMILLE
-#define PURRGO_HW_BATT_CAL_PERMILLE      1000u
+#define PURRGO_HW_BATT_CAL_PERMILLE      1004u
 #endif
 
 /* Не чаще одного измерения за столько мс; между ними возвращается прошлое значение. */
