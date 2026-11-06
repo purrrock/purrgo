@@ -1,5 +1,6 @@
 #include "purrgo/power.h"
 #include "purrgo/battery.h"
+#include "purrgo/supply.h"
 #include <stdlib.h>
 
 void purrgo_platform_storage_unmount(void)
@@ -23,4 +24,14 @@ void purrgo_platform_enter_standby(void)
 uint16_t purrgo_platform_battery_pin_mv(void)
 {
     return (uint16_t)PURRGO_PC_BATTERY_PIN_MV;
+}
+
+/* На PC напряжения питания МК нет: всегда нормальное, карту размонтировать нечего. */
+bool purrgo_platform_supply_low(void)
+{
+    return false;
+}
+
+void purrgo_platform_storage_suspend(void)
+{
 }

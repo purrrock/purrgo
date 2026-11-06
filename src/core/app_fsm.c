@@ -11,6 +11,7 @@
 #include "purrgo/trip_computer.h"
 #include "purrgo/menu_controller.h"
 #include "purrgo/track_logger.h"
+#include "purrgo/supply.h"
 #include "purrgo/logger.h"
 #include "purrgo/geo.h"
 #include "purrgo/hardware_config.h"
@@ -209,6 +210,7 @@ void purrgo_app_init(void) {
     last_tick_ms = last_gnss_update_ms;
     purrgo_ui_dirty_throttle_reset(last_gnss_update_ms);
     purrgo_battery_monitor_reset();
+    purrgo_supply_reset();
     render_gate_active = false;
     shown_pos_valid = false;
     logger_start_failures = 0;
@@ -443,6 +445,13 @@ static void gnss_check_fix_timeout(uint32_t now_ms) {
 }
 
 void purrgo_app_tick(uint32_t current_time_ms) {
+    /*
+     * Напряжение питания: при просадке ниже порога безопасной записи на SD
+     * закрываем трек и размонтируем карту (supply.c). Первым в такте: чем
+     * раньше остановим запись, тем больше запас по питанию.
+     */
+    (void)purrgo_supply_tick(current_time_ms);
+
     // Читалка: запись позиции чтения на SD по тайм-ауту бездействия.
     purrgo_book_reader_tick(current_time_ms);
 
@@ -491,6 +500,14 @@ void purrgo_app_tick(uint32_t current_time_ms) {
  * Вызывается раз в секунду из purrgo_app_update() на всех экранах, кроме читалки.
  */
 static void track_logger_service(const purrgo_gnss_solution_t* current_fix) {
+    /*
+     * Низкое напряжение питания: запись на карту остановлена (supply.c), новые
+     * сессии не стартуем и повторных попыток не планируем.
+     */
+    if (purrgo_supply_storage_blocked()) {
+        prev_logger_state = purrgo_logger_get_state();
+        return;
+    }
     {
         const uint32_t now = purrgo_system_time_ms();
         track_logger_state_t logger_state = purrgo_logger_get_state();
