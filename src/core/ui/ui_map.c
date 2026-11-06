@@ -9,6 +9,7 @@
 #include "purrgo/map.h"
 #include "purrgo/track_renderer.h"
 #include "purrgo/route.h"
+#include "purrgo/waypoint.h"
 #include "purrgo/track_logger.h"
 #include "purrgo/config.h"
 #include "purrgo/logger.h"
@@ -623,6 +624,9 @@ static void ui_map_render_dynamic_data(gfx_context_t* gfx, const purrgo_viewport
     if (ui_map_track_visible()) {
         purrgo_track_render(gfx, dynamic_cam, map_vp, purrgo_logger_get_active_filename());
     }
+
+    /* Цель навигации: поверх маршрута и трека, под маркёром GNSS. */
+    purrgo_wpt_render(gfx, dynamic_cam, map_vp);
     /* Все точки, имеющиеся сейчас, нарисованы (или трек не показывается). */
     s_track_drawn_serial = purrgo_logger_get_track_serial();
 }

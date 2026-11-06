@@ -238,6 +238,7 @@ void purrgo_gnss_power_off(void)
         return;
     }
     gnss_powered = false;
+    purrgo_gnss_monitor_stop();   /* отчёты и счёт 1PPS - только при включённом GNSS */
 
     /* 1. Остановить приём; HAL_UART_AbortReceive() останавливает и DMA. */
     (void)HAL_UART_AbortReceive(&hlpuart1);
@@ -500,4 +501,21 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
      * Флаг ставится только после остановки DMA.
      */
     gnss_rx_error_flag = true;
+}
+
+/**
+ * @brief Фронт 1PPS (PA8, EXTI8, Rising).
+ *
+ * Вызывается из прерывания EXTI8. Приоритет EXTI8 в NVIC должен быть ниже
+ * (числом больше), чем у GPDMA1 и LPUART1, чтобы импульс не вытеснял приём
+ * GNSS (настройка в CubeMX). При выключенном GNSS (EN Low) фронты игнорируются:
+ * линия PPS у отключённого модуля не должна давать срабатываний, а если они
+ * есть, это видно по отсутствию счёта в мониторе.
+ */
+void HAL_GPIO_EXTI_Rising_Callback(uint16_t GPIO_Pin)
+{
+    if ((GPIO_Pin == GNSS_PPS_Pin) && gnss_powered)
+    {
+        purrgo_gnss_monitor_pps_edge(HAL_GetTick());
+    }
 }

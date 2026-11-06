@@ -51,6 +51,8 @@ for t in tests/host/test_*.c; do
             extra="apps/stm32/common/sd_spi/sd_spi.c -Iapps/stm32/common/sd_spi" ;;
         test_gnss_diag)
             extra="apps/stm32/common/gnss_diag/gnss_diag.c -Iapps/stm32/common/gnss_diag" ;;
+        test_gnss_pps)
+            extra="apps/stm32/common/gnss_pps/gnss_pps.c -Iapps/stm32/common/gnss_pps" ;;
         test_display_eink)
             if [ ! -f $EPD/src/epd4g.c ]; then echo "== $name"; echo "SKIP (нет сабмодуля eink_part_refresh)"; continue; fi
             extra="apps/stm32/common/Src/display_eink.c $EPD/src/epd4g.c $EPD/src/epd4g_fb.c \

@@ -133,6 +133,10 @@ static void handle_sentence(gnss_diag_t *d)
         d->seen_interval |= GNSS_DIAG_SEEN_RMC;
         d->rmc_seen = true;
         d->rmc_valid = find_field(d, 2U, &start, &len) && (len >= 1U) && (d->body[start] == 'A');
+        if (d->rmc_valid)
+        {
+            d->rmc_valid_count++;
+        }
     }
     else if (memcmp(type, "GSV", 3U) == 0)
     {

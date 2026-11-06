@@ -30,6 +30,7 @@ extern const menu_screen_t menu_screen_main;
 extern const menu_screen_t menu_screen_map_layers;
 extern const menu_screen_t menu_screen_dir_select;
 extern const menu_screen_t menu_screen_route_select;
+extern const menu_screen_t menu_screen_wpt_select;
 
 /*
  * Переход на другой экран меню "вперёд": записывает состояние в *next и

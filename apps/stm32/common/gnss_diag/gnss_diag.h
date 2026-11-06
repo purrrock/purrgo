@@ -59,6 +59,7 @@ typedef struct
     uint8_t gga_sats_used;     /* поле 7 GGA */
     bool rmc_seen;
     bool rmc_valid;            /* статус A */
+    uint32_t rmc_valid_count;  /* число RMC со статусом A с момента старта (сверка с 1PPS) */
     uint8_t gsv_in_view[GNSS_DIAG_TALKERS];
     bool gsv_seen;
 

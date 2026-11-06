@@ -101,7 +101,15 @@ static void test_search_then_fix(void)
     gnss_diag_init(&d);
     feed_sentence(&d, "GPRMC,123519.00,A,5354.123,N,02734.456,E,0.1,10.0,261026,,,A");
     CHECK(d.rmc_valid);
+    CHECK(d.rmc_valid_count == 1U);
     CHECK(gnss_diag_state(&d) == GNSS_DIAG_FIX);
+
+    /* Счётчик RMC=A (для сверки с 1PPS) не растёт на RMC=V и растёт на каждом A. */
+    feed_sentence(&d, "GPRMC,123520.00,V,,,,,,,261026,,,N");
+    CHECK(!d.rmc_valid && d.rmc_valid_count == 1U);
+    feed_sentence(&d, "GPRMC,123521.00,A,5354.123,N,02734.456,E,0.1,10.0,261026,,,A");
+    feed_sentence(&d, "GPRMC,123522.00,A,5354.123,N,02734.456,E,0.1,10.0,261026,,,A");
+    CHECK(d.rmc_valid_count == 3U);
 }
 
 static void test_resync_and_noise(void)

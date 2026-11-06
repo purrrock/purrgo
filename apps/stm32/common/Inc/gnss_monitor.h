@@ -23,11 +23,17 @@
 /** @brief Сбросить счётчики и запомнить момент запуска (после purrgo_gnss_init). */
 void purrgo_gnss_monitor_init(void);
 
+/** @brief Остановить монитор (GNSS выключен): отчёты и подсчёт фронтов 1PPS прекращаются до init. */
+void purrgo_gnss_monitor_stop(void);
+
 /** @brief Учесть байт, отданный ядру (контекст основного цикла). */
 void purrgo_gnss_monitor_feed(uint8_t byte);
 
 /** @brief Учесть ошибку UART (HAL_UART_ERROR_* битами; можно из прерывания). */
 void purrgo_gnss_monitor_uart_error(uint32_t error_code);
+
+/** @brief Учесть фронт 1PPS (из прерывания EXTI; now_ms - HAL_GetTick()). */
+void purrgo_gnss_monitor_pps_edge(uint32_t now_ms);
 
 /** @brief Периодический вывод состояния; вызывать из основного цикла. */
 void purrgo_gnss_monitor_process(void);
@@ -35,8 +41,10 @@ void purrgo_gnss_monitor_process(void);
 #else
 
 static inline void purrgo_gnss_monitor_init(void) {}
+static inline void purrgo_gnss_monitor_stop(void) {}
 static inline void purrgo_gnss_monitor_feed(uint8_t byte) { (void)byte; }
 static inline void purrgo_gnss_monitor_uart_error(uint32_t error_code) { (void)error_code; }
+static inline void purrgo_gnss_monitor_pps_edge(uint32_t now_ms) { (void)now_ms; }
 static inline void purrgo_gnss_monitor_process(void) {}
 
 #endif

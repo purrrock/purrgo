@@ -4,6 +4,7 @@
 #include "ui/ui_trip.h"
 #include "ui/ui_menu_main.h"
 #include "ui/ui_dir_select.h"
+#include "ui/ui_wpt_select.h"
 #include "ui/ui_map_layers.h"
 #include "ui/ui_book.h"
 #include "purrgo/ui/ui_dirty.h"
@@ -134,6 +135,7 @@ static void ui_draw_key_hints(gfx_context_t* gfx, purrgo_state_t state, bool mar
         case APP_STATE_MENU_DIR_SELECT:
         case APP_STATE_MENU_MAP_LAYERS:
         case APP_STATE_MENU_ROUTE_SELECT:
+        case APP_STATE_MENU_WPT_SELECT:
             k1 = "\x18";
             k2 = "\x19";
             k3 = "SEL";
@@ -239,6 +241,12 @@ void purrgo_app_ui_render(
                 ui_menu_dir_select_reset();
             }
             ui_render_menu_route_select(gfx);
+            break;
+        case APP_STATE_MENU_WPT_SELECT:
+            if (prev_state != APP_STATE_MENU_WPT_SELECT) {
+                ui_menu_wpt_select_reset();
+            }
+            ui_render_menu_wpt_select(gfx);
             break;
         case APP_STATE_MENU_MAP_LAYERS:
             if (prev_state != APP_STATE_MENU_MAP_LAYERS) {
