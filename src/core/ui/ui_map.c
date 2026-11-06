@@ -825,7 +825,18 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
             purrgo_app_ui_defer_render(PURRGO_MAP_RENDER_RETRY_DELAY_MS);
         }
         purrgo_ui_dirty_clear(UI_DIRTY_TRACK);
+#if PURRGO_MAP_SHIFT_PARTIAL_REFRESH
+        /*
+         * Карта перерисована целиком, но на E-Ink уходят только изменившиеся пиксели
+         * (4 gray сравнивает кадр с предыдущим, границы области драйвер игнорирует).
+         * Область нужна, чтобы поставить запрос на обновление и для эмулятора:
+         * строка статуса + окно карты (подсказки кнопок на этом проходе не меняются).
+         */
+        display_refresh_region(0, 0, PURRGO_HW_DISPLAY_WIDTH_PX,
+                               (int16_t)(map_vp.offset_y + map_vp.height));
+#else
         purrgo_app_ui_request_full_refresh();
+#endif
         dbg_map_render_calls++;
     } else {
         /* Новые отрезки трека дорисовываются внутри обновления маркёра (порядок слоёв). */
