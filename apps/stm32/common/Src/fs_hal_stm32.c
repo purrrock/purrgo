@@ -324,6 +324,10 @@ const char* purrgo_fs_get_routes_path(void) {
     return "0:/PURRGO/ROUTES";
 }
 
+const char* purrgo_fs_get_waypts_path(void) {
+    return "0:/PURRGO/WAYPTS";
+}
+
 const char* purrgo_fs_get_books_path(void) {
     return "0:/PURRGO/BOOKS";
 }

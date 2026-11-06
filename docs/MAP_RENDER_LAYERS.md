@@ -8,5 +8,7 @@
 7. POI — точки
 8. подписи POI
 9. route — линии: GPX-файл из каталога ROUTES, чёрная линия 3 px с белой линией 1 px по центру (`route.c`)
-10. track — линии
-11. GNSS marker
+10. waypoints — иконка 46 из `purrgo_poi_icons.c` для каждой точки `<wpt>` выбранного маршрута и всех GPX-файлов каталога WAYPTS, не более 64 точек (`wpt_layer.c`)
+11. track — линии
+12. цель навигации (WAYPOINT) — кольцо с крестом
+13. GNSS marker

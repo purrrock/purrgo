@@ -39,6 +39,7 @@ static const struct {
     [PURRGO_LAYER_POI]            = { "POI",            "POI",            true  },
     [PURRGO_LAYER_POI_LABELS]     = { "POI_LABELS",     "POI labels",     true  },
     [PURRGO_LAYER_ROUTE]          = { "ROUTE",          "Route",          false },
+    [PURRGO_LAYER_WAYPOINT]       = { "WAYPOINT",       "Waypoints",      false },
     [PURRGO_LAYER_TRACK]          = { "TRACK",          "Track",          true  },
 };
 

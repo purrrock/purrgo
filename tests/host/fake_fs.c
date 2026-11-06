@@ -147,4 +147,5 @@ const char* purrgo_fs_get_config_path(void) { return "PURRGO.CFG"; }
 const char* purrgo_fs_get_maps_path(void) { return "maps"; }
 const char* purrgo_fs_get_tracks_path(void) { return "TRACKS"; }
 const char* purrgo_fs_get_routes_path(void) { return "routes"; }
+const char* purrgo_fs_get_waypts_path(void) { return "waypts"; }
 const char* purrgo_fs_get_books_path(void) { return "books"; }
