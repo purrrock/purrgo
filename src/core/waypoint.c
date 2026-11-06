@@ -1,13 +1,15 @@
 #include "purrgo/waypoint.h"
 #include "purrgo/config.h"
 #include "purrgo/fs_hal.h"
-#include "purrgo/gfx_circle.h"
-#include "purrgo/gfx_line.h"
+#include "purrgo/gfx_icon.h"
 #include "purrgo/gpx_parser.h"
 #include "purrgo/logger.h"
 #include "purrgo/purrgo_format.h"
+#include "purrgo/purrgo_poi_icons.h"
 #include "map_projection.h"
 #include <string.h>
+
+_Static_assert(PURRGO_WPT_TARGET_ICON < PURRGO_POI_ICON_COUNT, "wpt target icon out of range");
 
 /* Размер блока чтения GPX с SD. */
 #define WPT_READ_CHUNK      512u
@@ -113,6 +115,139 @@ void purrgo_wpt_clear(void)
     app_config.wpt_lon_1e7 = 0;
     app_config.wpt_name[0] = '\0';
     memset(&s_nav, 0, sizeof s_nav);
+}
+
+
+/* ------------------------------------------------------------------ */
+/*  Запись точки в WAYPTS                                               */
+/* ------------------------------------------------------------------ */
+
+/* Файлы точек: MP + 6 цифр + .GPX (8.3, без длинных имён FAT). */
+#define WPT_SAVE_PREFIX     "MP"
+#define WPT_SAVE_DIGITS     6u
+#define WPT_SAVE_MAX_INDEX  999999u
+
+/* Номер из имени вида MPnnnnnn.GPX (регистр любой). false - имя другое. */
+static bool saved_file_index(const char *name, uint32_t *index_out)
+{
+    if (name == NULL || strlen(name) != 2u + WPT_SAVE_DIGITS + 4u) {
+        return false;
+    }
+    if ((name[0] != 'M' && name[0] != 'm') || (name[1] != 'P' && name[1] != 'p')) {
+        return false;
+    }
+
+    uint32_t v = 0;
+    for (size_t i = 2; i < 2u + WPT_SAVE_DIGITS; i++) {
+        if (name[i] < '0' || name[i] > '9') {
+            return false;
+        }
+        v = v * 10u + (uint32_t)(name[i] - '0');
+    }
+
+    const char *ext = name + 2u + WPT_SAVE_DIGITS;
+    if (ext[0] != '.' ||
+        (ext[1] != 'G' && ext[1] != 'g') ||
+        (ext[2] != 'P' && ext[2] != 'p') ||
+        (ext[3] != 'X' && ext[3] != 'x')) {
+        return false;
+    }
+
+    *index_out = v;
+    return true;
+}
+
+/* Самый большой номер среди MPnnnnnn.GPX; 0 - файлов нет. false - каталог не открылся. */
+static bool saved_max_index(const char *dir_path, uint32_t *max_out)
+{
+    purrgo_dir_t *dir = purrgo_fs_opendir(dir_path);
+
+    if (dir == NULL) {
+        return false;
+    }
+
+    uint32_t max_index = 0;
+    purrgo_fs_dirent_t entry;
+
+    while (purrgo_fs_readdir(dir, &entry)) {
+        uint32_t idx;
+
+        if (!entry.is_directory && saved_file_index(entry.name, &idx) && idx > max_index) {
+            max_index = idx;
+        }
+    }
+    purrgo_fs_closedir(dir);
+
+    *max_out = max_index;
+    return true;
+}
+
+bool purrgo_wpt_save_to_waypts(int32_t lat_1e7, int32_t lon_1e7,
+                               char *name_out, size_t name_size)
+{
+    if (lat_1e7 < -900000000 || lat_1e7 > 900000000 ||
+        lon_1e7 < -1800000000 || lon_1e7 > 1800000000) {
+        return false;
+    }
+
+    const char *dir_path = purrgo_fs_get_waypts_path();
+    uint32_t max_index;
+
+    if (!saved_max_index(dir_path, &max_index) || max_index >= WPT_SAVE_MAX_INDEX) {
+        PURRGO_LOGE("wpt: WAYPTS unavailable or full\n\r");
+        return false;
+    }
+    const uint32_t index = max_index + 1u;
+
+    char path[PURRGO_FS_MAX_PATH + 16];
+    const int pn = purrgo_snprintf(path, sizeof path, "%s/%s%06u.GPX", dir_path,
+                                   WPT_SAVE_PREFIX, (unsigned)index);
+    if (pn <= 0 || (size_t)pn >= sizeof path) {
+        return false;
+    }
+
+    char name[PURRGO_WPT_NAME_MAX];
+    (void)purrgo_snprintf(name, sizeof name, "%s%u", WPT_SAVE_PREFIX, (unsigned)index);
+
+    const int32_t lat_abs = lat_1e7 < 0 ? -lat_1e7 : lat_1e7;
+    const int32_t lon_abs = lon_1e7 < 0 ? -lon_1e7 : lon_1e7;
+
+    char text[320];
+    const int tn = purrgo_snprintf(text, sizeof text,
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+        "<gpx version=\"1.1\" creator=\"PurrGo\">\n"
+        "<wpt lat=\"%s%d.%07d\" lon=\"%s%d.%07d\">\n"
+        "  <name>%s</name>\n"
+        "</wpt>\n"
+        "</gpx>\n",
+        lat_1e7 < 0 ? "-" : "", (int)(lat_abs / 10000000), (int)(lat_abs % 10000000),
+        lon_1e7 < 0 ? "-" : "", (int)(lon_abs / 10000000), (int)(lon_abs % 10000000),
+        name);
+    if (tn <= 0 || (size_t)tn >= sizeof text) {
+        return false;
+    }
+
+    /* Новое имя заведомо свободно (номер больше всех имеющихся): существующий файл не затирается. */
+    purrgo_file_t *file = purrgo_fs_open(path, FS_WRITE_CREATE);
+
+    if (file == NULL) {
+        PURRGO_LOGE("wpt: cannot create %s\n\r", path);
+        return false;
+    }
+
+    const bool written = purrgo_fs_write(file, (const uint8_t *)text, (uint32_t)tn) == (uint32_t)tn;
+    const bool synced = written && purrgo_fs_sync(file);
+    const bool closed = purrgo_fs_close(file);
+
+    if (!(written && synced && closed)) {
+        PURRGO_LOGE("wpt: write failed %s\n\r", path);
+        return false;
+    }
+
+    if (name_out != NULL && name_size > 0) {
+        (void)purrgo_snprintf(name_out, name_size, "%s", name);
+    }
+    return true;
 }
 
 
@@ -366,8 +501,13 @@ bool purrgo_wpt_list_truncated(void)
 /*  Карта                                                               */
 /* ------------------------------------------------------------------ */
 
-/* Радиус кольца символа цели, px. */
-#define WPT_MARK_R 5
+/*
+ * Иконка цели - булавка 11x11, остриё в нижнем центральном пикселе (ряд 10,
+ * столбец 5). gfx_draw_icon_11x11() ставит центр иконки в (x, y), поэтому центр
+ * сдвигается вверх на 5 px: остриё приходится ровно на координату цели.
+ */
+#define WPT_ICON_HALF       ((int)(PURRGO_POI_ICON_WIDTH / 2u))
+#define WPT_ICON_TIP_DY     ((int)(PURRGO_POI_ICON_HEIGHT / 2u))
 
 void purrgo_wpt_render(gfx_context_t *gfx, const purrgo_bbox_t *camera,
                        const purrgo_viewport_t *vp)
@@ -379,19 +519,14 @@ void purrgo_wpt_render(gfx_context_t *gfx, const purrgo_bbox_t *camera,
     int16_t sx, sy;
     project_to_screen(app_config.wpt_lon_1e7, app_config.wpt_lat_1e7, camera, vp, &sx, &sy);
 
-    /* Вне окна карты (с запасом на размер символа) символ не рисуется. */
-    const int m = WPT_MARK_R + 2;
-    if (sx < vp->offset_x - m || sx > vp->offset_x + (int)vp->width + m ||
-        sy < vp->offset_y - m || sy > vp->offset_y + (int)vp->height + m) {
+    /* Иконка занимает x: sx-5..sx+5, y: sy-10..sy. Целиком вне окна карты - не рисуется. */
+    if (sx + WPT_ICON_HALF < vp->offset_x ||
+        sx - WPT_ICON_HALF > vp->offset_x + (int)vp->width - 1 ||
+        sy < vp->offset_y ||
+        sy - 2 * WPT_ICON_TIP_DY > vp->offset_y + (int)vp->height - 1) {
         return;
     }
 
-    /* Белая подложка, чёрное кольцо и крест: видно и на тёмной, и на светлой карте. */
-    gfx_set_color(gfx, BLACK, WHITE);        /* заливка кругов и прямоугольников - цветом фона */
-    gfx_fill_circle(gfx, sx, sy, WPT_MARK_R + 1);
-
-    gfx_set_color(gfx, BLACK, gfx->color_bg);
-    gfx_draw_circle(gfx, sx, sy, WPT_MARK_R);
-    gfx_draw_line(gfx, (int16_t)(sx - WPT_MARK_R - 2), sy, (int16_t)(sx + WPT_MARK_R + 2), sy);
-    gfx_draw_line(gfx, sx, (int16_t)(sy - WPT_MARK_R - 2), sx, (int16_t)(sy + WPT_MARK_R + 2));
+    gfx_draw_icon_11x11(gfx, sx, (int16_t)(sy - WPT_ICON_TIP_DY),
+                        purrgo_poi_icons[PURRGO_WPT_TARGET_ICON]);
 }
