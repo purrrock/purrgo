@@ -63,6 +63,19 @@ else()
     set(_purrgo_log_level ${PURRGO_LOG_LEVEL})
 endif()
 add_compile_definitions(PURRGO_LOG_LEVEL=${_purrgo_log_level})
+
+# Host-тесты рассчитаны на идеальный делитель батареи 1 МОм + 1 МОм без поправки
+# (см. tests/host/test_power_source.c). Фактические значения под конкретную плату
+# (PURRGO_HW_BATT_DIV_R_*, PURRGO_HW_BATT_CAL_PERMILLE в hardware_config.h) на
+# результат тестов влиять не должны, поэтому в пресете linux-gcc-test они
+# подменяются идеальными. Прошивка и эмулятор эту опцию не используют.
+option(PURRGO_BATT_IDEAL_DIVIDER "Use ideal 1M+1M battery divider (host tests only)" OFF)
+if(PURRGO_BATT_IDEAL_DIVIDER)
+    add_compile_definitions(
+        PURRGO_HW_BATT_DIV_R_TOP_OHM=1000000u
+        PURRGO_HW_BATT_DIV_R_BOTTOM_OHM=1000000u
+        PURRGO_HW_BATT_CAL_PERMILLE=1000u)
+endif()
 message(STATUS "PurrGO log level: ${_purrgo_log_level}")
 
 # Опции эмуляции GNSS (только PC; в прошивке мок не используется).

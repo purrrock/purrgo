@@ -23,6 +23,18 @@
 static uint32_t g_now;
 uint32_t purrgo_system_time_ms(void) { return g_now; }
 
+/* Переносимый аналог GNU memmem (при -std=c11 он не объявлен). */
+static bool buf_contains(const uint8_t *hay, uint32_t hay_len, const char *needle)
+{
+    size_t n = strlen(needle);
+    if (n == 0u) { return true; }
+    if (hay_len < n) { return false; }
+    for (uint32_t i = 0; i + n <= hay_len; i++) {
+        if (memcmp(hay + i, needle, n) == 0) { return true; }
+    }
+    return false;
+}
+
 static void feed(const char *body)
 {
     char line[160];
@@ -120,7 +132,7 @@ static void test_supply_low(void)
         uint32_t size = 0;
         const uint8_t *d = fake_fs_data(first_track, &size);
         CHECK(d != NULL && size > 0);
-        CHECK(d != NULL && size >= 6 && memmem(d, size, "</gpx>", 6) != NULL);   /* футер записан */
+        CHECK(d != NULL && buf_contains(d, size, "</gpx>"));   /* футер записан */
     }
 
     /* Пока напряжение низкое: ни старта трека, ни повторных вызовов размонтирования. */
