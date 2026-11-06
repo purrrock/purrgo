@@ -90,6 +90,7 @@
                 "PURRGO_BUILD_EMULATOR": "OFF",
                 "PURRGO_SANITIZE": "ON",
                 "PURRGO_WERROR": "ON",
+                "PURRGO_BATT_IDEAL_DIVIDER": "ON",
                 "USE_MOCK_GNSS": "OFF"
             }
         },
