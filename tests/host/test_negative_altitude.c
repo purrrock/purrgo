@@ -205,11 +205,11 @@ static void test_ui_renders_minus_sign(void)
     CHECK(memcmp(neg, neg2, sizeof neg) == 0);        /* детерминированно */
     CHECK(memcmp(neg, pos, sizeof neg) != 0);         /* знак минус виден на экране */
 
-    /* Различия только в строке ALT (шестая строка сетки: y = 10 + 5 * 12 = 70 .. 80). */
+    /* Различия только в строке ALT (одиннадцатая строка сетки: y = 10 + 10 * 12 = 130 .. 140). */
     int outside = 0, inside = 0;
     for (int y = 0; y < H; y++) {
         for (int x = 0; x < W; x++) {
-            if (neg[y * W + x] != pos[y * W + x]) { (y >= 70 && y < 82) ? inside++ : outside++; }
+            if (neg[y * W + x] != pos[y * W + x]) { (y >= 130 && y < 142) ? inside++ : outside++; }
         }
     }
     CHECK(inside > 0);
@@ -217,7 +217,7 @@ static void test_ui_renders_minus_sign(void)
 
     /* Строка с минусом шире и не обрезана: "-430 m" не пересекается с правым краем экрана. */
     int rightmost = 0;
-    for (int y = 70; y < 82; y++) { for (int x = 0; x < W; x++) { if (neg[y * W + x] != 3 + 1 && neg[y * W + x] != 0) { if (x > rightmost) rightmost = x; } } }
+    for (int y = 130; y < 142; y++) { for (int x = 0; x < W; x++) { if (neg[y * W + x] != 3 + 1 && neg[y * W + x] != 0) { if (x > rightmost) rightmost = x; } } }
     CHECK(rightmost < W - 1);
     CHECK(memcmp(zero, neg, sizeof zero) != 0);
 
