@@ -7,6 +7,7 @@
 #if PURRGO_GNSS_MONITOR
 
 #include "gnss_diag.h"
+#include "gnss_pps.h"
 #include "main.h"
 #include "purrgo/logger.h"
 
@@ -19,8 +20,13 @@
 #define MONITOR_PERIOD_FAST_MS    5000U    /* первые 60 с */
 #define MONITOR_PERIOD_SLOW_MS   30000U
 #define MONITOR_FAST_PHASE_MS    60000U
+#define MONITOR_PPS_PERIOD_MS    60000U   /* отчёт по 1PPS, см. TODO "Проверить 1PPS" */
 
 static gnss_diag_t s_diag;
+static gnss_pps_t s_pps;
+static uint32_t s_t_pps_next;
+static uint32_t s_pps_edges_at_last;
+static uint32_t s_rmc_a_at_last;
 static bool s_started;
 static uint32_t s_t_start;
 static uint32_t s_t_next;
@@ -33,8 +39,12 @@ static bool s_last_reported_fix;
 void purrgo_gnss_monitor_init(void)
 {
     gnss_diag_init(&s_diag);
+    gnss_pps_init(&s_pps);
+    s_pps_edges_at_last = 0U;
+    s_rmc_a_at_last = 0U;
     s_t_start = HAL_GetTick();
     s_t_next = s_t_start + MONITOR_FIRST_REPORT_MS;
+    s_t_pps_next = s_t_start + MONITOR_PPS_PERIOD_MS;
     s_bytes_at_last = 0U;
     s_last_state = GNSS_DIAG_NO_DATA;
     s_last_reported_fix = false;
@@ -43,9 +53,60 @@ void purrgo_gnss_monitor_init(void)
     s_started = true;
 }
 
+void purrgo_gnss_monitor_stop(void)
+{
+    s_started = false;
+}
+
 void purrgo_gnss_monitor_feed(uint8_t byte)
 {
     gnss_diag_feed(&s_diag, byte);
+}
+
+void purrgo_gnss_monitor_pps_edge(uint32_t now_ms)
+{
+    /* Из прерывания EXTI8; до purrgo_gnss_monitor_init() фронты не считаются. */
+    if (s_started)
+    {
+        gnss_pps_edge(&s_pps, now_ms);
+    }
+}
+
+/*
+ * Раз в минуту: фронты 1PPS и RMC со статусом A за период и всего. При исправном
+ * 1PPS за минуту приходит около 60 фронтов и столько же RMC с A (импульсы идут
+ * только при решении), интервалы между фронтами лежат около 1000 мс.
+ */
+static void pps_report(uint32_t now)
+{
+    if ((int32_t)(now - s_t_pps_next) < 0)
+    {
+        return;
+    }
+    s_t_pps_next = now + MONITOR_PPS_PERIOD_MS;
+
+    gnss_pps_stats_t st;
+
+    gnss_pps_snapshot(&s_pps, &st);
+
+    const uint32_t d_edges = st.edges - s_pps_edges_at_last;
+    const uint32_t d_rmc = s_diag.rmc_valid_count - s_rmc_a_at_last;
+
+    s_pps_edges_at_last = st.edges;
+    s_rmc_a_at_last = s_diag.rmc_valid_count;
+
+    PURRGO_LOG("GNSS: PPS edges=%lu (+%lu) RMC-A=%lu (+%lu) ok=%lu short=%lu gaps=%lu missed=%lu "
+               "drift=%lu interval=%lu..%lu ms\r\n",
+               (unsigned long)st.edges, (unsigned long)d_edges,
+               (unsigned long)s_diag.rmc_valid_count, (unsigned long)d_rmc,
+               (unsigned long)st.ok, (unsigned long)st.too_short, (unsigned long)st.gaps,
+               (unsigned long)st.missed, (unsigned long)st.drift,
+               (unsigned long)st.min_ms, (unsigned long)st.max_ms);
+
+    if ((d_edges != 0U) && (d_rmc == 0U))
+    {
+        PURRGO_LOGW("GNSS: PPS edges without a valid RMC in the last period\r\n");
+    }
 }
 
 void purrgo_gnss_monitor_uart_error(uint32_t error_code)
@@ -87,6 +148,8 @@ void purrgo_gnss_monitor_process(void)
     }
 
     const uint32_t now = HAL_GetTick();
+
+    pps_report(now);
 
     if ((int32_t)(now - s_t_next) < 0)
     {

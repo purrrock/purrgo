@@ -4,6 +4,99 @@
 #include "purrgo/gfx_rect.h"
 #include "purrgo/config.h"
 #include "purrgo/purrgo_format.h"
+#include "purrgo/pgo_text.h"
+#include "purrgo/waypoint.h"
+#include "purrgo/gfx_line.h"
+#include <string.h>
+
+/* Окно стрелки на цель: правее значений LAT/LON, выше блока WPT. */
+#define TRIP_ARROW_BOX_X 128
+#define TRIP_ARROW_BOX_Y 38
+#define TRIP_ARROW_BOX_W 46
+#define TRIP_ARROW_BOX_H 48
+#define TRIP_ARROW_CX    150
+#define TRIP_ARROW_CY    66
+#define TRIP_ARROW_R     16
+
+/* Ширина поля значения в символах (от x = 40 до края экрана 176). */
+#define TRIP_VALUE_CHARS 22
+
+/* Дополняет строку пробелами до width символов (стирает прежний текст при перерисовке). */
+static void pad_to(char* buf, size_t size, size_t width)
+{
+    size_t n = strlen(buf);
+
+    if (width + 1 > size) {
+        width = size - 1;
+    }
+    if (n > width) {
+        n = width;
+        buf[n] = '\0';
+    }
+    while (n < width) {
+        buf[n++] = ' ';
+    }
+    buf[n] = '\0';
+}
+
+/* Блок цели навигации: имя, расстояние, пеленг и стрелка. y_pos - первая из трёх строк. */
+static void ui_trip_render_wpt(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, int16_t y_pos)
+{
+    char buf[48];
+    const purrgo_waypoint_t* wpt = purrgo_wpt_target();
+    const purrgo_wpt_nav_t* nav = purrgo_wpt_nav();
+    const int16_t val_x = 40;
+
+    /* Окно стрелки очищается при каждой перерисовке. */
+    gfx_set_color(gfx, 0, 3);     /* fill_rect заливает цветом фона (белый) */
+    gfx_fill_rect(gfx, TRIP_ARROW_BOX_X, TRIP_ARROW_BOX_Y, TRIP_ARROW_BOX_W, TRIP_ARROW_BOX_H);
+    gfx_set_color(gfx, 0, 3);
+
+    /* Имя (UTF-8 из GPX -> PurrGO-256). */
+    purrgo_snprintf(buf, sizeof(buf), "%s", (wpt != NULL) ? wpt->name : "NONE");
+    purrgo_utf8_to_pgo_inplace(buf);
+    pad_to(buf, sizeof(buf), TRIP_VALUE_CHARS);
+    gfx_draw_string(gfx, val_x, y_pos, buf);
+    y_pos = (int16_t)(y_pos + 12);
+
+    /* Расстояние. */
+    if (wpt != NULL && nav->valid) {
+        char dist[16];
+
+        purrgo_wpt_format_distance(dist, sizeof(dist), nav->nav.distance_to_wp_m);
+        purrgo_snprintf(buf, sizeof(buf), "%s%s", dist, nav->nav.is_arrived ? " ARRIVED" : "");
+    } else {
+        purrgo_snprintf(buf, sizeof(buf), "%s", (wpt != NULL) ? "---" : "");
+    }
+    pad_to(buf, sizeof(buf), TRIP_VALUE_CHARS);
+    gfx_draw_string(gfx, val_x, y_pos, buf);
+    y_pos = (int16_t)(y_pos + 12);
+
+    /* Пеленг (истинный, от севера). */
+    if (wpt != NULL && nav->valid) {
+        purrgo_snprintf(buf, sizeof(buf), "%03d deg %s",
+                        (int)nav->nav.bearing_to_wp_deg,
+                        purrgo_wpt_cardinal(nav->nav.bearing_to_wp_deg));
+    } else {
+        purrgo_snprintf(buf, sizeof(buf), "%s", (wpt != NULL) ? "---" : "");
+    }
+    pad_to(buf, sizeof(buf), TRIP_VALUE_CHARS - 6);   /* правее - окно стрелки */
+    gfx_draw_string(gfx, val_x, y_pos, buf);
+
+    /* Стрелка: вверх - направление движения (если курс надёжен), иначе север. */
+    if (wpt != NULL && nav->valid) {
+        uint16_t angle = 0;
+        const bool course_up = purrgo_wpt_arrow_angle(gnss, nav->nav.bearing_to_wp_deg, &angle);
+        purrgo_wpt_pt_t pts[4];
+
+        gfx_draw_string(gfx, TRIP_ARROW_BOX_X + 2, TRIP_ARROW_BOX_Y, course_up ? "CRS" : "N");
+
+        purrgo_wpt_arrow_points(TRIP_ARROW_CX, TRIP_ARROW_CY, TRIP_ARROW_R, angle, pts);
+        gfx_draw_thick_line(gfx, pts[0].x, pts[0].y, pts[1].x, pts[1].y, 2);
+        gfx_draw_thick_line(gfx, pts[1].x, pts[1].y, pts[2].x, pts[2].y, 2);
+        gfx_draw_thick_line(gfx, pts[1].x, pts[1].y, pts[3].x, pts[3].y, 2);
+    }
+}
 
 void ui_trip_render_grid(gfx_context_t* gfx) {
     gfx_set_color(gfx, 0, 3);
@@ -29,6 +122,11 @@ void ui_trip_render_grid(gfx_context_t* gfx) {
     y_pos = (int16_t)(y_pos + 12);
     gfx_draw_string(gfx, 10, y_pos, "CRS:");
     y_pos = (int16_t)(y_pos + 12);
+    gfx_draw_string(gfx, 10, y_pos, "WPT:");
+    y_pos = (int16_t)(y_pos + 12);
+    gfx_draw_string(gfx, 10, y_pos, "DST:");
+    y_pos = (int16_t)(y_pos + 12);
+    gfx_draw_string(gfx, 10, y_pos, "BRG:");
 }
 
 void ui_trip_render_values(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const purrgo_sun_info_t* sun) {
@@ -97,6 +195,10 @@ void ui_trip_render_values(gfx_context_t* gfx, const purrgo_gnss_solution_t* gns
     }
     gfx_draw_string(gfx, val_x, y_pos, buf);
     y_pos = (int16_t)(y_pos + 12);
+
+    // WPT / DST / BRG и стрелка на цель
+    ui_trip_render_wpt(gfx, gnss, y_pos);
+    y_pos = (int16_t)(y_pos + 36);
 
     // SUN INFO (No grid text split here, as this part varies completely based on state.
     // Usually, we would split it, but it's easier to just draw it whole here, overwriting

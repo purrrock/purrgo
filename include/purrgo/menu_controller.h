@@ -73,6 +73,16 @@ purrgo_power_source_t menu_app_get_draft_power_source(void);
 int menu_app_get_dir_list(purrgo_fs_dirent_t** list_out);
 int menu_app_get_dir_cursor(void);
 
+/*
+ * Выбор цели навигации (WAYPOINT). Строки: (none), HERE, MAP CENTER, затем точки
+ * GPX-файла маршрута. Видимое окно списка начинается с menu_app_get_wpt_top().
+ */
+int menu_app_get_wpt_count(void);
+int menu_app_get_wpt_cursor(void);
+int menu_app_get_wpt_top(void);
+int menu_app_get_wpt_visible(void);
+void menu_app_get_wpt_item_text(int index, char* buf, size_t size);
+
 /* Слои карты. */
 int menu_app_get_map_layers_cursor(void);
 /* Маска видимости слоёв в черновике: purrgo_layer_on(mask, PURRGO_LAYER_*). */

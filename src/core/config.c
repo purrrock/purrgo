@@ -210,6 +210,14 @@ void purrgo_config_init(void)
     app_config.route_file[0] = '\0';
 
     /*
+     * Цель навигации не задана.
+     */
+    app_config.wpt_valid = false;
+    app_config.wpt_lat_1e7 = 0;
+    app_config.wpt_lon_1e7 = 0;
+    app_config.wpt_name[0] = '\0';
+
+    /*
      * Книга не открывалась.
      */
     app_config.book_file[0] = '\0';
@@ -328,6 +336,11 @@ bool purrgo_config_load(void)
 
     char* line = buf;
 
+    /* Цель навигации собирается из нескольких ключей: задана, если есть SET, LAT и LON. */
+    bool wpt_set = false;
+    bool wpt_have_lat = false;
+    bool wpt_have_lon = false;
+
     while (*line) {
         char* end = line;
 
@@ -398,6 +411,39 @@ bool purrgo_config_load(void)
                     purrgo_snprintf(
                         app_config.route_file,
                         sizeof(app_config.route_file),
+                        "%s",
+                        val
+                    );
+                }
+            }
+
+            /*
+             * Цель навигации (Waypoint).
+             */
+            else if (strcmp(key, "WPT_SET") == 0) {
+                wpt_set = (parse_int32(val) != 0);
+            }
+            else if (strcmp(key, "WPT_LAT") == 0) {
+                int32_t lat = parse_int32(val);
+
+                if (lat >= -900000000 && lat <= 900000000) {
+                    app_config.wpt_lat_1e7 = lat;
+                    wpt_have_lat = true;
+                }
+            }
+            else if (strcmp(key, "WPT_LON") == 0) {
+                int32_t lon = parse_int32(val);
+
+                if (lon >= -1800000000 && lon <= 1800000000) {
+                    app_config.wpt_lon_1e7 = lon;
+                    wpt_have_lon = true;
+                }
+            }
+            else if (strcmp(key, "WPT_NAME") == 0) {
+                if (strlen(val) < sizeof(app_config.wpt_name)) {
+                    purrgo_snprintf(
+                        app_config.wpt_name,
+                        sizeof(app_config.wpt_name),
                         "%s",
                         val
                     );
@@ -569,6 +615,8 @@ bool purrgo_config_load(void)
         }
     }
 
+    app_config.wpt_valid = wpt_set && wpt_have_lat && wpt_have_lon;
+
     /*
      * Применяем загруженный режим записи трека.
      */
@@ -618,7 +666,11 @@ bool purrgo_config_save(void)
         "POWER_SRC=%d\n"
         "BOOK_FILE=%.*s\n"
         "BOOK_CRC=%08X\n"
-        "BOOK_PAGE=%u\n",
+        "BOOK_PAGE=%u\n"
+        "WPT_SET=%d\n"
+        "WPT_LAT=%d\n"
+        "WPT_LON=%d\n"
+        "WPT_NAME=%.*s\n",
 
         (int)app_config.tz_offset_minutes,
 
@@ -647,7 +699,16 @@ bool purrgo_config_save(void)
 
         (unsigned)app_config.book_crc32,
 
-        (unsigned)app_config.book_page
+        (unsigned)app_config.book_page,
+
+        app_config.wpt_valid ? 1 : 0,
+
+        (int)app_config.wpt_lat_1e7,
+
+        (int)app_config.wpt_lon_1e7,
+
+        (int)(sizeof(app_config.wpt_name) - 1),
+        app_config.wpt_name
     );
 
     /*

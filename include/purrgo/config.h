@@ -6,6 +6,7 @@
 #include "purrgo/track_logger.h"
 #include "purrgo/map_types.h"
 #include "purrgo/battery.h"
+#include "purrgo/navigation.h"
 
 
 /* purrgo_poi_mode_t и purrgo_map_details_t определены в map_types.h */
@@ -67,6 +68,16 @@ typedef struct {
      * Пустая строка - маршрут не выбран. Ключ ROUTE_FILE в PURRGO.CFG.
      */
     char route_file[PURRGO_ROUTE_NAME_MAX];
+
+    /*
+     * Активная цель навигации (Waypoint): wpt_valid - цель задана. Хранится в
+     * PURRGO.CFG (ключи WPT_SET, WPT_LAT, WPT_LON, WPT_NAME) и переживает
+     * выключение. Задаётся и снимается в меню WAYPOINT (purrgo/waypoint.h).
+     */
+    bool    wpt_valid;
+    int32_t wpt_lat_1e7;
+    int32_t wpt_lon_1e7;
+    char    wpt_name[PURRGO_WPT_NAME_MAX];
 
     /*
      * Последняя широта для центрирования при холодном старте.

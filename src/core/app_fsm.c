@@ -16,6 +16,7 @@
 #include "purrgo/hardware_config.h"
 #include "purrgo/book_reader.h"
 #include "purrgo/battery.h"
+#include "purrgo/waypoint.h"
 
 #define PURRGO_GNSS_MARKER_UPDATE_DISTANCE_M 5
 
@@ -35,6 +36,9 @@
  */
 #define PURRGO_UI_SPEED_THRESHOLD_KNOTS_100 100   /* 1 уз ~ 1,85 км/ч */
 #define PURRGO_UI_ALT_THRESHOLD_M           5
+/* Цель навигации на экране Trip computer: заметное изменение расстояния и пеленга. */
+#define PURRGO_UI_WPT_DIST_THRESHOLD_M      5
+#define PURRGO_UI_WPT_BEARING_THRESHOLD_DEG 5
 
 // Текущее состояние конечного автомата
 static purrgo_state_t current_state;
@@ -57,6 +61,10 @@ static uint32_t render_not_before_ms = 0;
 static int32_t shown_speed_knots_100 = 0;
 static int32_t shown_alt_m = 0;
 static uint8_t shown_satellites = 0;
+static bool shown_wpt_valid = false;
+static bool shown_wpt_arrived = false;
+static uint32_t shown_wpt_dist_m = 0;
+static uint16_t shown_wpt_bearing_deg = 0;
 static bool shown_pos_valid = false;
 static int32_t shown_lat_1e7 = 0;
 static int32_t shown_lon_1e7 = 0;
@@ -575,6 +583,9 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
      * после ухода с карты расхождение с последним маркером оставалось бы
      * "значительным" вечно и вызывало перерисовку на каждом интервале.
      */
+    /* Расстояние и пеленг до цели (раз в секунду, вместе с остальными данными). */
+    purrgo_wpt_update(current_fix);
+
     const bool use_marker_ref = (current_state == APP_STATE_MAP);
     const bool ref_valid = use_marker_ref ? last_rendered_pos_valid : shown_pos_valid;
     const int32_t ref_lat = use_marker_ref ? last_rendered_fix.lat_1e7 : shown_lat_1e7;
@@ -624,6 +635,24 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
             da >= PURRGO_UI_ALT_THRESHOLD_M ||
             current_fix->satellites_tracked != shown_satellites) {
             data_changed = true;
+        }
+
+        const purrgo_wpt_nav_t* wn = purrgo_wpt_nav();
+        int32_t dd = (int32_t)wn->nav.distance_to_wp_m - (int32_t)shown_wpt_dist_m;
+        int32_t db = (int32_t)wn->nav.bearing_to_wp_deg - (int32_t)shown_wpt_bearing_deg;
+        if (dd < 0) dd = -dd;
+        if (db < 0) db = -db;
+        if (db > 180) db = 360 - db;
+
+        if (wn->valid != shown_wpt_valid ||
+            (wn->valid && (wn->nav.is_arrived != shown_wpt_arrived ||
+                           dd >= PURRGO_UI_WPT_DIST_THRESHOLD_M ||
+                           db >= PURRGO_UI_WPT_BEARING_THRESHOLD_DEG))) {
+            data_changed = true;
+            shown_wpt_valid = wn->valid;
+            shown_wpt_arrived = wn->nav.is_arrived;
+            shown_wpt_dist_m = wn->nav.distance_to_wp_m;
+            shown_wpt_bearing_deg = wn->nav.bearing_to_wp_deg;
         }
     }
 
@@ -677,6 +706,7 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
         case APP_STATE_MENU_DIR_SELECT:
         case APP_STATE_MENU_MAP_LAYERS:
         case APP_STATE_MENU_ROUTE_SELECT:
+        case APP_STATE_MENU_WPT_SELECT:
             break;  // меню не требует периодического обновления
 
         case APP_STATE_BOOK_LIST:

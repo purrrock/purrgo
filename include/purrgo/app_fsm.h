@@ -20,6 +20,7 @@ typedef enum {
     APP_STATE_MENU_DIR_SELECT, // Подсостояние: Файловый браузер для выбора каталога с векторными картами
     APP_STATE_MENU_MAP_LAYERS, // Подсостояние: Экран настройки видимости слоев карты
     APP_STATE_MENU_ROUTE_SELECT, // Подсостояние: Выбор GPX-файла маршрута из каталога ROUTES
+    APP_STATE_MENU_WPT_SELECT, // Подсостояние: Выбор цели навигации (Waypoint): снять, HERE, центр карты, точки из GPX
     APP_STATE_BOOK_LIST,      // Читалка: список книг из каталога BOOKS (GNSS и запись трека выключены)
     APP_STATE_BOOK_READ,      // Читалка: страница книги, 1-bit (см. book_reader.h)
     APP_STATE_TRACKER_SCREEN_OFF // Трекер с отключённым дисплеем: запись трека как в EXPEDITION, экран не обновляется;

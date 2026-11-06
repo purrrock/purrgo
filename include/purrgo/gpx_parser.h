@@ -11,6 +11,7 @@ typedef struct {
     purrgo_waypoint_t *waypoints; // Указатель на массив для сохранения точек
     size_t max_waypoints;         // Вместимость массива
     size_t current_count;         // Количество успешно загруженных точек
+    size_t total_seen;            // Сколько корректных <wpt> встретилось (больше current_count, если массив переполнен)
 
     // Состояние конечного автомата
     bool in_wpt;
@@ -19,6 +20,7 @@ typedef struct {
     bool inside_tag_brackets;     // Флаг нахождения внутри скобок < ... >
 
     purrgo_waypoint_t temp_wp;    // Временный буфер для собираемой точки
+    bool temp_ok;                 // У собираемой точки корректные lat и lon
     
     char tag_buffer[128];         // Буфер для накопления текущего тега
     uint8_t tag_len;

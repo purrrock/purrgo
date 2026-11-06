@@ -46,6 +46,14 @@ if(TARGET test_gnss_diag)
         ${PROJECT_SOURCE_DIR}/apps/stm32/common/gnss_diag)
 endif()
 
+# test_gnss_pps проверяет статистику импульсов 1PPS (HAL-независимый модуль прошивки STM32).
+if(TARGET test_gnss_pps)
+    target_sources(test_gnss_pps PRIVATE
+        ${PROJECT_SOURCE_DIR}/apps/stm32/common/gnss_pps/gnss_pps.c)
+    target_include_directories(test_gnss_pps PRIVATE
+        ${PROJECT_SOURCE_DIR}/apps/stm32/common/gnss_pps)
+endif()
+
 # test_display_eink проверяет очередь обновлений E-Ink (display_eink.c) поверх
 # настоящей библиотеки epd4g и модели панели; HAL подменяют заглушки stm32_shim.
 # Нужен сабмодуль third_party/eink_part_refresh.

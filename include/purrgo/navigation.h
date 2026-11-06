@@ -4,12 +4,15 @@
 #include "purrgo/gnss_types.h"
 #include "purrgo/geo.h"
 
+/* Размер имени путевой точки в байтах (UTF-8, с завершающим нулём). */
+#define PURRGO_WPT_NAME_MAX 24
+
 // Структура навигационной путевой точки (Waypoint)
 typedef struct {
     int32_t lat_1e7;
     int32_t lon_1e7;
-	int16_t ele_m;
-    char name[16];
+    int16_t ele_m;
+    char name[PURRGO_WPT_NAME_MAX];
 } purrgo_waypoint_t;
 
 // Структура текущих данных навигации

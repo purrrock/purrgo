@@ -163,6 +163,18 @@ static void route_select(purrgo_state_t* next)
 }
 
 
+static void wpt_format(char* buf, size_t size)
+{
+    purrgo_snprintf(buf, size, "WAYPOINT: %s",
+                    app_config.wpt_valid ? app_config.wpt_name : "NONE");
+}
+
+static void wpt_select(purrgo_state_t* next)
+{
+    menu_goto(next, APP_STATE_MENU_WPT_SELECT);
+}
+
+
 static void poi_format(char* buf, size_t size)
 {
     const char* name;
@@ -241,6 +253,7 @@ static const menu_item_t main_items[] = {
     { .format = tz_format, .on_select = tz_select },
     { .format = map_dir_format, .on_select = map_dir_select },
     { .format = route_format, .on_select = route_select },
+    { .format = wpt_format, .on_select = wpt_select },
     { .format = poi_format, .on_select = poi_select },
     { .format = log_format, .on_select = log_select },
     { .format = map_details_format, .on_select = map_details_select },
