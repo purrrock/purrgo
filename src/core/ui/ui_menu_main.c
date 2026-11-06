@@ -70,17 +70,5 @@ void ui_render_menu_main(gfx_context_t* gfx)
         draw_item(gfx, cursor, row, buf);
     }
 
-    /*
-     * HELP: под последней строкой списка.
-     */
-    gfx_set_color(gfx, 0, 3);
-
-    const int16_t help_y =
-        (int16_t)(CONFIG_ROW_Y0 + count * CONFIG_ROW_STEP + 5);
-
-    gfx_draw_string(gfx, 10, help_y, "UP/DN: Select");
-    gfx_draw_string(gfx, 10, (int16_t)(help_y + 15), "SEL  : Change");
-    gfx_draw_string(gfx, 10, (int16_t)(help_y + 30), "BACK : Save");
-
     ui_rows_end(&s_rows, count);
 }
