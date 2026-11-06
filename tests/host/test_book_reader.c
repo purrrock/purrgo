@@ -121,7 +121,7 @@ static uint32_t build_book(uint32_t pages, const char *title, const char *author
     wr16(g_book + 4, 1); wr16(g_book + 6, 1); wr16(g_book + 8, 64); wr16(g_book + 10, 0);
     wr32(g_book + 12, pages); wr32(g_book + 16, 64); wr32(g_book + 20, index_off);
     wr32(g_book + 24, data_off); wr32(g_book + 28, pos);
-    g_book[40] = 29; g_book[41] = 24; g_book[42] = 0;
+    g_book[40] = 29; g_book[41] = 25; g_book[42] = 0;
     wr16(g_book + 44, tl); wr16(g_book + 46, al);
     wr16(g_book + 48, 176); wr16(g_book + 50, 256);   /* окно картинок */
 
@@ -978,7 +978,7 @@ static uint32_t build_image_book(uint32_t pages, int bad_pad)
     wr16(g_book + 4, 1); wr16(g_book + 6, 1); wr16(g_book + 8, 64); wr16(g_book + 10, 0);
     wr32(g_book + 12, pages); wr32(g_book + 16, 64); wr32(g_book + 20, index_off);
     wr32(g_book + 24, data_off); wr32(g_book + 28, pos);
-    g_book[40] = 29; g_book[41] = 24; g_book[42] = 0;
+    g_book[40] = 29; g_book[41] = 25; g_book[42] = 0;
     wr16(g_book + 44, tl); wr16(g_book + 46, al);
     wr16(g_book + 48, 176); wr16(g_book + 50, 256);
 
@@ -1155,9 +1155,9 @@ static void test_line_pitch(void)
     ui_book_read_reset();
     ui_render_book_read(&g);
 
-    CHECK(PGB_SCREEN_ROWS == 24u && PGB_LINE_PITCH_PX == 10u);
-    CHECK(PGB_TEXT_TOP_PX - PGB_STATUS_H_PX == (unsigned)H - PGB_TEXT_TOP_PX - (23u * PGB_LINE_PITCH_PX + 8u));   /* поля сверху и снизу равны */
-    CHECK(PGB_TEXT_TOP_PX + 23u * PGB_LINE_PITCH_PX + 8u <= (unsigned)H);   /* 24-я строка помещается */
+    CHECK(PGB_SCREEN_ROWS == 25u && PGB_LINE_PITCH_PX == 10u);
+    CHECK(PGB_TEXT_TOP_PX - PGB_STATUS_H_PX == (unsigned)H - PGB_TEXT_TOP_PX - (24u * PGB_LINE_PITCH_PX + 8u));   /* поля сверху и снизу равны */
+    CHECK(PGB_TEXT_TOP_PX + 24u * PGB_LINE_PITCH_PX + 8u <= (unsigned)H);   /* 25-я строка помещается */
     CHECK(glyph_at(0, 0, 'P') && glyph_at(1, 0, 'A') && glyph_at(2, 0, 'G') && glyph_at(3, 0, 'E'));
     CHECK(glyph_at(0, 1, 'L') && glyph_at(1, 1, '1'));              /* вторая строка - на 10 px ниже первой */
     CHECK(glyph_at(0, 2, 'L') && glyph_at(1, 2, '2'));

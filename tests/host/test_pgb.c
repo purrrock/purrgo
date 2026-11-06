@@ -6,7 +6,7 @@
  *   sample.pgb      - LZ4 Block, кодер пакета lz4 (HC);
  *   sample_py.pgb   - LZ4 Block, встроенный кодер конвертера;
  *   sample_raw.pgb  - без сжатия.
- * Во всех трёх одно и то же: 154 строки, 7 страниц, название «Тест PGB», автор
+ * Во всех трёх одно и то же: 160 строк, 7 страниц, название «Тест PGB», автор
  * «Автор»; страница 6 (индекс 5) - случайный текст, в сжатых книгах она хранится
  * как есть.
  *
@@ -118,7 +118,7 @@ static size_t next_line(line_gen_t *g, uint8_t *out)
     static const uint8_t word2[] = { 0x95, 0xA2, 0xAE, 0xB1, 0xB2, ' ' };         /* «Хвост » */
     size_t len = 0;
     unsigned n = ++g->n;
-    if (n <= 120u) {
+    if (n <= 125u) {
         memcpy(out, word1, sizeof(word1));
         len = sizeof(word1);
         out[len++] = (uint8_t)('0' + (n / 100u) % 10u);
@@ -128,13 +128,13 @@ static size_t next_line(line_gen_t *g, uint8_t *out)
             out[len++] = ' ';
             for (unsigned i = 0; i < n % 10u; i++) { out[len++] = 'x'; }
         }
-    } else if (n <= 144u) {
+    } else if (n <= 150u) {
         for (unsigned i = 0; i < 29u; i++) {
             g->lcg = g->lcg * 1664525u + 1013904223u;
             out[len++] = (uint8_t)alphabet[(g->lcg >> 16) % 62u];
         }
     } else {
-        unsigned k = n - 144u;
+        unsigned k = n - 150u;
         memcpy(out, word2, sizeof(word2));
         len = sizeof(word2);
         out[len++] = (uint8_t)('0' + (k / 10u) % 10u);
@@ -279,7 +279,7 @@ static void test_header_decode(void)
 {
     pgb_header_t h;
     CHECK(pgb_header_decode(DATA, SIZE, &h) == PGB_OK);
-    CHECK(h.page_count == PAGES && h.cols == 29u && h.rows == 24u);
+    CHECK(h.page_count == PAGES && h.cols == 29u && h.rows == 25u);
     CHECK(h.img_w == 176u && h.img_h == 256u);
     CHECK(h.compression == (g_fx->compressed ? PGB_COMPRESSION_LZ4 : PGB_COMPRESSION_NONE));
     CHECK(h.title_length == 8u && h.author_length == 5u);
@@ -338,7 +338,7 @@ static void test_open_and_info(void)
     CHECK(pgb_read_info(BOOK, &info) == PGB_OK);
     CHECK(strcmp(info.title, "\x92\xA5\xB1\xB2 PGB") == 0);
     CHECK(strcmp(info.author, "\x80\xA2\xB2\xAE\xB0") == 0);
-    CHECK(info.page_count == PAGES && info.cols == 29u && info.rows == 24u);
+    CHECK(info.page_count == PAGES && info.cols == 29u && info.rows == 25u);
     CHECK(info.img_w == 176u && info.img_h == 256u);
     CHECK(info.compression == (g_fx->compressed ? PGB_COMPRESSION_LZ4 : PGB_COMPRESSION_NONE));
     CHECK(info.file_crc32 == rd32(DATA + 32));
@@ -349,12 +349,12 @@ static void test_open_and_info(void)
     CHECK(fake_fs_max_read_end() <= PGB_INFO_READ_SIZE);
 
     CHECK(pgb_open(BOOK, 29, 31, &b) == PGB_ERR_GEOMETRY && b.file == NULL);
-    CHECK(pgb_open(BOOK, 30, 24, &b) == PGB_ERR_GEOMETRY);
+    CHECK(pgb_open(BOOK, 30, 25, &b) == PGB_ERR_GEOMETRY);
     CHECK(fake_fs_open_handles() == 0);
 
-    CHECK(pgb_open("0:/nope.pgb", 29, 24, &b) == PGB_ERR_IO);
+    CHECK(pgb_open("0:/nope.pgb", 29, 25, &b) == PGB_ERR_IO);
     CHECK(pgb_read_info("0:/nope.pgb", &info) == PGB_ERR_IO);
-    CHECK(pgb_open(NULL, 29, 24, &b) == PGB_ERR_IO);
+    CHECK(pgb_open(NULL, 29, 25, &b) == PGB_ERR_IO);
 }
 
 /* ---- Чтение страниц --------------------------------------------------------- */
@@ -367,7 +367,7 @@ static void test_read_all_pages(void)
     uint8_t page[PGB_SCREEN_MAX_PAGE_BYTES];
     line_gen_t gen = { 0, 12345u };
     int content_ok = 1;
-    static const unsigned expected_lines[PAGES] = { 24, 24, 24, 24, 24, 24, 10 };
+    static const unsigned expected_lines[PAGES] = { 25, 25, 25, 25, 25, 25, 10 };
     for (uint32_t p = 0; p < PAGES; p++) {
         size_t len = 0;
         CHECK(pgb_page_read(&b, p, page, sizeof(page), &len) == PGB_OK);
@@ -386,7 +386,7 @@ static void test_read_all_pages(void)
         CHECK(lines_here == expected_lines[p]);
     }
     CHECK(content_ok);
-    CHECK(gen.n == 154u);
+    CHECK(gen.n == 160u);
 
     /* Какие страницы сжаты: случайная (индекс 5) хранится как есть, остальные сжаты. */
     unsigned packed = 0;
@@ -624,7 +624,7 @@ static void test_tampered_index(void)
         uint8_t *entry = data + OFF_INDEX + ENTRY * 3u;
         if (variant == 0) { entry[4] = 0; entry[5] = 0; entry[6] = 0; entry[7] = 0; }
         if (variant == 1) { entry[6] ^= 1; }
-        if (variant == 2) { entry[4] = 0xC0; entry[5] = 0x03; entry[6] = 0xC0; entry[7] = 0x03; }   /* 960 > 719 */
+        if (variant == 2) { entry[4] = 0xC0; entry[5] = 0x03; entry[6] = 0xC0; entry[7] = 0x03; }   /* 960 > 749 */
         if (variant == 3) { entry[6] = (uint8_t)(entry[6] - 1u); entry[7] = entry[7]; }              /* raw на 1 меньше */
         reseal(data, SIZE);
         put(data, SIZE);
@@ -663,17 +663,17 @@ static void test_lz4_flag_and_geometry(void)
     CHECK(pgb_page_read(&b, 0, page, sizeof(page), &len) == PGB_OK);
     pgb_close(&b);
 
-    data[40] = 255;    /* cols = 255: страница (255 x 24 + 23 байта) могла бы быть длиннее scratch */
+    data[40] = 255;    /* cols = 255: страница (255 x 25 + 24 байта) могла бы быть длиннее scratch */
     reseal(data, SIZE);
     put(data, SIZE);
-    CHECK(pgb_open(BOOK, 255, 24, &b) == PGB_ERR_GEOMETRY && b.file == NULL);
+    CHECK(pgb_open(BOOK, 255, 25, &b) == PGB_ERR_GEOMETRY && b.file == NULL);
 
     /* без сжатия геометрия шире экрана допустима (scratch не нужен) */
     memcpy(data, DATA, SIZE);
     data[40] = 255;
     reseal(data, SIZE);
     put(data, SIZE);
-    CHECK(pgb_open(BOOK, 255, 24, &b) == PGB_OK);
+    CHECK(pgb_open(BOOK, 255, 25, &b) == PGB_OK);
     pgb_close(&b);
 
     /* окно картинок должно совпадать с экраном читалки */
@@ -765,7 +765,7 @@ static void test_memory_image(void)
         CHECK(pgb_page_locate(&h, DATA, n, &e) == PGB_OK);
 
         pgb_book_t book;
-        CHECK(pgb_open(BOOK, 29, 24, &book) == PGB_OK);
+        CHECK(pgb_open(BOOK, 29, 25, &book) == PGB_OK);
         CHECK(pgb_page_read(&book, n, ref, sizeof ref, &ref_len) == PGB_OK);
         pgb_close(&book);
 
@@ -866,7 +866,7 @@ static void test_image_pages(void)
     pgb_book_t b;
     pgb_header_t h;
 
-    CHECK(PGB_SCREEN_MAX_PAGE_BYTES == 5632u && PGB_SCREEN_MAX_TEXT_BYTES == 719u);
+    CHECK(PGB_SCREEN_MAX_PAGE_BYTES == 5632u && PGB_SCREEN_MAX_TEXT_BYTES == 749u);
     CHECK(PGB_IMG_ROW_BYTES(176) == 22u && PGB_IMG_ROW_BYTES(13) == 2u && PGB_IMG_ROW_BYTES(8) == 1u);
 
     CHECK(pgb_header_decode(g_img, g_img_size, &h) == PGB_OK);

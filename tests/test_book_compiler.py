@@ -174,7 +174,7 @@ class Pagination(unittest.TestCase):
         text = "\n".join("слово " * 6 for _ in range(100))
         for page in page_texts(compile_text(text)):
             lines = page.split("\n")
-            self.assertLessEqual(len(lines), 24)
+            self.assertLessEqual(len(lines), 25)
             self.assertTrue(all(len(l) <= 29 for l in lines))
 
     def test_empty_book_rejected(self):
@@ -209,7 +209,7 @@ class Container(unittest.TestCase):
 
     def test_verify_ok_and_metadata(self):
         stats = bc.verify_pgb(self.data)
-        self.assertEqual((stats["title"], stats["author"], stats["cols"], stats["rows"]), ("T", "A", 29, 24))
+        self.assertEqual((stats["title"], stats["author"], stats["cols"], stats["rows"]), ("T", "A", 29, 25))
 
     def test_meta_is_right_after_header(self):
         self.assertEqual(self.data[64:66], b"TA")
@@ -399,7 +399,7 @@ class Images(unittest.TestCase):
         lines = ["текст"] * 30 + [bc.ImageMark("k")] + ["после"]
         pages = bc.paginate(lines)
         self.assertEqual([isinstance(p, bc.ImageMark) for p in pages], [False, False, True, False])
-        self.assertEqual(pages[0].count(b"\n") + 1, 24)
+        self.assertEqual(pages[0].count(b"\n") + 1, 25)
 
     def test_build_and_verify_with_image_pages(self):
         img = bc.image_to_page(_gradient_png(300, 400))
