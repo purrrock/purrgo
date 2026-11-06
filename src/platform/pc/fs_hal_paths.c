@@ -12,6 +12,10 @@ const char* purrgo_fs_get_routes_path(void) {
     return "../../../../../tests/data/routes";
 }
 
+const char* purrgo_fs_get_waypts_path(void) {
+    return "../../../../../tests/data/waypts";
+}
+
 const char* purrgo_fs_get_books_path(void) {
     return "../../../../../tests/data/books";
 }
