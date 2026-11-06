@@ -231,6 +231,53 @@ static void test_track_segments_not_lost(void)
     CHECK(black > 50);
 }
 
+/* ------------------------- сдвиг карты (частичное) ------------------------ */
+
+/*
+ * Сдвиг карты на экране карты не вызывает полного обновления: перерисованная карта
+ * выводится частичным обновлением по маске изменившихся пикселей (E-Ink 4 gray).
+ * Полное обновление остаётся при входе на экран карты.
+ */
+static void test_map_shift_is_partial_refresh(void)
+{
+    gfx_context_t g;
+    app_start(&g, 0);
+    for (int i = 0; i < 3; i++) { run_ticks(1000); feed_epoch_lat(33.54000); render(&g); }
+
+    pc_display_stats_reset();
+    CHECK(purrgo_map_controller_handle_button(PURRGO_ACTION_LEFT));
+    render(&g);
+    pc_display_stats_t st = pc_display_stats_get();
+#if PURRGO_MAP_SHIFT_PARTIAL_REFRESH
+    CHECK(st.fulls == 0 && st.partials == 1);
+    /* Область - строка статуса и окно карты, до подсказок кнопок. */
+    CHECK(st.has_region && st.last_y == 0 && st.last_h == PURRGO_MAP_STATUS_BAR_H_PX + PURRGO_MAP_VIEWPORT_HEIGHT_PX);
+#else
+    CHECK(st.fulls == 1 && st.partials == 0);
+#endif
+
+    /* Масштаб - тоже перерисовка карты на экране карты. */
+    pc_display_stats_reset();
+    CHECK(purrgo_map_controller_handle_button(PURRGO_ACTION_PLUS));
+    render(&g);
+    st = pc_display_stats_get();
+#if PURRGO_MAP_SHIFT_PARTIAL_REFRESH
+    CHECK(st.fulls == 0 && st.partials == 1);
+#else
+    CHECK(st.fulls == 1);
+#endif
+
+    /* Выход в меню и возврат на карту: смена экрана - полное обновление. */
+    purrgo_app_handle_button(PURRGO_BTN_KEY4_LONG);
+    render(&g);
+    pc_display_stats_reset();
+    purrgo_app_handle_button(PURRGO_BTN_KEY4_LONG);
+    render(&g);
+    if (purrgo_app_get_state() == APP_STATE_MAP) {
+        CHECK(pc_display_stats_get().fulls == 1);
+    }
+}
+
 /* ------------------------------ маркёр ----------------------------------- */
 
 #define MW 64
@@ -370,6 +417,7 @@ int main(void)
     test_menu_value_change_refreshes_row();
     test_map_layers_toggle_refreshes_row();
     test_track_segments_not_lost();
+    test_map_shift_is_partial_refresh();
     test_marker_fill_inside_frame();
     return test_finish("test_ui_refresh_fixes");
 }
