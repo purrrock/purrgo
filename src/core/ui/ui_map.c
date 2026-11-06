@@ -18,6 +18,14 @@
 #include "purrgo/display_hal.h"
 #include "purrgo/purrgo_time.h"
 #include "purrgo/battery.h"
+#include "purrgo/gfx_icon.h"
+#include "purrgo/purrgo_poi_icons.h"
+
+/* Номер иконки перекрестия центра карты в purrgo_poi_icons (src/core/purrgo_poi_icons.c). */
+#ifndef PURRGO_MAP_CROSSHAIR_ICON
+#define PURRGO_MAP_CROSSHAIR_ICON 47
+#endif
+_Static_assert(PURRGO_MAP_CROSSHAIR_ICON < PURRGO_POI_ICON_COUNT, "crosshair icon out of range");
 
 typedef struct {
     bool rendered;
@@ -635,6 +643,19 @@ static void ui_map_render_dynamic_data(gfx_context_t* gfx, const purrgo_viewport
 
     /* Цель навигации: поверх маршрута и трека, под маркёром GNSS. */
     purrgo_wpt_render(gfx, dynamic_cam, map_vp);
+
+    /*
+     * Перекрестие в центре карты - только при выключенном автоследовании (карта
+     * двигается кнопками): это точка, которую берёт WAYPOINT > MAP CENTER.
+     * Рисуется на полной перерисовке карты; смена режима её запрашивает
+     * (purrgo_map_controller_handle_button()).
+     */
+    if (map_app_is_manual_pan_active()) {
+        int16_t cx, cy;
+        project_to_screen(map_app_get_map_center_lon(), map_app_get_map_center_lat(),
+                          dynamic_cam, map_vp, &cx, &cy);
+        gfx_draw_icon_11x11(gfx, cx, cy, purrgo_poi_icons[PURRGO_MAP_CROSSHAIR_ICON]);
+    }
     /* Все точки, имеющиеся сейчас, нарисованы (или трек не показывается). */
     s_track_drawn_serial = purrgo_logger_get_track_serial();
 }

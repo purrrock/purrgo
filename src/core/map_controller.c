@@ -287,6 +287,8 @@ bool purrgo_map_controller_handle_button(purrgo_action_t button) {
     if (button == PURRGO_ACTION_OK) {
         if (manual_pan_active) {
             manual_pan_active = false;
+            /* Перекрестие центра карты рисуется только в ручном режиме: убрать его. */
+            purrgo_ui_dirty_mark(UI_DIRTY_MAP);
             apply_auto_follow(&prev_fix_for_map);
         }
         return true;

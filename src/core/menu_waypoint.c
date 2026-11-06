@@ -1,16 +1,19 @@
 #include "menu_internal.h"
 #include "purrgo/config.h"
 #include "purrgo/map_controller.h"
+#include "purrgo/logger.h"
 #include "purrgo/purrgo_format.h"
 #include "purrgo/ui/ui_dirty.h"
 #include "purrgo/waypoint.h"
+#include "purrgo/wpt_layer.h"
 #include <string.h>
 
 /*
  * Экран выбора цели навигации (WAYPOINT). Строки списка:
  *   0                 (none)       - снять цель
  *   1                 HERE         - текущая позиция GNSS (нужен фикс)
- *   2                 MAP CENTER   - центр карты
+ *   2                 MAP CENTER   - центр карты (в ручном режиме карты там перекрестие);
+ *                                    точка пишется в WAYPTS (MPnnnnnn.GPX) и становится целью
  *   3 и далее         точки <wpt> из GPX-файла, выбранного как ROUTE
  * Цель, совпадающая со строкой, помечена "*". Выбор сохраняет PURRGO.CFG и
  * возвращает в главное меню; карта при выходе перерисовывается целиком (символ цели).
@@ -95,8 +98,24 @@ static bool on_button(purrgo_action_t button, purrgo_state_t* next)
                 }
             }
             else if (cursor == WPT_ROW_MAP) {
-                if (purrgo_wpt_set(map_app_get_map_center_lat(),
-                                   map_app_get_map_center_lon(), "MAP")) {
+                const int32_t lat = map_app_get_map_center_lat();
+                const int32_t lon = map_app_get_map_center_lon();
+                char name[PURRGO_WPT_NAME_MAX];
+
+                /*
+                 * Точка записывается в WAYPTS и становится целью. Если запись не удалась
+                 * (нет SD, каталога), цель всё равно задаётся: навигация от этого не зависит.
+                 */
+                if (!purrgo_wpt_save_to_waypts(lat, lon, name, sizeof name)) {
+                    PURRGO_LOGW("wpt: MAP CENTER not saved to WAYPTS\n\r");
+                    purrgo_snprintf(name, sizeof name, "MAP");
+                }
+                else {
+                    /* Слой Waypoints перечитает каталог при следующей отрисовке карты. */
+                    purrgo_wpt_layer_clear();
+                }
+
+                if (purrgo_wpt_set(lat, lon, name)) {
                     commit(next);
                 }
             }

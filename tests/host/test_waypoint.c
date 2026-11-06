@@ -6,7 +6,9 @@
  *   - цель в PURRGO.CFG (сохранение, загрузка, защита от неполных и неверных ключей);
  *   - расчёт расстояния и пеленга по текущему решению;
  *   - меню WAYPOINT (строки, выбор, прокрутка, сохранение, HERE, MAP CENTER);
- *   - символ цели на карте и блок цели на экране Trip computer.
+ *   - запись точки MAP CENTER в WAYPTS (MPnnnnnn.GPX) и её чтение обратно;
+ *   - иконка цели (35, остриё в точке цели) и перекрестие центра карты (47) в
+ *     ручном режиме карты, блок цели на экране Trip computer.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -16,10 +18,15 @@
 #include "purrgo/config.h"
 #include "purrgo/geo.h"
 #include "purrgo/gfx_renderer.h"
+#include "purrgo/gpx_parser.h"
+#include "purrgo/hardware_config.h"
 #include "purrgo/map_controller.h"
 #include "purrgo/menu_controller.h"
+#include "purrgo/purrgo_poi_icons.h"
 #include "purrgo/ui/ui_dirty.h"
 #include "purrgo/waypoint.h"
+#include "purrgo/wpt_layer.h"
+#include "map_projection.h"
 #include "fake_fs.h"
 #include "fake_power.h"
 #include "test_common.h"
@@ -432,10 +439,47 @@ static int count_px(uint8_t c)
     return n;
 }
 
+/*
+ * Сверяет кадр с иконкой icon_no, нарисованной остриём в (tip_x, tip_y) (булавка:
+ * остриё - нижний центральный пиксель): все непрозрачные пиксели иконки имеют её цвет,
+ * прозрачные не тронуты (фон 1). Возвращает число несовпадений.
+ */
+static int icon_mismatch(int icon_no, int tip_x, int tip_y)
+{
+    int bad = 0;
+
+    for (int r = 0; r < 11; r++) {
+        for (int c = 0; c < 11; c++) {
+            const uint8_t px = purrgo_poi_icons[icon_no][r][c];
+            const int x = tip_x - 5 + c, y = tip_y - 10 + r;
+            const uint8_t expect = (px & PURRGO_POI_ALPHA) ? (uint8_t)(px & 3u) : 1u;
+
+            if (x >= 0 && x < W && y >= 0 && y < H && g_fb[y * W + x] != expect) {
+                bad++;
+            }
+        }
+    }
+    return bad;
+}
+
+static int icon_opaque_count(int icon_no)
+{
+    int n = 0;
+
+    for (int r = 0; r < 11; r++) {
+        for (int c = 0; c < 11; c++) {
+            if (purrgo_poi_icons[icon_no][r][c] & PURRGO_POI_ALPHA) { n++; }
+        }
+    }
+    return n;
+}
+
 static void test_render(void)
 {
     purrgo_bbox_t cam = { 280000000, 530000000, 280064000, 530048000 };
     purrgo_viewport_t vp = { W, H, 0, 0 };
+
+    CHECK(PURRGO_WPT_TARGET_ICON == 35);
 
     fake_fs_reset();
     purrgo_config_init();
@@ -450,14 +494,14 @@ static void test_render(void)
     purrgo_wpt_render(&g_gfx, NULL, &vp);
     purrgo_wpt_render(&g_gfx, &cam, NULL);
 
+    /* Иконка 35 пиксель в пиксель, остриё (нижний центр) ровно в точке цели. */
     canvas();
     purrgo_wpt_render(&g_gfx, &cam, &vp);
-    CHECK(count_px(BLACK) > 20);
-    CHECK(count_px(WHITE) > 10);                       /* белая подложка */
-    CHECK(cb_read(g_fb, 32, 24) == BLACK);             /* центр креста */
-    CHECK(cb_read(g_fb, 32 + 7, 24) == BLACK && cb_read(g_fb, 32 - 7, 24) == BLACK);
-    CHECK(cb_read(g_fb, 32, 24 + 7) == BLACK && cb_read(g_fb, 32, 24 - 7) == BLACK);
-    CHECK(cb_read(g_fb, 32 + 12, 24) == 1 && cb_read(g_fb, 0, 0) == 1);   /* дальше символа фон не тронут */
+    CHECK(icon_mismatch(PURRGO_WPT_TARGET_ICON, 32, 24) == 0);
+    CHECK(cb_read(g_fb, 32, 24) == BLACK);             /* остриё */
+    CHECK(cb_read(g_fb, 32, 23) == BLACK && cb_read(g_fb, 32, 14) == BLACK);
+    CHECK(count_px(BLACK) + count_px(WHITE) == icon_opaque_count(PURRGO_WPT_TARGET_ICON));   /* лишнего нет */
+    CHECK(cb_read(g_fb, 32, 25) == 1 && cb_read(g_fb, 32, 13) == 1 && cb_read(g_fb, 0, 0) == 1);
 
     /* Цель за пределами кадра: ничего не рисуется. */
     purrgo_wpt_set(535000000, 285000000, "far");
@@ -465,21 +509,109 @@ static void test_render(void)
     purrgo_wpt_render(&g_gfx, &cam, &vp);
     CHECK(count_px(BLACK) == 0 && count_px(WHITE) == 0);
 
-    /* У самого края: символ частично виден и не портит память. */
+    /* У самого края: иконка частично видна и не портит память. */
     purrgo_wpt_set(530024000, 280000000, "edge");
     canvas();
     purrgo_wpt_render(&g_gfx, &cam, &vp);
     CHECK(count_px(BLACK) > 5);
+    CHECK(icon_mismatch(PURRGO_WPT_TARGET_ICON, 0, 24) == 0);
 
-    /* Смещённое окно карты (строка статуса сверху): цель в центре окна. */
+    /* Смещённое окно карты (строка статуса сверху): положение считается от окна. */
     purrgo_viewport_t vp2 = { W, H - 9, 0, 9 };
     purrgo_wpt_set(530021000, 280032000, "c2");
+    int16_t tx, ty;
+    project_to_screen(280032000, 530021000, &cam, &vp2, &tx, &ty);
     canvas();
     purrgo_wpt_render(&g_gfx, &cam, &vp2);
     CHECK(count_px(BLACK) > 20);
+    CHECK(icon_mismatch(PURRGO_WPT_TARGET_ICON, tx, ty) == 0);
     int top_rows_clean = 1;
-    for (int y = 0; y < 9 - 1; y++) for (int x = 0; x < W; x++) if (g_fb[y * W + x] != 1) top_rows_clean = 0;
-    CHECK(top_rows_clean || count_px(BLACK) > 0);      /* символ не уходит выше окна более чем на радиус */
+    for (int y = 0; y < 9; y++) for (int x = 0; x < W; x++) if (g_fb[y * W + x] != 1) top_rows_clean = 0;
+    CHECK(top_rows_clean);                              /* строка статуса не тронута */
+}
+
+/* --------------------------------------------- запись точки в WAYPTS --- */
+
+static void parse_one(const char *file, purrgo_waypoint_t *out, size_t *count)
+{
+    uint32_t n = 0;
+    const uint8_t *d = fake_fs_data(file, &n);
+    purrgo_gpx_parser_t parser;
+
+    *count = 0;
+    CHECK(d != NULL);
+    if (d == NULL) { return; }
+    purrgo_gpx_parser_init(&parser, out, 1);
+    purrgo_gpx_parser_feed(&parser, (const char *)d, n);
+    *count = parser.total_seen;
+}
+
+static void test_save_to_waypts(void)
+{
+    char name[PURRGO_WPT_NAME_MAX];
+    purrgo_waypoint_t w;
+    size_t cnt;
+
+    fake_fs_reset();
+    purrgo_config_init();
+
+    /* Первая точка: MP000001.GPX, имя MP1, координаты читаются обратно как записаны. */
+    CHECK(purrgo_wpt_save_to_waypts(539006123, 275590456, name, sizeof name));
+    CHECK(strcmp(name, "MP1") == 0);
+    parse_one("waypts/MP000001.GPX", &w, &cnt);
+    CHECK(cnt == 1 && w.lat_1e7 == 539006123 && w.lon_1e7 == 275590456 && strcmp(w.name, "MP1") == 0);
+    CHECK(fake_fs_open_handles() == 0 && fake_fs_open_dirs() == 0);
+
+    /* Файл - корректный GPX 1.1 (закрыт тегом gpx), цель сохранение не задаёт. */
+    uint32_t n = 0;
+    const uint8_t *d = fake_fs_data("waypts/MP000001.GPX", &n);
+    CHECK(d != NULL && strstr((const char *)d, "<gpx version=\"1.1\"") != NULL &&
+          strstr((const char *)d, "</gpx>") != NULL);
+    CHECK(!purrgo_wpt_is_set());
+
+    /* Следующая - номер 2; южное и западное полушария, малые по модулю значения. */
+    CHECK(purrgo_wpt_save_to_waypts(-123456789, -5, name, sizeof name));
+    CHECK(strcmp(name, "MP2") == 0);
+    parse_one("waypts/MP000002.GPX", &w, &cnt);
+    CHECK(cnt == 1 && w.lat_1e7 == -123456789 && w.lon_1e7 == -5);
+
+    /* Предельные координаты проходят, выход за диапазон - нет, файл не создаётся. */
+    CHECK(purrgo_wpt_save_to_waypts(900000000, 1800000000, NULL, 0));
+    CHECK(!purrgo_wpt_save_to_waypts(900000001, 0, name, sizeof name));
+    CHECK(!purrgo_wpt_save_to_waypts(0, -1800000001, name, sizeof name));
+    CHECK(fake_fs_data("waypts/MP000004.GPX", &n) == NULL);
+
+    /* Номер - максимум среди имеющихся (любой регистр) + 1; чужие файлы игнорируются. */
+    fake_fs_reset();
+    fake_fs_put("waypts/mp000010.gpx", "x");
+    fake_fs_put("waypts/MP000003.GPX", "x");
+    fake_fs_put("waypts/other.gpx", "x");
+    fake_fs_put("waypts/MP12.GPX", "x");
+    CHECK(purrgo_wpt_save_to_waypts(1, 2, name, sizeof name) && strcmp(name, "MP11") == 0);
+    CHECK(fake_fs_data("waypts/MP000011.GPX", &n) != NULL);
+
+    /* Сбои записи, открытия: false, цель не меняется, дескрипторы не текут. */
+    fake_fs_reset();
+    g_fault.fail_write = 1;
+    CHECK(!purrgo_wpt_save_to_waypts(1, 2, name, sizeof name));
+    CHECK(fake_fs_open_handles() == 0);
+    fake_fs_reset();
+    g_fault.fail_sync = 1;
+    CHECK(!purrgo_wpt_save_to_waypts(1, 2, name, sizeof name));
+    fake_fs_reset();
+    g_fault.fail_open_all = 1;
+    CHECK(!purrgo_wpt_save_to_waypts(1, 2, name, sizeof name));
+    CHECK(fake_fs_open_handles() == 0 && fake_fs_open_dirs() == 0);
+
+    /* Слой Waypoints видит записанную точку после purrgo_wpt_layer_clear(). */
+    fake_fs_reset();
+    purrgo_wpt_layer_clear();
+    CHECK(!purrgo_wpt_layer_sync(""));
+    CHECK(purrgo_wpt_save_to_waypts(530024000, 280032000, name, sizeof name));
+    purrgo_wpt_layer_clear();
+    CHECK(purrgo_wpt_layer_sync("") && purrgo_wpt_layer_count() == 1);
+    CHECK(purrgo_wpt_layer_get(0)->lat_1e7 == 530024000 && purrgo_wpt_layer_get(0)->lon_1e7 == 280032000);
+    purrgo_wpt_layer_clear();
 }
 
 /* ---------------------------------------------------------------- меню --- */
@@ -715,7 +847,26 @@ static void test_app_here_map_center_and_trip(void)
     CHECK(st == APP_STATE_MENU_MAIN && purrgo_wpt_is_set());
     CHECK(app_config.wpt_lat_1e7 == map_app_get_map_center_lat());
     CHECK(app_config.wpt_lon_1e7 == map_app_get_map_center_lon());
-    CHECK(strcmp(app_config.wpt_name, "MAP") == 0);
+    /* Точка записана в WAYPTS как MP1 и стала целью под тем же именем. */
+    CHECK(strcmp(app_config.wpt_name, "MP1") == 0);
+    {
+        purrgo_waypoint_t saved;
+        size_t cnt;
+        parse_one("waypts/MP000001.GPX", &saved, &cnt);
+        CHECK(cnt == 1 && saved.lat_1e7 == map_app_get_map_center_lat() &&
+              saved.lon_1e7 == map_app_get_map_center_lon() && strcmp(saved.name, "MP1") == 0);
+    }
+
+    /* Повторный выбор MAP CENTER - новый файл, а не перезапись. */
+    st = open_wpt_menu();
+    st = press(st, PURRGO_ACTION_DOWN);
+    st = press(st, PURRGO_ACTION_DOWN);
+    st = press(st, PURRGO_ACTION_OK);
+    CHECK(strcmp(app_config.wpt_name, "MP2") == 0);
+    {
+        uint32_t sz;
+        CHECK(fake_fs_data("waypts/MP000001.GPX", &sz) != NULL && fake_fs_data("waypts/MP000002.GPX", &sz) != NULL);
+    }
 
     /* HERE: цель - текущая позиция, расстояние около нуля, прибытие. */
     st = open_wpt_menu();
@@ -759,6 +910,65 @@ static void test_app_here_map_center_and_trip(void)
     CHECK(fcount(40, 106, 130, 118) > 5);               /* "NONE" */
 }
 
+/* Сверка кадра приложения с иконкой с центром в (cx, cy). */
+static int fmismatch_icon(int icon_no, int cx, int cy)
+{
+    int bad = 0;
+
+    for (int r = 0; r < 11; r++) {
+        for (int c = 0; c < 11; c++) {
+            const uint8_t px = purrgo_poi_icons[icon_no][r][c];
+            const int x = cx - 5 + c, y = cy - 5 + r;
+
+            if ((px & PURRGO_POI_ALPHA) && g_ffb[y * FW + x] != (uint8_t)((px & 3u) + 1u)) {
+                bad++;
+            }
+        }
+    }
+    return bad;
+}
+
+static void test_map_crosshair(void)
+{
+    gfx_context_t g;
+    const int cx = PURRGO_HW_DISPLAY_WIDTH_PX / 2;
+    const int cy = PURRGO_MAP_STATUS_BAR_H_PX + PURRGO_MAP_VIEWPORT_HEIGHT_PX / 2;
+
+    fake_fs_reset();
+    memset(&app_config, 0, sizeof app_config);
+    app_config.last_lat_1e7 = 539006000;
+    app_config.last_lon_1e7 = 275590000;
+    app_config.layers = 0;
+    g_now = 300000;
+    purrgo_app_init();
+    run_ticks(1000);
+    feed_fix();
+    CHECK(purrgo_app_get_state() == APP_STATE_MAP);
+    (void)gfx_init(&g, FW, FH, g_ffb, fcb_draw, fcb_read);
+
+    /* Автоследование включено: перекрестия нет. */
+    CHECK(!map_app_is_manual_pan_active());
+
+    /* Сдвиг карты кнопкой: ручной режим, перекрестие (иконка 47) в центре окна карты. */
+    CHECK(purrgo_map_controller_handle_button(PURRGO_ACTION_LEFT));
+    CHECK(map_app_is_manual_pan_active() && purrgo_ui_dirty_test(UI_DIRTY_MAP));
+    memset(g_ffb, 0, sizeof g_ffb);
+    purrgo_app_ui_render(&g, purrgo_app_get_gnss_solution(), NULL);
+    CHECK(fmismatch_icon(47, cx, cy) == 0);
+    CHECK(fcount(cx - 5, cy - 5, cx + 6, cy + 6) > 20);
+
+    /* Точка, взятая через MAP CENTER, - это координаты под перекрестием. */
+    CHECK(map_app_get_map_center_lon() < app_config.last_lon_1e7);
+
+    /* OK возвращает автоследование: перекрестие снимается полной перерисовкой. */
+    purrgo_ui_dirty_clear(UI_DIRTY_MAP);
+    CHECK(purrgo_map_controller_handle_button(PURRGO_ACTION_OK));
+    CHECK(!map_app_is_manual_pan_active());
+    CHECK(purrgo_ui_dirty_test(UI_DIRTY_MAP));
+    purrgo_app_ui_render(&g, purrgo_app_get_gnss_solution(), NULL);
+    CHECK(fcount(cx - 5, cy - 5, cx + 6, cy + 6) == 0);
+}
+
 int main(void)
 {
     test_format_and_cardinal();
@@ -770,8 +980,10 @@ int main(void)
     test_target_and_config();
     test_nav_state();
     test_render();
+    test_save_to_waypts();
     test_menu();
     test_menu_scroll();
     test_app_here_map_center_and_trip();
+    test_map_crosshair();
     return test_finish("test_waypoint");
 }
