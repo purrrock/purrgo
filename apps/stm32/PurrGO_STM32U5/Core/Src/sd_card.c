@@ -20,6 +20,7 @@
 #include "diskio.h"
 #include "sd_spi.h"
 #include "purrgo/logger.h"
+#include "purrgo/supply.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -376,6 +377,18 @@ static void unmount(void)
 
 static bool mount_card(void)
 {
+    /*
+     * Напряжение ниже порога безопасной записи: карту не трогаем (запуск от
+     * севших батарей, возврат после просадки до восстановления питания).
+     * Вызывающий код повторит попытку через PURRGO_SD_RETRY_PERIOD_MS.
+     */
+    if (purrgo_platform_supply_low())
+    {
+        PURRGO_LOGW("SD: mount postponed, VDD low\r\n");
+        s_state = PURRGO_SD_MOUNT_ERROR;
+        return false;
+    }
+
     s_card_lost = false;
     s_stat = (DSTATUS)STA_NOINIT;
 
@@ -537,6 +550,25 @@ void purrgo_sd_poll(uint32_t now_ms)
         }
     }
 #endif
+}
+
+/*
+ * Хук ядра (purrgo/supply.h): низкое напряжение, все файлы уже закрыты.
+ * Размонтировать FatFs, освободить SPI и ждать восстановления питания: повторное
+ * монтирование делает purrgo_sd_poll() по таймеру, пока mount_card() не пустит.
+ */
+void purrgo_platform_storage_suspend(void)
+{
+    if (s_state != PURRGO_SD_READY)
+    {
+        return;
+    }
+
+    PURRGO_LOGW("SD: unmounted, supply low\r\n");
+    unmount();
+    s_state = PURRGO_SD_MOUNT_ERROR;
+    s_retry_armed = true;
+    s_retry_at_ms = HAL_GetTick() + PURRGO_SD_RETRY_PERIOD_MS;
 }
 
 purrgo_sd_state_t purrgo_sd_state(void)

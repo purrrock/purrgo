@@ -548,6 +548,10 @@ void purrgo_logger_stop(void) {
     logger_stop_impl(true);
 }
 
+void purrgo_logger_suspend(void) {
+    logger_stop_impl(false);
+}
+
 const char* purrgo_logger_get_active_filename(void) {
     if (s_active_filename[0] != '\0') {
         return s_active_filename;

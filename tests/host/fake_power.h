@@ -1,5 +1,6 @@
 #ifndef FAKE_POWER_H
 #define FAKE_POWER_H
+#include <stdbool.h>
 #include <stdint.h>
 /*
  * Тестовые платформенные хуки выключения (purrgo_platform_storage_unmount,
@@ -21,4 +22,11 @@ int fake_power_gnss_on_calls(void);
 int fake_power_gnss_on_seq(void);
 /* Напряжение на выводе АЦП, которое вернёт purrgo_platform_battery_pin_mv() (по умолчанию 0). */
 void fake_power_set_battery_pin_mv(uint16_t mv);
+/* Низкое напряжение питания, которое вернёт purrgo_platform_supply_low() (по умолчанию false). */
+void fake_power_set_supply_low(bool low);
+/* Вызовы purrgo_platform_storage_suspend() и порядковый номер последнего вызова. */
+/* probe вызывается из purrgo_platform_storage_suspend(). */
+void fake_power_set_suspend_probe(void (*probe)(void));
+int fake_power_suspend_calls(void);
+int fake_power_suspend_seq(void);
 #endif

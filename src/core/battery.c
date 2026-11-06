@@ -3,6 +3,7 @@
 #include "purrgo/hardware_config.h"
 #include "purrgo/pgo_text.h"
 #include "purrgo/purrgo_format.h"
+#include "purrgo/supply.h"
 #include "purrgo/system_time.h"
 
 #include <string.h>
@@ -163,6 +164,12 @@ void purrgo_battery_format(char* buf, size_t size)
         return;
     }
 
+    /* Запись на SD остановлена из-за низкого питания (supply.h): заметный индикатор вместо процента. */
+    if (purrgo_supply_storage_blocked()) {
+        purrgo_snprintf(buf, size, "LOW");
+        return;
+    }
+
     purrgo_battery_t bat;
     if (purrgo_battery_read(&bat) && bat.percent >= 0 && bat.percent <= 100) {
         purrgo_snprintf(buf, size, "%d%%", (int)bat.percent);
@@ -177,6 +184,7 @@ void purrgo_battery_format(char* buf, size_t size)
 
 static struct {
     bool                  sampled;
+    bool                  blocked;      /* состояние блокировки записи на SD при замере */
     uint32_t              sampled_ms;
     purrgo_power_source_t src;          /* источник питания, для которого сделан замер */
     char                  text[PURRGO_BATTERY_STATUS_TEXT_SIZE];
@@ -191,6 +199,7 @@ static bool monitor_sample(uint32_t now_ms)
     s_mon.sampled = true;
     s_mon.sampled_ms = now_ms;
     s_mon.src = app_config.power_source;
+    s_mon.blocked = purrgo_supply_storage_blocked();
     if (strcmp(text, s_mon.text) == 0) {
         return false;
     }
@@ -203,6 +212,7 @@ bool purrgo_battery_monitor_tick(uint32_t now_ms)
     const bool first = !s_mon.sampled;
 
     if (!first && s_mon.src == app_config.power_source &&
+        s_mon.blocked == purrgo_supply_storage_blocked() &&
         (uint32_t)(now_ms - s_mon.sampled_ms) < PURRGO_BATTERY_STATUS_PERIOD_MS) {
         return false;
     }
@@ -211,7 +221,8 @@ bool purrgo_battery_monitor_tick(uint32_t now_ms)
 
 const char* purrgo_battery_status_text(void)
 {
-    if (!s_mon.sampled || s_mon.src != app_config.power_source) {
+    if (!s_mon.sampled || s_mon.src != app_config.power_source ||
+        s_mon.blocked != purrgo_supply_storage_blocked()) {
         (void)monitor_sample(purrgo_system_time_ms());
     }
     return s_mon.text;
