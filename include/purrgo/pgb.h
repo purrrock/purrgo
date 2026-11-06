@@ -37,21 +37,21 @@
 /*
  * Геометрия читалки на экране 176x264 (PGB-format.md, раздел 2).
  *   - сверху строка статуса 8 px;
- *   - текст: 24 строки по 29 символов, ячейка символа 6x8 px, шаг строк 10 px
+ *   - текст: 25 строк по 29 символов, ячейка символа 6x8 px, шаг строк 10 px
  *     (между строками 2 px пустых), первая строка на PGB_TEXT_TOP_PX;
  *   - картинка: 1 bit на пиксель, вписана в окно 176x256 под строкой статуса.
  */
 #define PGB_SCREEN_COLS       29u
-#define PGB_SCREEN_ROWS       24u
+#define PGB_SCREEN_ROWS       25u
 #define PGB_STATUS_H_PX       8u
 #define PGB_LINE_PITCH_PX     10u
-#define PGB_TEXT_TOP_PX       17u   /* (264 - 8 - (23 * 10 + 8)) / 2 пустых px сверху и снизу */
+#define PGB_TEXT_TOP_PX       12u   /* (264 - 8 - (24 * 10 + 8)) / 2 = 4 пустых px сверху и снизу */
 #define PGB_IMG_WINDOW_W      176u
 #define PGB_IMG_WINDOW_H      256u
 
 /* Наибольший размер текстовой страницы в байтах: rows строк по cols символов и rows-1 байт LF. */
 #define PGB_MAX_PAGE_BYTES(cols, rows) ((uint32_t)(cols) * (uint32_t)(rows) + (uint32_t)(rows) - 1u)
-#define PGB_SCREEN_MAX_TEXT_BYTES PGB_MAX_PAGE_BYTES(PGB_SCREEN_COLS, PGB_SCREEN_ROWS) /* 719 */
+#define PGB_SCREEN_MAX_TEXT_BYTES PGB_MAX_PAGE_BYTES(PGB_SCREEN_COLS, PGB_SCREEN_ROWS) /* 749 */
 
 /* Байт в строке картинки шириной w пикселей (строки выровнены по байту). */
 #define PGB_IMG_ROW_BYTES(w) (((uint32_t)(w) + 7u) / 8u)
