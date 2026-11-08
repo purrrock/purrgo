@@ -262,6 +262,7 @@ The compiler must produce geometry compatible with the target layer:
 | `roads` | line |
 | `landuse` | polygon |
 | `water` | polygon |
+| `waterways` | line (optional layer) |
 | `pois` | point |
 
 POIs must not require `.mlp` geometry.

@@ -95,6 +95,10 @@ water.idx
 water.mlp
 water.db
 
+waterways.idx
+waterways.mlp
+waterways.db
+
 pois.idx
 pois.db
 
@@ -103,11 +107,14 @@ map.name
 
 Some `.db` files may be omitted when the corresponding layer contains no named objects.
 
+The `waterways.*` files are written only if the source data contains linear water objects.
+
 Layers:
 
 - `roads` — roads and paths;
 - `landuse` — land-use areas;
-- `water` — water bodies;
+- `water` — water bodies (polygons);
+- `waterways` — rivers, streams and canals (lines);
 - `pois` — points of interest.
 
 POIs are stored without `.mlp` geometry.
@@ -157,6 +164,9 @@ maps/
     ├── water.idx
     ├── water.mlp
     ├── water.db
+    ├── waterways.idx
+    ├── waterways.mlp
+    ├── waterways.db
     ├── pois.idx
     └── pois.db
 ```

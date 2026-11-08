@@ -146,6 +146,7 @@ class OSMParser:
         self.roads: List[MapFeature] = []
         self.landuse: List[MapFeature] = []
         self.water: List[MapFeature] = []
+        self.waterways: List[MapFeature] = []
         self.pois: List[MapFeature] = []
 
         # Statistics for invalid oversized geometries.
@@ -153,6 +154,7 @@ class OSMParser:
         # These counters are deliberately kept separate for diagnostics.
         # They do not affect the binary format.
         self.skipped_oversized_roads = 0
+        self.skipped_oversized_waterways = 0
         self.skipped_oversized_polygons = 0
         self.skipped_oversized_multipolygons = 0
 
@@ -227,12 +229,19 @@ class OSMParser:
         List[MapFeature],
         List[MapFeature],
         List[MapFeature],
+        List[MapFeature],
         List[MapFeature]
     ]:
         self._pass1_cache_nodes()
         self._pass2_build_features()
 
-        return self.roads, self.landuse, self.water, self.pois
+        return (
+            self.roads,
+            self.landuse,
+            self.water,
+            self.waterways,
+            self.pois
+        )
 
     def _get_node_coord(
         self,
@@ -515,12 +524,14 @@ class OSMParser:
             f"\r    Assembled: "
             f"{len(self.roads)} roads, "
             f"{len(self.landuse)} polygons, "
+            f"{len(self.waterways)} waterways, "
             f"{len(self.pois)} points (POI).      "
         )
 
         # Report invalid geometries that were deliberately skipped.
         skipped_total = (
             self.skipped_oversized_roads
+            + self.skipped_oversized_waterways
             + self.skipped_oversized_polygons
             + self.skipped_oversized_multipolygons
         )
@@ -532,6 +543,10 @@ class OSMParser:
             print(
                 f"    - Roads:          "
                 f"{self.skipped_oversized_roads}"
+            )
+            print(
+                f"    - Waterways:      "
+                f"{self.skipped_oversized_waterways}"
             )
             print(
                 f"    - Polygons:       "
@@ -748,6 +763,9 @@ class OSMParser:
             if rule.layer == 'roads':
                 self.skipped_oversized_roads += 1
 
+            elif rule.layer == 'waterways':
+                self.skipped_oversized_waterways += 1
+
             elif rule.layer in ('landuse', 'water'):
                 self.skipped_oversized_polygons += 1
 
@@ -769,6 +787,28 @@ class OSMParser:
             feature.calculate_bbox()
 
             self.roads.append(feature)
+
+        elif rule.layer == 'waterways' and len(points) >= 2:
+            # Linear water objects (rivers, streams, canals).
+            #
+            # Same geometry as roads: an open polyline, stored as is
+            # (no ring orientation, no closing). A closed waterway
+            # (rare, e.g. a canal loop) is still a line.
+            points_bytes = self.way_coords_pool[
+                start_idx:start_idx + len(points) * 2
+            ].tobytes()
+
+            feature = MapFeature(
+                osm_id=osm_id,
+                code=rule.code,
+                name=name,
+                points=points_bytes,
+                lod=rule.lod
+            )
+
+            feature.calculate_bbox()
+
+            self.waterways.append(feature)
 
         elif (
             rule.layer in ('landuse', 'water')
