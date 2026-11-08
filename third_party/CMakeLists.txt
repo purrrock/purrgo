@@ -24,3 +24,9 @@ endif()
 if(CMAKE_SYSTEM_NAME STREQUAL "Generic")
     target_compile_definitions(minmea PRIVATE timegm=mktime)
 endif()
+
+# Emscripten (musl): timegm() объявлен в <time.h> только при _DEFAULT_SOURCE,
+# а проект собирается с -std=c11 без GNU-расширений.
+if(EMSCRIPTEN)
+    target_compile_definitions(minmea PRIVATE _DEFAULT_SOURCE)
+endif()

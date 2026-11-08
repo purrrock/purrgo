@@ -1,0 +1,186 @@
+name: Web emulator (GitHub Pages)
+
+# Собирает PC-эмулятор в WebAssembly (Emscripten) вместе с демо-картой и
+# публикует его на GitHub Pages: https://<владелец>.github.io/<репозиторий>/
+#
+# Один раз в репозитории: Settings -> Pages -> Build and deployment -> Source: "GitHub Actions".
+#
+# Демо-карта собирается из выреза Geofabrik (bbox) тем же компилятором, что и карты
+# для устройства, и кэшируется: пока не менялись tools/map-compiler, bbox и PBF URL,
+# PBF заново не скачивается. На pull request выполняется только сборка (без публикации).
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/emulator/**"
+      - "src/**"
+      - "include/**"
+      - "third_party/**"
+      - "cmake/**"
+      - "CMakeLists.txt"
+      - "CMakePresets.json"
+      - "tools/map-compiler/**"
+      - "tests/host/data/*.pgb"
+      - ".github/workflows/pages.yml"
+  pull_request:
+    paths:
+      - "apps/emulator/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+    inputs:
+      pbf_url:
+        description: "URL .osm.pbf (Geofabrik)"
+        required: true
+        default: "https://download.geofabrik.de/europe/belarus-latest.osm.pbf"
+      bbox:
+        description: "Область демо-карты: lon_min,lat_min,lon_max,lat_max"
+        required: true
+        default: "27.48,53.85,27.64,53.95"
+      mock_lat:
+        description: "Старт имитации GNSS, широта (градусы)"
+        required: true
+        default: "53.9006"
+      mock_lon:
+        description: "Старт имитации GNSS, долгота (градусы)"
+        required: true
+        default: "27.5590"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PBF_URL: ${{ inputs.pbf_url || 'https://download.geofabrik.de/europe/belarus-latest.osm.pbf' }}
+  BBOX: ${{ inputs.bbox || '27.48,53.85,27.64,53.95' }}
+  MOCK_LAT: ${{ inputs.mock_lat || '53.9006' }}
+  MOCK_LON: ${{ inputs.mock_lon || '27.5590' }}
+  MAP_NAME: demo
+  EMSDK_VERSION: "4.0.9"
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # ---- Демо-карта (кэшируется) ----
+      # В ключе кэша нельзя запятые (bbox), поэтому источник и область сворачиваем в хэш.
+      - name: Map cache key
+        id: mapkey
+        run: echo "src=$(printf '%s|%s' "$PBF_URL" "$BBOX" | sha1sum | cut -c1-12)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore demo map cache
+        id: map-cache
+        uses: actions/cache@v4
+        with:
+          path: web-root/maps
+          key: web-map-${{ env.MAP_NAME }}-${{ steps.mapkey.outputs.src }}-${{ hashFiles('tools/map-compiler/*.py', 'tools/map-compiler/features.csv') }}-${{ hashFiles('.github/workflows/pages.yml') }}
+
+      - name: Install osmium-tool
+        if: steps.map-cache.outputs.cache-hit != 'true'
+        run: sudo apt-get update && sudo apt-get install -y osmium-tool
+
+      - uses: actions/setup-python@v5
+        if: steps.map-cache.outputs.cache-hit != 'true'
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: tools/map-compiler/requirements.txt
+
+      - name: Install map compiler dependencies
+        if: steps.map-cache.outputs.cache-hit != 'true'
+        run: pip install -r tools/map-compiler/requirements.txt
+
+      - name: Build demo map
+        if: steps.map-cache.outputs.cache-hit != 'true'
+        env:
+          WORK: ${{ github.workspace }}/work
+        run: |
+          set -euo pipefail
+          if ! [[ "$BBOX" =~ ^-?[0-9.]+,-?[0-9.]+,-?[0-9.]+,-?[0-9.]+$ ]]; then
+            echo "::error::bbox must be lon_min,lat_min,lon_max,lat_max (got '$BBOX')"; exit 1
+          fi
+          mkdir -p "$WORK" web-root/maps
+          curl -fL --retry 5 --retry-delay 10 -o "$WORK/source.osm.pbf" "$PBF_URL"
+          # Вырез по bbox; complete_ways - дороги не обрываются на границе.
+          osmium extract -b "$BBOX" -s complete_ways "$WORK/source.osm.pbf" -o "$WORK/raw.osm" --overwrite
+          rm -f "$WORK/source.osm.pbf"
+          cd tools/map-compiler
+          python purrgo_osm_optimizer.py "$WORK/raw.osm" "$WORK/$MAP_NAME.osm"
+          python purrgo_map_compiler.py "$WORK/$MAP_NAME.osm"
+          for f in map.name roads.idx roads.mlp; do
+            [ -s "$MAP_NAME/$f" ] || { echo "::error::missing or empty $f"; exit 1; }
+          done
+          cp "$MAP_NAME"/* ../../web-root/maps/
+          du -sh ../../web-root/maps
+
+      # ---- Книги для демонстрации режима BOOKS ----
+      - name: Add sample books
+        run: |
+          mkdir -p web-root/books web-root/routes web-root/waypts
+          cp tests/host/data/sample.pgb web-root/books/
+          [ -f tests/host/data/sample_img.pgb ] && cp tests/host/data/sample_img.pgb web-root/books/ || true
+
+      # ---- Emscripten ----
+      - name: Setup emsdk
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: ${{ env.EMSDK_VERSION }}
+          actions-cache-folder: emsdk-cache
+
+      - name: Configure (preset web-release)
+        run: |
+          cmake --preset web-release \
+            -DPURRGO_WEB_PRELOAD_DIR="$GITHUB_WORKSPACE/web-root" \
+            -DPURRGO_MOCK_LAT_1E7="$(python3 -c "print(round(float('$MOCK_LAT')*1e7))")" \
+            -DPURRGO_MOCK_LON_1E7="$(python3 -c "print(round(float('$MOCK_LON')*1e7))")"
+
+      - name: Build
+        run: cmake --build out/build/web-release
+
+      - name: Assemble site
+        run: |
+          mkdir -p site
+          cp out/build/web-release/apps/emulator/index.{html,js,wasm,data} site/
+          touch site/.nojekyll
+          ls -lh site
+          {
+            echo "### Web emulator"
+            echo '```'
+            ls -lh site
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: purrgo-web-emulator
+          path: site
+          retention-days: 14
+
+      - uses: actions/configure-pages@v5
+        if: github.event_name != 'pull_request'
+
+      - uses: actions/upload-pages-artifact@v3
+        if: github.event_name != 'pull_request'
+        with:
+          path: site
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

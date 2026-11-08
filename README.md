@@ -251,6 +251,14 @@ PC-эмулятора, сборка прошивки STM32 (с выводом и
 
 ---
 
+## Эмулятор в браузере
+
+Эмулятор собирается в WebAssembly (Emscripten) и публикуется на GitHub Pages
+workflow'ом `.github/workflows/pages.yml`: работает на ПК и на смартфоне без установки.
+Сборка, настройка Pages и ограничения - в [`docs/WEB_EMULATOR.md`](docs/WEB_EMULATOR.md).
+
+---
+
 ## GNSS на ПК
 
 Эмулятор (`apps/emulator`) получает GNSS одним из двух способов:

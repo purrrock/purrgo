@@ -264,11 +264,117 @@ static void test_battery_monitor(void)
     CHECK(purrgo_app_ui_needs_render(g_now));
 }
 
+
+/* Фикс GNSS со смещением от центра карты в пикселях (x вправо, y вниз), масштаб текущий. */
+static purrgo_gnss_solution_t fix_at_px(int32_t clat, int32_t clon, int px, int py)
+{
+    const int64_t m_per_px_num = map_app_get_map_scale_width_m();
+    const int64_t lat_per_px = (m_per_px_num * PURRGO_1E7_PER_METER) / PURRGO_HW_DISPLAY_WIDTH_PX;
+    const int64_t lon_per_px = lat_per_px * 10000 / purrgo_geo_cos_10k(clat);
+    purrgo_gnss_solution_t f;
+    memset(&f, 0, sizeof f);
+    f.valid = true;
+    f.lat_1e7 = (int32_t)(clat - py * lat_per_px);
+    f.lon_1e7 = (int32_t)(clon + px * lon_per_px);
+    return f;
+}
+
+static void test_center_on_marker(void)
+{
+    memset(&app_config, 0, sizeof app_config);
+    app_config.last_lat_1e7 = 315590000;
+    app_config.last_lon_1e7 = 354731666;
+    purrgo_map_controller_init();
+    const int32_t lat0 = map_app_get_map_center_lat();
+    const int32_t lon0 = map_app_get_map_center_lon();
+
+    /* Маркёр рядом с центром (в зоне без сдвига), затем ручной сдвиг карты. */
+    purrgo_gnss_solution_t f = fix_at_px(lat0, lon0, 20, 30);
+    purrgo_map_controller_update(&f);
+    CHECK(map_app_get_map_center_lat() == lat0 && map_app_get_map_center_lon() == lon0);
+    CHECK(purrgo_map_controller_handle_button(PURRGO_ACTION_UP));
+    CHECK(purrgo_map_controller_handle_button(PURRGO_ACTION_LEFT));
+    CHECK(map_app_is_manual_pan_active());
+
+    /* Долгое K3: центр карты ровно на маркёре GNSS, автоследование включено. */
+    purrgo_ui_dirty_clear(UI_DIRTY_MAP);
+    CHECK(purrgo_map_controller_handle_button(PURRGO_ACTION_OK));
+    CHECK(!map_app_is_manual_pan_active());
+    CHECK(map_app_get_map_center_lat() == f.lat_1e7);
+    CHECK(map_app_get_map_center_lon() == f.lon_1e7);
+    CHECK(purrgo_ui_dirty_test(UI_DIRTY_MAP));
+
+    /* То же без ручного сдвига: маркёр в зоне без сдвига, но центрирование всё равно работает. */
+    f = fix_at_px(map_app_get_map_center_lat(), map_app_get_map_center_lon(), -25, 18);
+    purrgo_map_controller_update(&f);
+    CHECK(map_app_get_map_center_lat() != f.lat_1e7);
+    CHECK(purrgo_map_controller_handle_button(PURRGO_ACTION_OK));
+    CHECK(map_app_get_map_center_lat() == f.lat_1e7);
+    CHECK(map_app_get_map_center_lon() == f.lon_1e7);
+
+    /* Без валидного фикса центр не меняется. */
+    memset(&f, 0, sizeof f);
+    purrgo_map_controller_update(&f);
+    int32_t keep_lat = map_app_get_map_center_lat();
+    CHECK(purrgo_map_controller_handle_button(PURRGO_ACTION_OK));
+    CHECK(map_app_get_map_center_lat() == keep_lat);
+}
+
+static void test_follow_corner_no_pingpong(void)
+{
+    memset(&app_config, 0, sizeof app_config);
+    app_config.last_lat_1e7 = 315590000;
+    app_config.last_lon_1e7 = 354731666;
+    purrgo_map_controller_init();
+    int32_t lat0 = map_app_get_map_center_lat();
+    int32_t lon0 = map_app_get_map_center_lon();
+
+    /* Зоны срабатывания: x: 88-16 = 72 px, y: 123-16 = 107 px от центра. */
+    /* Маркёр вышел к краю только по x: широта (ось y) не трогается. */
+    purrgo_gnss_solution_t f = fix_at_px(lat0, lon0, 75, 10);
+    purrgo_map_controller_update(&f);
+    CHECK(map_app_get_map_center_lat() == lat0);
+    CHECK(map_app_get_map_center_lon() > lon0);
+    CHECK(purrgo_ui_dirty_test(UI_DIRTY_MAP));
+
+    /* Маркёр в углу (оба края): сдвиг по обеим осям, потом шум GNSS в +-2 px сдвигов не вызывает. */
+    purrgo_map_controller_init();
+    lat0 = map_app_get_map_center_lat();
+    lon0 = map_app_get_map_center_lon();
+    f = fix_at_px(lat0, lon0, 80, 112);
+    purrgo_map_controller_update(&f);
+    int32_t lat1 = map_app_get_map_center_lat();
+    int32_t lon1 = map_app_get_map_center_lon();
+    CHECK(lat1 < lat0 && lon1 > lon0);   /* камера ушла к югу и к востоку, к маркёру */
+
+    /* Маркёр теперь в противоположной четверти, не ближе 24 px к зоне срабатывания. */
+    static const int jx[] = { 0, 2, -2, 2, -2, 1, -1, 0 };
+    static const int jy[] = { 0, -2, 2, 2, -2, 1, -1, 0 };
+    for (unsigned i = 0; i < sizeof jx / sizeof jx[0]; i++) {
+        /* Маркёр стоит на месте; дрожит только его измеренное положение. */
+        purrgo_gnss_solution_t g = f;
+        purrgo_gnss_solution_t j = fix_at_px(0, 0, jx[i], jy[i]);
+        g.lat_1e7 = f.lat_1e7 + j.lat_1e7;
+        g.lon_1e7 = f.lon_1e7 + (int32_t)((int64_t)j.lon_1e7 * purrgo_geo_cos_10k(0) /
+                                          purrgo_geo_cos_10k(lat1));
+        purrgo_map_controller_update(&g);
+    }
+    CHECK(map_app_get_map_center_lat() == lat1);
+    CHECK(map_app_get_map_center_lon() == lon1);
+
+    /* Движение продолжается в ту же сторону: следующий сдвиг происходит только у нового края. */
+    purrgo_gnss_solution_t far = fix_at_px(lat1, lon1, 40, 60);
+    purrgo_map_controller_update(&far);
+    CHECK(map_app_get_map_center_lat() == lat1 && map_app_get_map_center_lon() == lon1);
+}
+
 int main(void)
 {
     test_marker_threshold_and_battery_line();
     test_pan_step();
     test_track_battery();
     test_battery_monitor();
+    test_center_on_marker();
+    test_follow_corner_no_pingpong();
     return test_finish("test_marker_pan_battery");
 }

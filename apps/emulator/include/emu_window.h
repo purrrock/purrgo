@@ -6,7 +6,12 @@
 
 #define PIXEL_SCALE 2
 #define WINDOW_WIDTH (DISPLAY_WIDTH * PIXEL_SCALE)
+#ifdef __EMSCRIPTEN__
+/* В браузере кнопки - HTML-элементы страницы, область кнопок в canvas не нужна. */
+#define UI_AREA_HEIGHT 0
+#else
 #define UI_AREA_HEIGHT 50
+#endif
 #define WINDOW_HEIGHT (DISPLAY_HEIGHT * PIXEL_SCALE + UI_AREA_HEIGHT)
 
 bool emu_window_init(SDL_Window** win, SDL_Renderer** ren, SDL_Texture** tex);

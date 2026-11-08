@@ -9,7 +9,8 @@
 #include "purrgo/ui/ui_dirty.h"
 
 #define AUTO_FOLLOW_EDGE_MARGIN_PX 16
-#define AUTO_FOLLOW_STOP_MARGIN_DIV 16
+/* Запас от границы зоны срабатывания, на который маркёр ставится после сдвига. */
+#define AUTO_FOLLOW_REARM_PX 24
 
 // Состояние окна просмотра карты (Map Viewport)
 static int32_t map_center_lat_1e7;
@@ -63,6 +64,31 @@ bool map_app_is_manual_pan_active(void) {
     return manual_pan_active;
 }
 
+/*
+ * Автоследование: камера сдвигается, когда маркёр подошёл к краю окна карты
+ * ближе AUTO_FOLLOW_EDGE_MARGIN_PX. Каждая ось обрабатывается независимо, и
+ * сдвигается только та ось, по которой маркёр дошёл до края: раньше при выходе
+ * к краю по одной оси вторая тоже отражалась относительно центра.
+ *
+ * После сдвига маркёр ставится на противоположную сторону, но не ближе
+ * AUTO_FOLLOW_REARM_PX к границе зоны срабатывания. Этот гистерезис нужен,
+ * чтобы маркёр, оказавшийся в углу, не попадал сразу после сдвига на ту же
+ * границу с другой стороны: иначе шум GNSS в 1 px запускал обратный сдвиг, и
+ * карта дёргалась туда-сюда.
+ */
+static int32_t follow_axis_target(int32_t d, int32_t start) {
+    int32_t abs_d = d < 0 ? -d : d;
+    if (abs_d < start) {
+        return d;   /* ось не сработала: маркёр остаётся где был */
+    }
+    int32_t limit = start - AUTO_FOLLOW_REARM_PX;
+    if (limit < 0) limit = 0;
+    int32_t target = -d;
+    if (target > limit) target = limit;
+    if (target < -limit) target = -limit;
+    return target;
+}
+
 static void apply_auto_follow(const purrgo_gnss_solution_t* fix) {
     if (!fix->valid || manual_pan_active) {
         return;
@@ -70,9 +96,9 @@ static void apply_auto_follow(const purrgo_gnss_solution_t* fix) {
 
     purrgo_viewport_t map_vp = {
         .width = PURRGO_HW_DISPLAY_WIDTH_PX,
-        .height = PURRGO_HW_DISPLAY_HEIGHT_PX - 18,
+        .height = PURRGO_MAP_VIEWPORT_HEIGHT_PX,
         .offset_x = 0,
-        .offset_y = 9
+        .offset_y = PURRGO_MAP_STATUS_BAR_H_PX
     };
 
     purrgo_bbox_t dynamic_cam;
@@ -85,118 +111,68 @@ static void apply_auto_follow(const purrgo_gnss_solution_t* fix) {
     );
 
     int16_t sx, sy;
-    project_to_screen(
-        fix->lon_1e7,
-        fix->lat_1e7,
-        &dynamic_cam,
-        &map_vp,
-        &sx,
-        &sy
-    );
+    project_to_screen(fix->lon_1e7, fix->lat_1e7, &dynamic_cam, &map_vp, &sx, &sy);
 
-    int16_t center_x = (int16_t)(map_vp.offset_x + map_vp.width / 2);
-    int16_t center_y = (int16_t)(map_vp.offset_y + map_vp.height / 2);
+    const int32_t center_x = map_vp.offset_x + map_vp.width / 2;
+    const int32_t center_y = map_vp.offset_y + map_vp.height / 2;
+    const int32_t dx = (int32_t)sx - center_x;
+    const int32_t dy = (int32_t)sy - center_y;
 
-    int32_t dx = (int32_t)sx - center_x;
-    if (dx < 0) dx = -dx;
+    const int32_t follow_start_x = (int32_t)(map_vp.width / 2) - AUTO_FOLLOW_EDGE_MARGIN_PX;
+    const int32_t follow_start_y = (int32_t)(map_vp.height / 2) - AUTO_FOLLOW_EDGE_MARGIN_PX;
 
-    int32_t dy = (int32_t)sy - center_y;
-    if (dy < 0) dy = -dy;
-
-    int32_t follow_start_x = (map_vp.width / 2) - AUTO_FOLLOW_EDGE_MARGIN_PX;
-    int32_t follow_start_y = (map_vp.height / 2) - AUTO_FOLLOW_EDGE_MARGIN_PX;
-
-    int32_t follow_stop_x = map_vp.width / AUTO_FOLLOW_STOP_MARGIN_DIV;
-    int32_t follow_stop_y = map_vp.height / AUTO_FOLLOW_STOP_MARGIN_DIV;
-
-    if (dx <= follow_stop_x && dy <= follow_stop_y) {
-        // Inside FOLLOW_STOP zone: no camera change
+    const int32_t target_dx = follow_axis_target(dx, follow_start_x);
+    const int32_t target_dy = follow_axis_target(dy, follow_start_y);
+    const bool move_x = (target_dx != dx);
+    const bool move_y = (target_dy != dy);
+    if (!move_x && !move_y) {
         return;
-    } else if (dx < follow_start_x && dy < follow_start_y) {
-        // Between FOLLOW_STOP and FOLLOW_START zones: no camera change
-        return;
-    } else {
-        // Reached or exceeded FOLLOW_START zone: calculate target opposite position
-        int32_t target_x = 2 * center_x - sx;
-        int32_t target_y = 2 * center_y - sy;
+    }
 
-        // Clamp target_x to safe area (shifted inward by 1 pixel to guarantee boundary adherence against integer rounding)
-        int32_t min_x = center_x - follow_start_x + 1;
-        int32_t max_x = center_x + follow_start_x - 1;
-        if (target_x < min_x) target_x = min_x;
-        if (target_x > max_x) target_x = max_x;
+    int32_t new_lat = map_center_lat_1e7;
+    int32_t new_lon = map_center_lon_1e7;
 
-        // Clamp target_y to safe area
-        int32_t min_y = center_y - follow_start_y + 1;
-        int32_t max_y = center_y + follow_start_y - 1;
-        if (target_y < min_y) target_y = min_y;
-        if (target_y > max_y) target_y = max_y;
-
-        // Exact inverse projection from GNSS coordinate to find new camera center
-        // From project_to_screen:
-        // projected_y = vp.height - (lat - min_y) * vp.height / height + vp.offset_y
-        // By substituting min_y = candidate_lat - rad_y and solving for candidate_lat:
-
+    /* Точная обратная проекция: центр камеры, при котором маркёр попадёт в target. */
+    if (move_y) {
         int64_t geo_height = (int64_t)dynamic_cam.max_y - (int64_t)dynamic_cam.min_y;
         int64_t rad_y = geo_height / 2;
-        int64_t y_term = (int64_t)map_vp.height - target_y + map_vp.offset_y;
-        int64_t candidate_lat = (int64_t)fix->lat_1e7 - (y_term * geo_height + map_vp.height / 2) / map_vp.height + rad_y;
-
+        int64_t y_term = (int64_t)map_vp.height - (center_y + target_dy) + map_vp.offset_y;
+        int64_t candidate_lat = (int64_t)fix->lat_1e7 -
+                                (y_term * geo_height + map_vp.height / 2) / map_vp.height + rad_y;
         if (candidate_lat > 900000000LL) candidate_lat = 900000000LL;
         if (candidate_lat < -900000000LL) candidate_lat = -900000000LL;
+        new_lat = (int32_t)candidate_lat;
+    }
 
-        // Calculate exact width at the new latitude to handle correct longitudinal scaling
+    if (move_x) {
+        /* Ширина охвата в градусах зависит от широты нового центра. */
         purrgo_bbox_t temp_cam;
-        purrgo_geo_bbox_from_center(
-            (int32_t)candidate_lat,
-            map_center_lon_1e7, // Lon doesn't matter for width calculation
-            map_app_get_map_scale_width_m(),
-            &map_vp,
-            &temp_cam
-        );
-
+        purrgo_geo_bbox_from_center(new_lat, map_center_lon_1e7,
+                                    map_app_get_map_scale_width_m(), &map_vp, &temp_cam);
         int64_t geo_width = camera_span_x(&temp_cam);
         int64_t rad_x = geo_width / 2;
-        int64_t x_term = (int64_t)target_x - map_vp.offset_x;
-        int64_t candidate_lon = (int64_t)fix->lon_1e7 - (x_term * geo_width + map_vp.width / 2) / map_vp.width + rad_x;
+        int64_t x_term = (int64_t)(center_x + target_dx) - map_vp.offset_x;
+        int64_t candidate_lon = (int64_t)fix->lon_1e7 -
+                                (x_term * geo_width + map_vp.width / 2) / map_vp.width + rad_x;
+        new_lon = purrgo_geo_wrap_lon(candidate_lon);
+    }
 
-        // Wrap candidate_lon cleanly within WGS84 +/- 180 (1.8e9) if needed
-        int32_t wrapped_lon = purrgo_geo_wrap_lon(candidate_lon);
+    if (new_lat != map_center_lat_1e7 || new_lon != map_center_lon_1e7) {
+        map_center_lat_1e7 = new_lat;
+        map_center_lon_1e7 = new_lon;
+        purrgo_ui_dirty_mark(UI_DIRTY_MAP);
+    }
+}
 
-        purrgo_bbox_t candidate_cam;
-        purrgo_geo_bbox_from_center(
-            (int32_t)candidate_lat,
-            wrapped_lon,
-            map_app_get_map_scale_width_m(),
-            &map_vp,
-            &candidate_cam
-        );
-
-        int16_t new_sx, new_sy;
-        project_to_screen(
-            fix->lon_1e7,
-            fix->lat_1e7,
-            &candidate_cam,
-            &map_vp,
-            &new_sx,
-            &new_sy
-        );
-
-        int32_t new_dx = (int32_t)new_sx - center_x;
-        if (new_dx < 0) new_dx = -new_dx;
-
-        int32_t new_dy = (int32_t)new_sy - center_y;
-        if (new_dy < 0) new_dy = -new_dy;
-
-
-        if (new_dx <= follow_start_x && new_dy <= follow_start_y) {
-        //    PURRGO_LOG("AUTO-FOLLOW: marker=(%d,%d) target=(%d,%d) result=(%d,%d)\n", sx, sy, (int)target_x, (int)target_y, new_sx, new_sy);
-            if (map_center_lat_1e7 != (int32_t)candidate_lat || map_center_lon_1e7 != wrapped_lon) {
-                map_center_lat_1e7 = (int32_t)candidate_lat;
-                map_center_lon_1e7 = wrapped_lon;
-                purrgo_ui_dirty_mark(UI_DIRTY_MAP);
-            }
-        }
+/* Центрирование карты на маркёре GNSS: маркёр в центре окна карты. */
+static void center_map_on_fix(const purrgo_gnss_solution_t* fix) {
+    if (!fix->valid) {
+        return;
+    }
+    if (map_center_lat_1e7 != fix->lat_1e7 || map_center_lon_1e7 != fix->lon_1e7) {
+        map_center_lat_1e7 = fix->lat_1e7;
+        map_center_lon_1e7 = fix->lon_1e7;
+        purrgo_ui_dirty_mark(UI_DIRTY_MAP);
     }
 }
 
@@ -285,11 +261,13 @@ bool purrgo_map_controller_handle_button(purrgo_action_t button) {
     }
 
     if (button == PURRGO_ACTION_OK) {
-        if (manual_pan_active) {
-            manual_pan_active = false;
+        /* Долгое K3: вернуть автоследование и поставить маркёр GNSS в центр карты. */
+        const bool was_manual = manual_pan_active;
+        manual_pan_active = false;
+        center_map_on_fix(&prev_fix_for_map);
+        if (was_manual) {
             /* Перекрестие центра карты рисуется только в ручном режиме: убрать его. */
             purrgo_ui_dirty_mark(UI_DIRTY_MAP);
-            apply_auto_follow(&prev_fix_for_map);
         }
         return true;
     }

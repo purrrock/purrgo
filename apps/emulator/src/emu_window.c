@@ -20,6 +20,10 @@ ButtonState buttons[] = {
 
 #define NUM_BUTTONS (sizeof(buttons) / sizeof(buttons[0]))
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
+
 /*
  * 2-bit framebuffer palette.
  */
@@ -111,6 +115,10 @@ bool emu_window_init(SDL_Window** win, SDL_Renderer** ren, SDL_Texture** tex) {
 
     *ren = SDL_CreateRenderer(*win, -1, SDL_RENDERER_ACCELERATED);
     if (!*ren) {
+        /* Нет GPU/WebGL (виртуальная машина, headless): программный рендерер. */
+        *ren = SDL_CreateRenderer(*win, -1, SDL_RENDERER_SOFTWARE);
+    }
+    if (!*ren) {
         fprintf(stderr, "Renderer could not be created! SDL_Error: %s\n", SDL_GetError());
         return false;
     }
@@ -134,73 +142,83 @@ static uint32_t key_press_times[4] = {0};
 static int active_mouse_button = -1;
 static uint32_t mouse_press_time = 0;
 
+/*
+ * Нажатие/отпускание аппаратной кнопки K1..K4 (index 0..3).
+ * Длинное нажатие определяется по времени между down и up, как на устройстве.
+ * Используется и клавишами 1-4, и (в web-сборке) HTML-кнопками страницы.
+ */
+static void emu_key_down(int index) {
+    if (index < 0 || index > 3) {
+        return;
+    }
+    key_press_times[index] = SDL_GetTicks();
+}
+
+static void emu_key_up(int index) {
+    static const purrgo_btn_t short_btn[4] = {
+        PURRGO_BTN_KEY1_SHORT, PURRGO_BTN_KEY2_SHORT,
+        PURRGO_BTN_KEY3_SHORT, PURRGO_BTN_KEY4_SHORT
+    };
+    static const purrgo_btn_t long_btn[4] = {
+        PURRGO_BTN_KEY1_LONG, PURRGO_BTN_KEY2_LONG,
+        PURRGO_BTN_KEY3_LONG, PURRGO_BTN_KEY4_LONG
+    };
+
+    if (index < 0 || index > 3 || key_press_times[index] == 0) {
+        return;
+    }
+    if (SDL_GetTicks() - key_press_times[index] >= PURRGO_BTN_LONG_PRESS_MS) {
+        handle_button_press(long_btn[index]);
+    } else {
+        handle_button_press(short_btn[index]);
+    }
+    key_press_times[index] = 0;
+}
+
+#ifdef __EMSCRIPTEN__
+/* Вызывается из JS (HTML-кнопки страницы): idx 0..3 = K1..K4, down 1/0. */
+EMSCRIPTEN_KEEPALIVE void purrgo_web_key(int idx, int down) {
+    if (down) {
+        emu_key_down(idx);
+    } else {
+        emu_key_up(idx);
+    }
+}
+
+/* Одновременное нажатие K1+K4 (выход из режима трекера). */
+EMSCRIPTEN_KEEPALIVE void purrgo_web_combo_k1_k4(void) {
+    handle_button_press(PURRGO_BTN_COMBO_K1_K4);
+}
+#endif
+
+static int sdl_key_to_index(SDL_Keycode sym) {
+    switch (sym) {
+        case SDLK_1: return 0;
+        case SDLK_2: return 1;
+        case SDLK_3: return 2;
+        case SDLK_4: return 3;
+        default:     return -1;
+    }
+}
+
 void emu_window_process_events(bool* quit) {
     SDL_Event e;
     while (SDL_PollEvent(&e) != 0) {
         if (e.type == SDL_QUIT) {
             *quit = true;
         } else if (e.type == SDL_KEYDOWN && e.key.repeat == 0) {
-            switch (e.key.keysym.sym) {
-                case SDLK_1:
-                    key_press_times[0] = SDL_GetTicks();
-                    break;
-                case SDLK_2:
-                    key_press_times[1] = SDL_GetTicks();
-                    break;
-                case SDLK_3:
-                    key_press_times[2] = SDL_GetTicks();
-                    break;
-                case SDLK_4:
-                    key_press_times[3] = SDL_GetTicks();
-                    break;
-                case SDLK_5:
-                    /* Эмуляция одновременного K1+K4 (выход из режима трекера). */
-                    handle_button_press(PURRGO_BTN_COMBO_K1_K4);
-                    break;
+            const int idx = sdl_key_to_index(e.key.keysym.sym);
+            if (idx >= 0) {
+                emu_key_down(idx);
+            } else if (e.key.keysym.sym == SDLK_5) {
+                /* Эмуляция одновременного K1+K4 (выход из режима трекера). */
+                handle_button_press(PURRGO_BTN_COMBO_K1_K4);
             }
         } else if (e.type == SDL_KEYUP) {
-             switch (e.key.keysym.sym) {
-                case SDLK_1:
-                    if (key_press_times[0] > 0) {
-                        if (SDL_GetTicks() - key_press_times[0] >= PURRGO_BTN_LONG_PRESS_MS) {
-                            handle_button_press(PURRGO_BTN_KEY1_LONG);
-                        } else {
-                            handle_button_press(PURRGO_BTN_KEY1_SHORT);
-                        }
-                        key_press_times[0] = 0;
-                    }
-                    break;
-                case SDLK_2:
-                    if (key_press_times[1] > 0) {
-                        if (SDL_GetTicks() - key_press_times[1] >= PURRGO_BTN_LONG_PRESS_MS) {
-                            handle_button_press(PURRGO_BTN_KEY2_LONG);
-                        } else {
-                            handle_button_press(PURRGO_BTN_KEY2_SHORT);
-                        }
-                        key_press_times[1] = 0;
-                    }
-                    break;
-                case SDLK_3:
-                    if (key_press_times[2] > 0) {
-                        if (SDL_GetTicks() - key_press_times[2] >= PURRGO_BTN_LONG_PRESS_MS) {
-                            handle_button_press(PURRGO_BTN_KEY3_LONG);
-                        } else {
-                            handle_button_press(PURRGO_BTN_KEY3_SHORT);
-                        }
-                        key_press_times[2] = 0;
-                    }
-                    break;
-                case SDLK_4:
-                    if (key_press_times[3] > 0) {
-                        if (SDL_GetTicks() - key_press_times[3] >= PURRGO_BTN_LONG_PRESS_MS) {
-                            handle_button_press(PURRGO_BTN_KEY4_LONG);
-                        } else {
-                            handle_button_press(PURRGO_BTN_KEY4_SHORT);
-                        }
-                        key_press_times[3] = 0;
-                    }
-                    break;
-             }
+            const int idx = sdl_key_to_index(e.key.keysym.sym);
+            if (idx >= 0) {
+                emu_key_up(idx);
+            }
         } else if (e.type == SDL_MOUSEBUTTONDOWN) {
             int x = e.button.x;
             int y = e.button.y;
@@ -257,6 +275,7 @@ void emu_window_render(SDL_Renderer* renderer, SDL_Texture* fb_texture) {
 
     SDL_RenderCopy(renderer, fb_texture, NULL, &dest_rect);
 
+#ifndef __EMSCRIPTEN__
     for (size_t i = 0; i < NUM_BUTTONS; ++i) {
         SDL_SetRenderDrawColor(renderer, 150, 150, 150, 255);
         SDL_RenderFillRect(renderer, &buttons[i].rect);
@@ -273,6 +292,7 @@ void emu_window_render(SDL_Renderer* renderer, SDL_Texture* fb_texture) {
 
         sdl_draw_text(renderer, text_x, text_y, buttons[i].label);
     }
+#endif
 
     SDL_RenderPresent(renderer);
 }
