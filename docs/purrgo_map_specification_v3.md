@@ -551,6 +551,8 @@ POI_SMALL
 
 Feature codes `37` (`WATERWAY_MAJOR`) and `38` (`WATERWAY_MINOR`) are assigned to linear water objects of the `waterways` layer. The `Type` field of a Data Node is `uint8`, so codes must not exceed `255`.
 
+Feature codes `39` (`WETLAND`) and `40` (`GLACIER`) are polygons of the `water` layer that the firmware draws with hatching instead of the solid black water fill. Maps compiled before these codes were introduced store wetlands and glaciers as code `10` and must be recompiled to get the hatching.
+
 The binary map stores only the numeric `Code`.
 
 ## 9.5. Rendering styles

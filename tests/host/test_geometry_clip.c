@@ -246,6 +246,73 @@ static void test_many_crossings_far(void)
     CHECK(diff_count(g_fb, g_ref) == 0);
 }
 
+/* ------------------------------------------------------- штриховка --- */
+
+/* Независимый эталон шаблона: пиксель закрашен, если он попадает в штрих. */
+static int hatch_hit(const gfx_hatch_t *h, int x, int y)
+{
+    if (y % h->row_period != 0) { return 0; }
+    int row = y / h->row_period;
+    int shift = (row * h->row_shift) % h->dash_period;
+    int rel = ((x - shift) % h->dash_period + h->dash_period) % h->dash_period;
+    return rel < h->dash_len;
+}
+
+static void test_hatched_fill(void)
+{
+    const gfx_hatch_t swamp = { 4, 4, 8, 4 };
+    const gfx_hatch_t ice   = { 1, 1, 6, 1 };
+    const gfx_hatch_t *hs[2] = { &swamp, &ice };
+
+    /* Квадрат с дыркой: штрихи только в кольце, нигде снаружи и в дырке. */
+    gfx_point_t pts[8] = {
+        {5, 5}, {55, 5}, {55, 43}, {5, 43},
+        {20, 15}, {40, 15}, {40, 30}, {20, 30}
+    };
+    uint32_t parts[2] = {0, 4};
+
+    for (int k = 0; k < 2; k++) {
+        const gfx_hatch_t *h = hs[k];
+
+        canvas(64, 48);
+        gfx_fill_compound_polygon_hatched(&g_gfx, pts, 8, parts, 2, h);
+
+        canvas(64, 48);
+        uint8_t solid[MAX_W * MAX_H];
+        gfx_fill_compound_polygon(&g_gfx, pts, 8, parts, 2);
+        memcpy(solid, g_fb, sizeof solid);
+
+        canvas(64, 48);
+        gfx_fill_compound_polygon_hatched(&g_gfx, pts, 8, parts, 2, h);
+
+        int painted = 0, bad = 0;
+        for (int y = 0; y < g_h; y++) {
+            for (int x = 0; x < g_w; x++) {
+                int got = g_fb[y * g_w + x] != 0;
+                int want = solid[y * g_w + x] && hatch_hit(h, x, y);
+                painted += got;
+                bad += (got != want);
+            }
+        }
+        CHECK(bad == 0);
+        CHECK(painted > 0);
+    }
+
+    /* Далёкие вершины: штриховка не должна зависать и не должна рисовать вне экрана. */
+    gfx_point_t far[3] = { {-4000000, -4000000}, {4000000, -4000000}, {0, 4000000} };
+    uint32_t fp[1] = {0};
+    canvas(64, 48);
+    gfx_fill_compound_polygon_hatched(&g_gfx, far, 3, fp, 1, &ice);
+    int cnt = 0;
+    for (int i = 0; i < g_w * g_h; i++) { cnt += (g_fb[i] != 0); }
+    CHECK(cnt > 0 && cnt < g_w * g_h);
+
+    /* NULL-шаблон ничего не рисует. */
+    canvas(64, 48);
+    gfx_fill_compound_polygon_hatched(&g_gfx, pts, 8, parts, 2, NULL);
+    CHECK(diff_count(g_fb, (uint8_t[MAX_W * MAX_H]){0}) == 0);
+}
+
 int main(void)
 {
     test_projection_i32();
@@ -254,5 +321,6 @@ int main(void)
     test_random_polygons();
     test_many_crossings();
     test_many_crossings_far();
+    test_hatched_fill();
     return test_finish("test_geometry_clip");
 }

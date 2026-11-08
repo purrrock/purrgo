@@ -389,6 +389,92 @@ static bool collect_nodes(
 
 
 /*
+ * Выводит один закрашиваемый интервал [x0, x1] строки y.
+ *
+ * Без штриховки (hatch == NULL) - сплошная линия gfx_draw_hline().
+ *
+ * Со штриховкой рисуются только штрихи шаблона. Шаблон привязан к
+ * координатам экрана (а не к полигону), поэтому штриховка соседних полигонов
+ * и частей одного полигона (кольца, куски scanline) сходится без швов:
+ *
+ *   - строка рисуется, если y кратно row_period;
+ *   - номер такой строки row = y / row_period сдвигает начало штрихов на
+ *     (row * row_shift) % dash_period пикселей (шахматный порядок / наклон);
+ *   - в строке штрих длиной dash_len повторяется с шагом dash_period.
+ */
+static void emit_span(
+    gfx_context_t *ctx,
+    const gfx_hatch_t *hatch,
+    int16_t x0,
+    int16_t x1,
+    int32_t y
+) {
+    if (hatch == NULL) {
+        gfx_draw_hline(ctx, x0, x1, (int16_t)y);
+        return;
+    }
+
+    if (hatch->row_period == 0 ||
+        hatch->dash_period == 0 ||
+        hatch->dash_len == 0) {
+        return;
+    }
+
+    if (x0 > x1) {
+        int16_t t = x0;
+        x0 = x1;
+        x1 = t;
+    }
+
+    /* Отсечение по clip до цикла: x0/x1 могут быть далеко за экраном. */
+    int32_t left = ctx->clip_x;
+    int32_t right = (int32_t)ctx->clip_x + (int32_t)ctx->clip_w - 1;
+
+    if ((int32_t)x1 < left || (int32_t)x0 > right) {
+        return;
+    }
+    if ((int32_t)x0 < left) {
+        x0 = (int16_t)left;
+    }
+    if ((int32_t)x1 > right) {
+        x1 = (int16_t)right;
+    }
+
+    const int32_t rp = hatch->row_period;
+    const int32_t period = hatch->dash_period;
+
+    int32_t ymod = y % rp;
+    if (ymod < 0) {
+        ymod += rp;
+    }
+    if (ymod != 0) {
+        return;
+    }
+
+    int32_t row = y / rp;
+    int32_t shift = (row * (int32_t)hatch->row_shift) % period;
+    if (shift < 0) {
+        shift += period;
+    }
+
+    /* Начало ближайшего слева от x0 штриха: shift + k * period, k целое. */
+    int32_t rel = (int32_t)x0 - shift;
+    int32_t cell = (rel >= 0) ? (rel / period)
+                              : -((-rel + period - 1) / period);
+
+    for (int32_t s = cell * period + shift; s <= (int32_t)x1; s += period) {
+        int32_t a = (s > (int32_t)x0) ? s : (int32_t)x0;
+        int32_t e = s + (int32_t)hatch->dash_len - 1;
+        int32_t b = (e < (int32_t)x1) ? e : (int32_t)x1;
+
+        if (a <= b) {
+            gfx_draw_hline(ctx, (int16_t)a, (int16_t)b, (int16_t)y);
+        }
+    }
+}
+
+
+/*
  * Запасной путь для scanline с очень большим числом пересечений.
  *
  * Пересечения упорядочиваются без массива на все пересечения: каждый проход по
@@ -405,7 +491,8 @@ static void fill_scanline_streaming(
     const uint32_t *parts,
     uint16_t num_parts,
     int32_t y,
-    bool wide
+    bool wide,
+    const gfx_hatch_t *hatch
 ) {
     uint32_t batch[GFX_STREAM_BATCH];
     uint32_t after = 0;
@@ -468,7 +555,7 @@ static void fill_scanline_streaming(
                 open_x = x;
                 inside = true;
             } else {
-                gfx_draw_hline(ctx, open_x, x, (int16_t)y);
+                emit_span(ctx, hatch, open_x, x, y);
                 inside = false;
             }
         }
@@ -515,12 +602,13 @@ static void fill_scanline_streaming(
  * пересечений, строка заливается запасным путём - полигон никогда не
  * обрывается на середине.
  */
-void gfx_fill_compound_polygon(
+static void fill_compound_impl(
     gfx_context_t *ctx,
     const gfx_point_t *points,
     uint16_t num_points,
     const uint32_t *parts,
-    uint16_t num_parts
+    uint16_t num_parts,
+    const gfx_hatch_t *hatch
 ) {
     if (
         !ctx ||
@@ -667,7 +755,8 @@ void gfx_fill_compound_polygon(
                 parts,
                 num_parts,
                 y,
-                wide
+                wide,
+                hatch
             );
             continue;
         }
@@ -712,12 +801,40 @@ void gfx_fill_compound_polygon(
             i + 1 < nodes;
             i += 2
         ) {
-            gfx_draw_hline(
+            emit_span(
                 ctx,
+                hatch,
                 nodeX[i],
                 nodeX[i + 1],
-                (int16_t)y
+                y
             );
         }
     }
+}
+
+
+void gfx_fill_compound_polygon(
+    gfx_context_t *ctx,
+    const gfx_point_t *points,
+    uint16_t num_points,
+    const uint32_t *parts,
+    uint16_t num_parts
+) {
+    fill_compound_impl(ctx, points, num_points, parts, num_parts, NULL);
+}
+
+
+void gfx_fill_compound_polygon_hatched(
+    gfx_context_t *ctx,
+    const gfx_point_t *points,
+    uint16_t num_points,
+    const uint32_t *parts,
+    uint16_t num_parts,
+    const gfx_hatch_t *hatch
+) {
+    if (hatch == NULL) {
+        return;
+    }
+
+    fill_compound_impl(ctx, points, num_points, parts, num_parts, hatch);
 }
