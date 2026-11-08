@@ -36,6 +36,11 @@ Code;PG_class;STYLE;LOD;Layer;OSM_Tags;Description;Enabled;Icon
 7;RAILWAY;RAILWAY_LINE;0;roads;railway=miniature;Железная дорога;1;
 7;RAILWAY;RAILWAY_LINE;2;roads;railway=monorail;Железная дорога;1;
 7;RAILWAY;RAILWAY_LINE;1;roads;railway=narrow_gauge;Железная дорога;1;
+41;SAND;SAND_DOTS;1;landuse;natural=beach;Пляж;1;
+41;SAND;SAND_DOTS;1;landuse;natural=sand;Песок;1;
+41;SAND;SAND_DOTS;1;landuse;natural=dune;Дюна;1;
+41;SAND;SAND_DOTS;1;landuse;natural=shingle;Галечник;1;
+41;SAND;SAND_DOTS;1;landuse;natural=scree;Осыпь;1;
 8;LANDUSE_NATURAL;LIGHT_GRAY_FILL;1;landuse;landuse=forest;Лес;1;
 8;LANDUSE_NATURAL;LIGHT_GRAY_FILL;1;landuse;natural=wood;Густой лес;1;
 8;LANDUSE_NATURAL;LIGHT_GRAY_FILL;1;landuse;leisure=park;Парк;1;

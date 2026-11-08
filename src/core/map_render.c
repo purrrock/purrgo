@@ -330,6 +330,17 @@ static const gfx_hatch_t s_wetland_hatch = {
     .row_shift   = 4
 };
 
+/*
+ * Пляж, песок и подобное: одиночные точки с шагом 4 px по x и 3 px по y,
+ * нечётные строки сдвинуты на 2 px (шахматный порядок).
+ */
+static const gfx_hatch_t s_sand_hatch = {
+    .row_period  = 3,
+    .dash_len    = 1,
+    .dash_period = 4,
+    .row_shift   = 2
+};
+
 static const gfx_hatch_t s_glacier_hatch = {
     .row_period  = 1,
     .dash_len    = 1,
@@ -678,7 +689,8 @@ void map_render_feature(
                 gfx->color_bg
             );
 
-        } else if (style == PURRGO_STYLE_GLACIER_HATCH) {
+        } else if (style == PURRGO_STYLE_GLACIER_HATCH ||
+                   style == PURRGO_STYLE_SAND_DOTS) {
 
             gfx_set_color(
                 gfx,
@@ -708,6 +720,17 @@ void map_render_feature(
                 (uint32_t *)iter.parts,
                 (uint16_t)part_count,
                 &s_glacier_hatch
+            );
+
+        } else if (style == PURRGO_STYLE_SAND_DOTS) {
+
+            gfx_fill_compound_polygon_hatched(
+                gfx,
+                screen_points,
+                (uint16_t)iter.num_points,
+                (uint32_t *)iter.parts,
+                (uint16_t)part_count,
+                &s_sand_hatch
             );
 
         } else {
