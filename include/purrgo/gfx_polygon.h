@@ -66,4 +66,41 @@ void gfx_fill_compound_polygon(
     uint16_t num_parts
 );
 
+/**
+ * @brief Шаблон штриховки для gfx_fill_compound_polygon_hatched().
+ *
+ * Шаблон привязан к координатам экрана. Рисуются только строки, где y кратно
+ * row_period; в такой строке штрих длиной dash_len повторяется с шагом
+ * dash_period, а начало штрихов сдвигается на (row * row_shift) % dash_period,
+ * где row = y / row_period.
+ *
+ * Примеры:
+ *   горизонтальные штрихи в шахматном порядке:
+ *       {row_period 4, dash_len 4, dash_period 8, row_shift 4}
+ *   диагональные линии под 45 градусов:
+ *       {row_period 1, dash_len 1, dash_period 6, row_shift 1}
+ */
+typedef struct {
+    uint8_t row_period;   /* Расстояние между строками штриховки, px (>= 1) */
+    uint8_t dash_len;     /* Длина штриха, px (>= 1) */
+    uint8_t dash_period;  /* Шаг штрихов в строке, px (>= dash_len) */
+    uint8_t row_shift;    /* Сдвиг начала штрихов на каждую следующую строку */
+} gfx_hatch_t;
+
+/**
+ * @brief Штриховка compound полигона (с holes) текущим цветом foreground.
+ *
+ * Геометрия, holes и отсечение те же, что у gfx_fill_compound_polygon();
+ * вместо сплошной заливки рисуются только штрихи шаблона. Контур полигона не
+ * рисуется. hatch == NULL ничего не рисует.
+ */
+void gfx_fill_compound_polygon_hatched(
+    gfx_context_t *ctx,
+    const gfx_point_t *points,
+    uint16_t num_points,
+    const uint32_t *parts,
+    uint16_t num_parts,
+    const gfx_hatch_t *hatch
+);
+
 #endif /* GFX_POLYGON_H */

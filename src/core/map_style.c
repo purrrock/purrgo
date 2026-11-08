@@ -81,6 +81,16 @@ static const purrgo_map_style_entry_t s_style_table[] = {
     },
 
     {
+        PURRGO_FEATURE_WETLAND,
+        PURRGO_STYLE_WETLAND_HATCH
+    },
+
+    {
+        PURRGO_FEATURE_GLACIER,
+        PURRGO_STYLE_GLACIER_HATCH
+    },
+
+    {
         PURRGO_FEATURE_WATERWAY_MAJOR,
         PURRGO_STYLE_WATER_THICK_LINE
     },

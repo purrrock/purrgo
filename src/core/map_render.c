@@ -316,6 +316,28 @@ static void map_draw_buffer_parts(
 }
 
 
+/*
+ * Штриховка полигонов слоя water (без обводки контура).
+ *
+ * Болото: горизонтальные штрихи 4 px через 4 px, строки через 4 px, каждая
+ * следующая строка сдвинута на полпериода (шахматный порядок).
+ * Ледник: диагональные линии 45 градусов, шаг 6 px по горизонтали.
+ */
+static const gfx_hatch_t s_wetland_hatch = {
+    .row_period  = 4,
+    .dash_len    = 4,
+    .dash_period = 8,
+    .row_shift   = 4
+};
+
+static const gfx_hatch_t s_glacier_hatch = {
+    .row_period  = 1,
+    .dash_len    = 1,
+    .dash_period = 6,
+    .row_shift   = 1
+};
+
+
 void map_render_feature(
     purrgo_file_t *mlp_file,
     uint32_t v1_offset,
@@ -647,16 +669,57 @@ void map_render_feature(
                 BLACK,
                 gfx->color_bg
             );
+
+        } else if (style == PURRGO_STYLE_WETLAND_HATCH) {
+
+            gfx_set_color(
+                gfx,
+                BLACK,
+                gfx->color_bg
+            );
+
+        } else if (style == PURRGO_STYLE_GLACIER_HATCH) {
+
+            gfx_set_color(
+                gfx,
+                DARK_GRAY,
+                gfx->color_bg
+            );
         }
 
 
-        gfx_fill_compound_polygon(
-            gfx,
-            screen_points,
-            (uint16_t)iter.num_points,
-            (uint32_t *)iter.parts,
-            (uint16_t)part_count
-        );
+        if (style == PURRGO_STYLE_WETLAND_HATCH) {
+
+            gfx_fill_compound_polygon_hatched(
+                gfx,
+                screen_points,
+                (uint16_t)iter.num_points,
+                (uint32_t *)iter.parts,
+                (uint16_t)part_count,
+                &s_wetland_hatch
+            );
+
+        } else if (style == PURRGO_STYLE_GLACIER_HATCH) {
+
+            gfx_fill_compound_polygon_hatched(
+                gfx,
+                screen_points,
+                (uint16_t)iter.num_points,
+                (uint32_t *)iter.parts,
+                (uint16_t)part_count,
+                &s_glacier_hatch
+            );
+
+        } else {
+
+            gfx_fill_compound_polygon(
+                gfx,
+                screen_points,
+                (uint16_t)iter.num_points,
+                (uint32_t *)iter.parts,
+                (uint16_t)part_count
+            );
+        }
 
 
         /*
