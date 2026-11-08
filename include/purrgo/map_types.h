@@ -56,8 +56,10 @@ typedef struct {
     purrgo_map_details_t details;           /* детализация: выбор уровня LOD */
     purrgo_poi_mode_t    poi_mode;          /* маркеры POI */
 
-    bool layer_landuse;                     /* полигоны landuse/water */
+    bool layer_landuse;                     /* полигоны landuse */
     bool layer_landuse_labels;              /* открывать landuse.db */
+    bool layer_water;                       /* водоёмы (water.*) и водотоки (waterways.*) */
+    bool layer_water_labels;                /* открывать water.db */
     bool layer_roads;                       /* дороги */
     bool layer_poi;                         /* маркеры POI (pois.idx) */
     bool layer_poi_labels;                  /* подписи POI и полигонов (pois.db) */

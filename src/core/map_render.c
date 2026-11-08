@@ -218,6 +218,104 @@ void map_render_draw_queued_labels(gfx_context_t *gfx)
 }
 
 
+/*
+ * Отрезок буфера точек на экран: отсечение по безопасному квадрату (как у
+ * обычных линий), толщина 1 - gfx_draw_line, больше - gfx_draw_thick_line.
+ */
+static void map_draw_buffer_segment(
+    gfx_context_t *gfx,
+    const gfx_point_t *a,
+    const gfx_point_t *b,
+    int16_t width
+)
+{
+    int32_t x0 = a->x;
+    int32_t y0 = a->y;
+    int32_t x1 = b->x;
+    int32_t y1 = b->y;
+
+    if (!map_clip_segment_to_safe(&x0, &y0, &x1, &y1)) {
+        return;
+    }
+
+    if (width <= 1) {
+        gfx_draw_line(gfx, (int16_t)x0, (int16_t)y0, (int16_t)x1, (int16_t)y1);
+    } else {
+        gfx_draw_thick_line(
+            gfx, (int16_t)x0, (int16_t)y0, (int16_t)x1, (int16_t)y1, width
+        );
+    }
+}
+
+
+/*
+ * Диапазон точек одной части [first, end) из буфера: ломаная
+ * (close_ring == false) или контур кольца (close_ring == true, замыкающий
+ * отрезок добавляется, если кольцо не замкнуто явно).
+ */
+static void map_draw_buffer_part(
+    gfx_context_t *gfx,
+    const gfx_point_t *pts,
+    uint32_t first,
+    uint32_t end,
+    bool close_ring,
+    int16_t width
+)
+{
+    if (end < first + 2) {
+        return;
+    }
+
+    for (uint32_t i = first; i + 1 < end; i++) {
+        map_draw_buffer_segment(gfx, &pts[i], &pts[i + 1], width);
+    }
+
+    if (close_ring &&
+        (pts[first].x != pts[end - 1].x ||
+         pts[first].y != pts[end - 1].y)) {
+        map_draw_buffer_segment(gfx, &pts[end - 1], &pts[first], width);
+    }
+}
+
+
+/*
+ * Все части объекта одним цветом и одной толщиной. Таблица частей берётся из
+ * итератора; без частей (num_parts == 0) весь буфер - одна часть.
+ */
+static void map_draw_buffer_parts(
+    gfx_context_t *gfx,
+    const gfx_point_t *pts,
+    uint32_t num_points,
+    const uint32_t *parts,
+    uint32_t num_parts,
+    bool close_ring,
+    gfx_color_t color,
+    int16_t width
+)
+{
+    gfx_set_color(gfx, color, gfx->color_bg);
+
+    if (num_parts == 0) {
+        map_draw_buffer_part(gfx, pts, 0, num_points, close_ring, width);
+        return;
+    }
+
+    for (uint32_t i = 0; i < num_parts; i++) {
+        uint32_t first = parts[i];
+        uint32_t end = (i + 1 < num_parts) ? parts[i + 1] : num_points;
+
+        if (first >= num_points) {
+            continue;
+        }
+        if (end > num_points) {
+            end = num_points;
+        }
+
+        map_draw_buffer_part(gfx, pts, first, end, close_ring, width);
+    }
+}
+
+
 void map_render_feature(
     purrgo_file_t *mlp_file,
     uint32_t v1_offset,
@@ -246,8 +344,19 @@ void map_render_feature(
      * Для полигонов используем общий статический буфер.
      * Для линий он не нужен.
      */
+    /*
+     * Линии воды (чёрное ядро с тёмно-серой обводкой) рисуются в два прохода:
+     * сначала обводка всех звеньев, затем ядро. Для этого точки объекта
+     * собираются в тот же буфер (объект до PURRGO_MAP_MAX_POINTS точек
+     * гарантирует map_mlp_iter_init()).
+     */
+    const bool is_water_line =
+        !is_polygon_layer &&
+        (style == PURRGO_STYLE_WATER_THICK_LINE ||
+         style == PURRGO_STYLE_WATER_LINE);
+
     gfx_point_t *screen_points =
-        is_polygon_layer ? s_polygon_buffer : NULL;
+        (is_polygon_layer || is_water_line) ? s_polygon_buffer : NULL;
 
     int32_t prev_sx = 0;
     int32_t prev_sy = 0;
@@ -278,14 +387,14 @@ void map_render_feature(
         );
 
 
-        if (is_polygon_layer) {
+        if (screen_points != NULL) {
 
             screen_points[point_index].x = sx;
             screen_points[point_index].y = sy;
         }
 
 
-        if (!is_polygon_layer) {
+        if (!is_polygon_layer && !is_water_line) {
 
             uint32_t current_part_offset =
                 (iter.num_parts > 0)
@@ -459,6 +568,29 @@ void map_render_feature(
     }
 
 
+    if (is_water_line) {
+
+        const bool thick = (style == PURRGO_STYLE_WATER_THICK_LINE);
+        const gfx_color_t prev_fg_line = gfx->color_fg;
+
+        /* Проход 1: тёмно-серая обводка. Проход 2: чёрное ядро. */
+        map_draw_buffer_parts(
+            gfx, screen_points, iter.num_points,
+            iter.parts, iter.num_parts, false,
+            DARK_GRAY, thick ? 5 : 3
+        );
+        map_draw_buffer_parts(
+            gfx, screen_points, iter.num_points,
+            iter.parts, iter.num_parts, false,
+            BLACK, thick ? 3 : 1
+        );
+
+        gfx_set_color(gfx, prev_fg_line, gfx->color_bg);
+
+        return;
+    }
+
+
     if (is_polygon_layer) {
 
         uint32_t part_count = iter.num_parts;
@@ -507,6 +639,14 @@ void map_render_feature(
                 DARK_GRAY,
                 gfx->color_bg
             );
+
+        } else if (style == PURRGO_STYLE_WATER_FILL) {
+
+            gfx_set_color(
+                gfx,
+                BLACK,
+                gfx->color_bg
+            );
         }
 
 
@@ -517,6 +657,21 @@ void map_render_feature(
             (uint32_t *)iter.parts,
             (uint16_t)part_count
         );
+
+
+        /*
+         * Вода: тёмно-серая обводка поверх чёрной заливки. Контур строится
+         * по тем же точкам из буфера, отрезки отсекаются по безопасному
+         * квадрату (вершины далёких полигонов выходят за int16).
+         */
+        if (style == PURRGO_STYLE_WATER_FILL) {
+
+            map_draw_buffer_parts(
+                gfx, screen_points, iter.num_points,
+                iter.parts, iter.num_parts, true,
+                DARK_GRAY, 1
+            );
+        }
 
 
         /*

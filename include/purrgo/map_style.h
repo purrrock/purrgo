@@ -33,7 +33,11 @@ typedef enum {
     PURRGO_FEATURE_WATER          = 10,
 
     PURRGO_FEATURE_POI_BIG        = 11,
-    PURRGO_FEATURE_POI_SMALL      = 12
+    PURRGO_FEATURE_POI_SMALL      = 12,
+
+    /* Линейные водные объекты (слой waterways). Коды 13..36 заняты POI. */
+    PURRGO_FEATURE_WATERWAY_MAJOR = 37,
+    PURRGO_FEATURE_WATERWAY_MINOR = 38
 
 } purrgo_feature_code_t;
 
@@ -55,9 +59,21 @@ typedef enum {
     PURRGO_STYLE_DARK_GRAY_DOTTED_LINE,
     PURRGO_STYLE_RAILWAY_LINE,
 
+    /*
+     * Вода (линии): чёрная линия с тёмно-серой обводкой.
+     * THICK - крупные водотоки (река, канал): обводка 5 px, ядро 3 px.
+     * LINE  - малые (ручей): обводка 3 px, ядро 1 px.
+     * Рисуются в два прохода по точкам объекта, чтобы обводка соседнего
+     * звена не перекрывала чёрное ядро на изгибах.
+     */
+    PURRGO_STYLE_WATER_THICK_LINE,
+    PURRGO_STYLE_WATER_LINE,
+
     /* Filled areas */
     PURRGO_STYLE_LIGHT_GRAY_FILL,
     PURRGO_STYLE_DARK_GRAY_FILL,
+    /* Вода (полигоны): чёрная заливка с тёмно-серой обводкой контура. */
+    PURRGO_STYLE_WATER_FILL,
 
     /* Points */
     PURRGO_STYLE_DARK_GRAY_BIG_CIRCLE,

@@ -77,7 +77,17 @@ static const purrgo_map_style_entry_t s_style_table[] = {
 
     {
         PURRGO_FEATURE_WATER,
-        PURRGO_STYLE_DARK_GRAY_FILL
+        PURRGO_STYLE_WATER_FILL
+    },
+
+    {
+        PURRGO_FEATURE_WATERWAY_MAJOR,
+        PURRGO_STYLE_WATER_THICK_LINE
+    },
+
+    {
+        PURRGO_FEATURE_WATERWAY_MINOR,
+        PURRGO_STYLE_WATER_LINE
     },
 
     {
@@ -101,7 +111,7 @@ purrgo_map_style_t purrgo_map_style_from_feature(
 ) {
     /*
      * Feature codes сейчас представляют собой небольшую
-     * плотную таблицу 0..12.
+     * таблицу (0..12 и 37, 38; коды 13..36 заняты POI).
      *
      * Тем не менее выполняем линейный поиск, а не обращение
      * feature_code напрямую как к индексу массива.

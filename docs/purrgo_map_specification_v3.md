@@ -480,8 +480,8 @@ Code;PG_class;STYLE;LOD;Layer;OSM_Tags;Description;Enabled;Icon
 1;ROAD_MAJOR;DARK_GRAY_THICK_LINE;2;roads;highway=motorway;Автомагистраль;1;
 2;ROAD_NORMAL;DARK_GRAY_SEMITHICK_LINE;1;roads;highway=primary;Главная дорога;1;
 3;ROAD_MINOR;DARK_GRAY_LINE;0;roads;highway=residential;Жилая улица;1;
-10;WATER;DARK_GRAY_FILL;1;water;natural=water;Водоем;1;
-37;WATERWAY_MAJOR;DARK_GRAY_SEMITHICK_LINE;2;waterways;waterway=river;Река;1;
+10;WATER;WATER_FILL;1;water;natural=water;Водоем;1;
+37;WATERWAY_MAJOR;WATER_THICK_LINE;2;waterways;waterway=river;Река;1;
 12;POI_SMALL;DARK_GRAY_CIRCLE;0;pois;amenity=pharmacy;Аптека;1;cross
 ```
 
@@ -566,13 +566,18 @@ DARK_GRAY_LINE
 DARK_GRAY_DOTTED_LINE
 DARK_GRAY_DASHED_LINE
 RAILWAY_LINE
+WATER_THICK_LINE
+WATER_LINE
 LIGHT_GRAY_FILL
 DARK_GRAY_FILL
+WATER_FILL
 DARK_GRAY_CIRCLE
 DARK_GRAY_BIG_CIRCLE
 ```
 
 Style names are not stored as strings in `.idx`.
+
+Water styles are black with a dark-gray outline: `WATER_FILL` is a black polygon fill with a 1 px dark-gray contour; `WATER_THICK_LINE` is a 3 px black line with a 1 px dark-gray outline on each side (rivers, canals); `WATER_LINE` is a 1 px black line with a 1 px dark-gray outline on each side (streams).
 
 ## 9.6. POI icons
 
