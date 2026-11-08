@@ -481,6 +481,7 @@ Code;PG_class;STYLE;LOD;Layer;OSM_Tags;Description;Enabled;Icon
 2;ROAD_NORMAL;DARK_GRAY_SEMITHICK_LINE;1;roads;highway=primary;Главная дорога;1;
 3;ROAD_MINOR;DARK_GRAY_LINE;0;roads;highway=residential;Жилая улица;1;
 10;WATER;DARK_GRAY_FILL;1;water;natural=water;Водоем;1;
+37;WATERWAY_MAJOR;DARK_GRAY_SEMITHICK_LINE;2;waterways;waterway=river;Река;1;
 12;POI_SMALL;DARK_GRAY_CIRCLE;0;pois;amenity=pharmacy;Аптека;1;cross
 ```
 
@@ -542,9 +543,13 @@ RAILWAY
 LANDUSE_NATURAL
 LANDUSE_HUMAN
 WATER
+WATERWAY_MAJOR
+WATERWAY_MINOR
 POI_BIG
 POI_SMALL
 ```
+
+Feature codes `37` (`WATERWAY_MAJOR`) and `38` (`WATERWAY_MINOR`) are assigned to linear water objects of the `waterways` layer. The `Type` field of a Data Node is `uint8`, so codes must not exceed `255`.
 
 The binary map stores only the numeric `Code`.
 
@@ -790,6 +795,9 @@ A complete map package therefore has the following structure:
 ├── water.idx
 ├── water.mlp
 ├── water.db
+├── waterways.idx
+├── waterways.mlp
+├── waterways.db
 ├── roads.idx
 ├── roads.mlp
 ├── roads.db
@@ -798,6 +806,12 @@ A complete map package therefore has the following structure:
 ```
 
 Layer files that contain no data may be omitted according to the layer rules defined elsewhere in this specification. The `map.name` file itself is mandatory.
+
+### 11.4.1. Optional layers and compatibility
+
+The `waterways` layer is optional. The compiler writes `waterways.idx`, `waterways.mlp` and `waterways.db` only if the source data contains at least one enabled linear water object; no empty dummy files are created for it.
+
+Adding a new layer does not change the binary format: the PGO container, `.idx`, `.mlp` and `.db` structures are the same, and the format version stays V3. A reader opens layer files by name and must ignore layer files it does not use. A package with `waterways.*` is therefore valid for a reader that does not know this layer, and a package without it is valid for a reader that does.
 
 ## 11.5. Relationship to binary map files
 
@@ -860,9 +874,12 @@ The current layer contract is:
 | `roads`   | line geometry only    |
 | `landuse` | polygon geometry only |
 | `water`   | polygon geometry only |
+| `waterways` | line geometry only  |
 | `pois`    | point geometry only   |
 
 The firmware may rely on this invariant and does not need to determine geometry type dynamically.
+
+Linear water objects (rivers, streams, canals) are therefore stored in the separate `waterways` layer and never in `water`. `waterways` uses the same geometry record as `roads`: an open polyline with a single part. Ring orientation and closure rules for polygons do not apply to it. Like `roads`, the layer is not labelled, and its `.db` may be omitted if it contains no named objects (Section 10.4).
 
 A violation indicates an invalid map produced by the compiler.
 

@@ -70,7 +70,7 @@ def main() -> None:
 
     # 2. Parse Source Data
     parser = OSMParser(map_osm_path)
-    roads_data, landuse_data, water_data, pois_data = parser.parse()
+    roads_data, landuse_data, water_data, waterways_data, pois_data = parser.parse()
 
     # 3. Serialize Layers
     # Обновляем помощник, чтобы он сохранял файлы в новую директорию out_dir
@@ -104,6 +104,17 @@ def main() -> None:
         MapCompiler.compile_db(water_data, out_path("water.db"))
         MapCompiler.compile_idx(water_data, out_path("water.idx"))
         meta_all.extend(water_data)
+
+    # 3.2.1 Waterways Layer (linear water objects)
+    #
+    # Optional layer: the files are written only when the source data has
+    # waterway lines. No dummy files are created for an empty layer.
+    if waterways_data:
+        MapCompiler.build_spatial_order(waterways_data)
+        MapCompiler.compile_mlp(waterways_data, out_path("waterways.mlp"))
+        MapCompiler.compile_db(waterways_data, out_path("waterways.db"))
+        MapCompiler.compile_idx(waterways_data, out_path("waterways.idx"))
+        meta_all.extend(waterways_data)
 
     # 3.3 Native POI Layer
     if pois_data:

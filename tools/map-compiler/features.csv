@@ -66,6 +66,11 @@ Code;PG_class;STYLE;LOD;Layer;OSM_Tags;Description;Enabled;Icon
 10;WATER;DARK_GRAY_FILL;1;water;waterway=dock;Док;1;
 10;WATER;DARK_GRAY_FILL;1;water;natural=glacier;Ледник;1;
 10;WATER;DARK_GRAY_FILL;1;water;natural=wetland;Болото;1;
+37;WATERWAY_MAJOR;DARK_GRAY_SEMITHICK_LINE;2;waterways;waterway=river;Река;1;
+37;WATERWAY_MAJOR;DARK_GRAY_SEMITHICK_LINE;1;waterways;waterway=canal;Канал;1;
+38;WATERWAY_MINOR;DARK_GRAY_LINE;1;waterways;waterway=stream;Ручей;1;
+38;WATERWAY_MINOR;DARK_GRAY_LINE;0;waterways;waterway=drain;Водосток;0;
+38;WATERWAY_MINOR;DARK_GRAY_LINE;0;waterways;waterway=ditch;Канава;0;
 11;POI_BIG;DARK_GRAY_BIG_CIRCLE;2;pois;place=city, capital=yes;Столица;1;большой круг
 11;POI_BIG;DARK_GRAY_BIG_CIRCLE;2;pois;place=city;Город;1;большой круг
 11;POI_BIG;DARK_GRAY_BIG_CIRCLE;2;pois;place=town;Городок;1;большой круг
