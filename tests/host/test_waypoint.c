@@ -499,7 +499,8 @@ static void test_render(void)
     purrgo_wpt_render(&g_gfx, &cam, &vp);
     CHECK(icon_mismatch(PURRGO_WPT_TARGET_ICON, 32, 24) == 0);
     CHECK(cb_read(g_fb, 32, 24) == BLACK);             /* остриё */
-    CHECK(cb_read(g_fb, 32, 23) == BLACK && cb_read(g_fb, 32, 14) == BLACK);
+    CHECK(cb_read(g_fb, 32, 23) == BLACK && cb_read(g_fb, 32, 15) == BLACK);
+    CHECK(cb_read(g_fb, 32, 14) == WHITE);             /* верхний белый контур булавки */
     CHECK(count_px(BLACK) + count_px(WHITE) == icon_opaque_count(PURRGO_WPT_TARGET_ICON));   /* лишнего нет */
     CHECK(cb_read(g_fb, 32, 25) == 1 && cb_read(g_fb, 32, 13) == 1 && cb_read(g_fb, 0, 0) == 1);
 
@@ -895,19 +896,19 @@ static void test_app_here_map_center_and_trip(void)
     CHECK(purrgo_app_get_state() == APP_STATE_TRIP_COMPUTER);
     purrgo_app_ui_render(&g, purrgo_app_get_gnss_solution(), NULL);
 
-    CHECK(fcount(40, 106, 130, 118) > 15);              /* имя "North" */
-    CHECK(fcount(40, 118, 130, 130) > 15);              /* "1.11 km" */
-    CHECK(fcount(40, 130, 130, 142) > 15);              /* "000 deg N" */
-    CHECK(fcount(128, 38, 174, 86) > 30);               /* стрелка и метка */
+    CHECK(fcount(40, 58, 130, 70) > 15);                /* имя "North" (строка WPT) */
+    CHECK(fcount(40, 70, 114, 82) > 15);                /* "1.11 km" (строка DST) */
+    CHECK(fcount(40, 82, 130, 94) > 15);                /* "000 deg N" (строка BRG) */
+    CHECK(fcount(134, 70, 176, 106) > 30);              /* круг компаса и стрелка */
 
     /* Цель снята: блок пуст, стрелки нет. */
     purrgo_wpt_clear();
     run_ticks(1500);
     memset(g_ffb, 0, sizeof g_ffb);
     purrgo_app_ui_render(&g, purrgo_app_get_gnss_solution(), NULL);
-    CHECK(fcount(128, 38, 174, 86) == 0);
-    CHECK(fcount(40, 118, 130, 142) == 0);              /* DST и BRG пусты */
-    CHECK(fcount(40, 106, 130, 118) > 5);               /* "NONE" */
+    CHECK(fcount(134, 70, 176, 106) == 0);
+    CHECK(fcount(40, 70, 130, 94) == 0);                /* DST и BRG пусты */
+    CHECK(fcount(40, 58, 130, 70) > 5);                 /* "NONE" */
 }
 
 /* Сверка кадра приложения с иконкой с центром в (cx, cy). */

@@ -95,6 +95,26 @@
             }
         },
         {
+            "name": "web-release",
+            "displayName": "Web (WebAssembly, Emscripten) - Release",
+            "description": "PC-эмулятор в браузере. Нужен установленный emsdk и переменная окружения EMSDK. Карту/книги кладёт PURRGO_WEB_PRELOAD_DIR.",
+            "inherits": "base",
+            "generator": "Ninja",
+            "toolchainFile": "$env{EMSDK}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
+            "condition": {
+                "type": "notEquals",
+                "lhs": "$env{EMSDK}",
+                "rhs": ""
+            },
+            "cacheVariables": {
+                "PURRGO_PLATFORM": "pc",
+                "CMAKE_BUILD_TYPE": "Release",
+                "PURRGO_BUILD_EMULATOR": "ON",
+                "PURRGO_GENERATE_MAP": "OFF",
+                "USE_MOCK_GNSS": "ON"
+            }
+        },
+        {
             "name": "stm32u5-base",
             "hidden": true,
             "inherits": "base",
@@ -166,6 +186,10 @@
                 "lhs": "${hostSystemName}",
                 "rhs": "Linux"
             }
+        },
+        {
+            "name": "web-release",
+            "configurePreset": "web-release"
         },
         {
             "name": "stm32u5-debug",

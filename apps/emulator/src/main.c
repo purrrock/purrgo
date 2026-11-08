@@ -1,5 +1,9 @@
 #include "purrgo/ui/ui_dirty.h"
 #include <SDL2/SDL.h>
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#include <sys/stat.h>
+#endif
 #include <stdio.h>
 #include <stdbool.h>
 #include <string.h>
@@ -93,6 +97,15 @@ static bool emulator_sys_init(int argc, char* argv[]) {
         return false;
     }
 
+#ifdef __EMSCRIPTEN__
+    /* Каталоги пользовательских данных в MEMFS (карта и книги приходят из образа). */
+    (void)mkdir("/maps", 0777);
+    (void)mkdir("/books", 0777);
+    (void)mkdir("/routes", 0777);
+    (void)mkdir("/waypts", 0777);
+    (void)mkdir("/tracks", 0777);
+#endif
+
     display_init();
 
 #ifdef USE_MOCK_GNSS
@@ -131,66 +144,85 @@ static bool emulator_sys_init(int argc, char* argv[]) {
     return true;
 }
 
+/*
+ * Состояние основного цикла. Вынесено в статические переменные, чтобы один
+ * шаг цикла (emulator_loop_step) можно было вызывать и из while (desktop),
+ * и из emscripten_set_main_loop (браузер: бесконечный цикл недопустим).
+ */
+static uint32_t loop_last_gnss_time = 0;
+static uint32_t loop_last_eink_refresh = 0;
+static bool loop_quit = false;
+
+static void emulator_loop_step(void) {
+    uint32_t current_time = purrgo_system_time_ms();
+
+    {
+        uint8_t rx_byte;
+        int bytes_processed = 0;
+        while (
+            purrgo_gnss_read_byte(&rx_byte) &&
+            bytes_processed < 256
+        ) {
+            purrgo_app_feed_gnss_byte(rx_byte);
+            bytes_processed++;
+        }
+    }
+
+    if (current_time - loop_last_gnss_time >= 1000) {
+        loop_last_gnss_time = current_time;
+#ifdef USE_MOCK_GNSS
+        pc_gnss_mock_update();
+#endif
+    }
+
+    /*
+     * 1. Обновление FSM/GNSS.
+     */
+    purrgo_app_tick(current_time);
+
+    /*
+     * 2. Отрисовка framebuffer с частотой 3 FPS.
+     *
+     * Парсинг и отрисовка карты должны выполняться только если
+     * карта помечена как dirty в APP_STATE_MAP.
+     */
+    if (current_time - loop_last_eink_refresh >= EINK_REFRESH_PERIOD_MS) {
+        loop_last_eink_refresh = current_time;
+
+        if (purrgo_app_ui_needs_render(current_time)) {
+            int last_calls = dbg_map_render_calls;
+
+            purrgo_app_ui_render(&global_gfx_ctx, purrgo_app_get_gnss_solution(), purrgo_app_get_sun_info());
+
+            if (last_calls != dbg_map_render_calls) {
+                printf("MAP RENDER EXECUTED. Total renders: %d\n", dbg_map_render_calls);
+            }
+
+            emu_window_render(renderer, fb_texture);
+        }
+    }
+
+    /*
+     * 3. Обработка SDL events.
+     */
+    emu_window_process_events(&loop_quit);
+}
+
 static void emulator_run_loop(void) {
     /* Время ядра - только purrgo_system_time_ms(): им же ядро метит последний RMC. */
-    uint32_t last_gnss_time = purrgo_system_time_ms();
-    uint32_t last_eink_refresh = 0;
+    loop_last_gnss_time = purrgo_system_time_ms();
+    loop_last_eink_refresh = 0;
+    loop_quit = false;
 
-    bool quit = false;
-
-    while (!quit) {
-        uint32_t current_time = purrgo_system_time_ms();
-
-        {
-            uint8_t rx_byte;
-            int bytes_processed = 0;
-            while (
-                purrgo_gnss_read_byte(&rx_byte) &&
-                bytes_processed < 256
-            ) {
-                purrgo_app_feed_gnss_byte(rx_byte);
-                bytes_processed++;
-            }
-        }
-
-        if (current_time - last_gnss_time >= 1000) {
-            last_gnss_time = current_time;
-#ifdef USE_MOCK_GNSS
-            pc_gnss_mock_update();
-#endif
-        }
-
-        /*
-         * 1. Обновление FSM/GNSS.
-         */
-        purrgo_app_tick(current_time);
-
-        /*
-         * 2. Отрисовка framebuffer с частотой 3 FPS.
-         *
-         * Парсинг и отрисовка карты должны выполняться только если
-         * карта помечена как dirty в APP_STATE_MAP.
-         */
-        if (current_time - last_eink_refresh >= EINK_REFRESH_PERIOD_MS) {
-            last_eink_refresh = current_time;
-
-            if (purrgo_app_ui_needs_render(current_time)) {
-                int last_calls = dbg_map_render_calls;
-
-                purrgo_app_ui_render(&global_gfx_ctx, purrgo_app_get_gnss_solution(), purrgo_app_get_sun_info());
-
-                if (last_calls != dbg_map_render_calls) {
-                    printf("MAP RENDER EXECUTED. Total renders: %d\n", dbg_map_render_calls);
-                }
-
-                emu_window_render(renderer, fb_texture);
-            }
-        }
-
-        /*
-         * 3. Обработка SDL events.
-         */
-        emu_window_process_events(&quit);
+#ifdef __EMSCRIPTEN__
+    /*
+     * fps = 0 -> requestAnimationFrame; simulate_infinite_loop = 1 -> main()
+     * дальше не продолжается (cleanup в браузере не нужен: закрытие вкладки).
+     */
+    emscripten_set_main_loop(emulator_loop_step, 0, 1);
+#else
+    while (!loop_quit) {
+        emulator_loop_step();
 
         /*
          * Небольшая задержка разгружает CPU, но не влияет на
@@ -198,6 +230,7 @@ static void emulator_run_loop(void) {
          */
         SDL_Delay(10);
     }
+#endif
 }
 
 static void emulator_cleanup(void) {
