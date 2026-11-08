@@ -598,6 +598,8 @@ static void ui_map_fill_render_params(purrgo_map_render_params_t* params) {
     params->poi_mode = app_config.poi_mode;
     params->layer_landuse = purrgo_layer_on(app_config.layers, PURRGO_LAYER_LANDUSE);
     params->layer_landuse_labels = purrgo_layer_on(app_config.layers, PURRGO_LAYER_LANDUSE_LABELS);
+    params->layer_water = purrgo_layer_on(app_config.layers, PURRGO_LAYER_WATER);
+    params->layer_water_labels = purrgo_layer_on(app_config.layers, PURRGO_LAYER_WATER_LABELS);
     params->layer_roads = purrgo_layer_on(app_config.layers, PURRGO_LAYER_ROADS);
     params->layer_poi = purrgo_layer_on(app_config.layers, PURRGO_LAYER_POI);
     params->layer_poi_labels = purrgo_layer_on(app_config.layers, PURRGO_LAYER_POI_LABELS);

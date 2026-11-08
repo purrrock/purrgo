@@ -19,6 +19,8 @@ typedef struct {
 
     bool layer_landuse;
     bool layer_landuse_labels;
+    bool layer_water;
+    bool layer_water_labels;
     bool layer_roads;
     bool layer_poi;
     bool layer_poi_labels;
@@ -26,6 +28,15 @@ typedef struct {
     purrgo_file_t* landuse_idx_file;
     purrgo_file_t* landuse_mlp_file;
     purrgo_file_t* landuse_db_file;
+
+    /* Водоёмы: полигоны + подписи. Слой необязателен (файлов может не быть). */
+    purrgo_file_t* water_idx_file;
+    purrgo_file_t* water_mlp_file;
+    purrgo_file_t* water_db_file;
+
+    /* Водотоки: линии, без подписей. Слой необязателен. Включается вместе с water. */
+    purrgo_file_t* waterways_idx_file;
+    purrgo_file_t* waterways_mlp_file;
 
     purrgo_file_t* roads_idx_file;
     purrgo_file_t* roads_mlp_file;
@@ -40,6 +51,9 @@ typedef struct {
      */
     bool landuse_missing;
     bool landuse_labels_missing;
+    bool water_missing;
+    bool water_labels_missing;
+    bool waterways_missing;
     bool roads_missing;
     bool poi_missing;
     bool poi_labels_missing;
@@ -64,6 +78,13 @@ static void map_close_all_files(void)
     map_close_file(&s_map_context.landuse_mlp_file);
     map_close_file(&s_map_context.landuse_db_file);
 
+    map_close_file(&s_map_context.water_idx_file);
+    map_close_file(&s_map_context.water_mlp_file);
+    map_close_file(&s_map_context.water_db_file);
+
+    map_close_file(&s_map_context.waterways_idx_file);
+    map_close_file(&s_map_context.waterways_mlp_file);
+
     map_close_file(&s_map_context.roads_idx_file);
     map_close_file(&s_map_context.roads_mlp_file);
 
@@ -72,12 +93,17 @@ static void map_close_all_files(void)
 
     s_map_context.layer_landuse = false;
     s_map_context.layer_landuse_labels = false;
+    s_map_context.layer_water = false;
+    s_map_context.layer_water_labels = false;
     s_map_context.layer_roads = false;
     s_map_context.layer_poi = false;
     s_map_context.layer_poi_labels = false;
 
     s_map_context.landuse_missing = false;
     s_map_context.landuse_labels_missing = false;
+    s_map_context.water_missing = false;
+    s_map_context.water_labels_missing = false;
+    s_map_context.waterways_missing = false;
     s_map_context.roads_missing = false;
     s_map_context.poi_missing = false;
     s_map_context.poi_labels_missing = false;
@@ -98,9 +124,13 @@ static purrgo_file_t* map_open_file(const char* map_dir, const char* name)
     return purrgo_fs_open(path_buf, FS_READ);
 }
 
-/* Открыть пару файлов слоя; при неудаче не оставляет открытым ничего. */
+/*
+ * Открыть пару файлов слоя; при неудаче не оставляет открытым ничего.
+ * optional: слой может отсутствовать в карте (water, waterways) - об этом не
+ * сообщаем как об ошибке.
+ */
 static bool map_open_pair(const char* map_dir, const char* name_a, const char* name_b,
-                          purrgo_file_t** out_a, purrgo_file_t** out_b)
+                          purrgo_file_t** out_a, purrgo_file_t** out_b, bool optional)
 {
     purrgo_file_t* a = map_open_file(map_dir, name_a);
     purrgo_file_t* b = map_open_file(map_dir, name_b);
@@ -114,7 +144,9 @@ static bool map_open_pair(const char* map_dir, const char* name_a, const char* n
     }
     if (a) purrgo_fs_close(a);
     if (b) purrgo_fs_close(b);
-    PURRGO_LOGE("Map: %s or %s not found in %s\r\n", name_a, name_b, map_dir);
+    if (!optional) {
+        PURRGO_LOGE("Map: %s or %s not found in %s\r\n", name_a, name_b, map_dir);
+    }
     return false;
 }
 
@@ -154,7 +186,7 @@ static bool map_sync_files(const purrgo_map_render_params_t *params)
     } else if (!s_map_context.layer_landuse && !s_map_context.landuse_missing) {
         if (map_open_pair(map_dir, "landuse.idx", "landuse.mlp",
                           &s_map_context.landuse_idx_file,
-                          &s_map_context.landuse_mlp_file)) {
+                          &s_map_context.landuse_mlp_file, false)) {
             s_map_context.layer_landuse = true;
         } else {
             s_map_context.landuse_missing = true;
@@ -177,6 +209,55 @@ static bool map_sync_files(const purrgo_map_render_params_t *params)
         }
     }
 
+    /* Water: полигоны водоёмов */
+    if (!params->layer_water) {
+        map_close_file(&s_map_context.water_idx_file);
+        map_close_file(&s_map_context.water_mlp_file);
+        map_close_file(&s_map_context.water_db_file);
+        map_close_file(&s_map_context.waterways_idx_file);
+        map_close_file(&s_map_context.waterways_mlp_file);
+        s_map_context.layer_water = false;
+        s_map_context.layer_water_labels = false;
+        s_map_context.water_missing = false;
+        s_map_context.water_labels_missing = false;
+        s_map_context.waterways_missing = false;
+    } else {
+        if (!s_map_context.layer_water && !s_map_context.water_missing) {
+            if (map_open_pair(map_dir, "water.idx", "water.mlp",
+                              &s_map_context.water_idx_file,
+                              &s_map_context.water_mlp_file, true)) {
+                s_map_context.layer_water = true;
+            } else {
+                s_map_context.water_missing = true;
+            }
+        }
+
+        /* Waterways: линии рек и ручьёв, включаются тем же переключателем. */
+        if (!s_map_context.waterways_idx_file && !s_map_context.waterways_missing) {
+            if (!map_open_pair(map_dir, "waterways.idx", "waterways.mlp",
+                               &s_map_context.waterways_idx_file,
+                               &s_map_context.waterways_mlp_file, true)) {
+                s_map_context.waterways_missing = true;
+            }
+        }
+    }
+
+    if (!params->layer_water_labels) {
+        map_close_file(&s_map_context.water_db_file);
+        s_map_context.layer_water_labels = false;
+        s_map_context.water_labels_missing = false;
+    } else if (s_map_context.layer_water &&
+               !s_map_context.layer_water_labels &&
+               !s_map_context.water_labels_missing) {
+        s_map_context.water_db_file = map_open_file(map_dir, "water.db");
+        if (s_map_context.water_db_file) {
+            s_map_context.layer_water_labels = true;
+        } else {
+            /* water.db нет, если в слое нет именованных объектов: не ошибка. */
+            s_map_context.water_labels_missing = true;
+        }
+    }
+
     /* Roads */
     if (!params->layer_roads) {
         map_close_file(&s_map_context.roads_idx_file);
@@ -186,7 +267,7 @@ static bool map_sync_files(const purrgo_map_render_params_t *params)
     } else if (!s_map_context.layer_roads && !s_map_context.roads_missing) {
         if (map_open_pair(map_dir, "roads.idx", "roads.mlp",
                           &s_map_context.roads_idx_file,
-                          &s_map_context.roads_mlp_file)) {
+                          &s_map_context.roads_mlp_file, false)) {
             s_map_context.layer_roads = true;
         } else {
             s_map_context.roads_missing = true;
@@ -484,6 +565,43 @@ bool purrgo_map_render_viewport(
             viewport,
             params,
             MAP_LAYER_POLYGONS
+        ) && ok;
+    }
+
+    /* ------------------- WATER (полигоны) ------------------- */
+
+    if (s_map_context.water_idx_file && s_map_context.water_mlp_file) {
+
+        gfx_set_color(gfx, 0, 3);
+
+        ok = purrgo_map_render_layer(
+            s_map_context.water_idx_file,
+            s_map_context.water_mlp_file,
+            s_map_context.water_db_file,
+            gfx,
+            camera,
+            viewport,
+            params,
+            MAP_LAYER_POLYGONS
+        ) && ok;
+    }
+
+    /* ------------------- WATERWAYS (линии) ------------------- */
+
+    if (s_map_context.waterways_idx_file && s_map_context.waterways_mlp_file) {
+
+        gfx_set_color(gfx, 0, 3);
+
+        /* Линии рек и ручьёв не подписываем: db_file не передаём. */
+        ok = purrgo_map_render_layer(
+            s_map_context.waterways_idx_file,
+            s_map_context.waterways_mlp_file,
+            NULL,
+            gfx,
+            camera,
+            viewport,
+            params,
+            MAP_LAYER_LINES
         ) && ok;
     }
 

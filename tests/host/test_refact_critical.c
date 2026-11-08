@@ -198,14 +198,14 @@ static void test_config_layers(void) {
     fake_fs_reset();
     purrgo_config_init();
     CHECK(layer(PURRGO_LAYER_ROADS) && layer(PURRGO_LAYER_TRACK) && layer(PURRGO_LAYER_POI_LABELS));
-    CHECK(!layer(PURRGO_LAYER_WATER) && !layer(PURRGO_LAYER_ROUTE));
+    CHECK(layer(PURRGO_LAYER_WATER) && layer(PURRGO_LAYER_WATER_LABELS) && !layer(PURRGO_LAYER_ROUTE));
 
     /* файл, отредактированный вручную: пробелы/CRLF допустимы, неизвестный ключ и
      * отсутствующие ключи не мешают, слои из файла имеют приоритет над умолчаниями */
     fake_fs_reset();
-    fake_fs_put(CFG, "TZ_MIN=60\r\nLAYER_WATER=1\r\nLAYER_ROADS=0\r\nLAYER_BOGUS=1\r\nLAYER_=1\r\n");
+    fake_fs_put(CFG, "TZ_MIN=60\r\nLAYER_WATER=0\r\nLAYER_ROADS=0\r\nLAYER_BOGUS=1\r\nLAYER_=1\r\n");
     CHECK(purrgo_config_load());
-    CHECK(layer(PURRGO_LAYER_WATER));
+    CHECK(!layer(PURRGO_LAYER_WATER));
     CHECK(!layer(PURRGO_LAYER_ROADS));
     CHECK(layer(PURRGO_LAYER_LANDUSE) && layer(PURRGO_LAYER_TRACK));   /* по умолчанию */
     CHECK(!layer(PURRGO_LAYER_ROUTE));
@@ -216,8 +216,8 @@ static void test_config_layers(void) {
     CHECK(d != NULL);
     if (d) {
         const char* t = (const char*)d;
-        CHECK(strstr(t, "LAYER_LANDUSE=1\n") && strstr(t, "LAYER_WATER=1\n"));
-        CHECK(strstr(t, "LAYER_LANDUSE_LABELS=1\n") && strstr(t, "LAYER_WATER_LABELS=0\n"));
+        CHECK(strstr(t, "LAYER_LANDUSE=1\n") && strstr(t, "LAYER_WATER=0\n"));
+        CHECK(strstr(t, "LAYER_LANDUSE_LABELS=1\n") && strstr(t, "LAYER_WATER_LABELS=1\n"));
         CHECK(strstr(t, "LAYER_ROADS=0\n") && strstr(t, "LAYER_POI=1\n"));
         CHECK(strstr(t, "LAYER_POI_LABELS=1\n") && strstr(t, "LAYER_ROUTE=0\n"));
         CHECK(strstr(t, "LAYER_TRACK=1\n"));
@@ -241,7 +241,7 @@ static void test_config_layers(void) {
     CHECK(purrgo_menu_controller_handle_button(APP_STATE_MENU_MAP_LAYERS, PURRGO_ACTION_MENU, &next));
     CHECK(next == APP_STATE_MENU_MAIN);
     CHECK(!layer(PURRGO_LAYER_LANDUSE) && !layer(PURRGO_LAYER_TRACK));
-    CHECK(layer(PURRGO_LAYER_WATER) && !layer(PURRGO_LAYER_ROADS));
+    CHECK(!layer(PURRGO_LAYER_WATER) && !layer(PURRGO_LAYER_ROADS));
     d = fake_fs_data(CFG, &n);
     CHECK(d && strstr((const char*)d, "LAYER_LANDUSE=0\n") && strstr((const char*)d, "LAYER_TRACK=0\n"));
 }

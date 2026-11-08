@@ -32,9 +32,9 @@ static const struct {
     bool        on;       /* по умолчанию */
 } s_layers[PURRGO_LAYER_COUNT] = {
     [PURRGO_LAYER_LANDUSE]        = { "LANDUSE",        "Landuse",        true  },
-    [PURRGO_LAYER_WATER]          = { "WATER",          "Water",          false },
+    [PURRGO_LAYER_WATER]          = { "WATER",          "Water",          true  },
     [PURRGO_LAYER_LANDUSE_LABELS] = { "LANDUSE_LABELS", "Landuse labels", true  },
-    [PURRGO_LAYER_WATER_LABELS]   = { "WATER_LABELS",   "Water labels",   false },
+    [PURRGO_LAYER_WATER_LABELS]   = { "WATER_LABELS",   "Water labels",   true  },
     [PURRGO_LAYER_ROADS]          = { "ROADS",          "Roads",          true  },
     [PURRGO_LAYER_POI]            = { "POI",            "POI",            true  },
     [PURRGO_LAYER_POI_LABELS]     = { "POI_LABELS",     "POI labels",     true  },

@@ -416,6 +416,133 @@ static void test_fuzz_truncate_and_flip(void)
     CHECK(1);   /* цель - отсутствие срабатываний ASan/UBSan */
 }
 
+/* --- вода: чёрное с тёмно-серой обводкой (g_fb хранит цвет + 1) --- */
+
+#define FB_BLACK     (BLACK + 1)
+#define FB_DARK_GRAY (DARK_GRAY + 1)
+
+static int count_fb(uint8_t v)
+{
+    int n = 0;
+    for (int i = 0; i < SCR_W * SCR_H; i++) { if (g_fb[i] == v) { n++; } }
+    return n;
+}
+
+static void test_water_polygon_style(void)
+{
+    static blob_t idx, mlp;
+    uint8_t node[25];
+    data_node(node, 100, 100, 900, 900, 10 /* WATER */, GEOM_V1, 0);
+    build_idx(&idx, node, sizeof node, 0, 1);
+    uint32_t parts[1] = { 0 };
+    int32_t xy[10] = { 100, 100, 900, 100, 900, 900, 100, 900, 100, 100 };
+    build_mlp(&mlp, 1, parts, 5, xy);
+    CHECK(render(&idx, &mlp, NULL, MAP_LAYER_POLYGONS) > 100);
+
+    CHECK(g_fb[32 * SCR_W + 32] == FB_BLACK);        /* заливка чёрная */
+    CHECK(count_fb(FB_DARK_GRAY) > 30);              /* контур тёмно-серый */
+    CHECK(count_fb(FB_BLACK) > count_fb(FB_DARK_GRAY));
+    CHECK(g_gfx.color_fg == 1);   /* foreground восстановлен */
+}
+
+static void waterway_line(blob_t *idx, blob_t *mlp, uint8_t type)
+{
+    uint8_t node[25];
+    data_node(node, 100, 500, 900, 500, type, GEOM_V1, 0);
+    build_idx(idx, node, sizeof node, 0, 1);
+    uint32_t parts[1] = { 0 };
+    int32_t xy[6] = { 100, 500, 500, 500, 900, 500 };
+    build_mlp(mlp, 1, parts, 3, xy);
+}
+
+static void test_waterway_line_style(void)
+{
+    static blob_t idx, mlp;
+
+    /* Малый водоток: ядро 1 px, обводка по 1 px с каждой стороны. */
+    waterway_line(&idx, &mlp, 38 /* WATERWAY_MINOR */);
+    CHECK(render(&idx, &mlp, NULL, MAP_LAYER_LINES) > 20);
+    CHECK(g_fb[32 * SCR_W + 32] == FB_BLACK);
+    CHECK(g_fb[31 * SCR_W + 32] == FB_DARK_GRAY);
+    CHECK(g_fb[33 * SCR_W + 32] == FB_DARK_GRAY);
+    CHECK(g_fb[30 * SCR_W + 32] == 0 && g_fb[34 * SCR_W + 32] == 0);
+
+    /* Крупный водоток: ядро 3 px, обводка по 1 px. */
+    waterway_line(&idx, &mlp, 37 /* WATERWAY_MAJOR */);
+    CHECK(render(&idx, &mlp, NULL, MAP_LAYER_LINES) > 20);
+    CHECK(g_fb[31 * SCR_W + 32] == FB_BLACK);
+    CHECK(g_fb[32 * SCR_W + 32] == FB_BLACK);
+    CHECK(g_fb[33 * SCR_W + 32] == FB_BLACK);
+    CHECK(g_fb[30 * SCR_W + 32] == FB_DARK_GRAY);
+    CHECK(g_fb[34 * SCR_W + 32] == FB_DARK_GRAY);
+
+    /* Излом: обводка второго звена не перекрывает чёрное ядро первого. */
+    uint8_t node[25];
+    data_node(node, 100, 100, 900, 900, 38, GEOM_V1, 0);
+    build_idx(&idx, node, sizeof node, 0, 1);
+    uint32_t parts[1] = { 0 };
+    int32_t xy[6] = { 100, 500, 500, 500, 500, 900 };
+    build_mlp(&mlp, 1, parts, 3, xy);
+    CHECK(render(&idx, &mlp, NULL, MAP_LAYER_LINES) > 20);
+    CHECK(g_fb[32 * SCR_W + 20] == FB_BLACK);
+    CHECK(g_fb[32 * SCR_W + 32] == FB_BLACK);        /* вершина излома */
+    CHECK(g_fb[14 * SCR_W + 32] == FB_BLACK);
+}
+
+/* Слои water/waterways через viewport: опциональные, включаются layer_water. */
+static void test_water_layers_viewport(void)
+{
+    static blob_t widx, wmlp, lidx, lmlp;
+    uint8_t node[25];
+    data_node(node, 100, 100, 900, 900, 10, GEOM_V1, 0);
+    build_idx(&widx, node, sizeof node, 0, 1);
+    uint32_t parts[1] = { 0 };
+    int32_t xy[10] = { 100, 100, 900, 100, 900, 900, 100, 900, 100, 100 };
+    build_mlp(&wmlp, 1, parts, 5, xy);
+    waterway_line(&lidx, &lmlp, 38);
+
+    /* Карта без water.* и waterways.*: слой включён, кадр успешен, ошибок нет. */
+    fake_fs_reset();
+    defaults();
+    g_params.layer_water = true;
+    g_params.layer_water_labels = true;
+    purrgo_map_shutdown();
+    gfx_reset();
+    CHECK(render_dir("maps/nowater"));
+    CHECK(g_pixels == 0);
+    int opens = fake_fs_open_calls();
+    gfx_reset();
+    CHECK(render_dir("maps/nowater"));
+    CHECK(fake_fs_open_calls() == opens);            /* повторных попыток нет */
+    purrgo_map_shutdown();
+
+    /* Только waterways.* (без water.*): линии рисуются. */
+    fake_fs_put_bin("maps/ww/waterways.idx", lidx.d, lidx.n);
+    fake_fs_put_bin("maps/ww/waterways.mlp", lmlp.d, lmlp.n);
+    gfx_reset();
+    CHECK(render_dir("maps/ww"));
+    CHECK(g_pixels > 20);
+    purrgo_map_shutdown();
+
+    /* Оба слоя: водоём и водоток; слой выключен - не рисуются. */
+    fake_fs_put_bin("maps/w/water.idx", widx.d, widx.n);
+    fake_fs_put_bin("maps/w/water.mlp", wmlp.d, wmlp.n);
+    fake_fs_put_bin("maps/w/waterways.idx", lidx.d, lidx.n);
+    fake_fs_put_bin("maps/w/waterways.mlp", lmlp.d, lmlp.n);
+    gfx_reset();
+    CHECK(render_dir("maps/w"));
+    CHECK(g_pixels > 100);
+    CHECK(g_fb[10 * SCR_W + 32] == FB_BLACK);        /* водоём */
+    purrgo_map_shutdown();
+
+    g_params.layer_water = false;
+    gfx_reset();
+    CHECK(render_dir("maps/w"));
+    CHECK(g_pixels == 0);
+    purrgo_map_shutdown();
+    CHECK(fake_fs_open_handles() == 0);
+}
+
 /* Полный путь purrgo_map_render_viewport через (фейковую) ФС. */
 static void test_viewport_via_fs(void)
 {
@@ -678,6 +805,9 @@ int main(void)
     test_v3_jump_bounds();
     test_poi_layer();
     test_fuzz_truncate_and_flip();
+    test_water_polygon_style();
+    test_waterway_line_style();
+    test_water_layers_viewport();
     test_viewport_via_fs();
     test_viewport_failures();
     test_feature_too_small();
