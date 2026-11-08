@@ -95,6 +95,9 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
 
     # Display test
     ${PURRGO_STM32_COMMON}/Src/eink_test.c
+
+    # Аппаратные тесты (замеры на железе), включаются -DPURRGO_HW_TEST=<имя>
+    ${PURRGO_STM32_COMMON}/Src/hw_test.c
 )
 
 # Предупреждения только для пользовательских файлов (не для CubeMX/HAL/FatFs/библиотеки epd4g).
@@ -120,6 +123,7 @@ purrgo_sources_warnings(
     ${PURRGO_STM32_COMMON}/Src/stm32_app.c
     ${PURRGO_STM32_COMMON}/Src/display_eink.c
     ${PURRGO_STM32_COMMON}/Src/eink_test.c
+    ${PURRGO_STM32_COMMON}/Src/hw_test.c
 )
 
 # Add include paths
@@ -148,6 +152,31 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     # прежнем драйвере Waveshare (меню и экран выключения рисуются двумя цветами).
     EPD4G_BW_THRESHOLD=3
 )
+
+# Режим аппаратного тестирования: вместо главного цикла навигатора после
+# инициализации периферии выполняется один тест (см. common/Inc/hw_test.h).
+#   cmake --preset stm32u5-release -DPURRGO_HW_TEST=SD_SPEED
+# Пустое значение - обычная прошивка. Смена значения пересобирает проект.
+set(PURRGO_HW_TEST_NAMES SD_SPEED EINK_4GRAY EINK_PARTIAL)
+set(PURRGO_HW_TEST "" CACHE STRING
+    "Hardware test instead of the navigator: ${PURRGO_HW_TEST_NAMES} (empty = normal firmware)")
+set_property(CACHE PURRGO_HW_TEST PROPERTY STRINGS "" ${PURRGO_HW_TEST_NAMES})
+
+if(NOT PURRGO_HW_TEST STREQUAL "")
+    if(NOT PURRGO_HW_TEST IN_LIST PURRGO_HW_TEST_NAMES)
+        message(FATAL_ERROR
+            "PURRGO_HW_TEST='${PURRGO_HW_TEST}': допустимо ${PURRGO_HW_TEST_NAMES} или пусто")
+    endif()
+    message(STATUS "!!! HARDWARE TEST BUILD: ${PURRGO_HW_TEST} (навигатор не запускается) !!!")
+    if(PURRGO_HW_TEST STREQUAL "EINK_4GRAY")
+        target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE PURRGO_EINK_SELFTEST_4GRAY)
+    elseif(PURRGO_HW_TEST STREQUAL "EINK_PARTIAL")
+        target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE PURRGO_EINK_SELFTEST_PARTIAL)
+    else()
+        target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
+            PURRGO_HW_TEST_ENABLED PURRGO_HW_TEST_${PURRGO_HW_TEST})
+    endif()
+endif()
 
 # Remove wrong libob.a library dependency when using cpp files.
 list(REMOVE_ITEM CMAKE_C_IMPLICIT_LINK_LIBRARIES ob)

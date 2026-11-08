@@ -414,6 +414,7 @@ fast full, 1-bit режим, неблокирующий API. В `apps/stm32/Purr
 | `common/Src/display_stm32.c` | framebuffer, накопление области, `display_stm32_poll()`, `display_stm32_ready_for_render()` |
 | `common/Src/stm32_app.c` | `display_stm32_poll()` на каждом проходе цикла; рендер только при `display_stm32_ready_for_render()` |
 | `common/Src/eink_test.c` | самотесты на железе (`PURRGO_EINK_SELFTEST_4GRAY`, `PURRGO_EINK_SELFTEST_PARTIAL`) |
+| `common/Src/hw_test.c` | аппаратные замеры вместо навигатора (`-DPURRGO_HW_TEST=SD_SPEED`), см. `HARDWARE.md` |
 | `tests/host/test_display_eink.c` | host-тест очереди на модели панели (нужен сабмодуль) |
 
 Framebuffer PurrGO (176×264, 2 бита на пиксель, первый пиксель в старших битах, 0 = чёрный … 3 = белый)
