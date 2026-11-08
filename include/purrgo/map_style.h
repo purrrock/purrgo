@@ -41,7 +41,10 @@ typedef enum {
 
     /* Полигоны слоя water, рисуемые штриховкой, а не чёрной заливкой. */
     PURRGO_FEATURE_WETLAND        = 39,
-    PURRGO_FEATURE_GLACIER        = 40
+    PURRGO_FEATURE_GLACIER        = 40,
+
+    /* Полигоны слоя landuse, рисуемые точками: пляж, песок, дюны, галька, осыпь. */
+    PURRGO_FEATURE_SAND           = 41
 
 } purrgo_feature_code_t;
 
@@ -82,6 +85,8 @@ typedef enum {
     PURRGO_STYLE_WETLAND_HATCH,
     /* Ледник: диагональная штриховка 45 градусов тёмно-серым, без контура. */
     PURRGO_STYLE_GLACIER_HATCH,
+    /* Пляж, песок и подобное: заливка тёмно-серыми точками в шахматном порядке, без контура. */
+    PURRGO_STYLE_SAND_DOTS,
 
     /* Points */
     PURRGO_STYLE_DARK_GRAY_BIG_CIRCLE,
