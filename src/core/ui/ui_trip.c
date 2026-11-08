@@ -8,6 +8,7 @@
 #include "purrgo/waypoint.h"
 #include "purrgo/gfx_line.h"
 #include "purrgo/gfx_circle.h"
+#include "purrgo/gfx_polygon.h"
 #include <string.h>
 
 /* Порядок строк (шаг 12 px, первая строка y = 10). */
@@ -27,17 +28,26 @@
 #define TRIP_ROW_SUN   11  /* SUN, TO SUNSET/SUNRISE, DAY */
 
 /*
- * Компас-стрелка на цель: круг правее значений DST / BRG / FIX (ниже имени цели,
- * чтобы имя могло занимать всю ширину). Окно очищается при каждой перерисовке.
+ * Компас на цель (по наброску): кольцо с 8 засечками, буквы N/E/S/W снаружи,
+ * длинная стрелка на всю ширину кольца с залитым наконечником. Циферблат
+ * вращается: при надёжном курсе вверх экрана направлен курс (буква N стоит там,
+ * где север), иначе N вверху. Стрелка показывает цель на этом циферблате.
+ * Окно очищается при каждой перерисовке и должно вмещать кольцо и буквы.
  */
-#define TRIP_ARROW_BOX_X 134
-#define TRIP_ARROW_BOX_Y 70
-#define TRIP_ARROW_BOX_W 42
-#define TRIP_ARROW_BOX_H 36
-#define TRIP_ARROW_CX    155
-#define TRIP_ARROW_CY    88
-#define TRIP_ARROW_RING  16   /* радиус круга */
-#define TRIP_ARROW_R     12   /* радиус стрелки (остриё), внутри круга */
+#define TRIP_ARROW_CX    152
+#define TRIP_ARROW_CY    92
+#define TRIP_ARROW_RING  15   /* радиус кольца */
+#define TRIP_TICK_LEN    3    /* засечки внутрь от кольца */
+#define TRIP_LABEL_R     21   /* расстояние от центра до центра буквы */
+#define TRIP_ARROW_TIP   13   /* остриё */
+#define TRIP_ARROW_TAIL  11   /* хвост (в противоположную сторону) */
+#define TRIP_ARROW_HEAD  7    /* длина наконечника */
+#define TRIP_ARROW_WING  4    /* половина ширины наконечника */
+/* Окно очистки: центр +-25 px по обеим осям (буквы 5x7 на радиусе 21). */
+#define TRIP_ARROW_BOX_X (TRIP_ARROW_CX - 24)
+#define TRIP_ARROW_BOX_Y (TRIP_ARROW_CY - 25)
+#define TRIP_ARROW_BOX_W 48
+#define TRIP_ARROW_BOX_H 51
 
 /* Ширина поля значения в символах (от x = 40 до края экрана 176). */
 #define TRIP_VALUE_CHARS 22
@@ -60,6 +70,60 @@ static void pad_to(char* buf, size_t size, size_t width)
     buf[n] = '\0';
 }
 
+/* Циферблат (кольцо, засечки, N/E/S/W) и стрелка на цель. */
+static void ui_trip_draw_compass(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss,
+                                 uint16_t bearing_deg, bool draw_arrow)
+{
+    static const char k_letters[4] = { 'N', 'E', 'S', 'W' };
+    const int16_t cx = TRIP_ARROW_CX;
+    const int16_t cy = TRIP_ARROW_CY;
+    uint16_t north = 0;   /* угол направления на север на экране */
+    purrgo_wpt_pt_t p0, p1;
+
+    /* arrow_angle(bearing = 0) даёт 360 - курс при надёжном курсе, иначе 0. */
+    (void)purrgo_wpt_arrow_angle(gnss, 0, &north);
+
+    gfx_draw_circle(gfx, cx, cy, TRIP_ARROW_RING);
+
+    for (int k = 0; k < 8; k++) {
+        const uint16_t a = (uint16_t)((north + k * 45) % 360);
+
+        purrgo_wpt_polar(cx, cy, (int16_t)(TRIP_ARROW_RING - TRIP_TICK_LEN), a, &p0);
+        purrgo_wpt_polar(cx, cy, (int16_t)(TRIP_ARROW_RING + 1), a, &p1);
+        gfx_draw_line(gfx, p0.x, p0.y, p1.x, p1.y);
+
+        if ((k & 1) == 0) {
+            char s[2] = { k_letters[k / 2], '\0' };
+
+            purrgo_wpt_polar(cx, cy, TRIP_LABEL_R, a, &p1);
+            /* Шрифт 5x7: центрируем символ относительно точки. */
+            gfx_draw_string(gfx, (int16_t)(p1.x - 2), (int16_t)(p1.y - 3), s);
+        }
+    }
+
+    if (draw_arrow) {
+        uint16_t angle = 0;
+        gfx_point_t head[3];
+        purrgo_wpt_pt_t tip, tail, base, wl, wr;
+
+        (void)purrgo_wpt_arrow_angle(gnss, bearing_deg, &angle);
+
+        purrgo_wpt_polar(cx, cy, TRIP_ARROW_TIP, angle, &tip);
+        purrgo_wpt_polar(cx, cy, TRIP_ARROW_TAIL, (uint16_t)((angle + 180) % 360), &tail);
+        purrgo_wpt_polar(cx, cy, (int16_t)(TRIP_ARROW_TIP - TRIP_ARROW_HEAD), angle, &base);
+        purrgo_wpt_polar(base.x, base.y, TRIP_ARROW_WING, (uint16_t)((angle + 270) % 360), &wl);
+        purrgo_wpt_polar(base.x, base.y, TRIP_ARROW_WING, (uint16_t)((angle + 90) % 360), &wr);
+
+        gfx_draw_thick_line(gfx, tail.x, tail.y, base.x, base.y, 2);
+
+        head[0].x = tip.x; head[0].y = tip.y;
+        head[1].x = wl.x;  head[1].y = wl.y;
+        head[2].x = wr.x;  head[2].y = wr.y;
+        gfx_fill_polygon(gfx, head, 3);
+        gfx_draw_polygon(gfx, head, 3);
+    }
+}
+
 /* Блок цели навигации: имя, расстояние, пеленг и стрелка в круге. y_pos - первая из трёх строк. */
 static void ui_trip_render_wpt(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, int16_t y_pos)
 {
@@ -68,9 +132,6 @@ static void ui_trip_render_wpt(gfx_context_t* gfx, const purrgo_gnss_solution_t*
     const purrgo_wpt_nav_t* nav = purrgo_wpt_nav();
     const int16_t val_x = 40;
     const bool nav_ok = (wpt != NULL && nav->valid);
-    uint16_t angle = 0;
-    const bool course_up = nav_ok &&
-                           purrgo_wpt_arrow_angle(gnss, nav->nav.bearing_to_wp_deg, &angle);
 
     /* Окно стрелки очищается при каждой перерисовке. */
     gfx_set_color(gfx, 0, 3);     /* fill_rect заливает цветом фона (белый) */
@@ -84,7 +145,7 @@ static void ui_trip_render_wpt(gfx_context_t* gfx, const purrgo_gnss_solution_t*
     gfx_draw_string(gfx, val_x, y_pos, buf);
     y_pos = (int16_t)(y_pos + TRIP_ROW_STEP);
 
-    /* Расстояние (правее - круг стрелки, поле ограничено 16 символами). */
+    /* Расстояние (правее - компас, поле ограничено 15 символами). */
     if (wpt != NULL && nav->valid) {
         char dist[16];
 
@@ -93,16 +154,9 @@ static void ui_trip_render_wpt(gfx_context_t* gfx, const purrgo_gnss_solution_t*
     } else {
         purrgo_snprintf(buf, sizeof(buf), "%s", (wpt != NULL) ? "---" : "");
     }
-    pad_to(buf, sizeof(buf), TRIP_VALUE_CHARS - 6);
+    pad_to(buf, sizeof(buf), TRIP_VALUE_CHARS - 7);
     gfx_draw_string(gfx, val_x, y_pos, buf);
 
-    /*
-     * Подпись опоры стрелки слева от круга: CRS - вверх это направление движения,
-     * N - вверх это север. При "ARRIVED" строка занята текстом, подписи нет.
-     */
-    if (nav_ok && !nav->nav.is_arrived) {
-        gfx_draw_string(gfx, 116, y_pos, course_up ? "CRS" : "N  ");
-    }
     y_pos = (int16_t)(y_pos + TRIP_ROW_STEP);
 
     /* Пеленг (истинный, от севера). */
@@ -113,23 +167,12 @@ static void ui_trip_render_wpt(gfx_context_t* gfx, const purrgo_gnss_solution_t*
     } else {
         purrgo_snprintf(buf, sizeof(buf), "%s", (wpt != NULL) ? "---" : "");
     }
-    pad_to(buf, sizeof(buf), TRIP_VALUE_CHARS - 6);
+    pad_to(buf, sizeof(buf), TRIP_VALUE_CHARS - 7);
     gfx_draw_string(gfx, val_x, y_pos, buf);
 
-    /* Круг компаса: рисуется, пока цель задана; стрелка - когда есть навигационные данные. */
+    /* Циферблат и стрелка: цель задана; стрелка - когда есть навигационные данные. */
     if (wpt != NULL) {
-        gfx_draw_circle(gfx, TRIP_ARROW_CX, TRIP_ARROW_CY, TRIP_ARROW_RING);
-        gfx_draw_circle(gfx, TRIP_ARROW_CX, TRIP_ARROW_CY, (int16_t)(TRIP_ARROW_RING - 1));
-    }
-
-    /* Стрелка: вверх - направление движения (если курс надёжен), иначе север. */
-    if (nav_ok) {
-        purrgo_wpt_pt_t pts[4];
-
-        purrgo_wpt_arrow_points(TRIP_ARROW_CX, TRIP_ARROW_CY, TRIP_ARROW_R, angle, pts);
-        gfx_draw_thick_line(gfx, pts[0].x, pts[0].y, pts[1].x, pts[1].y, 2);
-        gfx_draw_thick_line(gfx, pts[1].x, pts[1].y, pts[2].x, pts[2].y, 2);
-        gfx_draw_thick_line(gfx, pts[1].x, pts[1].y, pts[3].x, pts[3].y, 2);
+        ui_trip_draw_compass(gfx, gnss, nav_ok ? (uint16_t)nav->nav.bearing_to_wp_deg : 0, nav_ok);
     }
 }
 

@@ -116,6 +116,13 @@ typedef struct {
 void purrgo_wpt_arrow_points(int16_t cx, int16_t cy, int16_t r, uint16_t angle_deg,
                              purrgo_wpt_pt_t pts[4]);
 
+/*
+ * Точка на расстоянии r от (cx, cy) в направлении angle_deg (градусы по часовой
+ * от "вверх" экрана, y вниз). Нужна для засечек и подписей циферблата компаса.
+ */
+void purrgo_wpt_polar(int16_t cx, int16_t cy, int16_t r, uint16_t angle_deg,
+                      purrgo_wpt_pt_t *out);
+
 /* "845 m", "1.23 km", "12.3 km", "123 km". */
 void purrgo_wpt_format_distance(char *buf, size_t size, uint32_t meters);
 

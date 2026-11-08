@@ -131,6 +131,25 @@ static void test_arrow_geometry(void)
     CHECK(p[1].x == q[1].x && p[1].y == q[1].y);
 }
 
+static void test_polar(void)
+{
+    purrgo_wpt_pt_t p;
+
+    purrgo_wpt_polar(100, 100, 20, 0, &p);
+    CHECK(p.x == 100 && p.y == 80);
+    purrgo_wpt_polar(100, 100, 20, 90, &p);
+    CHECK(p.x == 120 && p.y == 100);
+    purrgo_wpt_polar(100, 100, 20, 180, &p);
+    CHECK(p.x == 100 && p.y == 120);
+    purrgo_wpt_polar(100, 100, 20, 270, &p);
+    CHECK(p.x == 80 && p.y == 100);
+    purrgo_wpt_polar(100, 100, 20, 450, &p);
+    CHECK(p.x == 120 && p.y == 100);
+    purrgo_wpt_polar(100, 100, 20, 45, &p);
+    CHECK(p.x == 114 && p.y == 86);
+    purrgo_wpt_polar(100, 100, 20, 0, NULL);     /* не падает */
+}
+
 static purrgo_gnss_solution_t fix_with_course(bool course_valid, int32_t course_deg_100, int32_t speed_kn_100)
 {
     purrgo_gnss_solution_t f;
@@ -975,6 +994,7 @@ int main(void)
     test_format_and_cardinal();
     test_arrow_geometry();
     test_arrow_angle();
+    test_polar();
     test_gpx_list();
     test_gpx_names_utf8();
     test_gpx_overflow_and_chunks();
