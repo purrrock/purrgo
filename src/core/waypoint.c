@@ -379,6 +379,16 @@ void purrgo_wpt_arrow_points(int16_t cx, int16_t cy, int16_t r, uint16_t angle_d
     pts[3].y = (int16_t)(base_y + scale_10k(wing, py));
 }
 
+void purrgo_wpt_polar(int16_t cx, int16_t cy, int16_t r, uint16_t angle_deg,
+                      purrgo_wpt_pt_t *out)
+{
+    if (out == NULL) {
+        return;
+    }
+    out->x = (int16_t)(cx + scale_10k(r, sin_10k(angle_deg)));
+    out->y = (int16_t)(cy - scale_10k(r, cos_10k(angle_deg)));
+}
+
 void purrgo_wpt_format_distance(char *buf, size_t size, uint32_t meters)
 {
     if (buf == NULL || size == 0) {

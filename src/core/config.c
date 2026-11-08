@@ -166,12 +166,10 @@ void purrgo_config_init(void)
     app_config.backlight_on = true;
 
     /*
-     * До появления настройки POI они не отображались.
-     *
-     * Поэтому PURRGO_POI_MODE_NO сохраняет прежнее поведение после обновления
-     * прошивки.
+     * POI по умолчанию отображаются иконками. Сохранённое в config значение
+     * POI_MODE (в том числе NO) перекрывает умолчание.
      */
-    app_config.poi_mode = PURRGO_POI_MODE_NO;
+    app_config.poi_mode = PURRGO_POI_MODE_ICONS;
 
     /*
      * Подписи по умолчанию выключены.
