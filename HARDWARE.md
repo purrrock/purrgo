@@ -65,6 +65,34 @@ EN
 Драйвер — библиотека `epd4g` (устройство и логика: `docs/architecture.md`, раздел «E-Ink driver (epd4g)»).
 Карта и экран выключения выводятся в 4 gray, меню и остальные экраны — в 1 bit.
 
+### Режимы аппаратного тестирования
+
+Замеры из `TODO.md` выполняются отдельной сборкой: после инициализации периферии CubeMX `main()` вызывает
+один тест и в главный цикл навигатора не попадает. Тест выбирается параметром CMake:
+
+```
+cmake --preset stm32u5-release -DPURRGO_HW_TEST=SD_SPEED
+cmake --build --preset stm32u5-release
+```
+
+Пустое значение (`-DPURRGO_HW_TEST=`) возвращает обычную прошивку. Допустимо: `SD_SPEED`, `EINK_4GRAY`,
+`EINK_PARTIAL` (последние два включают прежние `PURRGO_EINK_SELFTEST_*`). Результаты идут в UART1 строками
+`HWTEST ...` независимо от `PURRGO_LOG_LEVEL`, поэтому тесты можно собирать и в Release. Реализация:
+`apps/stm32/common/Src/hw_test.c`, список имён: `PURRGO_HW_TEST_NAMES` в `PurrGO_STM32U5/CMakeLists.txt`.
+
+**`SD_SPEED`.** Карта только читается (ничего не записывается). Замеры по `DWT->CYCCNT`:
+
+- A: сырое последовательное чтение 1 МиБ секторами по 1 / 2 / 8 / 32 за команду (CMD17 или CMD18);
+- B: случайное чтение одного сектора, 512 обращений: среднее, минимум, максимум;
+- C: FatFs, самый большой файл `0:/PURRGO/MAPS`: последовательное чтение блоками 512 Б / 4 КБ / 16 КБ и
+  случайные `f_lseek` + `f_read` 512 Б без CLMT и с CLMT (заодно видно `CLMT ok` / `CLMT off`).
+
+Скорость печатается в МБ/с и в процентах от предела SPI (`f_spi / 8`). Параметры (`-D` через
+`CMAKE_C_FLAGS` или `target_compile_definitions`): `PURRGO_HWTEST_SD_SEQ_SECTORS`, `PURRGO_HWTEST_SD_RANDOM_READS`,
+`PURRGO_HWTEST_SD_START_SECTOR`, `PURRGO_HWTEST_SD_FILE_BYTES`, `PURRGO_HWTEST_SD_FILE` (путь к файлу).
+Частота SPI берётся из `PURRGO_SD_SPI_RUN_PRESCALER` (`sd_card.c`), поэтому сравнение `/8` и `/4` делается
+двумя сборками с разным значением.
+
 ### Проверка дисплея на железе
 
 1. `PURRGO_EINK_SELFTEST_4GRAY` — 4 полосы серого, шахматка, градиент; картинка без мусора.

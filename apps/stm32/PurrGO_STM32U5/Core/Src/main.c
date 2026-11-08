@@ -31,6 +31,7 @@
 #include "stm32_app.h"
 #include "purrgo/logger.h"
 #include "eink_test.h"
+#include "hw_test.h"
 
 /* USER CODE END Includes */
 
@@ -116,6 +117,12 @@ int main(void)
   /* Самотест частичного обновления. */
   EinkTest_RunPartial();
   while (1) {}
+#endif
+
+#if defined(PURRGO_HW_TEST_ENABLED)
+  /* Аппаратный тест (-DPURRGO_HW_TEST=<имя>, см. hw_test.h): не возвращается,
+     навигатор не запускается. */
+  purrgo_hw_test_run();
 #endif
 
   /*
