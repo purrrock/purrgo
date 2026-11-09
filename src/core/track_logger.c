@@ -448,7 +448,7 @@ bool purrgo_logger_add_point(const purrgo_gnss_solution_t* fix) {
      * чтобы по треку анализировать энергопотребление. Сейчас данные - заглушка
      * (purrgo/battery.h). Напряжение пишется, только если оно измерено.
      */
-    char bat_str[64] = "";
+    char bat_str[96] = "";
     purrgo_battery_t bat;
     if (purrgo_battery_read(&bat) && bat.percent >= 0) {
         if (bat.millivolts != 0) {
@@ -462,7 +462,7 @@ bool purrgo_logger_add_point(const purrgo_gnss_solution_t* fix) {
         }
     }
 
-    char point_str[224];
+    char point_str[288];
     purrgo_snprintf(point_str, sizeof(point_str),
              "<trkpt lat=\"%s%d.%07d\" lon=\"%s%d.%07d\">\n"
              "  <ele>%d</ele>\n"
