@@ -226,14 +226,14 @@ static void test_battery_monitor(void)
     fake_power_reset();
     memset(&app_config, 0, sizeof app_config);
     app_config.power_source = PURRGO_POWER_SRC_ZINC_CARBON;   /* 3 x 1200 мВ = 25 % */
-    fake_power_set_battery_pin_mv(1800);                      /* делитель 1:1 */
+    fake_power_set_battery_pin_mv(fake_power_pin_for_pack_mv(3600));
     purrgo_battery_monitor_reset();
     g_now = 500000;
 
     /* Первый замер - база, не изменение; повторные тики до конца периода ничего не меняют. */
     CHECK(!purrgo_battery_monitor_tick(g_now));
     CHECK(strcmp(purrgo_battery_status_text(), "25%") == 0);
-    fake_power_set_battery_pin_mv(2400);                      /* 100 % */
+    fake_power_set_battery_pin_mv(fake_power_pin_for_pack_mv(4800));  /* 100 % */
     CHECK(!purrgo_battery_monitor_tick(g_now + PURRGO_BATTERY_STATUS_PERIOD_MS - 1u));
     CHECK(strcmp(purrgo_battery_status_text(), "25%") == 0);
 
@@ -249,7 +249,7 @@ static void test_battery_monitor(void)
     /* На карте изменение заряда перерисовывает строку статуса (с отсрочкой данных), на меню - нет. */
     memset(&app_config, 0, sizeof app_config);
     app_config.power_source = PURRGO_POWER_SRC_ZINC_CARBON;
-    fake_power_set_battery_pin_mv(1800);
+    fake_power_set_battery_pin_mv(fake_power_pin_for_pack_mv(3600));
     g_now = 800000;
     purrgo_app_init();
     purrgo_app_ui_reset();
@@ -257,7 +257,7 @@ static void test_battery_monitor(void)
     purrgo_ui_dirty_clear(UI_DIRTY_SCREEN | UI_DIRTY_MAP | UI_DIRTY_STATUS);
     CHECK(!purrgo_app_ui_needs_render(g_now));
 
-    fake_power_set_battery_pin_mv(2400);
+    fake_power_set_battery_pin_mv(fake_power_pin_for_pack_mv(4800));
     g_now += PURRGO_BATTERY_STATUS_PERIOD_MS;
     purrgo_app_tick(g_now);
     CHECK(purrgo_ui_dirty_test(UI_DIRTY_STATUS));

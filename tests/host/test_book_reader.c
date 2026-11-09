@@ -858,7 +858,7 @@ static void test_status_battery_and_idle_refresh(void)
     purrgo_app_ui_reset();
     CHECK(gfx_init(&g, W, H, g_fb, cb_draw, cb_read));
     app_config.power_source = PURRGO_POWER_SRC_ZINC_CARBON;   /* 3 x 1200 мВ = 25 % */
-    fake_power_set_battery_pin_mv(1800);                      /* делитель 1:1 */
+    fake_power_set_battery_pin_mv(fake_power_pin_for_pack_mv(3600));
     run_ticks(1000);
 
     purrgo_app_handle_button(PURRGO_BTN_KEY4_LONG);
@@ -875,7 +875,7 @@ static void test_status_battery_and_idle_refresh(void)
     CHECK(status_text_at(26, "25%"));
 
     /* Батарея заряжена, но замер раз в минуту: до минуты ничего не меняется и перерисовки нет. */
-    fake_power_set_battery_pin_mv(2400);                       /* 100 % */
+    fake_power_set_battery_pin_mv(fake_power_pin_for_pack_mv(4800));   /* 100 % */
     run_ticks(50000);
     CHECK(!purrgo_app_ui_needs_render(g_now));
 
