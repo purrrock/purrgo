@@ -23,6 +23,18 @@
  * ветка #elif в hw_test.c.
  */
 
+/*
+ * Выбор теста прямо в исходниках (без CMake): раскомментировать ОДНУ строку.
+ * Именно здесь, а не в main.c: заголовок включают и main.c, и hw_test.c, так что
+ * макрос виден обоим. Определения в main.c не работают: hw_test.c их не видит.
+ * Если тест задан параметром CMake -DPURRGO_HW_TEST=..., строки ниже не трогать.
+ */
+// #define PURRGO_HW_TEST_SD_SPEED
+
+#if defined(PURRGO_HW_TEST_SD_SPEED) && !defined(PURRGO_HW_TEST_ENABLED)
+#define PURRGO_HW_TEST_ENABLED
+#endif
+
 #ifdef PURRGO_HW_TEST_ENABLED
 
 /* Запускает выбранный тест. Не возвращает управление. */

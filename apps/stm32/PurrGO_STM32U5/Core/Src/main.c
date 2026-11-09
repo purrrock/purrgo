@@ -119,9 +119,6 @@ int main(void)
   while (1) {}
 #endif
 
-#define PURRGO_HW_TEST_ENABLED
-#define PURRGO_HW_TEST SD_SPEED
-
 #if defined(PURRGO_HW_TEST_ENABLED)
   /* Аппаратный тест (-DPURRGO_HW_TEST=<имя>, см. hw_test.h): не возвращается,
      навигатор не запускается. */
