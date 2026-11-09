@@ -115,6 +115,18 @@ const char* purrgo_power_source_title(purrgo_power_source_t src)
     return ((unsigned)src < PURRGO_POWER_SRC_COUNT) ? s_titles[src] : "?";
 }
 
+uint16_t purrgo_battery_stop_mv(purrgo_power_source_t src)
+{
+    switch (src) {
+    case PURRGO_POWER_SRC_ZINC_CARBON:
+        return (uint16_t)(PURRGO_BATTERY_STOP_CELL_MV_ZINC * PURRGO_BATTERY_CELLS);
+    case PURRGO_POWER_SRC_LIION_AA:
+        return (uint16_t)(PURRGO_BATTERY_STOP_CELL_MV_LIION_AA * PURRGO_BATTERY_CELLS);
+    default:
+        return 0u;
+    }
+}
+
 int purrgo_battery_percent_from_mv(purrgo_power_source_t src, uint32_t pack_mv)
 {
     if ((unsigned)src >= PURRGO_POWER_SRC_COUNT || s_curves[src].points == NULL) {

@@ -31,9 +31,4 @@ void fake_power_set_battery_pin_mv(uint16_t mv);
 uint16_t fake_power_pin_for_pack_mv(uint32_t pack_mv);
 /* Низкое напряжение питания, которое вернёт purrgo_platform_supply_low() (по умолчанию false). */
 void fake_power_set_supply_low(bool low);
-/* Вызовы purrgo_platform_storage_suspend() и порядковый номер последнего вызова. */
-/* probe вызывается из purrgo_platform_storage_suspend(). */
-void fake_power_set_suspend_probe(void (*probe)(void));
-int fake_power_suspend_calls(void);
-int fake_power_suspend_seq(void);
 #endif

@@ -14,8 +14,6 @@ static int s_gnss_off_calls, s_gnss_off_seq, s_gnss_on_calls, s_gnss_on_seq;
 static void (*s_probe)(void);
 static uint16_t s_battery_pin_mv;
 static bool s_supply_low;
-static int s_suspend_calls, s_suspend_seq;
-static void (*s_suspend_probe)(void);
 
 void fake_power_reset(void)
 {
@@ -25,8 +23,6 @@ void fake_power_reset(void)
     s_probe = NULL;
     s_battery_pin_mv = 0;
     s_supply_low = false;
-    s_suspend_calls = s_suspend_seq = 0;
-    s_suspend_probe = NULL;
 }
 void fake_power_set_unmount_probe(void (*probe)(void)) { s_probe = probe; }
 int fake_power_unmount_calls(void) { return s_unmount_calls; }
@@ -66,18 +62,8 @@ void purrgo_platform_enter_standby(void)
 void fake_power_set_battery_pin_mv(uint16_t mv) { s_battery_pin_mv = mv; }
 uint16_t purrgo_platform_battery_pin_mv(void) { return s_battery_pin_mv; }
 
-void fake_power_set_suspend_probe(void (*probe)(void)) { s_suspend_probe = probe; }
 void fake_power_set_supply_low(bool low) { s_supply_low = low; }
-int fake_power_suspend_calls(void) { return s_suspend_calls; }
-int fake_power_suspend_seq(void) { return s_suspend_seq; }
 bool purrgo_platform_supply_low(void) { return s_supply_low; }
-void purrgo_platform_storage_suspend(void)
-{
-    s_suspend_calls++;
-    s_suspend_seq = ++s_seq;
-    if (s_suspend_probe) { s_suspend_probe(); }
-}
-
 uint16_t fake_power_pin_for_pack_mv(uint32_t pack_mv)
 {
     const uint64_t num = (uint64_t)pack_mv * 1000u * PURRGO_HW_BATT_DIV_R_BOTTOM_OHM;

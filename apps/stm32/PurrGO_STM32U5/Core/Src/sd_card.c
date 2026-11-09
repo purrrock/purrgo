@@ -552,25 +552,6 @@ void purrgo_sd_poll(uint32_t now_ms)
 #endif
 }
 
-/*
- * Хук ядра (purrgo/supply.h): низкое напряжение, все файлы уже закрыты.
- * Размонтировать FatFs, освободить SPI и ждать восстановления питания: повторное
- * монтирование делает purrgo_sd_poll() по таймеру, пока mount_card() не пустит.
- */
-void purrgo_platform_storage_suspend(void)
-{
-    if (s_state != PURRGO_SD_READY)
-    {
-        return;
-    }
-
-    PURRGO_LOGW("SD: unmounted, supply low\r\n");
-    unmount();
-    s_state = PURRGO_SD_MOUNT_ERROR;
-    s_retry_armed = true;
-    s_retry_at_ms = HAL_GetTick() + PURRGO_SD_RETRY_PERIOD_MS;
-}
-
 purrgo_sd_state_t purrgo_sd_state(void)
 {
     return s_state;
