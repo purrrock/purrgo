@@ -814,7 +814,12 @@ static void test_fsm_and_screen(void)
     purrgo_app_handle_button(PURRGO_BTN_KEY3_SHORT);
     CHECK(purrgo_app_get_state() == APP_STATE_BOOK_READ);
     CHECK(page_is(1));
+    /* K4 длинное - поиск по книге (экранная клавиатура), долгое K4 там - отмена; K4 короткое - выход. */
     purrgo_app_handle_button(PURRGO_BTN_KEY4_LONG);
+    CHECK(purrgo_app_get_state() == APP_STATE_BOOK_SEARCH_INPUT);
+    purrgo_app_handle_button(PURRGO_BTN_KEY4_LONG);
+    CHECK(purrgo_app_get_state() == APP_STATE_BOOK_READ && page_is(1));
+    purrgo_app_handle_button(PURRGO_BTN_KEY4_SHORT);
     CHECK(purrgo_app_get_state() == APP_STATE_MENU_MAIN);
 
     /* Назад в навигатор: MENU, карта. */

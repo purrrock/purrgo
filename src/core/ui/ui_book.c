@@ -1,4 +1,5 @@
 #include "ui_book.h"
+#include "ui_keyboard.h"
 #include "ui_rows.h"
 
 #include "purrgo/battery.h"
@@ -100,8 +101,13 @@ static void draw_status(gfx_context_t* gfx, const char* text)
     gfx_set_color(gfx, BLACK, WHITE);
 }
 
-/* Текст страницы: строки через LF, ячейка 6x8 px, шаг строк 10 px, первая строка на TEXT_TOP. */
-static void draw_page_text(gfx_context_t* gfx, const uint8_t* text, size_t len)
+/*
+ * Текст страницы: строки через LF, ячейка 6x8 px, шаг строк 10 px, первая строка на TEXT_TOP.
+ * Байты [hl_start, hl_start + hl_len) выводятся инверсией (найденный текст); 1 px над ячейкой
+ * тоже закрашивается, чтобы выделение не выглядело обрезанным сверху.
+ */
+static void draw_page_text(gfx_context_t* gfx, const uint8_t* text, size_t len,
+                           uint32_t hl_start, uint32_t hl_len)
 {
     int col = 0;
     int row = 0;
@@ -112,7 +118,18 @@ static void draw_page_text(gfx_context_t* gfx, const uint8_t* text, size_t len)
             col = 0;
             continue;
         }
-        gfx_draw_char(gfx, (int16_t)(1 + col * CELL_W), (int16_t)(TEXT_TOP + row * LINE_PITCH), (char)text[i]);
+        const int16_t x = (int16_t)(1 + col * CELL_W);
+        const int16_t y = (int16_t)(TEXT_TOP + row * LINE_PITCH);
+        const bool hl = (hl_len > 0u && i >= hl_start && i - hl_start < hl_len);
+
+        if (hl) {
+            gfx_set_color(gfx, WHITE, BLACK);
+            gfx_fill_rect(gfx, x, (int16_t)(y - 1), CELL_W, 1);
+            gfx_draw_char(gfx, x, y, (char)text[i]);
+            gfx_set_color(gfx, BLACK, WHITE);
+        } else {
+            gfx_draw_char(gfx, x, y, (char)text[i]);
+        }
         col++;
     }
 }
@@ -176,8 +193,10 @@ static uint32_t body_hash(const purrgo_book_view_t* v)
     uint32_t h = 2166136261u;
     const uint8_t flags[4] = { (uint8_t)v->open, (uint8_t)v->error, (uint8_t)v->page_error,
                                (uint8_t)v->jump };
+    const uint32_t hl[2] = { v->hl_start, v->hl_len };
 
     h = fnv1a(h, flags, sizeof(flags));
+    h = fnv1a(h, hl, sizeof(hl));   /* подсветка найденного: сама по себе меняет экран */
     if (!v->open) {
         h = fnv1a(h, v->file, strlen(v->file));
     } else if (v->text != NULL) {
@@ -208,6 +227,17 @@ void ui_render_book_read(gfx_context_t* gfx)
         purrgo_snprintf(status, sizeof(status), "GO TO %u%% (p.%u/%u)",
                         (unsigned)v.jump_percent, (unsigned)(v.jump_page + 1u),
                         (unsigned)v.page_count);
+    } else if (v.find == PURRGO_BOOK_FIND_RUNNING) {
+        purrgo_snprintf(status, sizeof(status), "SEARCH %u%%  4:STOP", (unsigned)v.find_percent);
+    } else if (v.find == PURRGO_BOOK_FIND_FOUND) {
+        /* Страница/всего слева, подсказка кнопок справа: в режиме поиска K1/K2 листают совпадения. */
+        char left[24];
+        const char* keys = "3:NEW 4:END";
+        purrgo_snprintf(left, sizeof(left), "FIND %u/%u", (unsigned)(v.page + 1u), (unsigned)v.page_count);
+        const int pad = (int)PGB_SCREEN_COLS - (int)strlen(left) - (int)strlen(keys);
+        purrgo_snprintf(status, sizeof(status), "%s%*s%s", left, (pad > 1) ? pad : 1, "", keys);
+    } else if (v.find == PURRGO_BOOK_FIND_NOT_FOUND) {
+        purrgo_snprintf(status, sizeof(status), "NOT FOUND  3:EDIT 4:OK");
     } else {
         /* Слева страница/всего, справа заряд батареи (общий монитор); процент прочитанного не выводится. */
         char left[24];
@@ -244,7 +274,7 @@ void ui_render_book_read(gfx_context_t* gfx)
         draw_message(gfx, 7, "K4 - exit");
     } else {
         if (v.text != NULL) {
-            draw_page_text(gfx, v.text, v.text_len);
+            draw_page_text(gfx, v.text, v.text_len, v.hl_start, v.hl_len);
         } else if (v.image != NULL) {
             draw_page_image(gfx, v.image, v.image_w, v.image_h);
         } else {
@@ -269,4 +299,26 @@ void ui_render_book_read(gfx_context_t* gfx)
 
     /* Страница меняется по всей площади: обновляется весь экран (1 bit - частичное обновление). */
     display_refresh_region(0, 0, PURRGO_HW_DISPLAY_WIDTH_PX, PURRGO_HW_DISPLAY_HEIGHT_PX);
+}
+
+/* ---- Ввод запроса поиска ------------------------------------------------------- */
+
+void ui_book_search_reset(void)
+{
+    ui_keyboard_reset();
+}
+
+void ui_render_book_search(gfx_context_t* gfx)
+{
+    ui_render_keyboard(gfx, purrgo_book_reader_get_keyboard());
+
+    /*
+     * Свободная область между полем ввода и клавишами: неизменный текст, поэтому его область
+     * не регистрируется для частичного обновления (первый кадр экрана обновляется целиком).
+     * \x85 = Е, \xF0 = Ё в PurrGO-256.
+     */
+    gfx_set_color(gfx, BLACK, WHITE);
+    gfx_draw_string(gfx, 4, (int16_t)(UI_KEYBOARD_FREE_TOP_PX + 8), "Search from this page,");
+    gfx_draw_string(gfx, 4, (int16_t)(UI_KEYBOARD_FREE_TOP_PX + 20), "then from the book start.");
+    gfx_draw_string(gfx, 4, (int16_t)(UI_KEYBOARD_FREE_TOP_PX + 40), "Case is ignored, \x85 = \xF0");
 }
