@@ -89,4 +89,12 @@ purrgo_sd_state_t purrgo_sd_state(void);
 /** @brief true, если файловая система смонтирована. */
 bool purrgo_sd_is_ready(void);
 
+/**
+ * @brief Диагностика: принудительно использовать обмен через HAL (true) или
+ *        быстрый обмен по регистрам (false, по умолчанию).
+ *
+ * Нужна hw_test для сверки данных двумя способами.
+ */
+void purrgo_sd_spi_force_hal_xfer(bool force);
+
 #endif /* PURRGO_STM32_SD_CARD_H */

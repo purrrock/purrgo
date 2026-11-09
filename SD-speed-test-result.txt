@@ -29,3 +29,21 @@ HWTEST SD FatFs seek+read 512 (no CLMT): n=512 avg=24963 us min=861 us max=68155
 HWTEST SD FatFs CLMT ok: 4 entries used
 HWTEST SD FatFs seek+read 512 (CLMT): n=512 avg=742 us min=638 us max=893 us
 HWTEST SD_SPEED done
+
+После purrgo-sd-fast-spi.patch:
+HWTEST SD_SPEED start
+HWTEST SD config: SYSCLK=80000000 Hz, SPI2=20000000 Hz (prescaler 0x10000000), limit=2500 kB/s, card=7600 MB
+HWTEST SD xfer compare: OK (fast == HAL, 32 sectors from 8192)
+HWTEST SD raw seq  1 sect/cmd          1048576 B in 1296757 us = 0.808 MB/s (32% of SPI limit)
+HWTEST SD raw seq  2 sect/cmd          1048576 B in  893283 us = 1.173 MB/s (46% of SPI limit)
+HWTEST SD raw seq  8 sect/cmd          1048576 B in  565562 us = 1.854 MB/s (74% of SPI limit)
+HWTEST SD raw seq 32 sect/cmd          1048576 B in  483707 us = 2.167 MB/s (86% of SPI limit)
+HWTEST SD raw random 1 sect: n=512 avg=690 us min=461 us max=888 us (1449 reads/s)
+HWTEST SD FatFs file: 0:/PURRGO/MAPS/roads.idx, 36930074 bytes
+HWTEST SD FatFs seq f_read   512 B     1048576 B in 1314460 us = 0.797 MB/s (31% of SPI limit)
+HWTEST SD FatFs seq f_read  4096 B     1048576 B in  569867 us = 1.840 MB/s (73% of SPI limit)
+HWTEST SD FatFs seq f_read 16384 B     1048576 B in  569617 us = 1.840 MB/s (73% of SPI limit)
+HWTEST SD FatFs seek+read 512 (no CLMT): n=512 avg=19688 us min=636 us max=53875 us
+HWTEST SD FatFs CLMT ok: 4 entries used
+HWTEST SD FatFs seek+read 512 (CLMT): n=512 avg=514 us min=410 us max=665 us
+HWTEST SD_SPEED done
