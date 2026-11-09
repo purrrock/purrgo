@@ -26,12 +26,8 @@ uint16_t purrgo_platform_battery_pin_mv(void)
     return (uint16_t)PURRGO_PC_BATTERY_PIN_MV;
 }
 
-/* На PC напряжения питания МК нет: всегда нормальное, карту размонтировать нечего. */
+/* На PC напряжения питания МК нет: всегда нормальное. */
 bool purrgo_platform_supply_low(void)
 {
     return false;
-}
-
-void purrgo_platform_storage_suspend(void)
-{
 }

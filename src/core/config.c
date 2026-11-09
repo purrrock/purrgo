@@ -2,6 +2,7 @@
 #include "purrgo/fs_hal.h"
 #include "purrgo/logger.h"
 #include "purrgo/purrgo_format.h"
+#include "purrgo/supply.h"
 #include <string.h>
 
 
@@ -627,6 +628,12 @@ bool purrgo_config_load(void)
 
 bool purrgo_config_save(void)
 {
+    /* Низкое питание: запись на карту остановлена (purrgo/supply.h), настройки остаются в RAM. */
+    if (purrgo_supply_storage_blocked()) {
+        PURRGO_LOGW("purrgo_config_save: skipped, SD writes stopped (low supply)\n\r");
+        return false;
+    }
+
     PURRGO_LOG(
         "Saving configuration to: %s\n\r",
         purrgo_fs_get_config_path()

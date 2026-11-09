@@ -5,6 +5,7 @@
 #include "purrgo/gpx_parser.h"
 #include "purrgo/logger.h"
 #include "purrgo/purrgo_format.h"
+#include "purrgo/supply.h"
 #include "purrgo/purrgo_poi_icons.h"
 #include "map_projection.h"
 #include <string.h>
@@ -224,6 +225,12 @@ bool purrgo_wpt_save_to_waypts(int32_t lat_1e7, int32_t lon_1e7,
         lon_1e7 < 0 ? "-" : "", (int)(lon_abs / 10000000), (int)(lon_abs % 10000000),
         name);
     if (tn <= 0 || (size_t)tn >= sizeof text) {
+        return false;
+    }
+
+    /* Низкое питание: запись на карту остановлена (purrgo/supply.h). */
+    if (purrgo_supply_storage_blocked()) {
+        PURRGO_LOGW("wpt: skipped, SD writes stopped (low supply)\n\r");
         return false;
     }
 
