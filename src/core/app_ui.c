@@ -266,6 +266,12 @@ void purrgo_app_ui_render(
             }
             ui_render_book_read(gfx);
             break;
+        case APP_STATE_BOOK_SEARCH_INPUT:
+            if (prev_state != APP_STATE_BOOK_SEARCH_INPUT || s_full_refresh_requested) {
+                ui_book_search_reset();
+            }
+            ui_render_book_search(gfx);
+            break;
         case APP_STATE_TRACKER_SCREEN_OFF:
             ui_render_tracker_off(gfx);
             break;
@@ -281,9 +287,11 @@ void purrgo_app_ui_render(
      */
     /*
      * Экран чтения целиком занят текстом (33 строки), экран трекера - своим
-     * предупреждением: подсказок кнопок на них нет.
+     * предупреждением, экранная клавиатура рисует подсказки сама: общих подсказок
+     * кнопок на них нет.
      */
     if (current_state != APP_STATE_BOOK_READ &&
+        current_state != APP_STATE_BOOK_SEARCH_INPUT &&
         current_state != APP_STATE_TRACKER_SCREEN_OFF) {
         ui_draw_key_hints(gfx, current_state, current_state != prev_state);
     }

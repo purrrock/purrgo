@@ -100,7 +100,8 @@ static void logger_schedule_retry(uint32_t now_ms) {
 }
 
 static bool is_book_state(purrgo_state_t state) {
-    return state == APP_STATE_BOOK_LIST || state == APP_STATE_BOOK_READ;
+    return state == APP_STATE_BOOK_LIST || state == APP_STATE_BOOK_READ ||
+           state == APP_STATE_BOOK_SEARCH_INPUT;
 }
 
 // Экраны, на которых в строке статуса выводится заряд батареи.
@@ -452,8 +453,10 @@ void purrgo_app_tick(uint32_t current_time_ms) {
      */
     (void)purrgo_supply_tick(current_time_ms);
 
-    // Читалка: запись позиции чтения на SD по тайм-ауту бездействия.
-    purrgo_book_reader_tick(current_time_ms);
+    // Читалка: запись позиции чтения на SD по тайм-ауту бездействия и очередной шаг поиска по книге.
+    if (purrgo_book_reader_tick(current_time_ms)) {
+        purrgo_ui_dirty_mark(UI_DIRTY_SCREEN);
+    }
 
     /*
      * Заряд батареи в строке статуса (карта и читалка): общий монитор, опрос
@@ -728,6 +731,7 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
 
         case APP_STATE_BOOK_LIST:
         case APP_STATE_BOOK_READ:
+        case APP_STATE_BOOK_SEARCH_INPUT:
         case APP_STATE_TRACKER_SCREEN_OFF:
             break;  // обработано выше (ранний выход)
     }
