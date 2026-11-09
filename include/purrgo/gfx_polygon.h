@@ -102,5 +102,38 @@ void gfx_fill_compound_polygon_hatched(
     uint16_t num_parts,
     const gfx_hatch_t *hatch
 );
+/**
+ * @brief Растровая плитка для gfx_fill_compound_polygon_tiled().
+ *
+ * Плитка w x h (w <= 8, h <= 16) повторяется по всей плоскости и привязана
+ * к координатам экрана. rows[y] - строка плитки, бит x (младший бит - левый
+ * пиксель) равен 1, если пиксель закрашивается.
+ *
+ * Пример - снежинки 5 x 10: в верхней половине снежинка (X из 5 пикселей
+ * с полем в 1 px), в нижней такая же, сдвинутая на 2 px вправо (по кругу):
+ *   rows = {0x00, 0x0A, 0x04, 0x0A, 0x00,
+ *           0x00, 0x09, 0x10, 0x09, 0x00}
+ */
+typedef struct {
+    uint8_t w;
+    uint8_t h;
+    uint8_t rows[16];
+} gfx_tile_t;
+
+/**
+ * @brief Заливка compound полигона (с holes) растровой плиткой текущим
+ *        цветом foreground; контур полигона не рисуется.
+ *
+ * Геометрия, holes и отсечение те же, что у gfx_fill_compound_polygon().
+ * Плитки на границе полигона обрезаются. tile == NULL ничего не рисует.
+ */
+void gfx_fill_compound_polygon_tiled(
+    gfx_context_t *ctx,
+    const gfx_point_t *points,
+    uint16_t num_points,
+    const uint32_t *parts,
+    uint16_t num_parts,
+    const gfx_tile_t *tile
+);
 
 #endif /* GFX_POLYGON_H */

@@ -313,6 +313,54 @@ static void test_hatched_fill(void)
     CHECK(diff_count(g_fb, (uint8_t[MAX_W * MAX_H]){0}) == 0);
 }
 
+static void test_tiled_fill(void)
+{
+    const gfx_tile_t flake = { 5, 10, {
+        0x00, 0x0A, 0x04, 0x0A, 0x00,
+        0x00, 0x09, 0x10, 0x09, 0x00 } };
+
+    gfx_point_t pts[8] = {
+        {5, 5}, {55, 5}, {55, 43}, {5, 43},
+        {20, 15}, {40, 15}, {40, 30}, {20, 30}
+    };
+    uint32_t parts[2] = {0, 4};
+
+    canvas(64, 48);
+    gfx_fill_compound_polygon(&g_gfx, pts, 8, parts, 2);
+    uint8_t solid[MAX_W * MAX_H];
+    memcpy(solid, g_fb, sizeof solid);
+
+    canvas(64, 48);
+    gfx_fill_compound_polygon_tiled(&g_gfx, pts, 8, parts, 2, &flake);
+
+    int painted = 0, bad = 0;
+    for (int y = 0; y < g_h; y++) {
+        for (int x = 0; x < g_w; x++) {
+            int got = g_fb[y * g_w + x] != 0;
+            int want = solid[y * g_w + x]
+                && ((flake.rows[y % flake.h] >> (x % flake.w)) & 1);
+            painted += got;
+            bad += (got != want);
+        }
+    }
+    CHECK(bad == 0);
+    CHECK(painted > 0);
+
+    /* Далёкие вершины: не зависает и не рисует вне экрана. */
+    gfx_point_t far[3] = { {-4000000, -4000000}, {4000000, -4000000}, {0, 4000000} };
+    uint32_t fp[1] = {0};
+    canvas(64, 48);
+    gfx_fill_compound_polygon_tiled(&g_gfx, far, 3, fp, 1, &flake);
+    int cnt = 0;
+    for (int i = 0; i < g_w * g_h; i++) { cnt += (g_fb[i] != 0); }
+    CHECK(cnt > 0 && cnt < g_w * g_h);
+
+    /* NULL-плитка ничего не рисует. */
+    canvas(64, 48);
+    gfx_fill_compound_polygon_tiled(&g_gfx, pts, 8, parts, 2, NULL);
+    CHECK(diff_count(g_fb, (uint8_t[MAX_W * MAX_H]){0}) == 0);
+}
+
 int main(void)
 {
     test_projection_i32();
@@ -322,5 +370,6 @@ int main(void)
     test_many_crossings();
     test_many_crossings_far();
     test_hatched_fill();
+    test_tiled_fill();
     return test_finish("test_geometry_clip");
 }

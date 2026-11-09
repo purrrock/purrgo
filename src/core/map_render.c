@@ -321,7 +321,9 @@ static void map_draw_buffer_parts(
  *
  * Болото: горизонтальные штрихи 4 px через 4 px, строки через 4 px, каждая
  * следующая строка сдвинута на полпериода (шахматный порядок).
- * Ледник: диагональные линии 45 градусов, шаг 6 px по горизонтали.
+ * Ледник: мелкие снежинки 5x5 px (X из 5 пикселей с полем в 1 px). Плитка
+ * 5x10: каждая вторая строка снежинок сдвинута на 2 px вправо.
+ * Для сдвига на 3 px вторая половина: 0x00, 0x12, 0x01, 0x12, 0x00.
  */
 static const gfx_hatch_t s_wetland_hatch = {
     .row_period  = 4,
@@ -341,11 +343,22 @@ static const gfx_hatch_t s_sand_hatch = {
     .row_shift   = 2
 };
 
-static const gfx_hatch_t s_glacier_hatch = {
-    .row_period  = 1,
-    .dash_len    = 1,
-    .dash_period = 6,
-    .row_shift   = 1
+static const gfx_tile_t s_glacier_tile = {
+    .w = 5,
+    .h = 10,
+    .rows = {
+        0x00,   /* . . . . . */
+        0x0A,   /* . # . # . */
+        0x04,   /* . . # . . */
+        0x0A,   /* . # . # . */
+        0x00,   /* . . . . . */
+
+        0x00,   /* . . . . . */
+        0x09,   /* # . . # . */
+        0x10,   /* . . . . # */
+        0x09,   /* # . . # . */
+        0x00    /* . . . . . */
+    }
 };
 
 
@@ -713,13 +726,13 @@ void map_render_feature(
 
         } else if (style == PURRGO_STYLE_GLACIER_HATCH) {
 
-            gfx_fill_compound_polygon_hatched(
+            gfx_fill_compound_polygon_tiled(
                 gfx,
                 screen_points,
                 (uint16_t)iter.num_points,
                 (uint32_t *)iter.parts,
                 (uint16_t)part_count,
-                &s_glacier_hatch
+                &s_glacier_tile
             );
 
         } else if (style == PURRGO_STYLE_SAND_DOTS) {

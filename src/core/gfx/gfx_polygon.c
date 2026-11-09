@@ -389,6 +389,84 @@ static bool collect_nodes(
 
 
 /*
+ * Что именно рисовать вместо сплошной линии: штриховку (hatch) либо
+ * растровую плитку (tile). Указатель на структуру == NULL - сплошная заливка.
+ */
+typedef struct {
+    const gfx_hatch_t *hatch;
+    const gfx_tile_t *tile;
+} fill_pattern_t;
+
+
+/*
+ * Интервал [x0, x1] строки y, заполняемый растровой плиткой. Плитка
+ * привязана к координатам экрана и повторяется с шагом (w, h).
+ */
+static void emit_tile_span(
+    gfx_context_t *ctx,
+    const gfx_tile_t *tile,
+    int16_t x0,
+    int16_t x1,
+    int32_t y
+) {
+    if (tile->w == 0 || tile->w > 8 || tile->h == 0 || tile->h > 16) {
+        return;
+    }
+
+    if (x0 > x1) {
+        int16_t t = x0;
+        x0 = x1;
+        x1 = t;
+    }
+
+    int32_t left = ctx->clip_x;
+    int32_t right = (int32_t)ctx->clip_x + (int32_t)ctx->clip_w - 1;
+
+    if ((int32_t)x1 < left || (int32_t)x0 > right) {
+        return;
+    }
+    if ((int32_t)x0 < left) {
+        x0 = (int16_t)left;
+    }
+    if ((int32_t)x1 > right) {
+        x1 = (int16_t)right;
+    }
+
+    const int32_t w = tile->w;
+    const int32_t h = tile->h;
+
+    int32_t ty = y % h;
+    if (ty < 0) {
+        ty += h;
+    }
+
+    uint8_t bits = tile->rows[ty];
+    if (bits == 0) {
+        return;
+    }
+
+    int32_t cell = (int32_t)x0 / w;
+    if ((int32_t)x0 < 0 && ((int32_t)x0 % w) != 0) {
+        cell -= 1;
+    }
+
+    for (int32_t c = cell * w; c <= (int32_t)x1; c += w) {
+        for (int32_t b = 0; b < w; b++) {
+            if (!(bits & (1u << b))) {
+                continue;
+            }
+
+            int32_t x = c + b;
+
+            if (x >= (int32_t)x0 && x <= (int32_t)x1) {
+                gfx_draw_hline(ctx, (int16_t)x, (int16_t)x, (int16_t)y);
+            }
+        }
+    }
+}
+
+
+/*
  * Выводит один закрашиваемый интервал [x0, x1] строки y.
  *
  * Без штриховки (hatch == NULL) - сплошная линия gfx_draw_hline().
@@ -404,13 +482,24 @@ static bool collect_nodes(
  */
 static void emit_span(
     gfx_context_t *ctx,
-    const gfx_hatch_t *hatch,
+    const fill_pattern_t *pat,
     int16_t x0,
     int16_t x1,
     int32_t y
 ) {
-    if (hatch == NULL) {
+    if (pat == NULL) {
         gfx_draw_hline(ctx, x0, x1, (int16_t)y);
+        return;
+    }
+
+    if (pat->tile != NULL) {
+        emit_tile_span(ctx, pat->tile, x0, x1, y);
+        return;
+    }
+
+    const gfx_hatch_t *hatch = pat->hatch;
+
+    if (hatch == NULL) {
         return;
     }
 
@@ -492,7 +581,7 @@ static void fill_scanline_streaming(
     uint16_t num_parts,
     int32_t y,
     bool wide,
-    const gfx_hatch_t *hatch
+    const fill_pattern_t *pat
 ) {
     uint32_t batch[GFX_STREAM_BATCH];
     uint32_t after = 0;
@@ -555,7 +644,7 @@ static void fill_scanline_streaming(
                 open_x = x;
                 inside = true;
             } else {
-                emit_span(ctx, hatch, open_x, x, y);
+                emit_span(ctx, pat, open_x, x, y);
                 inside = false;
             }
         }
@@ -608,7 +697,7 @@ static void fill_compound_impl(
     uint16_t num_points,
     const uint32_t *parts,
     uint16_t num_parts,
-    const gfx_hatch_t *hatch
+    const fill_pattern_t *pat
 ) {
     if (
         !ctx ||
@@ -756,7 +845,7 @@ static void fill_compound_impl(
                 num_parts,
                 y,
                 wide,
-                hatch
+                pat
             );
             continue;
         }
@@ -803,7 +892,7 @@ static void fill_compound_impl(
         ) {
             emit_span(
                 ctx,
-                hatch,
+                pat,
                 nodeX[i],
                 nodeX[i + 1],
                 y
@@ -836,5 +925,25 @@ void gfx_fill_compound_polygon_hatched(
         return;
     }
 
-    fill_compound_impl(ctx, points, num_points, parts, num_parts, hatch);
+    fill_pattern_t pat = { hatch, NULL };
+
+    fill_compound_impl(ctx, points, num_points, parts, num_parts, &pat);
+}
+
+
+void gfx_fill_compound_polygon_tiled(
+    gfx_context_t *ctx,
+    const gfx_point_t *points,
+    uint16_t num_points,
+    const uint32_t *parts,
+    uint16_t num_parts,
+    const gfx_tile_t *tile
+) {
+    if (tile == NULL) {
+        return;
+    }
+
+    fill_pattern_t pat = { NULL, tile };
+
+    fill_compound_impl(ctx, points, num_points, parts, num_parts, &pat);
 }
