@@ -1,0 +1,31 @@
+HWTEST SD_SPEED start
+HWTEST SD config: SYSCLK=80000000 Hz, SPI2=10000000 Hz (prescaler 0x20000000), limit=1250 kB/s, card=7600 MB
+HWTEST SD raw seq  1 sect/cmd          1048576 B in 1773640 us = 0.591 MB/s (47% of SPI limit)
+HWTEST SD raw seq  2 sect/cmd          1048576 B in 1363325 us = 0.769 MB/s (61% of SPI limit)
+HWTEST SD raw seq  8 sect/cmd          1048576 B in 1016308 us = 1.031 MB/s (82% of SPI limit)
+HWTEST SD raw seq 32 sect/cmd          1048576 B in  929572 us = 1.128 MB/s (90% of SPI limit)
+HWTEST SD raw random 1 sect: n=512 avg=923 us min=695 us max=1120 us (1083 reads/s)
+HWTEST SD FatFs file: 0:/PURRGO/MAPS/roads.idx, 36930074 bytes
+HWTEST SD FatFs seq f_read   512 B     1048576 B in 1789913 us = 0.585 MB/s (46% of SPI limit)
+HWTEST SD FatFs seq f_read  4096 B     1048576 B in 1021331 us = 1.026 MB/s (82% of SPI limit)
+HWTEST SD FatFs seq f_read 16384 B     1048576 B in 1021100 us = 1.026 MB/s (82% of SPI limit)
+HWTEST SD FatFs seek+read 512 (no CLMT): n=512 avg=25111 us min=869 us max=68535 us
+HWTEST SD FatFs CLMT ok: 4 entries used
+HWTEST SD FatFs seek+read 512 (CLMT): n=512 avg=749 us min=642 us max=899 us
+HWTEST SD_SPEED done
+
+HWTEST SD_SPEED start
+HWTEST SD config: SYSCLK=80000000 Hz, SPI2=20000000 Hz (prescaler 0x10000000), limit=2500 kB/s, card=7600 MB
+HWTEST SD raw seq  1 sect/cmd          1048576 B in 1761086 us = 0.595 MB/s (23% of SPI limit)
+HWTEST SD raw seq  2 sect/cmd          1048576 B in 1352119 us = 0.775 MB/s (31% of SPI limit)
+HWTEST SD raw seq  8 sect/cmd          1048576 B in 1008848 us = 1.039 MB/s (41% of SPI limit)
+HWTEST SD raw seq 32 sect/cmd          1048576 B in  923164 us = 1.135 MB/s (45% of SPI limit)
+HWTEST SD raw random 1 sect: n=512 avg=916 us min=691 us max=1116 us (1091 reads/s)
+HWTEST SD FatFs file: 0:/PURRGO/MAPS/roads.idx, 36930074 bytes
+HWTEST SD FatFs seq f_read   512 B     1048576 B in 1780746 us = 0.588 MB/s (23% of SPI limit)
+HWTEST SD FatFs seq f_read  4096 B     1048576 B in 1013629 us = 1.034 MB/s (41% of SPI limit)
+HWTEST SD FatFs seq f_read 16384 B     1048576 B in 1013378 us = 1.034 MB/s (41% of SPI limit)
+HWTEST SD FatFs seek+read 512 (no CLMT): n=512 avg=24963 us min=861 us max=68155 us
+HWTEST SD FatFs CLMT ok: 4 entries used
+HWTEST SD FatFs seek+read 512 (CLMT): n=512 avg=742 us min=638 us max=893 us
+HWTEST SD_SPEED done
