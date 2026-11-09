@@ -4,6 +4,7 @@
  */
 #include "purrgo/power.h"
 #include "purrgo/battery.h"
+#include "purrgo/hardware_config.h"
 #include "purrgo/supply.h"
 #include "fake_power.h"
 #include <stddef.h>
@@ -75,4 +76,12 @@ void purrgo_platform_storage_suspend(void)
     s_suspend_calls++;
     s_suspend_seq = ++s_seq;
     if (s_suspend_probe) { s_suspend_probe(); }
+}
+
+uint16_t fake_power_pin_for_pack_mv(uint32_t pack_mv)
+{
+    const uint64_t num = (uint64_t)pack_mv * 1000u * PURRGO_HW_BATT_DIV_R_BOTTOM_OHM;
+    const uint64_t den = (uint64_t)PURRGO_HW_BATT_CAL_PERMILLE
+        * (PURRGO_HW_BATT_DIV_R_TOP_OHM + PURRGO_HW_BATT_DIV_R_BOTTOM_OHM);
+    return (uint16_t)((num + den / 2u) / den);
 }

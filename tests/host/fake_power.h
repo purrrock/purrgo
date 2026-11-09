@@ -22,6 +22,13 @@ int fake_power_gnss_on_calls(void);
 int fake_power_gnss_on_seq(void);
 /* Напряжение на выводе АЦП, которое вернёт purrgo_platform_battery_pin_mv() (по умолчанию 0). */
 void fake_power_set_battery_pin_mv(uint16_t mv);
+
+/*
+ * Напряжение на выводе АЦП, при котором purrgo_battery_pack_mv_from_pin() даст
+ * (с точностью до округления) pack_mv. Учитывает делитель и поправку из
+ * hardware_config.h, поэтому тесты не зависят от калибровки конкретного экземпляра.
+ */
+uint16_t fake_power_pin_for_pack_mv(uint32_t pack_mv);
 /* Низкое напряжение питания, которое вернёт purrgo_platform_supply_low() (по умолчанию false). */
 void fake_power_set_supply_low(bool low);
 /* Вызовы purrgo_platform_storage_suspend() и порядковый номер последнего вызова. */

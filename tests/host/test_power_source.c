@@ -190,11 +190,18 @@ static void test_curves(void)
 
     /* Li-ion AA со стабилизатором 1,5 В: "ступенька" - 100 % пока напряжение
      * держится, быстрое падение к 0 в конце. */
-    CHECK(purrgo_battery_percent_from_mv(PURRGO_POWER_SRC_LIION_AA, 3u * 1500u) == 100);
-    CHECK(purrgo_battery_percent_from_mv(PURRGO_POWER_SRC_LIION_AA, 3u * 1400u) == 100);
-    CHECK(purrgo_battery_percent_from_mv(PURRGO_POWER_SRC_LIION_AA, 3u * 1350u) == 55);
-    CHECK(purrgo_battery_percent_from_mv(PURRGO_POWER_SRC_LIION_AA, 3u * 1300u) == 10);
-    CHECK(purrgo_battery_percent_from_mv(PURRGO_POWER_SRC_LIION_AA, 3u * 1100u) == 0);
+    CHECK(purrgo_battery_percent_from_mv(PURRGO_POWER_SRC_LIION_AA, 3u * 1510u) == 100);
+    CHECK(purrgo_battery_percent_from_mv(PURRGO_POWER_SRC_LIION_AA, 3u * 1483u) == 100);  /* минимум на плато */
+    CHECK(purrgo_battery_percent_from_mv(PURRGO_POWER_SRC_LIION_AA, 3u * 1400u) == 5);    /* первое падение */
+    CHECK(purrgo_battery_percent_from_mv(PURRGO_POWER_SRC_LIION_AA, 3u * 1366u) == 4);    /* ступень 1,37 В */
+    CHECK(purrgo_battery_percent_from_mv(PURRGO_POWER_SRC_LIION_AA, 3u * 824u) == 1);     /* ступень 0,82 В */
+    CHECK(purrgo_battery_percent_from_mv(PURRGO_POWER_SRC_LIION_AA, 3u * 680u) == 0);     /* перед отключением */
+
+    /* Солевые: точки снятой кривой (полный разряд, 18,96 ч). */
+    CHECK(purrgo_battery_percent_from_mv(PURRGO_POWER_SRC_ZINC_CARBON, 3u * 1600u) == 100);
+    CHECK(purrgo_battery_percent_from_mv(PURRGO_POWER_SRC_ZINC_CARBON, 3u * 1290u) == 50);
+    CHECK(purrgo_battery_percent_from_mv(PURRGO_POWER_SRC_ZINC_CARBON, 3u * 1120u) == 14);
+    CHECK(purrgo_battery_percent_from_mv(PURRGO_POWER_SRC_ZINC_CARBON, 3u * 800u) == 0);
 
     /* Литиевые батарейки (Li-FeS2): свежий элемент выше 1,5 В, плато 1,5-1,6 В,
      * на 1,25 В почти пусто; кривая отличается от Li-ion AA. */
@@ -242,25 +249,29 @@ static void test_pin_voltage(void)
 
     /* Делитель 1 МΩ + 1 МΩ, поправка 1000: напряжение блока вдвое больше, чем на PB1. */
     CHECK(purrgo_battery_pack_mv_from_pin(0) == 0);
-    CHECK(purrgo_battery_pack_mv_from_pin(2250) == 4500);
-    CHECK(purrgo_battery_pack_mv_from_pin(1) == 2);
+    {
+        /* Делитель и поправка из hardware_config.h: пересчёт туда-обратно сходится (+-3 мВ). */
+        const uint32_t back = purrgo_battery_pack_mv_from_pin(fake_power_pin_for_pack_mv(4500));
+        CHECK(back >= 4497 && back <= 4503);
+        CHECK(purrgo_battery_pack_mv_from_pin(2000) > purrgo_battery_pack_mv_from_pin(1999));
+    }
 
     purrgo_config_init();
 
     /* Измеренное напряжение выбирает процент по кривой выбранного источника. */
     fake_power_reset();
-    fake_power_set_battery_pin_mv(1875);               /* блок 3750 мВ = 1250 мВ на элемент */
+    fake_power_set_battery_pin_mv(fake_power_pin_for_pack_mv(3750));   /* 1250 мВ на элемент */
     app_config.power_source = PURRGO_POWER_SRC_NIMH;
     CHECK(purrgo_battery_read(&b));
-    CHECK(b.millivolts == 3750 && b.percent == 60 && !b.external);
+    CHECK(b.millivolts >= 3747 && b.millivolts <= 3753 && b.percent == 60 && !b.external);
 
     app_config.power_source = PURRGO_POWER_SRC_ZINC_CARBON;
     CHECK(purrgo_battery_read(&b));
-    CHECK(b.millivolts == 3750 && b.percent == 35);
+    CHECK(b.millivolts >= 3747 && b.millivolts <= 3753 && b.percent == 38);
 
     app_config.power_source = PURRGO_POWER_SRC_LIION_AA;
     CHECK(purrgo_battery_read(&b));
-    CHECK(b.percent == 7);
+    CHECK(b.percent == 4);
 
     /* 5V: напряжение на выводе не важно, процентов нет. */
     app_config.power_source = PURRGO_POWER_SRC_EXTERNAL_5V;
