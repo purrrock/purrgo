@@ -58,7 +58,7 @@ static uint16_t s_queued_labels_count = 0;
 
 /*
  * Буфер точек полигона (int32: вершины далёких полигонов не насыщаются в int16,
- * см. project_to_screen_i32()). 512 точек * 8 байт = 4 КБ.
+ * см. project_to_screen_i32()). PURRGO_MAP_MAX_POINTS (2000) * 8 байт = 16 КБ.
  */
 static gfx_point_t s_polygon_buffer[PURRGO_MAP_MAX_POINTS];
 
@@ -390,19 +390,8 @@ void map_render_feature(
      * Для полигонов используем общий статический буфер.
      * Для линий он не нужен.
      */
-    /*
-     * Линии воды (чёрное ядро с тёмно-серой обводкой) рисуются в два прохода:
-     * сначала обводка всех звеньев, затем ядро. Для этого точки объекта
-     * собираются в тот же буфер (объект до PURRGO_MAP_MAX_POINTS точек
-     * гарантирует map_mlp_iter_init()).
-     */
-    const bool is_water_line =
-        !is_polygon_layer &&
-        (style == PURRGO_STYLE_WATER_THICK_LINE ||
-         style == PURRGO_STYLE_WATER_LINE);
-
     gfx_point_t *screen_points =
-        (is_polygon_layer || is_water_line) ? s_polygon_buffer : NULL;
+        is_polygon_layer ? s_polygon_buffer : NULL;
 
     int32_t prev_sx = 0;
     int32_t prev_sy = 0;
@@ -440,7 +429,7 @@ void map_render_feature(
         }
 
 
-        if (!is_polygon_layer && !is_water_line) {
+        if (!is_polygon_layer) {
 
             uint32_t current_part_offset =
                 (iter.num_parts > 0)
@@ -571,6 +560,47 @@ void map_render_feature(
                         break;
 
 
+                    case PURRGO_STYLE_WATER_THICK_LINE:
+
+                        /* Крупные водотоки (река, канал): чёрная линия 3 px. */
+                        gfx_set_color(
+                            gfx,
+                            BLACK,
+                            gfx->color_bg
+                        );
+
+                        gfx_draw_thick_line(
+                            gfx,
+                            (int16_t)seg_x0,
+                            (int16_t)seg_y0,
+                            (int16_t)seg_x1,
+                            (int16_t)seg_y1,
+                            3
+                        );
+
+                        break;
+
+
+                    case PURRGO_STYLE_WATER_LINE:
+
+                        /* Малые водотоки (ручей): чёрная линия 1 px. */
+                        gfx_set_color(
+                            gfx,
+                            BLACK,
+                            gfx->color_bg
+                        );
+
+                        gfx_draw_line(
+                            gfx,
+                            (int16_t)seg_x0,
+                            (int16_t)seg_y0,
+                            (int16_t)seg_x1,
+                            (int16_t)seg_y1
+                        );
+
+                        break;
+
+
                     case PURRGO_STYLE_RAILWAY_LINE:
 
                         gfx_draw_railway_line(
@@ -610,29 +640,6 @@ void map_render_feature(
      * Проверяем, была ли полностью прочитана геометрия.
      */
     if (iter.points_read < iter.num_points) {
-        return;
-    }
-
-
-    if (is_water_line) {
-
-        const bool thick = (style == PURRGO_STYLE_WATER_THICK_LINE);
-        const gfx_color_t prev_fg_line = gfx->color_fg;
-
-        /* Проход 1: тёмно-серая обводка. Проход 2: чёрное ядро. */
-        map_draw_buffer_parts(
-            gfx, screen_points, iter.num_points,
-            iter.parts, iter.num_parts, false,
-            DARK_GRAY, thick ? 5 : 3
-        );
-        map_draw_buffer_parts(
-            gfx, screen_points, iter.num_points,
-            iter.parts, iter.num_parts, false,
-            BLACK, thick ? 3 : 1
-        );
-
-        gfx_set_color(gfx, prev_fg_line, gfx->color_bg);
-
         return;
     }
 
