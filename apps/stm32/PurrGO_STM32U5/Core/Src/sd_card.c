@@ -40,7 +40,12 @@
 #define PURRGO_SD_SPI_RUN_PRESCALER SPI_BAUDRATEPRESCALER_4
 #endif
 
-/* Таймаут одного вызова HAL_SPI_TransmitReceive (максимум 512 байт), мс. */
+/* Быстрый обмен по регистрам SPI2 (см. xfer_fast). 0 - только HAL. */
+#ifndef PURRGO_SD_SPI_FAST_XFER
+#define PURRGO_SD_SPI_FAST_XFER 1
+#endif
+
+/* Таймаут одного обмена (максимум 512 байт), мс. */
 #define PURRGO_SD_SPI_TIMEOUT_MS 1000U
 
 /* Период опроса вывода Detect. Изменение уровня принимается после двух
@@ -138,10 +143,14 @@ static void port_cs(bool select, void *ctx)
     HAL_GPIO_WritePin(SD_CS_GPIO_Port, SD_CS_Pin, select ? GPIO_PIN_RESET : GPIO_PIN_SET);
 }
 
-static bool port_xfer(const uint8_t *tx, uint8_t *rx, size_t len, void *ctx)
+/*
+ * Обмен через HAL_SPI_TransmitReceive: при 8-битном кадре HAL гоняет данные
+ * по одному байту (32-битный путь есть только для DataSize > 16 бит), это
+ * ~70 тактов ядра на байт. Оставлен как эталон для сверки (hw_test) и как
+ * запасной вариант (PURRGO_SD_SPI_FAST_XFER=0).
+ */
+static bool xfer_hal(const uint8_t *tx, uint8_t *rx, size_t len)
 {
-    (void)ctx;
-
     while (len > 0U)
     {
         const uint16_t n = (len > SD_SPI_BLOCK_SIZE) ? (uint16_t)SD_SPI_BLOCK_SIZE : (uint16_t)len;
@@ -165,6 +174,159 @@ static bool port_xfer(const uint8_t *tx, uint8_t *rx, size_t len, void *ctx)
         len -= n;
     }
     return true;
+}
+
+#if PURRGO_SD_SPI_FAST_XFER
+
+/*
+ * Быстрый обмен напрямую через регистры SPI2 (SPI v2 в STM32U5).
+ *
+ * Блок len >= 16 и кратный 4 идёт 32-битными обращениями к TXDR/RXDR
+ * (порог FIFO 4 кадра: в слове 4 байта), остальное - побайтно. Одна
+ * транзакция = одна установка TSIZE + SPE + CSTART; конец - флаг EOT.
+ * В полёте держится не больше 12 байт (FIFO 16 байт у SPI2), поэтому
+ * переполнения RX нет, а передатчик не простаивает: следующее слово
+ * кладётся сразу, как только прочитано предыдущее.
+ *
+ * Прерывания и DMA не используются, HAL-состояние hspi2 не трогается
+ * (остаётся READY), поэтому spi_set_prescaler() (DeInit/Init) работает как
+ * раньше.
+ */
+static bool xfer_fast(const uint8_t *tx, uint8_t *rx, size_t len)
+{
+    SPI_TypeDef *const spi = hspi2.Instance;
+    const bool wide = (len >= 16U) && ((len & 3U) == 0U);
+    const size_t total = wide ? (len >> 2) : len;
+    const size_t max_inflight = wide ? 3U : 8U;
+    size_t sent = 0U;
+    size_t got = 0U;
+    bool ok = true;
+    const uint32_t t0 = HAL_GetTick();
+
+    /* Порог FIFO и размер транзакции меняются только при выключенном SPI. */
+    MODIFY_REG(spi->CFG1, SPI_CFG1_FTHLV,
+               wide ? SPI_FIFO_THRESHOLD_04DATA : SPI_FIFO_THRESHOLD_01DATA);
+    MODIFY_REG(spi->CR2, SPI_CR2_TSIZE, (uint32_t)len);
+    SET_BIT(spi->CR1, SPI_CR1_SPE);
+    SET_BIT(spi->CR1, SPI_CR1_CSTART);
+
+    while (got < total)
+    {
+        const uint32_t sr = spi->SR;
+        bool progress = false;
+
+        if ((sent < total) && ((sent - got) < max_inflight) && ((sr & SPI_SR_TXP) != 0U))
+        {
+            if (wide)
+            {
+                uint32_t w = 0xFFFFFFFFUL;
+
+                if (tx != NULL)
+                {
+                    memcpy(&w, tx + (sent << 2), sizeof w);
+                }
+                *(__IO uint32_t *)&spi->TXDR = w;
+            }
+            else
+            {
+                *(__IO uint8_t *)&spi->TXDR = (tx != NULL) ? tx[sent] : 0xFFU;
+            }
+            sent++;
+            progress = true;
+        }
+
+        if ((sr & SPI_SR_RXP) != 0U)
+        {
+            if (wide)
+            {
+                const uint32_t w = *(__IO uint32_t *)&spi->RXDR;
+
+                if (rx != NULL)
+                {
+                    memcpy(rx + (got << 2), &w, sizeof w);
+                }
+            }
+            else
+            {
+                const uint8_t b = *(__IO uint8_t *)&spi->RXDR;
+
+                if (rx != NULL)
+                {
+                    rx[got] = b;
+                }
+            }
+            got++;
+            progress = true;
+        }
+
+        if (!progress && ((HAL_GetTick() - t0) >= PURRGO_SD_SPI_TIMEOUT_MS))
+        {
+            ok = false;
+            break;
+        }
+    }
+
+    if (ok)
+    {
+        while ((spi->SR & SPI_SR_EOT) == 0U)
+        {
+            if ((HAL_GetTick() - t0) >= PURRGO_SD_SPI_TIMEOUT_MS)
+            {
+                ok = false;
+                break;
+            }
+        }
+    }
+
+    if ((spi->SR & (SPI_SR_OVR | SPI_SR_UDR)) != 0U)
+    {
+        ok = false;
+    }
+
+    spi->IFCR = SPI_IFCR_EOTC | SPI_IFCR_TXTFC | SPI_IFCR_OVRC | SPI_IFCR_UDRC |
+                SPI_IFCR_MODFC | SPI_IFCR_SUSPC;
+    CLEAR_BIT(spi->CR1, SPI_CR1_SPE);
+    return ok;
+}
+
+#endif /* PURRGO_SD_SPI_FAST_XFER */
+
+static volatile bool s_force_hal_xfer;
+
+void purrgo_sd_spi_force_hal_xfer(bool force)
+{
+    s_force_hal_xfer = force;
+}
+
+static bool port_xfer(const uint8_t *tx, uint8_t *rx, size_t len, void *ctx)
+{
+    (void)ctx;
+
+#if PURRGO_SD_SPI_FAST_XFER
+    if (!s_force_hal_xfer)
+    {
+        bool ok = true;
+
+        while (ok && (len > 0U))
+        {
+            const size_t n = (len > SD_SPI_BLOCK_SIZE) ? (size_t)SD_SPI_BLOCK_SIZE : len;
+
+            ok = xfer_fast(tx, rx, n);
+            if (tx != NULL)
+            {
+                tx += n;
+            }
+            if (rx != NULL)
+            {
+                rx += n;
+            }
+            len -= n;
+        }
+        return ok;
+    }
+#endif
+
+    return xfer_hal(tx, rx, len);
 }
 
 static uint32_t port_tick(void *ctx)

@@ -16,6 +16,9 @@
  *      PURRGO_HWTEST_SD_FILE_SCAN_MAX файлов); можно задать явно:
  *      -DPURRGO_HWTEST_SD_FILE=\"0:/PURRGO/MAPS/minsk.idx\".
  *
+ *   D. Сверка быстрого обмена по регистрам SPI2 с обменом через HAL: те же
+ *      сектора читаются обоими способами и сравниваются (до замеров A-C).
+ *
  * Скорость печатается в МБ/с (1 МБ = 10^6 Б) и в процентах от теоретического
  * предела SPI (f_spi / 8 Б/с).
  */
@@ -394,6 +397,60 @@ static void test_fatfs(void)
     (void)f_close(&f);
 }
 
+/* ---- D. сверка быстрого обмена с HAL ------------------------------------ */
+
+static uint8_t s_ref[32U * 512U] __attribute__((aligned(4)));
+
+static void test_xfer_compare(uint32_t sector_count)
+{
+    const uint32_t sector = PURRGO_HWTEST_SD_START_SECTOR;
+    const uint32_t count = 32U;
+    static const uint8_t chunks[] = { 1U, 2U, 8U, 32U };
+    bool ok = true;
+
+    if ((sector + count) > sector_count)
+    {
+        HT("HWTEST SD xfer compare skipped: card too small\r\n");
+        return;
+    }
+
+    purrgo_sd_spi_force_hal_xfer(true);
+    const DRESULT r_ref = disk_read(0, s_ref, sector, count);
+    purrgo_sd_spi_force_hal_xfer(false);
+
+    if (r_ref != RES_OK)
+    {
+        HT("HWTEST SD xfer compare: HAL read ERROR\r\n");
+        return;
+    }
+
+    for (size_t i = 0; i < ARRAY_SIZE(chunks); i++)
+    {
+        for (uint32_t done = 0U; done < count; done += chunks[i])
+        {
+            if (disk_read(0, &s_buf[done * 512U], sector + done, chunks[i]) != RES_OK)
+            {
+                HT("HWTEST SD xfer compare: fast read ERROR (%u sect/cmd)\r\n",
+                   (unsigned)chunks[i]);
+                ok = false;
+                break;
+            }
+        }
+        if (ok && (memcmp(s_buf, s_ref, sizeof s_ref) != 0))
+        {
+            HT("HWTEST SD xfer compare: MISMATCH (%u sect/cmd)\r\n", (unsigned)chunks[i]);
+            ok = false;
+        }
+        if (!ok)
+        {
+            return;
+        }
+        memset(s_buf, 0, sizeof s_ref);
+    }
+    HT("HWTEST SD xfer compare: OK (fast == HAL, %lu sectors from %lu)\r\n",
+       (unsigned long)count, (unsigned long)sector);
+}
+
 /* ---- сам тест ----------------------------------------------------------- */
 
 static void run_sd_speed(void)
@@ -422,6 +479,7 @@ static void run_sd_speed(void)
        (unsigned long)hspi2.Init.BaudRatePrescaler,
        (unsigned long)(spi_hz() / 8U / 1000U), (unsigned long)(sectors >> 11));
 
+    test_xfer_compare((uint32_t)sectors);
     test_raw_sequential((uint32_t)sectors);
     test_raw_random((uint32_t)sectors);
     test_fatfs();
