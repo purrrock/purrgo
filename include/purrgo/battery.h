@@ -7,15 +7,18 @@
 
 /*
  * Источник питания (пункт меню CONFIG, ключ POWER_SRC в PURRGO.CFG).
- * Числа сохраняются в файле конфигурации, поэтому порядок менять нельзя;
- * новые значения добавляются перед PURRGO_POWER_SRC_COUNT.
+ * Числа сохраняются в файле конфигурации; порядок значений совпадает с порядком
+ * перебора в меню, PURRGO_POWER_SRC_EXTERNAL_5V - последний (у него нет кривой
+ * разряда, см. battery.c). При изменении нумерации старый PURRGO.CFG
+ * нужно удалить или поправить POWER_SRC.
  */
 typedef enum {
     PURRGO_POWER_SRC_ZINC_CARBON = 0,   /* солевые батарейки */
     PURRGO_POWER_SRC_ALKALINE    = 1,   /* алкалайновые батарейки */
     PURRGO_POWER_SRC_NIMH        = 2,   /* Ni-MH аккумуляторы */
-    PURRGO_POWER_SRC_LITHIUM     = 3,   /* литиевые аккумуляторы */
-    PURRGO_POWER_SRC_EXTERNAL_5V = 4,   /* внешнее питание 5 В (USB, powerbank) */
+    PURRGO_POWER_SRC_LIION_AA    = 3,   /* Li-ion аккумуляторы AA со встроенным понижающим преобразователем (1,5 В) */
+    PURRGO_POWER_SRC_LITHIUM     = 4,   /* литиевые батарейки (Li-FeS2, AA, не перезаряжаемые) */
+    PURRGO_POWER_SRC_EXTERNAL_5V = 5,   /* внешнее питание 5 В (USB, powerbank) */
     PURRGO_POWER_SRC_COUNT
 } purrgo_power_source_t;
 

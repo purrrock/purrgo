@@ -57,14 +57,26 @@ static const curve_point_t s_curve_nimh[] = {
 };
 
 /*
- * Li-ion AA со встроенным стабилизатором 1,5 В: напряжение почти не меняется
- * до конца разряда, затем резко падает (срабатывает защита). Процент по
- * напряжению невозможен: кривая - "ступенька", 100 % пока напряжение держится
- * и быстрое падение к 0 в конце. Пороги ЗАГЛУШКА, уточнить по логу разряда
- * (pg:vbat в треке).
+ * Li-ion AA со встроенным понижающим преобразователем (выход ~1,5 В):
+ * напряжение почти не меняется до конца разряда, затем резко падает
+ * (срабатывает защита). Процент по напряжению невозможен: кривая -
+ * "ступенька", 100 % пока напряжение держится и быстрое падение к 0 в конце.
+ * Пороги ЗАГЛУШКА, уточнить по логу разряда (pg:vbat в треке).
+ */
+static const curve_point_t s_curve_liion_aa[] = {
+    { 1600, 100 }, { 1400, 100 }, { 1300, 10 }, { 1100, 0 },
+};
+
+/*
+ * Литиевые батарейки Li-FeS2 (Energizer Ultimate Lithium и аналоги): свежий
+ * элемент 1,7-1,8 В, длинное плато 1,5-1,6 В, затем быстрое падение к
+ * ~1,0 В. Начальное напряжение выше, чем у щелочных, поэтому блок из трёх
+ * элементов может дать до ~5,4 В. Точки ЗАГЛУШКА по справочным кривым,
+ * уточнить по логу разряда (pg:vbat в треке).
  */
 static const curve_point_t s_curve_lithium[] = {
-    { 1600, 100 }, { 1400, 100 }, { 1300, 10 }, { 1100, 0 },
+    { 1750, 100 }, { 1650, 85 }, { 1600, 65 }, { 1550, 45 },
+    { 1500,  25 }, { 1400, 10 }, { 1200,  0 },
 };
 
 #define CURVE(a) { (a), (uint8_t)(sizeof(a) / sizeof((a)[0])) }
@@ -74,6 +86,7 @@ static const curve_t s_curves[PURRGO_POWER_SRC_COUNT] = {
     [PURRGO_POWER_SRC_ZINC_CARBON] = CURVE(s_curve_zinc),
     [PURRGO_POWER_SRC_ALKALINE]    = CURVE(s_curve_alkaline),
     [PURRGO_POWER_SRC_NIMH]        = CURVE(s_curve_nimh),
+    [PURRGO_POWER_SRC_LIION_AA]    = CURVE(s_curve_liion_aa),
     [PURRGO_POWER_SRC_LITHIUM]     = CURVE(s_curve_lithium),
 };
 
@@ -81,6 +94,7 @@ static const char* const s_titles[PURRGO_POWER_SRC_COUNT] = {
     [PURRGO_POWER_SRC_ZINC_CARBON] = "ZINC-CARBON",
     [PURRGO_POWER_SRC_ALKALINE]    = "ALKALINE",
     [PURRGO_POWER_SRC_NIMH]        = "NIMH",
+    [PURRGO_POWER_SRC_LIION_AA]    = "LI-ION AA",
     [PURRGO_POWER_SRC_LITHIUM]     = "LITHIUM",
     [PURRGO_POWER_SRC_EXTERNAL_5V] = "5V",
 };
