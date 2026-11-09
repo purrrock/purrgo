@@ -81,21 +81,23 @@ static void test_menu(void)
 {
     fake_fs_reset();
     purrgo_config_init();
-    app_config.power_source = PURRGO_POWER_SRC_LITHIUM;
+    app_config.power_source = PURRGO_POWER_SRC_LIION_AA;
 
     purrgo_menu_controller_on_enter(APP_STATE_MENU_MAIN);
 
     /* Первый пункт - BOOKS (режим чтения, см. test_book_reader.c), курсор стоит на нём. */
     CHECK(menu_app_get_main_cursor() == 0);
     purrgo_state_t st = APP_STATE_MENU_MAIN;
-    CHECK(menu_app_get_draft_power_source() == PURRGO_POWER_SRC_LITHIUM);
+    CHECK(menu_app_get_draft_power_source() == PURRGO_POWER_SRC_LIION_AA);
 
     /* Второй пункт - источник питания. */
     st = press(st, PURRGO_ACTION_DOWN);
     CHECK(menu_app_get_main_cursor() == 1);
-    CHECK(menu_app_get_draft_power_source() == PURRGO_POWER_SRC_LITHIUM);
+    CHECK(menu_app_get_draft_power_source() == PURRGO_POWER_SRC_LIION_AA);
 
-    /* OK перебирает источники по кругу: LITHIUM -> 5V -> ZINC -> ... */
+    /* OK перебирает источники по кругу: LI-ION AA -> LITHIUM -> 5V -> ZINC -> ALKALINE -> NIMH */
+    st = press(st, PURRGO_ACTION_OK);
+    CHECK(menu_app_get_draft_power_source() == PURRGO_POWER_SRC_LITHIUM);
     st = press(st, PURRGO_ACTION_OK);
     CHECK(menu_app_get_draft_power_source() == PURRGO_POWER_SRC_EXTERNAL_5V);
     st = press(st, PURRGO_ACTION_OK);
@@ -107,7 +109,7 @@ static void test_menu(void)
     CHECK(st == APP_STATE_MENU_MAIN);
 
     /* До MENU конфиг не меняется. */
-    CHECK(app_config.power_source == PURRGO_POWER_SRC_LITHIUM);
+    CHECK(app_config.power_source == PURRGO_POWER_SRC_LIION_AA);
 
     /*
      * Порядок остальных пунктов: 2 POWER OFF, 3 TRACKER (SCREEN OFF), 4 TZ, ...,
@@ -135,18 +137,19 @@ static void test_menu(void)
     /* Новый вход в меню: черновик заново из конфига, курсор на первом пункте. */
     purrgo_menu_controller_on_enter(APP_STATE_MENU_MAIN);
     CHECK(menu_app_get_main_cursor() == 0);
-    CHECK(menu_app_get_draft_power_source() == PURRGO_POWER_SRC_LITHIUM);
+    CHECK(menu_app_get_draft_power_source() == PURRGO_POWER_SRC_LIION_AA);
 
     /* Выбор 5V и MENU: применяется и сохраняется. */
     st = APP_STATE_MENU_MAIN;
     st = press(st, PURRGO_ACTION_DOWN);                        /* BOOKS -> POWER */
+    st = press(st, PURRGO_ACTION_OK);                          /* LI-ION AA -> LITHIUM */
     st = press(st, PURRGO_ACTION_OK);                          /* LITHIUM -> 5V */
     st = press(st, PURRGO_ACTION_MENU);
     CHECK(st == APP_STATE_MAP);
     CHECK(app_config.power_source == PURRGO_POWER_SRC_EXTERNAL_5V);
     uint32_t n;
     const uint8_t* d = fake_fs_data(CFG, &n);
-    CHECK(d != NULL && strstr((const char*)d, "POWER_SRC=4\n") != NULL);
+    CHECK(d != NULL && strstr((const char*)d, "POWER_SRC=5\n") != NULL);
 }
 
 static void test_curves(void)
@@ -179,7 +182,7 @@ static void test_curves(void)
     const int zinc = purrgo_battery_percent_from_mv(PURRGO_POWER_SRC_ZINC_CARBON, v);
     const int alk  = purrgo_battery_percent_from_mv(PURRGO_POWER_SRC_ALKALINE, v);
     const int nimh = purrgo_battery_percent_from_mv(PURRGO_POWER_SRC_NIMH, v);
-    const int lith = purrgo_battery_percent_from_mv(PURRGO_POWER_SRC_LITHIUM, v);
+    const int lith = purrgo_battery_percent_from_mv(PURRGO_POWER_SRC_LIION_AA, v);
     CHECK(nimh == 60);
     CHECK(zinc != alk);
     CHECK(nimh > zinc && nimh > alk);
@@ -187,13 +190,26 @@ static void test_curves(void)
 
     /* Li-ion AA со стабилизатором 1,5 В: "ступенька" - 100 % пока напряжение
      * держится, быстрое падение к 0 в конце. */
-    CHECK(purrgo_battery_percent_from_mv(PURRGO_POWER_SRC_LITHIUM, 3u * 1500u) == 100);
-    CHECK(purrgo_battery_percent_from_mv(PURRGO_POWER_SRC_LITHIUM, 3u * 1400u) == 100);
-    CHECK(purrgo_battery_percent_from_mv(PURRGO_POWER_SRC_LITHIUM, 3u * 1350u) == 55);
-    CHECK(purrgo_battery_percent_from_mv(PURRGO_POWER_SRC_LITHIUM, 3u * 1300u) == 10);
-    CHECK(purrgo_battery_percent_from_mv(PURRGO_POWER_SRC_LITHIUM, 3u * 1100u) == 0);
+    CHECK(purrgo_battery_percent_from_mv(PURRGO_POWER_SRC_LIION_AA, 3u * 1500u) == 100);
+    CHECK(purrgo_battery_percent_from_mv(PURRGO_POWER_SRC_LIION_AA, 3u * 1400u) == 100);
+    CHECK(purrgo_battery_percent_from_mv(PURRGO_POWER_SRC_LIION_AA, 3u * 1350u) == 55);
+    CHECK(purrgo_battery_percent_from_mv(PURRGO_POWER_SRC_LIION_AA, 3u * 1300u) == 10);
+    CHECK(purrgo_battery_percent_from_mv(PURRGO_POWER_SRC_LIION_AA, 3u * 1100u) == 0);
+
+    /* Литиевые батарейки (Li-FeS2): свежий элемент выше 1,5 В, плато 1,5-1,6 В,
+     * на 1,25 В почти пусто; кривая отличается от Li-ion AA. */
+    CHECK(purrgo_battery_percent_from_mv(PURRGO_POWER_SRC_LITHIUM, 3u * 1800u) == 100);
+    CHECK(purrgo_battery_percent_from_mv(PURRGO_POWER_SRC_LITHIUM, 3u * 1600u) == 65);
+    CHECK(purrgo_battery_percent_from_mv(PURRGO_POWER_SRC_LITHIUM, 3u * 1500u) == 25);
+    CHECK(purrgo_battery_percent_from_mv(PURRGO_POWER_SRC_LITHIUM, 3u * 1200u) == 0);
+    /* 1,5 В: у Li-ion AA со стабилизатором ещё 100 %, у батарейки - уже 25 %. */
+    CHECK(purrgo_battery_percent_from_mv(PURRGO_POWER_SRC_LIION_AA, 3u * 1500u) == 100);
+    CHECK(purrgo_battery_percent_from_mv(PURRGO_POWER_SRC_LITHIUM, 3u * 1500u) <
+          purrgo_battery_percent_from_mv(PURRGO_POWER_SRC_LIION_AA, 3u * 1500u));
 
     /* Заголовки для меню. */
+    CHECK(strcmp(purrgo_power_source_title(PURRGO_POWER_SRC_LIION_AA), "LI-ION AA") == 0);
+    CHECK(strcmp(purrgo_power_source_title(PURRGO_POWER_SRC_LITHIUM), "LITHIUM") == 0);
     CHECK(strcmp(purrgo_power_source_title(PURRGO_POWER_SRC_EXTERNAL_5V), "5V") == 0);
     CHECK(strcmp(purrgo_power_source_title(PURRGO_POWER_SRC_NIMH), "NIMH") == 0);
     CHECK(strcmp(purrgo_power_source_title(PURRGO_POWER_SRC_COUNT), "?") == 0);
@@ -242,7 +258,7 @@ static void test_pin_voltage(void)
     CHECK(purrgo_battery_read(&b));
     CHECK(b.millivolts == 3750 && b.percent == 35);
 
-    app_config.power_source = PURRGO_POWER_SRC_LITHIUM;
+    app_config.power_source = PURRGO_POWER_SRC_LIION_AA;
     CHECK(purrgo_battery_read(&b));
     CHECK(b.percent == 7);
 
