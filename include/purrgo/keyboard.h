@@ -85,14 +85,17 @@ typedef enum {
 typedef struct {
     uint8_t kind;   /* purrgo_kbd_key_kind_t */
     uint8_t code;   /* LETTER: заглавная буква PurrGO-256; CHAR: символ */
-    uint8_t width;  /* ширина клавиши по горизонтали, px */
+    uint8_t width;  /* ширина в ячейках сетки (1 - обычная клавиша) */
 } purrgo_kbd_key_t;
 
-/* Геометрия сетки (px). Высота клавиши и межстрочный шаг нужны отрисовке. */
+/*
+ * Геометрия сетки. Клавиши лежат в регулярной сетке: строки не сдвинуты друг
+ * относительно друга, ячейки одной ширины, соседние клавиши делят общую линию.
+ * Число столбцов зависит от раскладки (RU - 12, EN и SYM - 10), ширина ячейки
+ * подбирается под экран. Высота ячейки одинакова во всех раскладках.
+ */
 #define PURRGO_KBD_ROWS      5
-#define PURRGO_KBD_KEY_W     14
-#define PURRGO_KBD_KEY_H     20
-#define PURRGO_KBD_ROW_PITCH 22
+#define PURRGO_KBD_ROW_PITCH 18
 #define PURRGO_KBD_MAX_COLS  12
 
 typedef struct {
@@ -149,8 +152,14 @@ int purrgo_kbd_row_len(purrgo_kbd_layout_t layout, int row);
 /* Клавиша раскладки или NULL, если row/col вне таблицы. */
 const purrgo_kbd_key_t *purrgo_kbd_key(purrgo_kbd_layout_t layout, int row, int col);
 
-/* Координата x левого края клавиши (строка выровнена по центру экрана). */
+/* Число столбцов (ячеек) сетки раскладки. */
+int purrgo_kbd_cols(purrgo_kbd_layout_t layout);
+
+/* Координата x левого края клавиши (px). Клавиши разных строк, занимающие одни ячейки, выровнены. */
 int purrgo_kbd_key_x(purrgo_kbd_layout_t layout, int row, int col);
+
+/* Ширина клавиши (px) от её левой линии до левой линии следующей клавиши. */
+int purrgo_kbd_key_w(purrgo_kbd_layout_t layout, int row, int col);
 
 /*
  * Символ PurrGO-256, который введёт клавиша при текущем Shift (для LETTER -

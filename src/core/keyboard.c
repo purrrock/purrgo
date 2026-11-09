@@ -10,20 +10,20 @@
  * Строка 0 - цифры, строки 1..3 - буквы, строка 4 - служебные клавиши.
  */
 
-#define W  PURRGO_KBD_KEY_W   /* локальные макросы таблиц, снимаются ниже */
-#define L(c)      { PURRGO_KBD_KEY_LETTER, (uint8_t)(c), W }
-#define C(c)      { PURRGO_KBD_KEY_CHAR,   (uint8_t)(c), W }
+/* Локальные макросы таблиц (снимаются ниже); последнее число - ширина в ячейках. */
+#define L(c)      { PURRGO_KBD_KEY_LETTER, (uint8_t)(c), 1 }
+#define C(c)      { PURRGO_KBD_KEY_CHAR,   (uint8_t)(c), 1 }
 #define SHIFT(w)  { PURRGO_KBD_KEY_SHIFT,     0, (w) }
 #define BKSP(w)   { PURRGO_KBD_KEY_BACKSPACE, 0, (w) }
 
 #define DIGITS_ROW \
     C('1'), C('2'), C('3'), C('4'), C('5'), C('6'), C('7'), C('8'), C('9'), C('0')
 
-#define BOTTOM_ROW \
-    { PURRGO_KBD_KEY_LANG,  0,   28 }, \
-    { PURRGO_KBD_KEY_SYM,   0,   28 }, \
-    { PURRGO_KBD_KEY_SPACE, ' ', 56 }, \
-    { PURRGO_KBD_KEY_OK,    0,   28 }
+#define BOTTOM_ROW(space_w) \
+    { PURRGO_KBD_KEY_LANG,  0,   2 }, \
+    { PURRGO_KBD_KEY_SYM,   0,   2 }, \
+    { PURRGO_KBD_KEY_SPACE, ' ', (space_w) }, \
+    { PURRGO_KBD_KEY_OK,    0,   2 }
 
 static const purrgo_kbd_key_t s_en_row0[] = { DIGITS_ROW };
 static const purrgo_kbd_key_t s_en_row1[] = {
@@ -33,7 +33,7 @@ static const purrgo_kbd_key_t s_en_row2[] = {
     L('A'), L('S'), L('D'), L('F'), L('G'), L('H'), L('J'), L('K'), L('L')
 };
 static const purrgo_kbd_key_t s_en_row3[] = {
-    SHIFT(21), L('Z'), L('X'), L('C'), L('V'), L('B'), L('N'), L('M'), BKSP(21)
+    SHIFT(1), L('Z'), L('X'), L('C'), L('V'), L('B'), L('N'), L('M'), BKSP(2)
 };
 
 /* Кириллица: А=0x80 Б=0x81 В=0x82 Г=0x83 Д=0x84 Е=0x85 Ж=0x86 З=0x87 И=0x88 Й=0x89
@@ -49,8 +49,8 @@ static const purrgo_kbd_key_t s_ru_row2[] = {   /* Ф Ы В А П Р О Л Д Ж
     L(0x8E), L(0x8B), L(0x84), L(0x86), L(0x9D)
 };
 static const purrgo_kbd_key_t s_ru_row3[] = {   /* Shift Я Ч С М И Т Ь Б Ю Ё Backspace */
-    SHIFT(W), L(0x9F), L(0x97), L(0x91), L(0x8C), L(0x88), L(0x92),
-    L(0x9C), L(0x81), L(0x9E), L(0xF0), BKSP(W)
+    SHIFT(1), L(0x9F), L(0x97), L(0x91), L(0x8C), L(0x88), L(0x92),
+    L(0x9C), L(0x81), L(0x9E), L(0xF0), BKSP(1)
 };
 
 static const purrgo_kbd_key_t s_sym_row0[] = { DIGITS_ROW };
@@ -61,12 +61,13 @@ static const purrgo_kbd_key_t s_sym_row2[] = {
     C('!'), C('?'), C('@'), C('#'), C('&'), C('+'), C('='), C('*'), C('%'), C('_')
 };
 static const purrgo_kbd_key_t s_sym_row3[] = {
-    C('['), C(']'), C('{'), C('}'), C('<'), C('>'), C('\\'), C('|'), C('~'), BKSP(W)
+    C('['), C(']'), C('{'), C('}'), C('<'), C('>'), C('\\'), C('|'), C('~'), BKSP(1)
 };
 
-static const purrgo_kbd_key_t s_bottom_row[] = { BOTTOM_ROW };
+/* 10 столбцов (EN, SYM) и 12 столбцов (RU): 2 + 2 + пробел + 2. */
+static const purrgo_kbd_key_t s_bottom10[] = { BOTTOM_ROW(4) };
+static const purrgo_kbd_key_t s_bottom12[] = { BOTTOM_ROW(6) };
 
-#undef W
 #undef L
 #undef C
 #undef SHIFT
@@ -83,13 +84,13 @@ typedef struct {
 
 static const kbd_row_t s_layouts[3][PURRGO_KBD_ROWS] = {
     [PURRGO_KBD_LAYOUT_EN] = {
-        ROW(s_en_row0), ROW(s_en_row1), ROW(s_en_row2), ROW(s_en_row3), ROW(s_bottom_row)
+        ROW(s_en_row0), ROW(s_en_row1), ROW(s_en_row2), ROW(s_en_row3), ROW(s_bottom10)
     },
     [PURRGO_KBD_LAYOUT_RU] = {
-        ROW(s_ru_row0), ROW(s_ru_row1), ROW(s_ru_row2), ROW(s_ru_row3), ROW(s_bottom_row)
+        ROW(s_ru_row0), ROW(s_ru_row1), ROW(s_ru_row2), ROW(s_ru_row3), ROW(s_bottom12)
     },
     [PURRGO_KBD_LAYOUT_SYM] = {
-        ROW(s_sym_row0), ROW(s_sym_row1), ROW(s_sym_row2), ROW(s_sym_row3), ROW(s_bottom_row)
+        ROW(s_sym_row0), ROW(s_sym_row1), ROW(s_sym_row2), ROW(s_sym_row3), ROW(s_bottom10)
     }
 };
 
@@ -114,15 +115,20 @@ const purrgo_kbd_key_t *purrgo_kbd_key(purrgo_kbd_layout_t layout, int row, int 
     return &s_layouts[layout][row].keys[col];
 }
 
-static int row_width(purrgo_kbd_layout_t layout, int row)
+int purrgo_kbd_cols(purrgo_kbd_layout_t layout)
 {
-    int w = 0;
-    const int n = purrgo_kbd_row_len(layout, row);
+    return (layout == PURRGO_KBD_LAYOUT_RU) ? 12 : 10;
+}
 
-    for (int i = 0; i < n; i++) {
-        w += s_layouts[layout][row].keys[i].width;
-    }
-    return w;
+static int cell_w(purrgo_kbd_layout_t layout)
+{
+    return PURRGO_HW_DISPLAY_WIDTH_PX / purrgo_kbd_cols(layout);
+}
+
+/* Сетка по центру экрана; линия справа от последней ячейки тоже внутри экрана. */
+static int grid_x0(purrgo_kbd_layout_t layout)
+{
+    return (PURRGO_HW_DISPLAY_WIDTH_PX - cell_w(layout) * purrgo_kbd_cols(layout) - 1) / 2;
 }
 
 int purrgo_kbd_key_x(purrgo_kbd_layout_t layout, int row, int col)
@@ -131,19 +137,26 @@ int purrgo_kbd_key_x(purrgo_kbd_layout_t layout, int row, int col)
         return 0;
     }
 
-    int x = (PURRGO_HW_DISPLAY_WIDTH_PX - row_width(layout, row)) / 2;
+    int units = 0;
 
     for (int i = 0; i < col; i++) {
-        x += s_layouts[layout][row].keys[i].width;
+        units += s_layouts[layout][row].keys[i].width;
     }
-    return x;
+    return grid_x0(layout) + units * cell_w(layout);
+}
+
+int purrgo_kbd_key_w(purrgo_kbd_layout_t layout, int row, int col)
+{
+    const purrgo_kbd_key_t *k = purrgo_kbd_key(layout, row, col);
+
+    return (k == NULL) ? 0 : k->width * cell_w(layout);
 }
 
 static int key_center_x(purrgo_kbd_layout_t layout, int row, int col)
 {
     const purrgo_kbd_key_t *k = purrgo_kbd_key(layout, row, col);
 
-    return (k == NULL) ? 0 : purrgo_kbd_key_x(layout, row, col) + k->width / 2;
+    return (k == NULL) ? 0 : purrgo_kbd_key_x(layout, row, col) + purrgo_kbd_key_w(layout, row, col) / 2;
 }
 
 /* Клавиша строки, центр которой ближе всего к x. */

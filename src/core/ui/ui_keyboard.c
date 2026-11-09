@@ -67,30 +67,27 @@ static void fill(gfx_context_t *gfx, int x, int y, int w, int h, gfx_color_t col
     gfx_set_color(gfx, fg, bg);
 }
 
-/* Глиф 5x8 шрифта в двойном масштабе (10x16 px), прозрачный фон. */
-static void draw_glyph2x(gfx_context_t *gfx, int x, int y, uint8_t code, gfx_color_t ink)
+/* Глиф стандартного шрифта 5x7 (ячейка 6x8) цветом ink на фоне bg. */
+static void draw_glyph(gfx_context_t *gfx, int x, int y, uint8_t code,
+                       gfx_color_t ink, gfx_color_t bg)
 {
-    const unsigned char *bitmap = font5x7[code];
+    gfx_color_t fg;
+    gfx_color_t old_bg;
 
-    for (int col = 0; col < 5; col++) {
-        for (int row = 0; row < 8; row++) {
-            if ((bitmap[col] >> row) & 1) {
-                fill(gfx, x + col * 2, y + row * 2, 2, 2, ink);
-            }
-        }
-    }
+    gfx_get_color(gfx, &fg, &old_bg);
+    gfx_set_color(gfx, ink, bg);
+    gfx_draw_char(gfx, (int16_t)x, (int16_t)y, (char)code);
+    gfx_set_color(gfx, fg, old_bg);
 }
 
-/* Строка двойным масштабом, шаг 11 px (глиф 10 px и 1 px зазор). */
-static int text2x_width(const char *s)
+/* Строка шрифтом 5x7 по центру клавиши. */
+static void draw_label(gfx_context_t *gfx, int x, int y, int w, const char *s,
+                       gfx_color_t ink, gfx_color_t bg)
 {
-    return (int)strlen(s) * 11 - 1;
-}
+    const int tw = (int)strlen(s) * CHAR_W - 1;
 
-static void draw_text2x(gfx_context_t *gfx, int x, int y, const char *s, gfx_color_t ink)
-{
-    for (; *s != '\0'; s++, x += 11) {
-        draw_glyph2x(gfx, x, y, (uint8_t)*s, ink);
+    for (int cx = x + (w - tw) / 2; *s != '\0'; s++, cx += CHAR_W) {
+        draw_glyph(gfx, cx, y, (uint8_t)*s, ink, bg);
     }
 }
 
@@ -174,61 +171,47 @@ static void draw_input(gfx_context_t *gfx, const purrgo_keyboard_t *kb)
     fill(gfx, x, INPUT_TEXT_Y + 9, 5, 2, BLACK);
 }
 
-/* Подпись служебной клавиши внутри рамки (x, y, w - ширина клавиши без зазора). */
+/* Содержимое клавиши внутри рамки (x, y - линия слева/сверху, w - шаг до линии справа). */
 static void draw_key_face(gfx_context_t *gfx, const purrgo_keyboard_t *kb,
-                          const purrgo_kbd_key_t *key, int x, int y, int w, gfx_color_t ink)
+                          const purrgo_kbd_key_t *key, int x, int y, int w,
+                          gfx_color_t ink, gfx_color_t bg)
 {
-    const int gx = x + (w - 10) / 2;   /* глиф 10 px по центру */
-    const int gy = y + (PURRGO_KBD_KEY_H - 16) / 2;   /* глиф 5x8 в двойном масштабе - 16 px */
+    const int gy = y + (PURRGO_KBD_ROW_PITCH - 8) / 2 + 1;   /* глиф 5x7 (ячейка 6x8) по центру */
+    const int gx = x + (w - 5) / 2 + 1;
 
     switch (key->kind) {
     case PURRGO_KBD_KEY_LETTER:
     case PURRGO_KBD_KEY_CHAR:
-        draw_glyph2x(gfx, gx, gy, purrgo_kbd_key_char(kb, key), ink);
+        draw_glyph(gfx, gx, gy, purrgo_kbd_key_char(kb, key), ink, bg);
         break;
 
     case PURRGO_KBD_KEY_SHIFT:
-        /* выключен - стрелка вверх, один раз и Caps - закрашенный треугольник; Caps - ещё полоса снизу */
-        draw_glyph2x(gfx, gx, gy - (kb->shift == PURRGO_KBD_SHIFT_LOCK ? 1 : 0),
-                     (kb->shift == PURRGO_KBD_SHIFT_OFF) ? 0x18u : 0x1Eu, ink);
+        /* выключен - стрелка вверх, один раз и Caps - закрашенный треугольник; Caps - полоса снизу */
+        draw_glyph(gfx, gx, gy - (kb->shift == PURRGO_KBD_SHIFT_LOCK ? 1 : 0),
+                   (kb->shift == PURRGO_KBD_SHIFT_OFF) ? 0x18u : 0x1Eu, ink, bg);
         if (kb->shift == PURRGO_KBD_SHIFT_LOCK) {
-            fill(gfx, x + 3, y + PURRGO_KBD_KEY_H - 3, w - 6, 2, ink);
+            fill(gfx, gx, y + PURRGO_KBD_ROW_PITCH - 3, 5, 1, ink);
         }
         break;
 
     case PURRGO_KBD_KEY_BACKSPACE:
-        draw_glyph2x(gfx, gx, gy, 0x1Bu, ink);
+        draw_glyph(gfx, gx, gy, 0x1Bu, ink, bg);
         break;
 
-    case PURRGO_KBD_KEY_LANG: {
-        const char *s = (kb->alpha == PURRGO_KBD_LAYOUT_RU) ? "RU" : "EN";
-
-        draw_text2x(gfx, x + (w - text2x_width(s)) / 2, gy, s, ink);
+    case PURRGO_KBD_KEY_LANG:
+        draw_label(gfx, x + 1, gy, w, (kb->alpha == PURRGO_KBD_LAYOUT_RU) ? "RU" : "EN", ink, bg);
         break;
-    }
 
-    case PURRGO_KBD_KEY_SYM: {
-        const char *s = (kb->layout == PURRGO_KBD_LAYOUT_SYM) ? "ABC" : "#+=";
-        const int tw = (int)strlen(s) * CHAR_W - 1;
-        gfx_color_t fg;
-        gfx_color_t bg;
-
-        gfx_get_color(gfx, &fg, &bg);
-        gfx_set_color(gfx, ink, (ink == BLACK) ? WHITE : BLACK);
-        gfx_draw_string(gfx, (int16_t)(x + (w - tw) / 2), (int16_t)(y + (PURRGO_KBD_KEY_H - 8) / 2), s);
-        gfx_set_color(gfx, fg, bg);
+    case PURRGO_KBD_KEY_SYM:
+        draw_label(gfx, x + 1, gy, w, (kb->layout == PURRGO_KBD_LAYOUT_SYM) ? "ABC" : "#+=", ink, bg);
         break;
-    }
 
     case PURRGO_KBD_KEY_SPACE:
-        /* скобка-пробел: горизонтальная линия с короткими засечками вверх */
-        fill(gfx, x + 12, y + 11, w - 24, 2, ink);
-        fill(gfx, x + 12, y + 7, 2, 6, ink);
-        fill(gfx, x + w - 14, y + 7, 2, 6, ink);
+        draw_label(gfx, x + 1, gy, w, "SPACE", ink, bg);
         break;
 
     case PURRGO_KBD_KEY_OK:
-        draw_text2x(gfx, x + (w - text2x_width("OK")) / 2, gy, "OK", ink);
+        draw_label(gfx, x + 1, gy, w, "OK", ink, bg);
         break;
 
     default:
@@ -236,7 +219,12 @@ static void draw_key_face(gfx_context_t *gfx, const purrgo_keyboard_t *kb,
     }
 }
 
-/* Одна клавиша (ширина без 1 px зазора): у клавиши под курсором - инверсия. */
+/*
+ * Одна клавиша. Рамка рисуется от линии x до линии x + w включительно, поэтому
+ * соседние клавиши (по горизонтали и вертикали) делят одну общую линию, а ряды
+ * не сдвинуты друг относительно друга. Клавиша под курсором закрашивается
+ * внутри рамки (инверсия).
+ */
 static void draw_key(gfx_context_t *gfx, const purrgo_keyboard_t *kb, int row, int col)
 {
     const purrgo_kbd_layout_t layout = (purrgo_kbd_layout_t)kb->layout;
@@ -248,19 +236,13 @@ static void draw_key(gfx_context_t *gfx, const purrgo_keyboard_t *kb, int row, i
 
     const int x = purrgo_kbd_key_x(layout, row, col);
     const int y = GRID_Y + row * PURRGO_KBD_ROW_PITCH;
-    const int w = key->width - 1;
+    const int w = purrgo_kbd_key_w(layout, row, col);
     const bool cursor = (row == kb->row && col == kb->col);
-    const gfx_color_t ink = cursor ? WHITE : BLACK;
 
-    /* Буквы, цифры и знаки - без рамки (чище сетка); служебные клавиши обведены. */
-    const bool framed = (key->kind != PURRGO_KBD_KEY_LETTER && key->kind != PURRGO_KBD_KEY_CHAR);
-
-    fill(gfx, x, y, w, PURRGO_KBD_KEY_H, cursor ? BLACK : WHITE);
-    if (!cursor && framed) {
-        gfx_set_color(gfx, BLACK, WHITE);
-        gfx_draw_rect(gfx, (int16_t)x, (int16_t)y, (int16_t)w, PURRGO_KBD_KEY_H);
-    }
-    draw_key_face(gfx, kb, key, x, y, w, ink);
+    fill(gfx, x + 1, y + 1, w - 1, PURRGO_KBD_ROW_PITCH - 1, cursor ? BLACK : WHITE);
+    gfx_set_color(gfx, BLACK, WHITE);
+    gfx_draw_rect(gfx, (int16_t)x, (int16_t)y, (int16_t)(w + 1), (int16_t)(PURRGO_KBD_ROW_PITCH + 1));
+    draw_key_face(gfx, kb, key, x, y, w, cursor ? WHITE : BLACK, cursor ? BLACK : WHITE);
 }
 
 static void draw_grid(gfx_context_t *gfx, const purrgo_keyboard_t *kb)
@@ -292,14 +274,15 @@ static void mark(int x, int y, int w, int h)
     display_refresh_region((int16_t)x, (int16_t)y, (int16_t)w, (int16_t)h);
 }
 
-/* Клавиша (row, col) вместе с зазором: прямоугольник для частичного обновления. */
+/* Клавиша (row, col) вместе с рамкой: прямоугольник для частичного обновления. */
 static void mark_key(uint8_t layout, int row, int col)
 {
     const purrgo_kbd_key_t *key = purrgo_kbd_key((purrgo_kbd_layout_t)layout, row, col);
 
     if (key != NULL) {
         mark(purrgo_kbd_key_x((purrgo_kbd_layout_t)layout, row, col),
-             GRID_Y + row * PURRGO_KBD_ROW_PITCH, key->width, PURRGO_KBD_ROW_PITCH);
+             GRID_Y + row * PURRGO_KBD_ROW_PITCH,
+             purrgo_kbd_key_w((purrgo_kbd_layout_t)layout, row, col) + 1, PURRGO_KBD_ROW_PITCH + 1);
     }
 }
 
@@ -327,7 +310,7 @@ void ui_render_keyboard(gfx_context_t *gfx, const purrgo_keyboard_t *kb)
         if (layout_changed) {
             /* Меняются подписи всех клавиш и строка состояния. */
             mark(0, 0, SCREEN_W, STATUS_H);
-            mark(0, GRID_Y, SCREEN_W, PURRGO_KBD_ROWS * PURRGO_KBD_ROW_PITCH);
+            mark(0, GRID_Y, SCREEN_W, PURRGO_KBD_ROWS * PURRGO_KBD_ROW_PITCH + 1);
         } else {
             if (title_hash != s_frame.title_hash) {
                 mark(0, 0, SCREEN_W, STATUS_H);
