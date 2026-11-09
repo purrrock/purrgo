@@ -101,16 +101,27 @@ static void test_layout_tables(void)
 
             CHECK(n > 0 && n <= PURRGO_KBD_MAX_COLS);
             int prev_end = -1;
+            int cells = 0;
+            const purrgo_kbd_layout_t L_ = (purrgo_kbd_layout_t)lay;
 
             for (int c = 0; c < n; c++) {
-                const purrgo_kbd_key_t *k = purrgo_kbd_key((purrgo_kbd_layout_t)lay, r, c);
-                const int x = purrgo_kbd_key_x((purrgo_kbd_layout_t)lay, r, c);
+                const purrgo_kbd_key_t *k = purrgo_kbd_key(L_, r, c);
+                const int x = purrgo_kbd_key_x(L_, r, c);
+                const int w = purrgo_kbd_key_w(L_, r, c);
 
                 CHECK(k != NULL);
-                CHECK(x >= 0 && x + k->width <= W);   /* в пределах экрана */
-                CHECK(x >= prev_end);                 /* без перекрытий */
-                prev_end = x + k->width;
+                CHECK(x >= 0 && x + w + 1 <= W);   /* вместе с правой линией внутри экрана */
+                CHECK(x >= prev_end);               /* без перекрытий */
+                /* регулярная сетка: клавиша начинается на целом числе ячеек от начала сетки */
+                CHECK((x - purrgo_kbd_key_x(L_, 0, 0)) % purrgo_kbd_key_w(L_, 0, 0) == 0);
+                CHECK(w == k->width * purrgo_kbd_key_w(L_, 0, 0));
+                prev_end = x + w;
+                cells += k->width;
             }
+            CHECK(cells <= purrgo_kbd_cols(L_));
+            /* Нижняя и буквенная строка с Shift/Backspace занимают сетку без дыр. */
+            if (r == 3 && lay != PURRGO_KBD_LAYOUT_SYM) CHECK(cells == purrgo_kbd_cols(L_));
+            if (r == 4) CHECK(cells == purrgo_kbd_cols(L_));
         }
     }
     CHECK(purrgo_kbd_key(PURRGO_KBD_LAYOUT_EN, 0, 99) == NULL);
@@ -412,8 +423,8 @@ static void test_render_and_refresh(void)
     display_flush();
     st = pc_display_stats_get();
     CHECK(st.partials == 1 && st.has_region);
-    CHECK(st.last_y >= UI_KEYBOARD_GRID_TOP_PX && st.last_h <= PURRGO_KBD_ROW_PITCH);
-    CHECK(st.last_w <= 2 * PURRGO_KBD_KEY_W);
+    CHECK(st.last_y >= UI_KEYBOARD_GRID_TOP_PX && st.last_h <= PURRGO_KBD_ROW_PITCH + 1);
+    CHECK(st.last_w <= 2 * purrgo_kbd_key_w(PURRGO_KBD_LAYOUT_EN, 1, 0) + 2);
 
     /* Ввод символа: только поле ввода. */
     pc_display_stats_reset();
