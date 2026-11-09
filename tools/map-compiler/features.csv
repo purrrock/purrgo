@@ -71,7 +71,7 @@ Code;PG_class;STYLE;LOD;Layer;OSM_Tags;Description;Enabled;Icon
 10;WATER;WATER_FILL;1;water;waterway=dock;Док;1;
 40;GLACIER;GLACIER_HATCH;1;water;natural=glacier;Ледник;1;
 39;WETLAND;WETLAND_HATCH;1;water;natural=wetland;Болото;1;
-37;WATERWAY_MAJOR;WATER_THICK_LINE;2;waterways;waterway=river;Река;1;
+37;WATERWAY_MAJOR;WATER_THICK_LINE;1;waterways;waterway=river;Река;1;
 37;WATERWAY_MAJOR;WATER_THICK_LINE;1;waterways;waterway=canal;Канал;1;
 38;WATERWAY_MINOR;WATER_LINE;0;waterways;waterway=stream;Ручей;1;
 38;WATERWAY_MINOR;WATER_LINE;0;waterways;waterway=drain;Водосток;0;
