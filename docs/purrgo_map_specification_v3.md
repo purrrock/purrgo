@@ -223,6 +223,20 @@ Inner rings → Counter-Clockwise (CCW)
 
 A simple polygon consists of one closed part.
 
+Rings are filled with the even-odd rule, so an inner ring is a hole (for example an island in a lake).
+
+### 3.4.1. Limits
+
+One geometry record holds at most `2000` points in total over all parts and at most `32` parts. The firmware rejects a larger record as a whole, and the object is not drawn. The compiler skips ways and multipolygons above `1999` points, so every object it writes fits the limit.
+
+### 3.4.2. Multipolygon construction in the compiler
+
+* the rings of a relation are assembled from member ways: closed ways are taken as they are, open ways are chained by shared end points;
+* a member with an empty role is an outer ring;
+* a ring that cannot be closed (incomplete data at the edge of the extract) is dropped;
+* an inner ring is kept only if it lies inside one of the assembled outer rings; a relation without a closed outer ring produces nothing, so islands are never written without their lake;
+* for water, a multipolygon replaces the standalone polygon of its outer way, whether the relation duplicates the tags of that way or carries none (old-style tagging). Otherwise the solid polygon would cover the holes.
+
 ---
 
 # 4. SPATIAL INDEX (`.IDX`)
@@ -579,7 +593,7 @@ DARK_GRAY_BIG_CIRCLE
 
 Style names are not stored as strings in `.idx`.
 
-Water styles are black with a dark-gray outline: `WATER_FILL` is a black polygon fill with a 1 px dark-gray contour; `WATER_THICK_LINE` is a 3 px black line with a 1 px dark-gray outline on each side (rivers, canals); `WATER_LINE` is a 1 px black line with a 1 px dark-gray outline on each side (streams).
+Water styles are black: `WATER_FILL` is a black polygon fill with a 1 px dark-gray contour; `WATER_THICK_LINE` is a plain 3 px black line (rivers, canals); `WATER_LINE` is a plain 1 px black line (streams). Water lines have no outline.
 
 ## 9.6. POI icons
 

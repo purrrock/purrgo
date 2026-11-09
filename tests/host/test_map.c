@@ -6,6 +6,7 @@
  *   - «фаззинг»: усечение файла в каждой точке и подмена каждого байта .idx/.mlp/.db
  *     (проверяется ASan/UBSan: любое чтение за границей - ошибка теста).
  */
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 #include "purrgo/map.h"
@@ -256,7 +257,7 @@ static void test_bad_mlp_geometry(void)
     CHECK(render(&idx, &tmp, NULL, MAP_LAYER_LINES) == 0);
     build_mlp_ex(&tmp, 1, p1, 1, -5, xy, 4);                              /* отрицательное число точек */
     CHECK(render(&idx, &tmp, NULL, MAP_LAYER_LINES) == 0);
-    build_mlp_ex(&tmp, 1, p1, 1, 513, xy, 4);                             /* больше PURRGO_MAP_MAX_POINTS */
+    build_mlp_ex(&tmp, 1, p1, 1, 2001, xy, 4);                            /* больше PURRGO_MAP_MAX_POINTS */
     CHECK(render(&idx, &tmp, NULL, MAP_LAYER_LINES) == 0);
     build_mlp_ex(&tmp, 1, p1, 1, 0x7FFFFFFF, xy, 4);
     CHECK(render(&idx, &tmp, NULL, MAP_LAYER_LINES) == 0);
@@ -459,24 +460,23 @@ static void test_waterway_line_style(void)
 {
     static blob_t idx, mlp;
 
-    /* Малый водоток: ядро 1 px, обводка по 1 px с каждой стороны. */
+    /* Малый водоток: чёрная линия 1 px, без обводки. */
     waterway_line(&idx, &mlp, 38 /* WATERWAY_MINOR */);
     CHECK(render(&idx, &mlp, NULL, MAP_LAYER_LINES) > 20);
     CHECK(g_fb[32 * SCR_W + 32] == FB_BLACK);
-    CHECK(g_fb[31 * SCR_W + 32] == FB_DARK_GRAY);
-    CHECK(g_fb[33 * SCR_W + 32] == FB_DARK_GRAY);
-    CHECK(g_fb[30 * SCR_W + 32] == 0 && g_fb[34 * SCR_W + 32] == 0);
+    CHECK(g_fb[31 * SCR_W + 32] == 0 && g_fb[33 * SCR_W + 32] == 0);
+    CHECK(count_fb(FB_DARK_GRAY) == 0);
 
-    /* Крупный водоток: ядро 3 px, обводка по 1 px. */
+    /* Крупный водоток: чёрная линия 3 px, без обводки. */
     waterway_line(&idx, &mlp, 37 /* WATERWAY_MAJOR */);
     CHECK(render(&idx, &mlp, NULL, MAP_LAYER_LINES) > 20);
     CHECK(g_fb[31 * SCR_W + 32] == FB_BLACK);
     CHECK(g_fb[32 * SCR_W + 32] == FB_BLACK);
     CHECK(g_fb[33 * SCR_W + 32] == FB_BLACK);
-    CHECK(g_fb[30 * SCR_W + 32] == FB_DARK_GRAY);
-    CHECK(g_fb[34 * SCR_W + 32] == FB_DARK_GRAY);
+    CHECK(g_fb[30 * SCR_W + 32] == 0 && g_fb[34 * SCR_W + 32] == 0);
+    CHECK(count_fb(FB_DARK_GRAY) == 0);
 
-    /* Излом: обводка второго звена не перекрывает чёрное ядро первого. */
+    /* Излом: оба звена чёрные, вершина без разрыва. */
     uint8_t node[25];
     data_node(node, 100, 100, 900, 900, 38, GEOM_V1, 0);
     build_idx(&idx, node, sizeof node, 0, 1);
@@ -487,6 +487,44 @@ static void test_waterway_line_style(void)
     CHECK(g_fb[32 * SCR_W + 20] == FB_BLACK);
     CHECK(g_fb[32 * SCR_W + 32] == FB_BLACK);        /* вершина излома */
     CHECK(g_fb[14 * SCR_W + 32] == FB_BLACK);
+}
+
+/* Длинные объекты (сотни точек): не отбрасываются, как раньше при лимите 512. */
+static void test_long_geometry(void)
+{
+    static blob_t idx, mlp;
+    static int32_t xy[2 * 2000];
+
+    uint8_t node[25];
+    data_node(node, 100, 500, 900, 500, 37, GEOM_V1, 0);
+    build_idx(&idx, node, sizeof node, 0, 1);
+    uint32_t parts[1] = { 0 };
+
+    /* Река 1500 точек вдоль y = 500. */
+    for (int i = 0; i < 1500; i++) { xy[2 * i] = 100 + i * 800 / 1499; xy[2 * i + 1] = 500; }
+    build_mlp(&mlp, 1, parts, 1500, xy);
+    CHECK(render(&idx, &mlp, NULL, MAP_LAYER_LINES) > 100);
+    CHECK(g_fb[32 * SCR_W + 32] == FB_BLACK);
+
+    /* Ровно PURRGO_MAP_MAX_POINTS точек: ещё рисуется, на одну больше - нет. */
+    for (int i = 0; i < 2000; i++) { xy[2 * i] = 100 + i * 800 / 1999; xy[2 * i + 1] = 500; }
+    build_mlp(&mlp, 1, parts, 2000, xy);
+    CHECK(render(&idx, &mlp, NULL, MAP_LAYER_LINES) > 100);
+    build_mlp_ex(&mlp, 1, parts, 1, 2001, xy, 2000);
+    CHECK(render(&idx, &mlp, NULL, MAP_LAYER_LINES) == 0);
+
+    /* Полигон воды из 1000 точек (окружность): заливка и контур на месте. */
+    data_node(node, 100, 100, 900, 900, 10, GEOM_V1, 0);
+    build_idx(&idx, node, sizeof node, 0, 1);
+    for (int i = 0; i < 1000; i++) {
+        double a = 6.283185307179586 * i / 999.0;
+        xy[2 * i] = 500 + (int32_t)(400.0 * cos(a));
+        xy[2 * i + 1] = 500 + (int32_t)(400.0 * sin(a));
+    }
+    xy[2 * 999] = xy[0]; xy[2 * 999 + 1] = xy[1];
+    build_mlp(&mlp, 1, parts, 1000, xy);
+    CHECK(render(&idx, &mlp, NULL, MAP_LAYER_POLYGONS) > 500);
+    CHECK(g_fb[32 * SCR_W + 32] == FB_BLACK);
 }
 
 /* Слои water/waterways через viewport: опциональные, включаются layer_water. */
@@ -807,6 +845,7 @@ int main(void)
     test_fuzz_truncate_and_flip();
     test_water_polygon_style();
     test_waterway_line_style();
+    test_long_geometry();
     test_water_layers_viewport();
     test_viewport_via_fs();
     test_viewport_failures();

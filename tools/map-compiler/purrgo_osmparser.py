@@ -12,7 +12,7 @@ import struct
 from decimal import Decimal
 from lxml import etree as ET
 from functools import lru_cache
-from typing import List, Tuple, Dict, Optional
+from typing import List, Tuple, Dict, Optional, Set
 
 from purrgo_models import MapFeature, HWConfig, pgo_encode
 from purrgo_geometry import is_clockwise
@@ -153,6 +153,13 @@ class OSMParser:
         #
         # These counters are deliberately kept separate for diagnostics.
         # They do not affect the binary format.
+        # Water polygons made from plain closed ways, by OSM way id.
+        # A multipolygon relation (lake with islands, ...) replaces the
+        # standalone polygon of its outer way: otherwise the solid polygon
+        # would cover the holes and islands would be painted over.
+        self._water_way_features: Dict[str, MapFeature] = {}
+        self._superseded_features: Set[int] = set()
+
         self.skipped_oversized_roads = 0
         self.skipped_oversized_waterways = 0
         self.skipped_oversized_polygons = 0
@@ -234,6 +241,15 @@ class OSMParser:
     ]:
         self._pass1_cache_nodes()
         self._pass2_build_features()
+
+        if self._superseded_features:
+            superseded = self._superseded_features
+            self.water = [
+                f for f in self.water if id(f) not in superseded
+            ]
+
+        self._water_way_features = {}
+        self._superseded_features = set()
 
         return (
             self.roads,
@@ -835,8 +851,190 @@ class OSMParser:
 
                 if rule.layer == 'water':
                     self.water.append(feature)
+                    self._water_way_features[osm_id] = feature
                 else:
                     self.landuse.append(feature)
+
+    # ------------------------------------------------------------------
+    # Multipolygon helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _assemble_rings(
+        ways: List[List[Tuple[int, int]]]
+    ) -> List[List[Tuple[int, int]]]:
+        """Join member ways into closed rings.
+
+        A ring of a multipolygon is often split into several ways that
+        share end nodes. Closed ways are taken as they are, open ways are
+        chained by matching end points (either direction). Chains that do
+        not close (incomplete data at the edge of the extract) are dropped.
+        """
+        rings: List[List[Tuple[int, int]]] = []
+        open_ways: List[List[Tuple[int, int]]] = []
+
+        for way in ways:
+            if len(way) < 2:
+                continue
+
+            if way[0] == way[-1]:
+                if len(way) >= 4:
+                    rings.append(list(way))
+            else:
+                open_ways.append(list(way))
+
+        while open_ways:
+            chain = open_ways.pop()
+            progress = True
+
+            while chain[0] != chain[-1] and progress:
+                progress = False
+
+                for i, way in enumerate(open_ways):
+                    if way[0] == chain[-1]:
+                        chain.extend(way[1:])
+                    elif way[-1] == chain[-1]:
+                        chain.extend(reversed(way[:-1]))
+                    elif way[-1] == chain[0]:
+                        chain = way[:-1] + chain
+                    elif way[0] == chain[0]:
+                        chain = list(reversed(way[1:])) + chain
+                    else:
+                        continue
+
+                    open_ways.pop(i)
+                    progress = True
+                    break
+
+            if chain[0] == chain[-1] and len(chain) >= 4:
+                rings.append(chain)
+
+        return rings
+
+    @staticmethod
+    def _point_in_ring(
+        pt: Tuple[int, int],
+        ring: List[Tuple[int, int]]
+    ) -> bool:
+        """Even-odd ray casting test."""
+        x, y = pt
+        inside = False
+        n = len(ring)
+        j = n - 1
+
+        for i in range(n):
+            xi, yi = ring[i]
+            xj, yj = ring[j]
+
+            if (yi > y) != (yj > y):
+                x_cross = xi + (xj - xi) * (y - yi) / (yj - yi)
+
+                if x < x_cross:
+                    inside = not inside
+
+            j = i
+
+        return inside
+
+    @classmethod
+    def _ring_inside(
+        cls,
+        inner: List[Tuple[int, int]],
+        outer: List[Tuple[int, int]]
+    ) -> bool:
+        # An island may touch the outline of the lake at a vertex, so a
+        # single vertex can fall on the border. Several vertices are tried.
+        step = max(1, len(inner) // 4)
+
+        for k in range(0, len(inner) - 1, step):
+            if cls._point_in_ring(inner[k], outer):
+                return True
+
+        return False
+
+    def _member_way_points(
+        self,
+        ref: int
+    ) -> Optional[List[Tuple[int, int]]]:
+        idx = bisect.bisect_left(self.way_cache_ids, ref)
+
+        if idx >= len(self.way_cache_ids) or self.way_cache_ids[idx] != ref:
+            return None
+
+        start_idx = self.way_cache_starts[idx]
+        length = self.way_cache_lengths[idx]
+        flat = self.way_coords_pool[start_idx:start_idx + length * 2]
+
+        return [
+            (flat[i], flat[i + 1])
+            for i in range(0, length * 2, 2)
+        ]
+
+    def _orient_rings(
+        self,
+        outers: List[List[Tuple[int, int]]],
+        inners: List[List[Tuple[int, int]]]
+    ) -> Tuple[List[Tuple[int, int]], List[int]]:
+        """Flatten rings: outers clockwise first, then inners counter-clockwise."""
+        combined: List[Tuple[int, int]] = []
+        parts: List[int] = []
+
+        for ring in outers:
+            ring = list(ring)
+            if not self._is_clockwise(ring):
+                ring.reverse()
+            parts.append(len(combined))
+            combined.extend(ring)
+
+        for ring in inners:
+            ring = list(ring)
+            if self._is_clockwise(ring):
+                ring.reverse()
+            parts.append(len(combined))
+            combined.extend(ring)
+
+        return combined, parts
+
+    def _emit_multipolygon(
+        self,
+        layer: str,
+        osm_id: str,
+        code: int,
+        name: str,
+        lod: int,
+        outers: List[List[Tuple[int, int]]],
+        inners: List[List[Tuple[int, int]]]
+    ) -> Optional[MapFeature]:
+        combined, parts = self._orient_rings(outers, inners)
+
+        # Defensive OSM geometry limit for multipolygons: num_points in the
+        # MLP record is the total over all parts. A multipolygon is not split.
+        if len(combined) > MAX_GEOMETRY_POINTS:
+            self.skipped_oversized_multipolygons += 1
+            return None
+
+        points_bytes = b''.join(
+            struct.pack("<ii", p[0], p[1])
+            for p in combined
+        )
+
+        feature = MapFeature(
+            osm_id=osm_id,
+            code=code,
+            name=name,
+            points=points_bytes,
+            parts=parts,
+            lod=lod
+        )
+
+        feature.calculate_bbox()
+
+        if layer == 'water':
+            self.water.append(feature)
+        else:
+            self.landuse.append(feature)
+
+        return feature
 
     def _process_relation(self, elem: ET.Element) -> None:
         tags = self._extract_tags(elem)
@@ -846,133 +1044,124 @@ class OSMParser:
 
         rule = LookupTables.match_feature(tags)
 
-        if not rule or rule.layer not in ('landuse', 'water'):
+        if rule and rule.layer not in ('landuse', 'water'):
             return
-
-        name = _resolve_name(tags, rule)
-
-        combined_points = []
-        parts = []
-        current_index = 0
-
-        members = list(elem.iterchildren('member'))
-
-        sorted_members = (
-            [
-                m
-                for m in members
-                if m.get('role', 'outer') == 'outer'
-            ]
-            +
-            [
-                m
-                for m in members
-                if m.get('role', 'outer') == 'inner'
-            ]
-        )
-
-        for member in sorted_members:
-            if (
-                member.get('type') == 'way'
-                and member.get('ref') is not None
-            ):
-                try:
-                    ref = int(member.get('ref'))
-                    role = member.get('role', 'outer')
-
-                    idx = bisect.bisect_left(
-                        self.way_cache_ids,
-                        ref
-                    )
-
-                    if (
-                        idx < len(self.way_cache_ids)
-                        and self.way_cache_ids[idx] == ref
-                    ):
-                        # [C-ARRAY UNFLATTENING]:
-                        # Reconstructing geometries at memory-safe speed.
-                        start_idx = self.way_cache_starts[idx]
-                        length = self.way_cache_lengths[idx]
-                        end_idx = start_idx + (length * 2)
-
-                        flat_coords = self.way_coords_pool[
-                            start_idx:end_idx
-                        ]
-
-                        ring_points = [
-                            (
-                                flat_coords[i],
-                                flat_coords[i + 1]
-                            )
-                            for i in range(
-                                0,
-                                length * 2,
-                                2
-                            )
-                        ]
-
-                        if (
-                            len(ring_points) >= 4
-                            and ring_points[0] == ring_points[-1]
-                        ):
-                            is_cw = self._is_clockwise(
-                                ring_points
-                            )
-
-                            if (
-                                role == 'outer'
-                                and not is_cw
-                            ):
-                                ring_points.reverse()
-
-                            elif (
-                                role == 'inner'
-                                and is_cw
-                            ):
-                                ring_points.reverse()
-
-                            parts.append(current_index)
-                            combined_points.extend(ring_points)
-                            current_index += len(ring_points)
-
-                except ValueError:
-                    continue
 
         osm_id = elem.get('id')
 
-        if not combined_points or not parts or not osm_id:
+        if not osm_id:
             return
 
-        # ------------------------------------------------------------------
-        # Defensive OSM geometry limit for multipolygons.
-        #
-        # num_points in the PurrGO MLP geometry record represents the total
-        # number of points in all parts. Therefore the check is performed
-        # after all rings have been flattened into combined_points.
-        #
-        # We deliberately do not split the multipolygon.
-        # ------------------------------------------------------------------
-        if len(combined_points) > MAX_GEOMETRY_POINTS:
-            self.skipped_oversized_multipolygons += 1
+        members = list(elem.iterchildren('member'))
+
+        if rule is None:
+            # Untagged multipolygons are only interesting when the outer way
+            # is a water polygon already emitted (old-style tagging).
+            if not self._water_way_features:
+                return
+
+            if not any(
+                m.get('type') == 'way'
+                and m.get('role') != 'inner'
+                and m.get('ref') in self._water_way_features
+                for m in members
+            ):
+                return
+
+        # Collect member ways. An empty role is an outer ring.
+        outer_ways: List[List[Tuple[int, int]]] = []
+        outer_refs: List[str] = []
+        inner_ways: List[List[Tuple[int, int]]] = []
+
+        for member in members:
+            if member.get('type') != 'way' or member.get('ref') is None:
+                continue
+
+            try:
+                ref = int(member.get('ref'))
+            except ValueError:
+                continue
+
+            way_points = self._member_way_points(ref)
+
+            if way_points is None:
+                continue
+
+            if member.get('role') == 'inner':
+                inner_ways.append(way_points)
+            else:
+                outer_ways.append(way_points)
+                outer_refs.append(member.get('ref'))
+
+        outers = self._assemble_rings(outer_ways)
+
+        if not outers:
+            # No closed outer ring (incomplete data): do not keep islands
+            # alone, they would be filled as ordinary polygons.
             return
 
-        points_bytes = b''.join(
-            struct.pack("<ii", p[0], p[1])
-            for p in combined_points
-        )
+        inners = [
+            ring
+            for ring in self._assemble_rings(inner_ways)
+            if any(self._ring_inside(ring, outer) for outer in outers)
+        ]
 
-        feature = MapFeature(
-            osm_id=osm_id,
-            code=rule.code,
-            name=name,
-            points=points_bytes,
-            parts=parts,
-            lod=rule.lod
-        )
+        if rule is not None:
+            # Tagged relation: one feature with all rings.
+            feature = self._emit_multipolygon(
+                rule.layer,
+                osm_id,
+                rule.code,
+                _resolve_name(tags, rule),
+                rule.lod,
+                outers,
+                inners
+            )
 
-        feature.calculate_bbox()
+            if feature is not None and rule.layer == 'water':
+                for ref in outer_refs:
+                    standalone = self._water_way_features.get(ref)
 
-        if rule.layer == 'water':
-            self.water.append(feature)
-        else:
-            self.landuse.append(feature)
+                    if standalone is not None:
+                        self._superseded_features.add(id(standalone))
+
+            return
+
+        # Old-style multipolygon: the relation carries no tags, they stay
+        # on the outer way. The way was already emitted as a solid polygon;
+        # when the relation adds holes, replace it with a polygon that has
+        # them.
+        if not inners:
+            return
+
+        for ref in outer_refs:
+            standalone = self._water_way_features.get(ref)
+
+            if standalone is None or id(standalone) in self._superseded_features:
+                continue
+
+            own_ring = self._member_way_points(int(ref))
+
+            if own_ring is None or len(own_ring) < 4 or own_ring[0] != own_ring[-1]:
+                continue
+
+            holes = [
+                ring for ring in inners
+                if self._ring_inside(ring, own_ring)
+            ]
+
+            if not holes:
+                continue
+
+            feature = self._emit_multipolygon(
+                'water',
+                standalone.osm_id,
+                standalone.code,
+                standalone.name,
+                standalone.lod,
+                [own_ring],
+                holes
+            )
+
+            if feature is not None:
+                self._superseded_features.add(id(standalone))
