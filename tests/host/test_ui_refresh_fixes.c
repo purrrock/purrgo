@@ -54,13 +54,18 @@ static void feed(const char *body)
 }
 
 /* lat_min - минуты широты 31 град (ddmm.mmmmm), долгота постоянная, курс 0 (на север). */
-static void feed_epoch_lat(double lat_min)
+static void feed_epoch_ll(double lat_min, double lon_min)
 {
     char b[140];
-    snprintf(b, sizeof b, "GPRMC,093015.00,A,31%08.5f,N,03528.39000,E,2.00,0.00,191026,,,A", lat_min);
+    snprintf(b, sizeof b, "GPRMC,093015.00,A,31%08.5f,N,035%08.5f,E,2.00,0.00,191026,,,A", lat_min, lon_min);
     feed(b);
-    snprintf(b, sizeof b, "GPGGA,093015.00,31%08.5f,N,03528.39000,E,1,08,1.1,100.0,M,18.9,M,,", lat_min);
+    snprintf(b, sizeof b, "GPGGA,093015.00,31%08.5f,N,035%08.5f,E,1,08,1.1,100.0,M,18.9,M,,", lat_min, lon_min);
     feed(b);
+}
+
+static void feed_epoch_lat(double lat_min)
+{
+    feed_epoch_ll(lat_min, 28.39000);
 }
 
 static void run_ticks(uint32_t ms)
@@ -196,7 +201,8 @@ static void test_track_segments_not_lost(void)
     for (int k = 1; k <= 24; k++) {
         lat -= 0.004;
         run_ticks(1000);
-        feed_epoch_lat(lat);
+        /* Зигзаг ~6 м поперёк движения: на прямой фильтр трека точек не пишет. */
+        feed_epoch_ll(lat, (k & 1) ? 28.39400 : 28.39000);
         if (k % 3 == 0) {
             purrgo_ui_dirty_mark(UI_DIRTY_SCREEN);
             render(&g);
