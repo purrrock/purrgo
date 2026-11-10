@@ -46,6 +46,17 @@ if(TARGET test_gnss_diag)
         ${PROJECT_SOURCE_DIR}/apps/stm32/common/gnss_diag)
 endif()
 
+# test_gnss_link проверяет поиск скорости UART и смену скорости GNSS-модуля
+# (HAL-независимый модуль прошивки STM32, использует gnss_diag).
+if(TARGET test_gnss_link)
+    target_sources(test_gnss_link PRIVATE
+        ${PROJECT_SOURCE_DIR}/apps/stm32/common/gnss_link/gnss_link.c
+        ${PROJECT_SOURCE_DIR}/apps/stm32/common/gnss_diag/gnss_diag.c)
+    target_include_directories(test_gnss_link PRIVATE
+        ${PROJECT_SOURCE_DIR}/apps/stm32/common/gnss_link
+        ${PROJECT_SOURCE_DIR}/apps/stm32/common/gnss_diag)
+endif()
+
 # test_gnss_pps проверяет статистику импульсов 1PPS (HAL-независимый модуль прошивки STM32).
 if(TARGET test_gnss_pps)
     target_sources(test_gnss_pps PRIVATE

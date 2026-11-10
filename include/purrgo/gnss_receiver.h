@@ -32,6 +32,16 @@ void purrgo_gnss_receiver_configure(purrgo_gnss_tx_fn tx);
 void purrgo_gnss_receiver_configure_ubx(purrgo_gnss_tx_fn tx);
 
 /*
+ * Собирает команду смены скорости UART приёмника на baud бит/с (u-blox M10:
+ * UBX-CFG-VALSET, CFG-UART1-BAUDRATE, слой PURRGO_GNSS_UBX_LAYERS). Отправляет
+ * вызывающий (после передачи нужно выдержать паузу и переключить свой UART).
+ * Возвращает длину кадра; 0, если выбранная модель не умеет менять скорость
+ * (PURRGO_GNSS_RECEIVER_NONE), baud == 0 или кадр не помещается в out
+ * (нужно 20 байт).
+ */
+size_t purrgo_gnss_receiver_build_baud(uint8_t *out, size_t out_size, uint32_t baud);
+
+/*
  * UBX (u-blox M10, интерфейс SPG 5.x).
  *
  * Кадр: B5 62 <class> <id> <len LE16> <payload> <CK_A> <CK_B>, контрольная сумма

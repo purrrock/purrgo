@@ -142,8 +142,44 @@ static void test_configure(void)
 #endif
 }
 
+static void test_build_baud(void)
+{
+    uint8_t out[32];
+
+#if (PURRGO_HW_GNSS_RECEIVER == PURRGO_GNSS_RECEIVER_UBX)
+    /* Эталоны: UBX-CFG-VALSET, слой RAM (PURRGO_GNSS_UBX_LAYERS = 0x01), CFG-UART1-BAUDRATE
+     * (ключ 0x40520001, U4). Контрольная сумма посчитана независимо (Fletcher-8). */
+    static const uint8_t expect_115200[] = {
+        0xB5, 0x62, 0x06, 0x8A, 0x0C, 0x00, 0x00, 0x01, 0x00, 0x00, 0x01, 0x00,
+        0x52, 0x40, 0x00, 0xC2, 0x01, 0x00, 0xF3, 0xA5
+    };
+    static const uint8_t expect_38400[] = {
+        0xB5, 0x62, 0x06, 0x8A, 0x0C, 0x00, 0x00, 0x01, 0x00, 0x00, 0x01, 0x00,
+        0x52, 0x40, 0x00, 0x96, 0x00, 0x00, 0xC6, 0x1F
+    };
+
+    CHECK(PURRGO_GNSS_UBX_LAYERS == 0x01);
+    size_t n = purrgo_gnss_receiver_build_baud(out, sizeof out, 115200U);
+    CHECK(n == sizeof expect_115200);
+    CHECK(memcmp(out, expect_115200, sizeof expect_115200) == 0);
+
+    n = purrgo_gnss_receiver_build_baud(out, sizeof out, 38400U);
+    CHECK(n == sizeof expect_38400);
+    CHECK(memcmp(out, expect_38400, sizeof expect_38400) == 0);
+
+    /* Граница размера и некорректные аргументы. */
+    CHECK(purrgo_gnss_receiver_build_baud(out, 20, 115200U) == 20);
+    CHECK(purrgo_gnss_receiver_build_baud(out, 19, 115200U) == 0);
+    CHECK(purrgo_gnss_receiver_build_baud(NULL, 32, 115200U) == 0);
+    CHECK(purrgo_gnss_receiver_build_baud(out, sizeof out, 0U) == 0);
+#else
+    CHECK(purrgo_gnss_receiver_build_baud(out, sizeof out, 115200U) == 0);
+#endif
+}
+
 int main(void)
 {
+    test_build_baud();
     test_ubx_frame();
     test_ubx_configure();
     test_configure();
