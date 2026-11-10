@@ -123,8 +123,7 @@
  *
  *   U_блока = U_PB1 * (R_TOP + R_BOTTOM) / R_BOTTOM * CAL / 1000
  *
- * R_TOP и R_BOTTOM - фактические сопротивления резисторов (измерить
- * мультиметром). CAL_PERMILLE - поправка в тысячных: сравнить U_блока в логе
+ * R_TOP и R_BOTTOM - фактические сопротивления резисторов. CAL_PERMILLE - поправка в тысячных: сравнить U_блока в логе
  * (PURRGO_LOG_LEVEL >= 3) с мультиметром, CAL = 1000 * U_мультиметр / U_лога.
  */
 #ifndef PURRGO_HW_BATT_DIV_R_TOP_OHM
@@ -184,7 +183,7 @@
  * на железе после 5 сдвигов подряд были видны следы.
  */
 #ifndef PURRGO_MAP_SHIFT_PARTIALS_BEFORE_FULL
-#define PURRGO_MAP_SHIFT_PARTIALS_BEFORE_FULL 2
+#define PURRGO_MAP_SHIFT_PARTIALS_BEFORE_FULL 4
 #endif
 
 /*

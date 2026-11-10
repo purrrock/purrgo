@@ -141,6 +141,12 @@ bool purrgo_fs_replace(const char* src, const char* dst) {
 }
 
 
+bool purrgo_fs_exists(const char* path) {
+    struct stat st;
+    return path != NULL && stat(path, &st) == 0;
+}
+
+
 /*
  * Open a directory.
  *

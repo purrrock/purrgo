@@ -47,6 +47,13 @@ bool purrgo_fs_close(purrgo_file_t* file);
  */
 bool purrgo_fs_replace(const char* src, const char* dst);
 
+/*
+ * true - файл или каталог с таким путём существует. Не открывает файл, не занимает слот
+ * и не пишет в лог ошибок (в отличие от purrgo_fs_open(FS_READ) для проверки наличия).
+ * Любая ошибка доступа трактуется как "не существует".
+ */
+bool purrgo_fs_exists(const char* path);
+
 purrgo_dir_t* purrgo_fs_opendir(const char* path);
 bool purrgo_fs_readdir(purrgo_dir_t* dir, purrgo_fs_dirent_t* dirent);
 void purrgo_fs_closedir(purrgo_dir_t* dir);

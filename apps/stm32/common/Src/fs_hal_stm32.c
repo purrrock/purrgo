@@ -517,6 +517,12 @@ bool purrgo_fs_replace(const char* src, const char* dst) {
     return true;
 }
 
+bool purrgo_fs_exists(const char* path) {
+    if (!path) return false;
+    /* fno == NULL допустим: нужна только проверка наличия, буфер FILINFO на стеке не нужен */
+    return f_stat(path, NULL) == FR_OK;
+}
+
 purrgo_dir_t* purrgo_fs_opendir(const char* path) {
     if (!path) return NULL;
 
