@@ -250,6 +250,11 @@ static void test_map_shift_is_partial_refresh(void)
     app_start(&g, 0);
     for (int i = 0; i < 3; i++) { run_ticks(1000); feed_epoch_lat(33.54000); render(&g); }
 
+    /* Начало отсчёта: полное обновление экрана (в приложении так же: вход на экран карты). */
+    purrgo_app_ui_request_full_refresh();
+    purrgo_ui_dirty_mark(UI_DIRTY_SCREEN);
+    render(&g);
+
     pc_display_stats_reset();
     CHECK(purrgo_map_controller_handle_button(PURRGO_ACTION_LEFT));
     render(&g);
@@ -271,6 +276,25 @@ static void test_map_shift_is_partial_refresh(void)
     CHECK(st.fulls == 0 && st.partials == 1);
 #else
     CHECK(st.fulls == 1);
+#endif
+
+#if PURRGO_MAP_SHIFT_PARTIAL_REFRESH
+    /*
+     * Лимит частичных от сдвигов подряд: после PURRGO_MAP_SHIFT_PARTIALS_BEFORE_FULL
+     * (уже было LEFT и PLUS) очередной сдвиг - полное обновление, затем счёт заново.
+     */
+    CHECK(PURRGO_MAP_SHIFT_PARTIALS_BEFORE_FULL == 2);
+    pc_display_stats_reset();
+    CHECK(purrgo_map_controller_handle_button(PURRGO_ACTION_RIGHT));
+    render(&g);
+    st = pc_display_stats_get();
+    CHECK(st.fulls == 1 && st.partials == 0);
+
+    pc_display_stats_reset();
+    CHECK(purrgo_map_controller_handle_button(PURRGO_ACTION_LEFT));
+    render(&g);
+    st = pc_display_stats_get();
+    CHECK(st.fulls == 0 && st.partials == 1);
 #endif
 
     /* Выход в меню и возврат на карту: смена экрана - полное обновление. */
