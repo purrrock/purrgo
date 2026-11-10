@@ -210,7 +210,7 @@ static void test_track_battery(void)
         purrgo_battery_t b;
         CHECK(purrgo_battery_read(&b) && b.percent == 100);
         CHECK(strstr(t, "xmlns:pg=") != NULL);
-        CHECK(strstr(t, "<extensions><pg:bat>100</pg:bat></extensions>") != NULL);
+        CHECK(strstr(t, "<extensions><pg:bat>100</pg:bat><pg:spd>500</pg:spd></extensions>") != NULL);
         /* <extensions> - последний элемент точки (порядок по схеме GPX 1.1). */
         const char *ext = strstr(t, "<extensions>");
         const char *tm = strstr(t, "<time>");

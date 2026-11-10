@@ -285,8 +285,79 @@ static void test_gpx_matches_ram_track(void)
     }
 }
 
+
+/* Текст GPX последней сессии (закрывает логгер). Вызывающий освобождает результат. */
+static char *finish_and_read(void)
+{
+    char name[64];
+    snprintf(name, sizeof name, "%s", purrgo_logger_get_active_filename());
+    purrgo_logger_stop();
+    uint32_t sz = 0;
+    const uint8_t *d = fake_fs_data(name, &sz);
+    if (!d) { return NULL; }
+    char *t = malloc((size_t)sz + 1u);
+    memcpy(t, d, sz);
+    t[sz] = 0;
+    return t;
+}
+
+static void test_gpx_quality_tags(void)
+{
+    /* Порядок по схеме GPX 1.1: ele, time, fix, sat, hdop, extensions. */
+    purrgo_logger_reset();
+    fake_fs_reset();
+    app_config.tz_offset_minutes = 0;
+    purrgo_gnss_solution_t f = mk(0, 0, 0);
+    f.fix_type = 3; f.fix_quality = 1; f.satellites_tracked = 9; f.hdop_100 = 95; f.speed_knots = 1234;
+    CHECK(purrgo_logger_start(&f) && purrgo_logger_add_point(&f));
+    char *t = finish_and_read();
+    CHECK(t != NULL);
+    if (t) {
+        const char *ele = strstr(t, "<ele>"), *tm = strstr(t, "<time>"), *fx = strstr(t, "<fix>3d</fix>");
+        const char *sat = strstr(t, "<sat>9</sat>"), *hd = strstr(t, "<hdop>0.95</hdop>");
+        const char *ex = strstr(t, "<extensions>");
+        CHECK(ele && tm && fx && sat && hd && ex);
+        CHECK(ele < tm && tm < fx && fx < sat && sat < hd && hd < ex);
+        CHECK(strstr(t, "<pg:spd>1234</pg:spd>") != NULL);
+#if defined(PURRGO_TRACK_DIAG) && PURRGO_TRACK_DIAG
+        CHECK(strstr(t, "pg:rej") != NULL);
+#else
+        CHECK(strstr(t, "pg:rej") == NULL);              /* только в диагностической сборке */
+#endif
+        free(t);
+    }
+
+    /* 2D/DGPS, HDOP >= 10, большие значения не ломают разметку. */
+    purrgo_logger_reset();
+    fake_fs_reset();
+    f = mk(0, 0, 0);
+    f.fix_type = 3; f.fix_quality = 2; f.satellites_tracked = 14; f.hdop_100 = 1005; f.speed_knots = -5;
+    CHECK(purrgo_logger_start(&f));
+    f.hdop_100 = 400;                                    /* HDOP 4.00 проходит фильтр (<= 5.0) */
+    CHECK(purrgo_logger_add_point(&f));
+    t = finish_and_read();
+    if (t) {
+        CHECK(strstr(t, "<fix>dgps</fix>") && strstr(t, "<sat>14</sat>") && strstr(t, "<hdop>4.00</hdop>"));
+        CHECK(strstr(t, "<pg:spd>0</pg:spd>") != NULL);  /* отрицательная скорость -> 0 */
+        free(t);
+    }
+
+    /* Параметры, которых приёмник не присылает (0), не пишутся. */
+    purrgo_logger_reset();
+    fake_fs_reset();
+    f = mk(0, 0, 0);
+    CHECK(purrgo_logger_start(&f) && purrgo_logger_add_point(&f));
+    t = finish_and_read();
+    if (t) {
+        CHECK(!strstr(t, "<fix>") && !strstr(t, "<sat>") && !strstr(t, "<hdop>"));
+        CHECK(strstr(t, "<pg:spd>") != NULL);
+        free(t);
+    }
+}
+
 int main(void)
 {
+    test_gpx_quality_tags();
     test_straight_line_is_thinned();
     test_speed_change_is_not_a_change();
     test_corner_is_recorded();

@@ -64,6 +64,16 @@ else()
 endif()
 add_compile_definitions(PURRGO_LOG_LEVEL=${_purrgo_log_level})
 
+# Диагностическая запись трека для полевой сверки фильтров (см. docs/track-field-test.md):
+# в GPX пишется каждая эпоха GNSS с маской pg:rej (какие фильтры отбросили бы точку).
+# ~0,9 МБ/ч, для штатной работы выключено. Host-тесты рассчитаны на OFF (в ON часть тестов
+# логгера, считающих точки в файле, ожидаемо не проходит: пишутся все эпохи).
+# Пример: cmake --preset stm32u5-release -DPURRGO_TRACK_DIAG=ON
+option(PURRGO_TRACK_DIAG "Track logger diagnostic mode: log every GNSS epoch with filter reasons" OFF)
+if(PURRGO_TRACK_DIAG)
+    add_compile_definitions(PURRGO_TRACK_DIAG=1)
+endif()
+
 # Host-тесты рассчитаны на идеальный делитель батареи 1 МОм + 1 МОм без поправки
 # (см. tests/host/test_power_source.c). Фактические значения под конкретную плату
 # (PURRGO_HW_BATT_DIV_R_*, PURRGO_HW_BATT_CAL_PERMILLE в hardware_config.h) на
