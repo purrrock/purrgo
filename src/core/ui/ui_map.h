@@ -9,4 +9,7 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
 /* Сброс состояния экрана карты (кэш маркера и строки статуса, счётчик повторов) - для тестов. */
 void ui_map_reset(void);
 
+/* Экран обновлён полностью (вход на экран, смена режима, запрос): счётчик частичных сдвигов в ноль. */
+void ui_map_full_refresh_done(void);
+
 #endif // PURRGO_UI_MAP_H

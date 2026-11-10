@@ -814,6 +814,9 @@ static void ui_map_render_overlays(gfx_context_t* gfx, const purrgo_gnss_solutio
 
 static uint8_t s_map_render_attempts = 0;
 
+/* Частичных обновлений от сдвигов карты подряд после последнего полного обновления экрана. */
+static uint8_t s_shift_partials = 0;
+
 void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const purrgo_sun_info_t* sun) {
     (void)sun;  // Currently unused in map view
 
@@ -857,14 +860,20 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
         }
         purrgo_ui_dirty_clear(UI_DIRTY_TRACK);
 #if PURRGO_MAP_SHIFT_PARTIAL_REFRESH
-        /*
-         * Карта перерисована целиком, но на E-Ink уходят только изменившиеся пиксели
-         * (4 gray сравнивает кадр с предыдущим, границы области драйвер игнорирует).
-         * Область нужна, чтобы поставить запрос на обновление и для эмулятора:
-         * строка статуса + окно карты (подсказки кнопок на этом проходе не меняются).
-         */
-        display_refresh_region(0, 0, PURRGO_HW_DISPLAY_WIDTH_PX,
-                               (int16_t)(map_vp.offset_y + map_vp.height));
+        if (s_shift_partials >= PURRGO_MAP_SHIFT_PARTIALS_BEFORE_FULL) {
+            /* Сдвиги меняют почти весь кадр: следы копятся быстрее общего лимита драйвера. */
+            purrgo_app_ui_request_full_refresh();
+        } else {
+            /*
+             * Карта перерисована целиком, но на E-Ink уходят только изменившиеся пиксели
+             * (4 gray сравнивает кадр с предыдущим, границы области драйвер игнорирует).
+             * Область нужна, чтобы поставить запрос на обновление и для эмулятора:
+             * строка статуса + окно карты (подсказки кнопок на этом проходе не меняются).
+             */
+            display_refresh_region(0, 0, PURRGO_HW_DISPLAY_WIDTH_PX,
+                                   (int16_t)(map_vp.offset_y + map_vp.height));
+            s_shift_partials++;
+        }
 #else
         purrgo_app_ui_request_full_refresh();
 #endif
@@ -875,7 +884,12 @@ void ui_render_map(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const
     }
 }
 
+void ui_map_full_refresh_done(void) {
+    s_shift_partials = 0;
+}
+
 void ui_map_reset(void) {
+    s_shift_partials = 0;
     memset(&prev_marker_state, 0, sizeof(prev_marker_state));
     prev_marker_state_valid = false;
     memset(&prev_status_state, 0, sizeof(prev_status_state));

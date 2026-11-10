@@ -298,6 +298,7 @@ void purrgo_app_ui_render(
 
     if (current_state != prev_state || s_full_refresh_requested) {
         display_refresh();
+        ui_map_full_refresh_done();
     } else {
         display_flush();
     }
