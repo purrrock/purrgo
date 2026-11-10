@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Анализ GPX, записанного диагностической сборкой (PURRGO_TRACK_DIAG=1): сверка порогов
-фильтров track_logger.c по реальным данным. См. docs/track-field-test.md.
+фильтров track_logger.c по реальным данным. См. docs/development.md, раздел «Полевой тест фильтров трека».
 
     python3 tools/track-analyze/analyze_diag.py track1.gpx [track2.gpx ...]
     python3 tools/track-analyze/analyze_diag.py track.gpx --from 2026-11-12T08:30 --to 2026-11-12T09:00
