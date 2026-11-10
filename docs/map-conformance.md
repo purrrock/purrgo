@@ -7,7 +7,7 @@ This document defines the conformance requirements for implementations of **Purr
 The normative binary format is defined exclusively in:
 
 ```text
-docs/purrgo_map_specification_v3.md
+docs/map-format-v3.md
 ```
 
 This document does **not** duplicate the binary layout.
@@ -50,7 +50,7 @@ The audit covers:
 All binary-format questions must be resolved against:
 
 ```text
-docs/purrgo_map_specification_v3.md
+docs/map-format-v3.md
 ```
 
 In particular, the following definitions are normative:
@@ -386,7 +386,7 @@ Implementation-specific optimizations are permitted provided that they do not ch
 Any change to the V3 binary representation requires simultaneous review of:
 
 ```text
-docs/purrgo_map_specification_v3.md
+docs/map-format-v3.md
 tools/map-compiler/
 STM32 map parser
 conformance tests

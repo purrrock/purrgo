@@ -6,7 +6,7 @@
 
 /*
  * Перекодировка текста во внутреннюю 8-битную кодировку шрифта PurrGO-256
- * (docs/PurrGO_font_encoding.md, include/purrgo/font5x7.h).
+ * (docs/font-encoding.md, include/purrgo/font5x7.h).
  *
  * Имена файлов и каталогов с SD приходят из FatFs в UTF-8
  * (FF_LFN_UNICODE = 2), а шрифт 5x7 индексируется байтом PurrGO-256, поэтому

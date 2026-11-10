@@ -11,7 +11,7 @@ PurrGO — автономный GNSS-навигатор и трекер без �
 - управление физическими кнопками;
 - хранение данных на microSD.
 
-Подробности программной архитектуры описаны в [`docs/architecture.md`](docs/architecture.md).
+Подробности программной архитектуры описаны в [`docs/architecture.md`](architecture.md).
 
 ---
 
@@ -27,7 +27,7 @@ PurrGO — автономный GNSS-навигатор и трекер без �
 | Хранилище | microSD по SPI2 (в 48-выводном корпусе U585CI нет SDMMC) |
 | Питание | USB 5 В, питание от трёх AA и мониторинг батареи|
 | Ввод | кнопки |
-| Распиновка | [`PurrGO_STM32U585_PINOUT.md`](PurrGO_STM32U585_PINOUT.md) |
+| Распиновка | [`PurrGO_STM32U585_PINOUT.md`](../PurrGO_STM32U585_PINOUT.md) |
 
 ### GNSS
 
@@ -92,7 +92,7 @@ cmake --build --preset stm32u5-release
 `CMAKE_C_FLAGS` или `target_compile_definitions`): `PURRGO_HWTEST_SD_SEQ_SECTORS`, `PURRGO_HWTEST_SD_RANDOM_READS`,
 `PURRGO_HWTEST_SD_START_SECTOR`, `PURRGO_HWTEST_SD_FILE_BYTES`, `PURRGO_HWTEST_SD_FILE` (путь к файлу).
 Частота SPI берётся из `PURRGO_SD_SPI_RUN_PRESCALER` (`sd_card.c`, по умолчанию `/4` = 20 МГц), поэтому сравнение `/8` и `/4`
-делается двумя сборками с разным значением. Результат прогонов на плате: [`docs/SD-speed-test-result.txt`](docs/SD-speed-test-result.txt).
+делается двумя сборками с разным значением. Результат прогонов на плате: [`docs/SD-speed-test-result.txt`](SD-speed-test-result.txt).
 
 ### Проверка дисплея на железе
 
@@ -148,7 +148,7 @@ microSD используется как основное внешнее хран
 ```text
 0:/PURRGO/
     PURRGO.CFG          конфигурация (ключ=значение), пишется атомарно
-    MAPS/<имя карты>/   предкомпилированные карты (каталог выбирается пунктом меню MAP DIR; формат - docs/purrgo_map_specification_v3.md)
+    MAPS/<имя карты>/   предкомпилированные карты (каталог выбирается пунктом меню MAP DIR; формат - docs/map-format-v3.md)
     TRACKS/             записанные треки (GPX)
     ROUTES/             маршруты (GPX)
     WAYPTS/             путевые точки (GPX)
@@ -159,9 +159,9 @@ microSD используется как основное внешнее хран
 
 Путевые точки - GPX-файлы в `/PURRGO/WAYPTS/` (имя файла до 95 символов, расширение `.gpx`). Слой Waypoints (MAP LAYERS) рисует иконкой все `<wpt>` из этих файлов и из выбранного маршрута; одновременно отображается не более 64 точек, первыми берутся точки маршрута. Пункт WAYPOINT > MAP CENTER записывает точку в центре карты в этот каталог (`MPnnnnnn.GPX`) и делает её целью навигации.
 
-Электронные книги - файлы `.PGB` в `/PURRGO/BOOKS/` (в списке до 48 книг, имя файла до 95 байт). Режим чтения включается в главном меню: пункт BOOKS. Формат книг: [`tools/book-compiler/PGB-format.md`](tools/book-compiler/PGB-format.md), описание режима: [`E-books.md`](E-books.md).
+Электронные книги - файлы `.PGB` в `/PURRGO/BOOKS/` (в списке до 48 книг, имя файла до 95 байт). Режим чтения включается в главном меню: пункт BOOKS. Формат книг: [`tools/book-compiler/PGB-format.md`](../tools/book-compiler/PGB-format.md), описание режима: [`docs/e-books.md`](e-books.md).
 
-Формат карт описан в [`docs/purrgo_map_specification_v3.md`](docs/purrgo_map_specification_v3.md).
+Формат карт описан в [`docs/map-format-v3.md`](map-format-v3.md).
 
 ---
 
@@ -218,10 +218,10 @@ microSD используется как основное внешнее хран
 
 | Документ | Назначение |
 |---|---|
-| [`docs/architecture.md`](docs/architecture.md) | Архитектура программного обеспечения |
-| [`docs/purrgo_map_specification_v3.md`](docs/purrgo_map_specification_v3.md) | Формат карт V3 |
-| [`docs/PurrGO Map Format V3 — Binary Format Conformance.md`](docs/PurrGO%20Map%20Format%20V3%20%E2%80%94%20Binary%20Format%20Conformance.md) | Проверка соответствия формату карт |
-| [`tools/map-compiler/README.md`](tools/map-compiler/README.md) | Создание карт для PurrGO |
-| [`PurrGO_STM32U585_PINOUT.md`](PurrGO_STM32U585_PINOUT.md) | Распиновка платы |
-| [`docs/PURRGO_KEYS.md`](docs/PURRGO_KEYS.md) | Назначение кнопок |
-| [`E-books.md`](E-books.md) | Режим чтения книг |
+| [`docs/architecture.md`](architecture.md) | Архитектура программного обеспечения |
+| [`docs/map-format-v3.md`](map-format-v3.md) | Формат карт V3 |
+| [`docs/map-conformance.md`](map-conformance.md) | Проверка соответствия формату карт |
+| [`tools/map-compiler/README.md`](../tools/map-compiler/README.md) | Создание карт для PurrGO |
+| [`PurrGO_STM32U585_PINOUT.md`](../PurrGO_STM32U585_PINOUT.md) | Распиновка платы |
+| [`docs/user-guide.md`](user-guide.md) | Назначение кнопок |
+| [`docs/e-books.md`](e-books.md) | Режим чтения книг |

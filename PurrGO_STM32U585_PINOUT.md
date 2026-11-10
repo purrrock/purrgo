@@ -6,7 +6,7 @@
 ## 1. Контроллер и плата
 
 - MCU: **STM32U585CIU6** (UFQFPN48, вариант без SMPS: питание ядра от внутреннего LDO, на VCAP1 4.7 мкФ). SDMMC в этом корпусе нет.
-- Плата: WeAct STM32U585Cx CoreBoard V3.1. Схема: `docs/STM32U585CIU6/`.
+- Плата: WeAct STM32U585Cx CoreBoard V3.1. Схема: `docs/datasheets/STM32U585CIU6/`.
 - Отладочный интерфейс: ST-LINK, **SWD** (PA13/PA14). Запасной путь прошивки: BOOT0 + системный DFU через USB-C.
 - Отладочный текстовый вывод: USART1 (PA9/PA10).
 - Тактирование (решения D4, D9): **HSI16 → PLL1 → SYSCLK 80 МГц** (M=1, N=10, R=2), Voltage Scaling **Range 2**, HSE и LSE выключены. Кварцы на плате (Y1 32.768 кГц на PC14/PC15, Y2 25 МГц на PH0/PH1) не используются.
@@ -98,7 +98,7 @@ LPDMA1 и Stop 2 пока не используются.
 | RST | 11 / GPIO17 | PB9 | GPIO_Output, `EINK_RST`, High | **FIXED** |
 | BUSY | 18 / GPIO24 | PB2 | GPIO_Input, `EINK_BUSY`, без подтяжки | **FIXED** |
 
-Пины 2 и 4 (5V), I2C (3, 5) и остальные выводы гребёнки не подключаются. Переключатель BS на HAT должен стоять в положении 4-line SPI. Сигналы дисплея сверены с разделом Hardware Connection в `docs/Display_modules/E-Ink/display-e-ink-paper-hat-2n7in-user-manual.pdf`.
+Пины 2 и 4 (5V), I2C (3, 5) и остальные выводы гребёнки не подключаются. Переключатель BS на HAT должен стоять в положении 4-line SPI. Сигналы дисплея сверены с разделом Hardware Connection в `docs/datasheets/Display_modules/E-Ink/display-e-ink-paper-hat-2n7in-user-manual.pdf`.
 
 PB2 на плате подтянут к GND резистором 10 кОм (R3); для BUSY это не мешает, дисплей управляет линией активно.
 
@@ -115,7 +115,7 @@ PB2 на плате подтянут к GND резистором 10 кОм (R3);
 
 - PA0: на плате встроенная кнопка KEY через 330 Ом на GND, **подтяжки к питанию на плате нет**, внутренний Pull-up в CubeMX обязателен. PA0 = `WKUP1` (пробуждение по низкому уровню).
 - PC14/PC15 — выводы LSE (OSC32), на плате установлен кварц Y1 32.768 кГц; LSE в проекте выключен. Кварц не мешает: K3 и K4 читаются (проверено на U585).
-- Код: `apps/stm32/common/Src/buttons.c`, выводы берутся из меток CubeMX `K1_Pin`…`K4_Pin` (`main.h`). Назначение функций — `docs/PURRGO_KEYS.md`.
+- Код: `apps/stm32/common/Src/buttons.c`, выводы берутся из меток CubeMX `K1_Pin`…`K4_Pin` (`main.h`). Назначение функций — `docs/user-guide.md`.
 
 ## 5. Светодиод
 
