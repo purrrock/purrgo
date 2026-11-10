@@ -160,7 +160,7 @@ to the CubeMX project (`apps/stm32/PurrGO_STM32U5/Core/Src/`):
 * microSD + FatFs (`fs_hal_stm32.c` in `common`, `sd_card.c` in the project):
   the card is on SPI2 (the 48-pin package has no SDMMC) with the HAL-free card
   protocol in `common/sd_spi` (host-tested) and FatFs R0.16 in `common/fatfs`
-  (see `docs/SD_SPI_MODE.md`). `fs_hal_stm32.c` keeps a 64-sector LRU cache,
+  (see `docs/hardware.md`, section microSD). `fs_hal_stm32.c` keeps a 64-sector LRU cache,
   builds a FatFs cluster link map (CLMT, fast seek) for read-only files of 256 KB and
   more (map files), and supports an optional per-file read-ahead
   (`purrgo_fs_set_read_ahead`, a single multi-sector SD request per cache miss; the map
@@ -305,7 +305,7 @@ Storage access is performed through a platform abstraction.
 of the last recorded segment (turn), a reversal, a maximum chord length, or a timeout. The tolerances depend
 on the mode (`LOGGER_MODE_STANDARD`, `LOGGER_MODE_EXPEDITION`; `LOGGER_MODE_OFF` disables recording), the
 arithmetic is integer only. Quality filters (fix type, HDOP, satellite count, standing, outliers) are applied
-before that; the values are in `track_logger.c` and `docs/track-field-test.md`. The track shown on the screen is
+before that; the values are in `track_logger.c` and `docs/development.md` (field test of the track filters). The track shown on the screen is
 kept in a RAM ring (`TRACK_RAM_MAX_POINTS`) independently of the file. Points carry `<fix>`, `<sat>`, `<hdop>`
 and battery and speed extensions. The menu item `TRACKER (SCREEN OFF)` records in the expedition mode with the
 display switched off; the way out is the K1+K4 combination (`docs/user-guide.md`).
