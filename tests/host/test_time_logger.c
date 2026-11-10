@@ -108,6 +108,12 @@ static purrgo_gnss_solution_t fixt(uint8_t y, uint8_t mo, uint8_t d, uint8_t h, 
     return f;
 }
 
+/*
+ * Смещение долготы для зигзага ~33 м поперёк движения на север: на прямой фильтр
+ * трека точки не пишет, а тестам, которым нужна запись каждой точки, нужен поворот.
+ */
+static int32_t zz(int i) { return (i & 1) ? 5000 : 0; }
+
 static void test_time_timezone(void)
 {
     purrgo_gnss_solution_t in, out;
@@ -274,19 +280,24 @@ static void test_logger_decimation(void)
     CHECK(purrgo_logger_get_track_point_count() == 3);
     purrgo_logger_stop();
 
-    /* EXPEDITION: 100 м или 900 с. */
+    /*
+     * EXPEDITION: шаг >= 10 м; дальше - только заметное изменение (отклонение >= 10 м,
+     * разворот, хорда >= 1 км) или таймаут 900 с.
+     */
     logger_reset(0);
     purrgo_logger_set_mode(LOGGER_MODE_EXPEDITION);
     f = fixt(26, 10, 19, 12, 0, 0);
     CHECK(purrgo_logger_start(&f) && purrgo_logger_add_point(&f));
-    f = fixt(26, 10, 19, 12, 0, 10); f.lat_1e7 += 5000;             /* ~55 м */
+    f = fixt(26, 10, 19, 12, 0, 5); f.lat_1e7 += 700;               /* ~7,8 м: шум */
     CHECK(!purrgo_logger_add_point(&f));
-    f = fixt(26, 10, 19, 12, 0, 20); f.lat_1e7 += 10000;            /* ~111 м */
-    CHECK(purrgo_logger_add_point(&f));
-    f = fixt(26, 10, 19, 12, 14, 0); f.lat_1e7 += 10000;            /* 13:40 после последней */
+    f = fixt(26, 10, 19, 12, 0, 10); f.lat_1e7 += 5000;             /* ~55 м: направление ещё неизвестно */
+    CHECK(purrgo_logger_add_point(&f));                             /* #2 */
+    f = fixt(26, 10, 19, 12, 0, 20); f.lat_1e7 += 10000;            /* ещё 55 м строго по прямой */
     CHECK(!purrgo_logger_add_point(&f));
-    f = fixt(26, 10, 19, 12, 15, 21); f.lat_1e7 += 10000;           /* > 900 с */
-    CHECK(purrgo_logger_add_point(&f));
+    f = fixt(26, 10, 19, 12, 14, 0); f.lat_1e7 += 10000;            /* 13:50 после последней записи */
+    CHECK(!purrgo_logger_add_point(&f));
+    f = fixt(26, 10, 19, 12, 15, 11); f.lat_1e7 += 10000;           /* > 900 с */
+    CHECK(purrgo_logger_add_point(&f));                             /* #3 */
     purrgo_logger_stop();
     purrgo_logger_set_mode(LOGGER_MODE_STANDARD);
 }
@@ -421,6 +432,7 @@ static void test_logger_ram_ring(void)
     for (int i = 0; i < total; i++) {
         f = fixt(26, 10, 19, 12, 0, (uint8_t)(i % 60));
         f.lat_1e7 = 537000000 + i * 1000;                             /* ~11 м шаг */
+        f.lon_1e7 += zz(i);
         if (purrgo_logger_add_point(&f)) { recorded++; }
     }
     CHECK(recorded == total);
@@ -450,18 +462,18 @@ static void test_logger_sync_cadence(void)
     CHECK(purrgo_logger_start(&f));
     int i;
     for (i = 0; i < 49; i++) {                       /* 49 точек за 49 с: буфер сбрасывался, sync - нет */
-        f = fixt(26, 10, 19, 12, 0, (uint8_t)i); f.lat_1e7 += i * 1000;
+        f = fixt(26, 10, 19, 12, 0, (uint8_t)i); f.lat_1e7 += i * 1000; f.lon_1e7 += zz(i);
         CHECK(purrgo_logger_add_point(&f));
     }
     CHECK(fake_fs_sync_calls() == 0);
-    f = fixt(26, 10, 19, 12, 0, 49); f.lat_1e7 += 49 * 1000;
+    f = fixt(26, 10, 19, 12, 0, 49); f.lat_1e7 += 49 * 1000; f.lon_1e7 += zz(49);
     CHECK(purrgo_logger_add_point(&f));              /* 50-я точка */
     CHECK(fake_fs_sync_calls() == 1);
 
-    f = fixt(26, 10, 19, 12, 1, 20); f.lat_1e7 += 60 * 1000;     /* 31 с после sync */
+    f = fixt(26, 10, 19, 12, 1, 20); f.lat_1e7 += 60 * 1000; f.lon_1e7 += zz(60);    /* 31 с после sync */
     CHECK(purrgo_logger_add_point(&f));
     CHECK(fake_fs_sync_calls() == 1);
-    f = fixt(26, 10, 19, 12, 2, 0); f.lat_1e7 += 61 * 1000;      /* 71 с после sync */
+    f = fixt(26, 10, 19, 12, 2, 0); f.lat_1e7 += 61 * 1000; f.lon_1e7 += zz(61);     /* 71 с после sync */
     CHECK(purrgo_logger_add_point(&f));
     CHECK(fake_fs_sync_calls() == 2);
 
@@ -502,7 +514,7 @@ static void test_logger_reset(void)
     purrgo_logger_stop();
 }
 
-/* Фильтры качества фикса, шума на стоянке, поворотов и выбросов. */
+/* Фильтры качества фикса, шума на стоянке и выбросов. */
 static void test_logger_filters(void)
 {
     purrgo_gnss_solution_t f;
@@ -545,7 +557,7 @@ static void test_logger_filters(void)
     CHECK(!purrgo_logger_add_point(&f));
     f = fixt(26, 10, 19, 12, 0, 1); f.lat_1e7 += 1000;              /* ~11 м, нормальное движение */
     CHECK(purrgo_logger_add_point(&f));
-    f = fixt(26, 10, 19, 12, 0, 1); f.lat_1e7 += 1000 + 4000;       /* ~44 м за тот же момент: dt = 0 -> 1 с */
+    f = fixt(26, 10, 19, 12, 0, 1); f.lat_1e7 += 1000 + 4000; f.lon_1e7 += 5000;   /* ~44 м вперёд и ~33 м вбок за тот же момент: dt = 0 -> 1 с */
     CHECK(purrgo_logger_add_point(&f));
     CHECK(purrgo_logger_get_track_point_count() == 3);
     f = fixt(26, 10, 19, 12, 10, 1); f.lat_1e7 += 5000 + 300000;    /* ~33 км за 600 с = 55 м/с: допустимо */
@@ -591,27 +603,10 @@ static void test_logger_filters(void)
     }
     purrgo_logger_stop();
 
-    /* EXPEDITION: поворот >= 20 градусов при смещении >= 10 м пишется раньше, чем 100 м. */
-    logger_reset(0);
-    purrgo_logger_set_mode(LOGGER_MODE_EXPEDITION);
-    f = fixt(26, 10, 19, 12, 0, 0); f.course_valid = true; f.course_deg_100 = 35000;   /* 350 */
-    CHECK(purrgo_logger_start(&f) && purrgo_logger_add_point(&f));
-    f = fixt(26, 10, 19, 12, 0, 5); f.lat_1e7 += 500;               /* ~5,5 м, курс 350 -> 5 (15 град) */
-    f.course_valid = true; f.course_deg_100 = 500;
-    CHECK(!purrgo_logger_add_point(&f));
-    f = fixt(26, 10, 19, 12, 0, 10); f.lat_1e7 += 1500;             /* ~16,7 м, 350 -> 15 (25 град через 0) */
-    f.course_valid = true; f.course_deg_100 = 1500;
-    CHECK(purrgo_logger_add_point(&f));
-    f = fixt(26, 10, 19, 12, 0, 12); f.lat_1e7 += 1500 + 400;       /* ~4,4 м, курс 15 -> 90: мало смещения */
-    f.course_valid = true; f.course_deg_100 = 9000;
-    CHECK(!purrgo_logger_add_point(&f));
-    f = fixt(26, 10, 19, 12, 0, 14); f.lat_1e7 += 1500 + 1500;      /* ~16,7 м, курс неизвестен */
-    f.course_valid = false;
-    CHECK(!purrgo_logger_add_point(&f));
-    purrgo_logger_stop();
-    purrgo_logger_set_mode(LOGGER_MODE_STANDARD);
-
-    /* STANDARD: критерий поворота не действует. */
+    /*
+     * Курс GNSS в фильтре не участвует: направление берётся из записанных точек
+     * (поворот, разворот и прямая - см. test_track_filter).
+     */
     logger_reset(0);
     f = fixt(26, 10, 19, 12, 0, 0); f.course_valid = true; f.course_deg_100 = 0;
     CHECK(purrgo_logger_start(&f) && purrgo_logger_add_point(&f));
