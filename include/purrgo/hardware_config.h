@@ -59,12 +59,57 @@
 #endif
 
 /*
- * Повторная отправка настройки через столько мс после старта (0 - не
- * повторять). Модуль, запитанный одновременно с МК, может ещё не принимать
- * команды в момент первой отправки; настройка идемпотентна.
+ * Повторная отправка настройки (набор NMEA) через столько мс после установления
+ * связи с модулем (0 - не повторять). Связь установлена, когда от модуля принято
+ * корректное предложение NMEA на рабочей скорости (см. PURRGO_GNSS_BAUD_*);
+ * повтор нужен на случай потерянной команды, настройка идемпотентна.
  */
 #ifndef PURRGO_GNSS_CONFIG_RETRY_MS
 #define PURRGO_GNSS_CONFIG_RETRY_MS 2000
+#endif
+
+/*
+ * Скорость UART связи с GNSS-модулем (только STM32, apps/stm32/common/gnss_link).
+ *
+ * PURRGO_GNSS_BAUD_DEFAULT - скорость модуля после включения (G10A F30: 38400,
+ * настройка слоя RAM пропадает при выключении по EN).
+ * PURRGO_GNSS_BAUD_TARGET  - рабочая скорость. Если она равна DEFAULT, скорость
+ * не меняется, но настройка NMEA всё равно отправляется только после приёма
+ * корректного предложения от модуля.
+ *
+ * Порядок при включении: слушать DEFAULT; при корректном NMEA отправить команду
+ * смены скорости (UBX-CFG-VALSET CFG-UART1-BAUDRATE, слой PURRGO_GNSS_UBX_LAYERS),
+ * переключить UART на TARGET и дождаться NMEA; если NMEA нет - вернуться на
+ * DEFAULT и повторить. Если модуль уже работает на TARGET (сброс МК без
+ * выключения модуля или настройка сохранена в BBR/Flash), он находится слушанием
+ * TARGET. После PURRGO_GNSS_LINK_ATTEMPTS неудач остаётся DEFAULT (или ошибка,
+ * если модуль молчит).
+ *
+ * PURRGO_GNSS_LINK_PROBE_MS - сколько слушать на одной скорости; модуль выдаёт
+ * NMEA раз в секунду, поэтому меньше 1100 мс ставить нельзя.
+ */
+#ifndef PURRGO_GNSS_BAUD_DEFAULT
+#define PURRGO_GNSS_BAUD_DEFAULT 38400U
+#endif
+#ifndef PURRGO_GNSS_BAUD_TARGET
+#define PURRGO_GNSS_BAUD_TARGET 115200U
+#endif
+#ifndef PURRGO_GNSS_LINK_PROBE_MS
+#define PURRGO_GNSS_LINK_PROBE_MS 1300U
+#endif
+#ifndef PURRGO_GNSS_LINK_ATTEMPTS
+#define PURRGO_GNSS_LINK_ATTEMPTS 3U
+#endif
+
+#if (PURRGO_GNSS_BAUD_DEFAULT < 9600U) || (PURRGO_GNSS_BAUD_DEFAULT > 921600U) || \
+    (PURRGO_GNSS_BAUD_TARGET < 9600U) || (PURRGO_GNSS_BAUD_TARGET > 921600U)
+#error "PURRGO_GNSS_BAUD_DEFAULT/TARGET must be in 9600..921600"
+#endif
+#if (PURRGO_GNSS_LINK_PROBE_MS < 1100U)
+#error "PURRGO_GNSS_LINK_PROBE_MS must be >= 1100 (NMEA at 1 Hz)"
+#endif
+#if (PURRGO_GNSS_LINK_ATTEMPTS < 1U)
+#error "PURRGO_GNSS_LINK_ATTEMPTS must be >= 1"
 #endif
 
 

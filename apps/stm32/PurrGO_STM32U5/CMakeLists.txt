@@ -60,9 +60,11 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Core/Src/gnss_io.c
 
     # STM32 system time implementation.
-    # Монитор связи с GNSS (отладочный лог): разбор NMEA + отчёт.
+    # Монитор связи с GNSS (отладочный лог): разбор NMEA + отчёт; gnss_link - поиск скорости UART
+    # и смена скорости модуля.
     ${PURRGO_STM32_COMMON}/gnss_diag/gnss_diag.c
     ${PURRGO_STM32_COMMON}/gnss_pps/gnss_pps.c
+    ${PURRGO_STM32_COMMON}/gnss_link/gnss_link.c
     ${PURRGO_STM32_COMMON}/Src/gnss_monitor.c
 
     ${PURRGO_STM32_COMMON}/Src/system_time.c
@@ -108,6 +110,7 @@ purrgo_sources_warnings(
     Core/Src/gnss_io.c
     ${PURRGO_STM32_COMMON}/gnss_diag/gnss_diag.c
     ${PURRGO_STM32_COMMON}/gnss_pps/gnss_pps.c
+    ${PURRGO_STM32_COMMON}/gnss_link/gnss_link.c
     ${PURRGO_STM32_COMMON}/Src/gnss_monitor.c
     ${PURRGO_STM32_COMMON}/Src/system_time.c
     ${PURRGO_STM32_COMMON}/Src/buttons.c
@@ -132,6 +135,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${PURRGO_STM32_COMMON}/Inc
     ${PURRGO_STM32_COMMON}/gnss_diag
     ${PURRGO_STM32_COMMON}/gnss_pps
+    ${PURRGO_STM32_COMMON}/gnss_link
     ${PURRGO_STM32_COMMON}/sd_spi
     ${PURRGO_STM32_COMMON}/fatfs
 )

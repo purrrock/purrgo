@@ -13,6 +13,7 @@
 
 #include "purrgo/logger.h"
 #include "gnss_monitor.h"
+#include "gnss_link.h"
 
 /*
  * GNSS на STM32U585: LPUART1_RX -> GPDMA1 Channel 0, linked-list в круговом
@@ -26,7 +27,12 @@
  *     пока не используются, при их внедрении изменится только канал и запрос;
  *   - остаток блока читается из CBR1.BNDT (__HAL_DMA_GET_COUNTER); его
  *     семантика для кольцевого буфера соответствует
- *     purrgo_gnss_ring_head_from_ndtr() из gnss_ring.h.
+ *     purrgo_gnss_ring_head_from_ndtr() из gnss_ring.h;
+ *   - скорость UART определяет и меняет gnss_link (apps/stm32/common/gnss_link):
+ *     после включения LPUART1 работает на заводской скорости модуля
+ *     (PURRGO_GNSS_BAUD_DEFAULT, CubeMX: 38400), затем модулю отправляется команда
+ *     смены скорости и LPUART1 переключается на PURRGO_GNSS_BAUD_TARGET.
+ *     Настройка NMEA отправляется только после установления связи.
  */
 
 /*
@@ -35,8 +41,9 @@
  * DMA непрерывно записывает входные байты в этот массив.
  * После достижения конца массива DMA начинает запись с начала.
  *
- * G10A F30 работает на 38400 бод (до 3840 байт/с в пределе); после настройки
- * (GGA, RMC, GSA, 1 Гц) реальный поток - несколько сотен байт/с.
+ * G10A F30 стартует на 38400 бод, рабочая скорость - PURRGO_GNSS_BAUD_TARGET
+ * (115200: до 11520 байт/с в пределе); после настройки (GGA, RMC, GSA, 1 Гц)
+ * реальный поток - несколько сотен байт/с, от скорости линии он не зависит.
  */
 #define GNSS_RX_BUFFER_SIZE 2048U
 
@@ -60,7 +67,8 @@ static uint8_t gnss_rx_buffer[GNSS_RX_BUFFER_SIZE];
  * Условие корректности: потребитель обязан вызывать
  * purrgo_gnss_read_byte() чаще, чем DMA заполняет весь буфер
  * (после настройки приёмника - несколько секунд; при полной загрузке линии
- * 38400 бод - ~0.53 с на 2048 байт).
+ * 38400 бод - ~0.53 с, 115200 бод - ~0.18 с на 2048 байт; фактический поток
+ * при 1 Гц от скорости линии не зависит, она меняет только длительность пачки).
  */
 static purrgo_gnss_ring_t gnss_ring;
 
@@ -79,10 +87,13 @@ static volatile bool gnss_rx_error_flag = false;
 static volatile uint32_t gnss_rx_error_code = 0U;
 
 #if (PURRGO_GNSS_CONFIG_RETRY_MS > 0)
-/* Повторная отправка настройки: модуль мог не успеть загрузиться к первой. */
-static uint32_t gnss_t_init = 0U;
-static bool gnss_cfg_retry_done = false;
+/* Повторная отправка настройки NMEA через PURRGO_GNSS_CONFIG_RETRY_MS после установления связи. */
+static uint32_t gnss_t_cfg = 0U;
+static bool gnss_cfg_retry_pending = false;
 #endif
+
+/* Определение скорости UART и её смена (см. gnss_link.h). */
+static gnss_link_t gnss_link;
 
 /*
  * Последнее достоверное положение producer (индекс следующего байта,
@@ -158,23 +169,36 @@ static bool gnss_dma_setup(void)
 }
 
 /**
- * @brief Отправка байт приёмнику GNSS (транспорт для gnss_receiver).
+ * @brief Отправка байт приёмнику GNSS; возвращается после полной передачи
+ *        (HAL_UART_Transmit ждёт флаг TC).
+ *
+ * @return true при успехе.
  */
-static void gnss_uart_tx(const uint8_t *data, size_t len)
+static bool gnss_tx_raw(const uint8_t *data, size_t len)
 {
     const HAL_StatusTypeDef st =
         HAL_UART_Transmit(&hlpuart1, (uint8_t *)(uintptr_t)data, (uint16_t)len, 1000U);
 
-    if (st == HAL_OK)
+    if (st != HAL_OK)
+    {
+        PURRGO_LOGE("GNSS: TX FAILED (HAL status %d, uart err 0x%lX)\r\n",
+                   (int)st, (unsigned long)hlpuart1.ErrorCode);
+    }
+    return (st == HAL_OK);
+}
+
+/**
+ * @brief Отправка настройки приёмнику GNSS (транспорт для gnss_receiver).
+ */
+static void gnss_uart_tx(const uint8_t *data, size_t len)
+{
+    if (gnss_tx_raw(data, len))
     {
         PURRGO_LOG("GNSS: config sent to module (%u bytes)\r\n", (unsigned)len);
     }
-    else
-    {
-        PURRGO_LOGE("GNSS: config TX FAILED (HAL status %d, uart err 0x%lX)\r\n",
-                   (int)st, (unsigned long)hlpuart1.ErrorCode);
-    }
 }
+
+static void gnss_link_begin(void);
 
 /**
  * @brief Инициализировать приём GNSS через LPUART1.
@@ -207,19 +231,14 @@ void purrgo_gnss_init(void)
     }
 
     /*
-     * 2. Теперь безопасно отправляем конфигурацию. Любые ответы от модуля 
-     * мгновенно и без задержек будут перехвачены работающим контроллером DMA.
-     */
-    /*
+     * 2. Установление связи: определение скорости UART, смена скорости модуля и
+     * только потом настройка NMEA (gnss_link; настройку отправляет link_on_state
+     * после приёма корректного NMEA). Любые ответы модуля мгновенно и без задержек
+     * перехватывает работающий контроллер DMA.
      * Команды настройки приёмника зависят от его модели и вынесены в ядро
      * (gnss_receiver.c, выбор - PURRGO_HW_GNSS_RECEIVER в hardware_config.h).
      */
-    purrgo_gnss_receiver_configure(gnss_uart_tx);
-
-#if (PURRGO_GNSS_CONFIG_RETRY_MS > 0)
-    gnss_t_init = HAL_GetTick();
-    gnss_cfg_retry_done = false;
-#endif
+    gnss_link_begin();
 }
 
 /**
@@ -238,6 +257,10 @@ void purrgo_gnss_power_off(void)
         return;
     }
     gnss_powered = false;
+    gnss_link_stop(&gnss_link);
+#if (PURRGO_GNSS_CONFIG_RETRY_MS > 0)
+    gnss_cfg_retry_pending = false;
+#endif
     purrgo_gnss_monitor_stop();   /* отчёты и счёт 1PPS - только при включённом GNSS */
 
     /* 1. Остановить приём; HAL_UART_AbortReceive() останавливает и DMA. */
@@ -282,7 +305,8 @@ void purrgo_gnss_power_on(void)
     /* 2. LPUART1 заново: MspInit возвращает PA2/PA3 в AF8 (PA3 с подтяжкой). */
     MX_LPUART1_UART_Init();
 
-    /* 3. DMA-приём и настройка приёмника (скорость, набор NMEA). */
+    /* 3. DMA-приём, затем связь с модулем (скорость, набор NMEA). Модуль после EN Low -> High
+     *    снова на заводской скорости (настройка слоя RAM потеряна). */
     gnss_powered = true;
     gnss_last_head = 0U;
     purrgo_gnss_init();
@@ -340,6 +364,142 @@ static bool gnss_rx_restart(void)
     return (HAL_UART_Receive_DMA(&hlpuart1, gnss_rx_buffer, GNSS_RX_BUFFER_SIZE) == HAL_OK);
 }
 
+/*
+ * Колбэки gnss_link. Вызываются из purrgo_gnss_read_byte() (основной цикл), то
+ * есть в том же контексте, что и перезапуск приёма после ошибки UART.
+ */
+
+/* Паузa после команды смены скорости: модуль применяет её не мгновенно. */
+#define GNSS_LINK_SETTLE_MS 100U
+
+/**
+ * @brief Перенастроить LPUART1 на скорость baud и перезапустить приём.
+ *
+ * Порядок: остановить приём (и DMA) -> HAL_UART_Init с новой скоростью ->
+ * сбросить потребителя и флаг ошибки (приём остановлен, прерывание его не
+ * поставит) -> запустить круговой DMA заново с начала буфера.
+ */
+static bool link_set_baud(uint32_t baud, void *ctx)
+{
+    (void)ctx;
+
+    (void)HAL_UART_AbortReceive(&hlpuart1);
+
+    hlpuart1.Init.BaudRate = baud;
+    if (HAL_UART_Init(&hlpuart1) != HAL_OK)
+    {
+        PURRGO_LOGE("GNSS: LPUART1 reinit at %lu baud FAILED\r\n", (unsigned long)baud);
+        return false;
+    }
+
+    gnss_rx_error_flag = false;
+    purrgo_gnss_ring_reset(&gnss_ring);
+    gnss_last_head = 0U;
+
+    if (!gnss_rx_restart())
+    {
+        PURRGO_LOGE("GNSS: RX restart at %lu baud FAILED\r\n", (unsigned long)baud);
+        return false;
+    }
+    return true;
+}
+
+/**
+ * @brief Отправить модулю команду смены скорости (после полной передачи на старой скорости).
+ */
+static bool link_send_baud_cmd(uint32_t baud, void *ctx)
+{
+    uint8_t frame[24];
+    (void)ctx;
+
+    const size_t len = purrgo_gnss_receiver_build_baud(frame, sizeof frame, baud);
+
+    if (len == 0U)
+    {
+        PURRGO_LOGW("GNSS: receiver model cannot change baud rate\r\n");
+        return false;
+    }
+    return gnss_tx_raw(frame, len);
+}
+
+static void link_on_state(gnss_link_state_t state, uint32_t baud, void *ctx)
+{
+    (void)ctx;
+
+    switch (state)
+    {
+    case GNSS_LINK_PROBE:
+        purrgo_gnss_monitor_link(baud, false);
+        PURRGO_LOG("GNSS: listening for NMEA at %lu baud\r\n", (unsigned long)baud);
+        break;
+
+    case GNSS_LINK_SWITCH:
+        PURRGO_LOG("GNSS: NMEA at %lu baud, module -> %lu baud\r\n",
+                   (unsigned long)baud, (unsigned long)PURRGO_GNSS_BAUD_TARGET);
+        break;
+
+    case GNSS_LINK_VERIFY:
+        PURRGO_LOG("GNSS: UART at %lu baud, waiting for NMEA\r\n", (unsigned long)baud);
+        break;
+
+    case GNSS_LINK_READY:
+    case GNSS_LINK_DEGRADED:
+        if (state == GNSS_LINK_READY)
+        {
+            PURRGO_LOG("GNSS: link OK at %lu baud\r\n", (unsigned long)baud);
+        }
+        else
+        {
+            PURRGO_LOGW("GNSS: module did not switch to %lu baud, staying at %lu baud\r\n",
+                       (unsigned long)PURRGO_GNSS_BAUD_TARGET, (unsigned long)baud);
+        }
+        /* Диагностика с нуля на рабочей скорости, затем настройка набора NMEA. */
+        purrgo_gnss_monitor_link(baud, true);
+        purrgo_gnss_receiver_configure(gnss_uart_tx);
+#if (PURRGO_GNSS_CONFIG_RETRY_MS > 0)
+        gnss_t_cfg = HAL_GetTick();
+        gnss_cfg_retry_pending = true;
+#endif
+        break;
+
+    case GNSS_LINK_FAILED:
+        PURRGO_LOGE("GNSS: no NMEA at %lu and %lu baud, link FAILED (UART left at %lu baud)\r\n",
+                   (unsigned long)PURRGO_GNSS_BAUD_DEFAULT, (unsigned long)PURRGO_GNSS_BAUD_TARGET,
+                   (unsigned long)PURRGO_GNSS_BAUD_DEFAULT);
+        /* Монитор объяснит причину (нет данных / не NMEA / неверное подключение). */
+        purrgo_gnss_monitor_link(gnss_link_baud(&gnss_link), true);
+        break;
+
+    case GNSS_LINK_IDLE:
+    default:
+        break;
+    }
+}
+
+/**
+ * @brief Запустить установление связи с модулем (после старта DMA-приёма).
+ */
+static void gnss_link_begin(void)
+{
+#if (PURRGO_HW_GNSS_RECEIVER == PURRGO_GNSS_RECEIVER_NONE)
+    /* Приёмник без команд настройки: скорость не меняется, ждать нечего. */
+    gnss_link_stop(&gnss_link);
+    purrgo_gnss_receiver_configure(gnss_uart_tx);
+#else
+    const gnss_link_cfg_t cfg = {
+        PURRGO_GNSS_BAUD_DEFAULT, PURRGO_GNSS_BAUD_TARGET,
+        PURRGO_GNSS_LINK_PROBE_MS, GNSS_LINK_SETTLE_MS, (uint8_t)PURRGO_GNSS_LINK_ATTEMPTS
+    };
+    const gnss_link_ops_t ops = { link_set_baud, link_send_baud_cmd, link_on_state, NULL };
+
+#if (PURRGO_GNSS_CONFIG_RETRY_MS > 0)
+    gnss_cfg_retry_pending = false;
+#endif
+    gnss_link_init(&gnss_link, &cfg, &ops);
+    gnss_link_start(&gnss_link, HAL_GetTick());
+#endif
+}
+
 /**
  * @brief Забрать байт из кольцевого буфера и показать его монитору связи.
  */
@@ -348,6 +508,7 @@ static bool gnss_pop(uint16_t head, uint8_t *byte)
     if (purrgo_gnss_ring_pop(&gnss_ring, head, byte))
     {
         purrgo_gnss_monitor_feed(*byte);
+        gnss_link_feed(&gnss_link, *byte);
         return true;
     }
     return false;
@@ -377,12 +538,15 @@ bool purrgo_gnss_read_byte(uint8_t *byte)
         return false;
     }
 
+    /* Определение скорости и её смена: таймауты, переходы (после READY отправляется настройка). */
+    gnss_link_poll(&gnss_link, HAL_GetTick());
+
 #if (PURRGO_GNSS_CONFIG_RETRY_MS > 0)
-    /* Повторяем настройку один раз: модуль мог ещё не принимать команды. */
-    if (!gnss_cfg_retry_done &&
-        ((uint32_t)(HAL_GetTick() - gnss_t_init) >= (uint32_t)PURRGO_GNSS_CONFIG_RETRY_MS))
+    /* Повторяем настройку один раз после установления связи: команда могла потеряться. */
+    if (gnss_cfg_retry_pending &&
+        ((uint32_t)(HAL_GetTick() - gnss_t_cfg) >= (uint32_t)PURRGO_GNSS_CONFIG_RETRY_MS))
     {
-        gnss_cfg_retry_done = true;
+        gnss_cfg_retry_pending = false;
         purrgo_gnss_receiver_configure(gnss_uart_tx);
     }
 #endif
@@ -423,8 +587,12 @@ bool purrgo_gnss_read_byte(uint8_t *byte)
         gnss_rx_error_flag = false;
         purrgo_gnss_ring_reset(&gnss_ring);
 
-        PURRGO_LOGE("GNSS RX error 0x%lX (PE=1 NE=2 FE=4 ORE=8 DMA=0x10), restarting RX\r\n",
-                   (unsigned long)gnss_rx_error_code);
+        /* При поиске скорости ошибки кадра ожидаемы (приём на неверной скорости): без лога. */
+        if (!gnss_link_busy(&gnss_link))
+        {
+            PURRGO_LOGE("GNSS RX error 0x%lX (PE=1 NE=2 FE=4 ORE=8 DMA=0x10), restarting RX\r\n",
+                       (unsigned long)gnss_rx_error_code);
+        }
 
         gnss_last_head = 0U;
 

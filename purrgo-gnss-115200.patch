@@ -1,0 +1,1605 @@
+diff --git a/HARDWARE.md b/HARDWARE.md
+index 3989214..d9fc22c 100644
+--- a/HARDWARE.md
++++ b/HARDWARE.md
+@@ -47,7 +47,7 @@ EN
+ - выключение устройства и выход из режима навигатора: GNSS выключается по EN;
+ - ожидание в режиме навигатора: GNSS остаётся включённым и переводится в программный standby или режим энергосбережения (выбор по замерам тока и времени восстановления фикса);
+ - пока GNSS выключен: TX в сторону модуля (PA2) в Low или Analog, подтяжка RX (PA3) отключена;
+-- после каждого включения GNSS настраивается заново (скорость UART, набор предложений NMEA);
++- после каждого включения GNSS настраивается заново: определение скорости UART (38400 → 115200 с откатом, `gnss_link`), затем набор предложений NMEA;
+ - что именно делает EN (питание чипа или сон) и какой старт, холодный или горячий, будет после включения, пока не измерено (см. `TODO.md`);
+ 
+ Питание модуля: 3.3–5 V согласно имеющейся документации на модуль.
+diff --git a/PurrGO_STM32U585_PINOUT.md b/PurrGO_STM32U585_PINOUT.md
+index 4d90bdc..53e9998 100644
+--- a/PurrGO_STM32U585_PINOUT.md
++++ b/PurrGO_STM32U585_PINOUT.md
+@@ -58,7 +58,7 @@ LPDMA1 и Stop 2 пока не используются.
+ | PB0 | 6 (E, EN) | Высокий уровень или не подключен - модуль работает | FIXED |
+ | PA8 | 1 (P, 1PPS) | При наличии фикса ежесекундный сигнал | FIXED |
+ 
+-38400 8N1 (заводская скорость G10A F30). Тактирование LPUART1 — HSI16. Приём: GPDMA1 Channel 0,
++8N1; после включения модуль работает на 38400 (заводская скорость G10A F30, `PURRGO_GNSS_BAUD_DEFAULT`), затем прошивка переводит его и LPUART1 на 115200 (`PURRGO_GNSS_BAUD_TARGET`, `hardware_config.h`; в CubeMX остаётся 38400). Тактирование LPUART1 — HSI16. Приём: GPDMA1 Channel 0,
+ запрос `GPDMA1_REQUEST_LPUART1_RX`, linked-list circular (`gnss_io.c`).
+ 
+ 
+@@ -68,7 +68,7 @@ LPDMA1 и Stop 2 пока не используются.
+ - `GNSS_PPS` (PA8): GPIO_EXTI8, фронт Rising, внутренний Pull-down, чтобы вход не плавал при выключенном GNSS. Импульсы идут при валидном времени (светодиод PPS мигает после 3D-фикса).
+ - Пока GNSS выключен: PA2 (LPUART1_TX, в сторону модуля) в Low (или Analog), на PA3 (LPUART1_RX) подтяжка отключена. Иначе модуль может подпитываться через защитные диоды линий UART, и сброс будет неполным.
+ - В Standby МК состояние выводов не сохраняется (без подтяжек PWR выводы в Hi-Z), поэтому PB0 должен удерживаться в Low подтяжкой PWR, иначе подтяжка модуля включит GNSS. Проверить на железе (см. `TODO.md`, P0 «GNSS»).
+-- После каждого включения GNSS настраивается заново: заводские 38400 → целевая скорость, набор предложений NMEA (см. `TODO.md`).
++- После каждого включения GNSS настраивается заново (`apps/stm32/common/gnss_link`): слушать NMEA на 38400 → команда смены скорости → LPUART1 на 115200 → проверка NMEA → набор предложений NMEA. Если модуль уже на 115200 (сброс одного МК), он находится слушанием 115200; при неудаче остаётся 38400.
+ 
+ ### USART1 — отладочный лог
+ 
+diff --git a/TODO.md b/TODO.md
+index eed93d7..cc8c093 100644
+--- a/TODO.md
++++ b/TODO.md
+@@ -34,6 +34,14 @@
+ - [ ] Тест переполнения: заморозить главный цикл на время, большее заполнения буфера (2048 байт: ~0,53 с при полной загрузке линии 38400, несколько секунд при реальном потоке), убедиться, что восстановление работает (`gnss_rx_error_flag`).
+ - [x] Настроить G10A F30 на минимально необходимый набор предложений и выдачу не чаще одного раза в секунду (UBX-CFG-VALSET: GGA, RMC, GSA, 1 Гц, слой RAM; на плате модуль подтверждает настройку ACK, GLL/GSV/VTG пропали).
+ - [ ] Настроить LPUART1 до 115200 бод или выше (G10A F30 стартует на 38400; потребует смены скорости и в модуле, и в LPUART1).
++  - [x] Код: `apps/stm32/common/gnss_link` (поиск скорости, команда UBX-CFG-VALSET CFG-UART1-BAUDRATE, переключение LPUART1,
++    откат на 38400), `PURRGO_GNSS_BAUD_DEFAULT/TARGET` в `hardware_config.h` (115200), host-тест `test_gnss_link.c`. CubeMX менять не нужно
++    (в `.ioc` остаётся 38400: так LPUART1 стартует после EN High).
++  - [ ] **[HW]** Проверить на G10A F30: в логе `GNSS: link OK at 115200 baud`, затем `config sent`, `UBX replies: ACK`; поток NMEA без ошибок FE/ORE;
++    перезапуск одного МК без выключения модуля (модуль остаётся на 115200, находится слушанием); EN Low → High (модуль снова на 38400);
++    время до первого NMEA после включения.
++  - [ ] **[проверить]** По Interface Description u-blox M10: когда модуль отправляет ACK на команду смены скорости (на старой или новой скорости). Код от этого не зависит
++    (успех смены определяется по NMEA на новой скорости).
+ - [ ] Проверить 1PPS.
+   - [X] **[CubeMX]** PA8: `GPIO_EXTI8`, фронт Rising, Pull-down, метка `GNSS_PPS`, прерывание EXTI8 в NVIC.
+   - [X] **[CubeMX]** Приоритет EXTI8 понижен до preemption 5 (ниже GPDMA1 и LPUART1), PPS не вытесняет приём GNSS.
+@@ -62,11 +70,11 @@
+ - [ ] Автонастройка GNSS после каждого включения (EN High или выход из Standby):
+   - [X] После `purrgo_gnss_power_on()` и при старте отправляется UBX-CFG-VALSET (GGA, RMC, GSA, 1 Гц, слой RAM), одна
+     повторная отправка через `PURRGO_GNSS_CONFIG_RETRY_MS` (2 с); ACK/NAK считает монитор (`gnss_monitor.c`).
+-  - [ ] Ожидание NMEA на 38400 с таймаутом перед отправкой (сейчас команда уходит сразу, без проверки готовности).
+-  - [ ] Отдельной командой скорость UART и переключение LPUART1 на целевую скорость (сейчас `BaudRate = 38400`,
+-    см. пункт про 115200 выше).
+-  - [ ] Проверка потока NMEA и ACK после настройки; при неудаче возврат на 38400 и повтор, при повторной неудаче —
+-    зафиксировать ошибку GNSS (сейчас ACK только пишется в лог, на логику не влияет).
++  - [x] Ожидание NMEA с таймаутом перед отправкой: настройка и смена скорости отправляются только после корректного предложения NMEA (`gnss_link`, `PURRGO_GNSS_LINK_PROBE_MS`).
++  - [x] Отдельной командой скорость UART и переключение LPUART1 на целевую скорость (код готов, проверка на железе - в пункте про 115200 выше).
++  - [x] Проверка потока NMEA после смены скорости; при неудаче возврат на 38400 и повтор (`PURRGO_GNSS_LINK_ATTEMPTS` = 3), затем работа на 38400
++    (`DEGRADED`) или ошибка `FAILED`, если модуль молчит; причина пишется в лог.
++  - [ ] Проверка ACK/NAK на саму настройку набора NMEA: пока только пишется в лог, на логику не влияет; ошибка GNSS в интерфейсе не показывается.
+ 
+ ## microSD (SPI2)
+ 
+diff --git a/apps/stm32/PurrGO_STM32U5/CMakeLists.txt b/apps/stm32/PurrGO_STM32U5/CMakeLists.txt
+index 62dff42..8094070 100644
+--- a/apps/stm32/PurrGO_STM32U5/CMakeLists.txt
++++ b/apps/stm32/PurrGO_STM32U5/CMakeLists.txt
+@@ -60,9 +60,11 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
+     Core/Src/gnss_io.c
+ 
+     # STM32 system time implementation.
+-    # Монитор связи с GNSS (отладочный лог): разбор NMEA + отчёт.
++    # Монитор связи с GNSS (отладочный лог): разбор NMEA + отчёт; gnss_link - поиск скорости UART
++    # и смена скорости модуля.
+     ${PURRGO_STM32_COMMON}/gnss_diag/gnss_diag.c
+     ${PURRGO_STM32_COMMON}/gnss_pps/gnss_pps.c
++    ${PURRGO_STM32_COMMON}/gnss_link/gnss_link.c
+     ${PURRGO_STM32_COMMON}/Src/gnss_monitor.c
+ 
+     ${PURRGO_STM32_COMMON}/Src/system_time.c
+@@ -108,6 +110,7 @@ purrgo_sources_warnings(
+     Core/Src/gnss_io.c
+     ${PURRGO_STM32_COMMON}/gnss_diag/gnss_diag.c
+     ${PURRGO_STM32_COMMON}/gnss_pps/gnss_pps.c
++    ${PURRGO_STM32_COMMON}/gnss_link/gnss_link.c
+     ${PURRGO_STM32_COMMON}/Src/gnss_monitor.c
+     ${PURRGO_STM32_COMMON}/Src/system_time.c
+     ${PURRGO_STM32_COMMON}/Src/buttons.c
+@@ -132,6 +135,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
+     ${PURRGO_STM32_COMMON}/Inc
+     ${PURRGO_STM32_COMMON}/gnss_diag
+     ${PURRGO_STM32_COMMON}/gnss_pps
++    ${PURRGO_STM32_COMMON}/gnss_link
+     ${PURRGO_STM32_COMMON}/sd_spi
+     ${PURRGO_STM32_COMMON}/fatfs
+ )
+diff --git a/apps/stm32/PurrGO_STM32U5/Core/Src/gnss_io.c b/apps/stm32/PurrGO_STM32U5/Core/Src/gnss_io.c
+index f56b2ef..fabe7e7 100644
+--- a/apps/stm32/PurrGO_STM32U5/Core/Src/gnss_io.c
++++ b/apps/stm32/PurrGO_STM32U5/Core/Src/gnss_io.c
+@@ -13,6 +13,7 @@
+ 
+ #include "purrgo/logger.h"
+ #include "gnss_monitor.h"
++#include "gnss_link.h"
+ 
+ /*
+  * GNSS на STM32U585: LPUART1_RX -> GPDMA1 Channel 0, linked-list в круговом
+@@ -26,7 +27,12 @@
+  *     пока не используются, при их внедрении изменится только канал и запрос;
+  *   - остаток блока читается из CBR1.BNDT (__HAL_DMA_GET_COUNTER); его
+  *     семантика для кольцевого буфера соответствует
+- *     purrgo_gnss_ring_head_from_ndtr() из gnss_ring.h.
++ *     purrgo_gnss_ring_head_from_ndtr() из gnss_ring.h;
++ *   - скорость UART определяет и меняет gnss_link (apps/stm32/common/gnss_link):
++ *     после включения LPUART1 работает на заводской скорости модуля
++ *     (PURRGO_GNSS_BAUD_DEFAULT, CubeMX: 38400), затем модулю отправляется команда
++ *     смены скорости и LPUART1 переключается на PURRGO_GNSS_BAUD_TARGET.
++ *     Настройка NMEA отправляется только после установления связи.
+  */
+ 
+ /*
+@@ -35,8 +41,9 @@
+  * DMA непрерывно записывает входные байты в этот массив.
+  * После достижения конца массива DMA начинает запись с начала.
+  *
+- * G10A F30 работает на 38400 бод (до 3840 байт/с в пределе); после настройки
+- * (GGA, RMC, GSA, 1 Гц) реальный поток - несколько сотен байт/с.
++ * G10A F30 стартует на 38400 бод, рабочая скорость - PURRGO_GNSS_BAUD_TARGET
++ * (115200: до 11520 байт/с в пределе); после настройки (GGA, RMC, GSA, 1 Гц)
++ * реальный поток - несколько сотен байт/с, от скорости линии он не зависит.
+  */
+ #define GNSS_RX_BUFFER_SIZE 2048U
+ 
+@@ -60,7 +67,8 @@ static uint8_t gnss_rx_buffer[GNSS_RX_BUFFER_SIZE];
+  * Условие корректности: потребитель обязан вызывать
+  * purrgo_gnss_read_byte() чаще, чем DMA заполняет весь буфер
+  * (после настройки приёмника - несколько секунд; при полной загрузке линии
+- * 38400 бод - ~0.53 с на 2048 байт).
++ * 38400 бод - ~0.53 с, 115200 бод - ~0.18 с на 2048 байт; фактический поток
++ * при 1 Гц от скорости линии не зависит, она меняет только длительность пачки).
+  */
+ static purrgo_gnss_ring_t gnss_ring;
+ 
+@@ -79,11 +87,14 @@ static volatile bool gnss_rx_error_flag = false;
+ static volatile uint32_t gnss_rx_error_code = 0U;
+ 
+ #if (PURRGO_GNSS_CONFIG_RETRY_MS > 0)
+-/* Повторная отправка настройки: модуль мог не успеть загрузиться к первой. */
+-static uint32_t gnss_t_init = 0U;
+-static bool gnss_cfg_retry_done = false;
++/* Повторная отправка настройки NMEA через PURRGO_GNSS_CONFIG_RETRY_MS после установления связи. */
++static uint32_t gnss_t_cfg = 0U;
++static bool gnss_cfg_retry_pending = false;
+ #endif
+ 
++/* Определение скорости UART и её смена (см. gnss_link.h). */
++static gnss_link_t gnss_link;
++
+ /*
+  * Последнее достоверное положение producer (индекс следующего байта,
+  * который запишет DMA). HAL при завершении abort обнуляет CBR1 (чтобы
+@@ -158,24 +169,37 @@ static bool gnss_dma_setup(void)
+ }
+ 
+ /**
+- * @brief Отправка байт приёмнику GNSS (транспорт для gnss_receiver).
++ * @brief Отправка байт приёмнику GNSS; возвращается после полной передачи
++ *        (HAL_UART_Transmit ждёт флаг TC).
++ *
++ * @return true при успехе.
+  */
+-static void gnss_uart_tx(const uint8_t *data, size_t len)
++static bool gnss_tx_raw(const uint8_t *data, size_t len)
+ {
+     const HAL_StatusTypeDef st =
+         HAL_UART_Transmit(&hlpuart1, (uint8_t *)(uintptr_t)data, (uint16_t)len, 1000U);
+ 
+-    if (st == HAL_OK)
++    if (st != HAL_OK)
+     {
+-        PURRGO_LOG("GNSS: config sent to module (%u bytes)\r\n", (unsigned)len);
++        PURRGO_LOGE("GNSS: TX FAILED (HAL status %d, uart err 0x%lX)\r\n",
++                   (int)st, (unsigned long)hlpuart1.ErrorCode);
+     }
+-    else
++    return (st == HAL_OK);
++}
++
++/**
++ * @brief Отправка настройки приёмнику GNSS (транспорт для gnss_receiver).
++ */
++static void gnss_uart_tx(const uint8_t *data, size_t len)
++{
++    if (gnss_tx_raw(data, len))
+     {
+-        PURRGO_LOGE("GNSS: config TX FAILED (HAL status %d, uart err 0x%lX)\r\n",
+-                   (int)st, (unsigned long)hlpuart1.ErrorCode);
++        PURRGO_LOG("GNSS: config sent to module (%u bytes)\r\n", (unsigned)len);
+     }
+ }
+ 
++static void gnss_link_begin(void);
++
+ /**
+  * @brief Инициализировать приём GNSS через LPUART1.
+  */
+@@ -207,19 +231,14 @@ void purrgo_gnss_init(void)
+     }
+ 
+     /*
+-     * 2. Теперь безопасно отправляем конфигурацию. Любые ответы от модуля 
+-     * мгновенно и без задержек будут перехвачены работающим контроллером DMA.
+-     */
+-    /*
++     * 2. Установление связи: определение скорости UART, смена скорости модуля и
++     * только потом настройка NMEA (gnss_link; настройку отправляет link_on_state
++     * после приёма корректного NMEA). Любые ответы модуля мгновенно и без задержек
++     * перехватывает работающий контроллер DMA.
+      * Команды настройки приёмника зависят от его модели и вынесены в ядро
+      * (gnss_receiver.c, выбор - PURRGO_HW_GNSS_RECEIVER в hardware_config.h).
+      */
+-    purrgo_gnss_receiver_configure(gnss_uart_tx);
+-
+-#if (PURRGO_GNSS_CONFIG_RETRY_MS > 0)
+-    gnss_t_init = HAL_GetTick();
+-    gnss_cfg_retry_done = false;
+-#endif
++    gnss_link_begin();
+ }
+ 
+ /**
+@@ -238,6 +257,10 @@ void purrgo_gnss_power_off(void)
+         return;
+     }
+     gnss_powered = false;
++    gnss_link_stop(&gnss_link);
++#if (PURRGO_GNSS_CONFIG_RETRY_MS > 0)
++    gnss_cfg_retry_pending = false;
++#endif
+     purrgo_gnss_monitor_stop();   /* отчёты и счёт 1PPS - только при включённом GNSS */
+ 
+     /* 1. Остановить приём; HAL_UART_AbortReceive() останавливает и DMA. */
+@@ -282,7 +305,8 @@ void purrgo_gnss_power_on(void)
+     /* 2. LPUART1 заново: MspInit возвращает PA2/PA3 в AF8 (PA3 с подтяжкой). */
+     MX_LPUART1_UART_Init();
+ 
+-    /* 3. DMA-приём и настройка приёмника (скорость, набор NMEA). */
++    /* 3. DMA-приём, затем связь с модулем (скорость, набор NMEA). Модуль после EN Low -> High
++     *    снова на заводской скорости (настройка слоя RAM потеряна). */
+     gnss_powered = true;
+     gnss_last_head = 0U;
+     purrgo_gnss_init();
+@@ -340,6 +364,142 @@ static bool gnss_rx_restart(void)
+     return (HAL_UART_Receive_DMA(&hlpuart1, gnss_rx_buffer, GNSS_RX_BUFFER_SIZE) == HAL_OK);
+ }
+ 
++/*
++ * Колбэки gnss_link. Вызываются из purrgo_gnss_read_byte() (основной цикл), то
++ * есть в том же контексте, что и перезапуск приёма после ошибки UART.
++ */
++
++/* Паузa после команды смены скорости: модуль применяет её не мгновенно. */
++#define GNSS_LINK_SETTLE_MS 100U
++
++/**
++ * @brief Перенастроить LPUART1 на скорость baud и перезапустить приём.
++ *
++ * Порядок: остановить приём (и DMA) -> HAL_UART_Init с новой скоростью ->
++ * сбросить потребителя и флаг ошибки (приём остановлен, прерывание его не
++ * поставит) -> запустить круговой DMA заново с начала буфера.
++ */
++static bool link_set_baud(uint32_t baud, void *ctx)
++{
++    (void)ctx;
++
++    (void)HAL_UART_AbortReceive(&hlpuart1);
++
++    hlpuart1.Init.BaudRate = baud;
++    if (HAL_UART_Init(&hlpuart1) != HAL_OK)
++    {
++        PURRGO_LOGE("GNSS: LPUART1 reinit at %lu baud FAILED\r\n", (unsigned long)baud);
++        return false;
++    }
++
++    gnss_rx_error_flag = false;
++    purrgo_gnss_ring_reset(&gnss_ring);
++    gnss_last_head = 0U;
++
++    if (!gnss_rx_restart())
++    {
++        PURRGO_LOGE("GNSS: RX restart at %lu baud FAILED\r\n", (unsigned long)baud);
++        return false;
++    }
++    return true;
++}
++
++/**
++ * @brief Отправить модулю команду смены скорости (после полной передачи на старой скорости).
++ */
++static bool link_send_baud_cmd(uint32_t baud, void *ctx)
++{
++    uint8_t frame[24];
++    (void)ctx;
++
++    const size_t len = purrgo_gnss_receiver_build_baud(frame, sizeof frame, baud);
++
++    if (len == 0U)
++    {
++        PURRGO_LOGW("GNSS: receiver model cannot change baud rate\r\n");
++        return false;
++    }
++    return gnss_tx_raw(frame, len);
++}
++
++static void link_on_state(gnss_link_state_t state, uint32_t baud, void *ctx)
++{
++    (void)ctx;
++
++    switch (state)
++    {
++    case GNSS_LINK_PROBE:
++        purrgo_gnss_monitor_link(baud, false);
++        PURRGO_LOG("GNSS: listening for NMEA at %lu baud\r\n", (unsigned long)baud);
++        break;
++
++    case GNSS_LINK_SWITCH:
++        PURRGO_LOG("GNSS: NMEA at %lu baud, module -> %lu baud\r\n",
++                   (unsigned long)baud, (unsigned long)PURRGO_GNSS_BAUD_TARGET);
++        break;
++
++    case GNSS_LINK_VERIFY:
++        PURRGO_LOG("GNSS: UART at %lu baud, waiting for NMEA\r\n", (unsigned long)baud);
++        break;
++
++    case GNSS_LINK_READY:
++    case GNSS_LINK_DEGRADED:
++        if (state == GNSS_LINK_READY)
++        {
++            PURRGO_LOG("GNSS: link OK at %lu baud\r\n", (unsigned long)baud);
++        }
++        else
++        {
++            PURRGO_LOGW("GNSS: module did not switch to %lu baud, staying at %lu baud\r\n",
++                       (unsigned long)PURRGO_GNSS_BAUD_TARGET, (unsigned long)baud);
++        }
++        /* Диагностика с нуля на рабочей скорости, затем настройка набора NMEA. */
++        purrgo_gnss_monitor_link(baud, true);
++        purrgo_gnss_receiver_configure(gnss_uart_tx);
++#if (PURRGO_GNSS_CONFIG_RETRY_MS > 0)
++        gnss_t_cfg = HAL_GetTick();
++        gnss_cfg_retry_pending = true;
++#endif
++        break;
++
++    case GNSS_LINK_FAILED:
++        PURRGO_LOGE("GNSS: no NMEA at %lu and %lu baud, link FAILED (UART left at %lu baud)\r\n",
++                   (unsigned long)PURRGO_GNSS_BAUD_DEFAULT, (unsigned long)PURRGO_GNSS_BAUD_TARGET,
++                   (unsigned long)PURRGO_GNSS_BAUD_DEFAULT);
++        /* Монитор объяснит причину (нет данных / не NMEA / неверное подключение). */
++        purrgo_gnss_monitor_link(gnss_link_baud(&gnss_link), true);
++        break;
++
++    case GNSS_LINK_IDLE:
++    default:
++        break;
++    }
++}
++
++/**
++ * @brief Запустить установление связи с модулем (после старта DMA-приёма).
++ */
++static void gnss_link_begin(void)
++{
++#if (PURRGO_HW_GNSS_RECEIVER == PURRGO_GNSS_RECEIVER_NONE)
++    /* Приёмник без команд настройки: скорость не меняется, ждать нечего. */
++    gnss_link_stop(&gnss_link);
++    purrgo_gnss_receiver_configure(gnss_uart_tx);
++#else
++    const gnss_link_cfg_t cfg = {
++        PURRGO_GNSS_BAUD_DEFAULT, PURRGO_GNSS_BAUD_TARGET,
++        PURRGO_GNSS_LINK_PROBE_MS, GNSS_LINK_SETTLE_MS, (uint8_t)PURRGO_GNSS_LINK_ATTEMPTS
++    };
++    const gnss_link_ops_t ops = { link_set_baud, link_send_baud_cmd, link_on_state, NULL };
++
++#if (PURRGO_GNSS_CONFIG_RETRY_MS > 0)
++    gnss_cfg_retry_pending = false;
++#endif
++    gnss_link_init(&gnss_link, &cfg, &ops);
++    gnss_link_start(&gnss_link, HAL_GetTick());
++#endif
++}
++
+ /**
+  * @brief Забрать байт из кольцевого буфера и показать его монитору связи.
+  */
+@@ -348,6 +508,7 @@ static bool gnss_pop(uint16_t head, uint8_t *byte)
+     if (purrgo_gnss_ring_pop(&gnss_ring, head, byte))
+     {
+         purrgo_gnss_monitor_feed(*byte);
++        gnss_link_feed(&gnss_link, *byte);
+         return true;
+     }
+     return false;
+@@ -377,12 +538,15 @@ bool purrgo_gnss_read_byte(uint8_t *byte)
+         return false;
+     }
+ 
++    /* Определение скорости и её смена: таймауты, переходы (после READY отправляется настройка). */
++    gnss_link_poll(&gnss_link, HAL_GetTick());
++
+ #if (PURRGO_GNSS_CONFIG_RETRY_MS > 0)
+-    /* Повторяем настройку один раз: модуль мог ещё не принимать команды. */
+-    if (!gnss_cfg_retry_done &&
+-        ((uint32_t)(HAL_GetTick() - gnss_t_init) >= (uint32_t)PURRGO_GNSS_CONFIG_RETRY_MS))
++    /* Повторяем настройку один раз после установления связи: команда могла потеряться. */
++    if (gnss_cfg_retry_pending &&
++        ((uint32_t)(HAL_GetTick() - gnss_t_cfg) >= (uint32_t)PURRGO_GNSS_CONFIG_RETRY_MS))
+     {
+-        gnss_cfg_retry_done = true;
++        gnss_cfg_retry_pending = false;
+         purrgo_gnss_receiver_configure(gnss_uart_tx);
+     }
+ #endif
+@@ -423,8 +587,12 @@ bool purrgo_gnss_read_byte(uint8_t *byte)
+         gnss_rx_error_flag = false;
+         purrgo_gnss_ring_reset(&gnss_ring);
+ 
+-        PURRGO_LOGE("GNSS RX error 0x%lX (PE=1 NE=2 FE=4 ORE=8 DMA=0x10), restarting RX\r\n",
+-                   (unsigned long)gnss_rx_error_code);
++        /* При поиске скорости ошибки кадра ожидаемы (приём на неверной скорости): без лога. */
++        if (!gnss_link_busy(&gnss_link))
++        {
++            PURRGO_LOGE("GNSS RX error 0x%lX (PE=1 NE=2 FE=4 ORE=8 DMA=0x10), restarting RX\r\n",
++                       (unsigned long)gnss_rx_error_code);
++        }
+ 
+         gnss_last_head = 0U;
+ 
+diff --git a/apps/stm32/common/Inc/gnss_monitor.h b/apps/stm32/common/Inc/gnss_monitor.h
+index fb6b760..4db3bcd 100644
+--- a/apps/stm32/common/Inc/gnss_monitor.h
++++ b/apps/stm32/common/Inc/gnss_monitor.h
+@@ -12,6 +12,7 @@
+  * не вмешивается в приём. Отключается макросом PURRGO_GNSS_MONITOR=0.
+  */
+ 
++#include <stdbool.h>
+ #include <stdint.h>
+ 
+ #ifndef PURRGO_GNSS_MONITOR
+@@ -26,6 +27,15 @@ void purrgo_gnss_monitor_init(void);
+ /** @brief Остановить монитор (GNSS выключен): отчёты и подсчёт фронтов 1PPS прекращаются до init. */
+ void purrgo_gnss_monitor_stop(void);
+ 
++/**
++ * @brief Состояние связи с модулем (gnss_link): baud - текущая скорость UART, ready -
++ *        false пока идёт поиск скорости (текстовые отчёты о связи не выводятся, счёт
++ *        1PPS не прерывается), true - связь установлена или поиск закончился неудачей
++ *        (диагностика начинается с нуля на скорости baud).
++ *        Вызывать после purrgo_gnss_init(), purrgo_gnss_monitor_init() их не меняет.
++ */
++void purrgo_gnss_monitor_link(uint32_t baud, bool ready);
++
+ /** @brief Учесть байт, отданный ядру (контекст основного цикла). */
+ void purrgo_gnss_monitor_feed(uint8_t byte);
+ 
+@@ -42,6 +52,7 @@ void purrgo_gnss_monitor_process(void);
+ 
+ static inline void purrgo_gnss_monitor_init(void) {}
+ static inline void purrgo_gnss_monitor_stop(void) {}
++static inline void purrgo_gnss_monitor_link(uint32_t baud, bool ready) { (void)baud; (void)ready; }
+ static inline void purrgo_gnss_monitor_feed(uint8_t byte) { (void)byte; }
+ static inline void purrgo_gnss_monitor_uart_error(uint32_t error_code) { (void)error_code; }
+ static inline void purrgo_gnss_monitor_pps_edge(uint32_t now_ms) { (void)now_ms; }
+diff --git a/apps/stm32/common/Src/gnss_monitor.c b/apps/stm32/common/Src/gnss_monitor.c
+index 2c3815a..0457bc1 100644
+--- a/apps/stm32/common/Src/gnss_monitor.c
++++ b/apps/stm32/common/Src/gnss_monitor.c
+@@ -9,6 +9,7 @@
+ #include "gnss_diag.h"
+ #include "gnss_pps.h"
+ #include "main.h"
++#include "purrgo/hardware_config.h"
+ #include "purrgo/logger.h"
+ 
+ #include <stdbool.h>
+@@ -36,6 +37,10 @@ static uint32_t s_ubx_ack_reported = 0U;
+ static uint32_t s_ubx_nak_reported = 0U;
+ static bool s_last_reported_fix;
+ 
++/* Связь с модулем (gnss_link): скорость UART и признак "поиск скорости закончен". */
++static uint32_t s_baud = PURRGO_GNSS_BAUD_DEFAULT;
++static bool s_link_ready = true;
++
+ void purrgo_gnss_monitor_init(void)
+ {
+     gnss_diag_init(&s_diag);
+@@ -53,6 +58,30 @@ void purrgo_gnss_monitor_init(void)
+     s_started = true;
+ }
+ 
++void purrgo_gnss_monitor_link(uint32_t baud, bool ready)
++{
++    s_baud = baud;
++    s_link_ready = ready;
++    if (!ready)
++    {
++        return;
++    }
++
++    /*
++     * Всё, что пришло во время поиска скорости (мусор на неверной скорости,
++     * ошибки кадра), в диагностику не входит: счётчики с нуля, первый отчёт
++     * через MONITOR_FIRST_REPORT_MS. Время отсчёта s_t_start не меняется:
++     * "FIX after N s" по-прежнему считается от запуска GNSS.
++     */
++    gnss_diag_init(&s_diag);
++    s_bytes_at_last = 0U;
++    s_last_state = GNSS_DIAG_NO_DATA;
++    s_last_reported_fix = false;
++    s_ubx_ack_reported = 0U;
++    s_ubx_nak_reported = 0U;
++    s_t_next = HAL_GetTick() + MONITOR_FIRST_REPORT_MS;
++}
++
+ void purrgo_gnss_monitor_stop(void)
+ {
+     s_started = false;
+@@ -151,6 +180,11 @@ void purrgo_gnss_monitor_process(void)
+ 
+     pps_report(now);
+ 
++    if (!s_link_ready)
++    {
++        return;
++    }
++
+     if ((int32_t)(now - s_t_next) < 0)
+     {
+         return;
+@@ -209,10 +243,11 @@ void purrgo_gnss_monitor_process(void)
+             : (unsigned long)(((uint64_t)s_diag.printable * 100U) / s_diag.bytes);
+ 
+         PURRGO_LOGW("GNSS: NOT NMEA after %lu s: bytes=%lu (+%lu) printable=%lu%% bad=%lu FE=%lu NE=%lu "
+-                   "ORE=%lu. Wrong baud (expected 38400), noise or bad wiring\r\n",
++                   "ORE=%lu. Wrong baud (UART at %lu), noise or bad wiring\r\n",
+                    up_s, (unsigned long)s_diag.bytes, (unsigned long)delta, pct,
+                    (unsigned long)s_diag.sentences_bad, (unsigned long)s_diag.err_fe,
+-                   (unsigned long)s_diag.err_ne, (unsigned long)s_diag.err_ore);
++                   (unsigned long)s_diag.err_ne, (unsigned long)s_diag.err_ore,
++                   (unsigned long)s_baud);
+         break;
+     }
+ 
+diff --git a/apps/stm32/common/gnss_link/gnss_link.c b/apps/stm32/common/gnss_link/gnss_link.c
+new file mode 100644
+index 0000000..e0a9722
+--- /dev/null
++++ b/apps/stm32/common/gnss_link/gnss_link.c
+@@ -0,0 +1,234 @@
++/*
++ * Установление связи с GNSS-модулем: определение скорости UART и смена скорости.
++ * См. gnss_link.h.
++ */
++
++#include "gnss_link.h"
++
++#include <stddef.h>
++
++#define PROBED_DEFAULT 0x01U
++#define PROBED_TARGET  0x02U
++
++static uint8_t probed_bit(const gnss_link_t *l, uint32_t baud)
++{
++    return (baud == l->cfg.default_baud) ? PROBED_DEFAULT : PROBED_TARGET;
++}
++
++static bool elapsed(const gnss_link_t *l, uint32_t now_ms, uint32_t ms)
++{
++    return (uint32_t)(now_ms - l->t0) >= ms;
++}
++
++static void notify(gnss_link_t *l)
++{
++    if (l->ops.on_state != NULL)
++    {
++        l->ops.on_state(l->state, l->baud, l->ops.ctx);
++    }
++}
++
++/* Итоговое состояние. FAILED и DEGRADED оставляют UART на заводской скорости. */
++static void finish(gnss_link_t *l, gnss_link_state_t state)
++{
++    if ((state != GNSS_LINK_READY) && (l->baud != l->cfg.default_baud))
++    {
++        (void)l->ops.set_baud(l->cfg.default_baud, l->ops.ctx);
++        l->baud = l->cfg.default_baud;
++    }
++    l->state = state;
++    notify(l);
++}
++
++/* Слушать на скорости baud. Ошибка перенастройки UART - сразу FAILED. */
++static void enter_probe(gnss_link_t *l, uint32_t baud, uint32_t now_ms)
++{
++    if (!l->ops.set_baud(baud, l->ops.ctx))
++    {
++        l->state = GNSS_LINK_FAILED;
++        notify(l);
++        return;
++    }
++    l->baud = baud;
++    l->probed |= probed_bit(l, baud);
++    gnss_diag_init(&l->diag);
++    l->t0 = now_ms;
++    l->state = GNSS_LINK_PROBE;
++    notify(l);
++}
++
++void gnss_link_init(gnss_link_t *l, const gnss_link_cfg_t *cfg, const gnss_link_ops_t *ops)
++{
++    if ((l == NULL) || (cfg == NULL) || (ops == NULL))
++    {
++        return;
++    }
++    l->cfg = *cfg;
++    l->ops = *ops;
++    l->state = GNSS_LINK_IDLE;
++    l->baud = cfg->default_baud;
++    l->t0 = 0U;
++    l->probed = 0U;
++    l->cycles = 0U;
++    l->switch_tries = 0U;
++    gnss_diag_init(&l->diag);
++}
++
++void gnss_link_start(gnss_link_t *l, uint32_t now_ms)
++{
++    if ((l == NULL) || (l->ops.set_baud == NULL) || (l->ops.send_baud_cmd == NULL))
++    {
++        return;
++    }
++    l->probed = 0U;
++    l->cycles = 0U;
++    l->switch_tries = 0U;
++    enter_probe(l, l->cfg.default_baud, now_ms);
++}
++
++void gnss_link_stop(gnss_link_t *l)
++{
++    if (l != NULL)
++    {
++        l->state = GNSS_LINK_IDLE;
++    }
++}
++
++void gnss_link_feed(gnss_link_t *l, uint8_t byte)
++{
++    if ((l == NULL) ||
++        ((l->state != GNSS_LINK_PROBE) && (l->state != GNSS_LINK_VERIFY)))
++    {
++        return;
++    }
++    gnss_diag_feed(&l->diag, byte);
++}
++
++static void poll_probe(gnss_link_t *l, uint32_t now_ms)
++{
++    if (l->diag.sentences_ok != 0U)
++    {
++        if (l->baud == l->cfg.target_baud)
++        {
++            finish(l, GNSS_LINK_READY);
++            return;
++        }
++
++        /* Модуль на заводской скорости, рабочая другая: сменить скорость. */
++        if ((l->switch_tries >= l->cfg.attempts) ||
++            !l->ops.send_baud_cmd(l->cfg.target_baud, l->ops.ctx))
++        {
++            finish(l, GNSS_LINK_DEGRADED);
++            return;
++        }
++        l->switch_tries++;
++        l->t0 = now_ms;
++        l->state = GNSS_LINK_SWITCH;
++        notify(l);
++        return;
++    }
++
++    if (!elapsed(l, now_ms, l->cfg.probe_ms))
++    {
++        return;
++    }
++
++    /* Тишина на этой скорости: попробовать другую; обе без ответа - цикл закончен. */
++    const uint32_t other = (l->baud == l->cfg.default_baud) ? l->cfg.target_baud
++                                                              : l->cfg.default_baud;
++
++    if ((l->probed & probed_bit(l, other)) == 0U)
++    {
++        enter_probe(l, other, now_ms);
++        return;
++    }
++
++    l->cycles++;
++    if (l->cycles >= l->cfg.attempts)
++    {
++        finish(l, GNSS_LINK_FAILED);
++        return;
++    }
++    l->probed = 0U;
++    enter_probe(l, l->cfg.default_baud, now_ms);
++}
++
++void gnss_link_poll(gnss_link_t *l, uint32_t now_ms)
++{
++    if (l == NULL)
++    {
++        return;
++    }
++
++    switch (l->state)
++    {
++    case GNSS_LINK_PROBE:
++        poll_probe(l, now_ms);
++        break;
++
++    case GNSS_LINK_SWITCH:
++        if (elapsed(l, now_ms, l->cfg.settle_ms))
++        {
++            if (!l->ops.set_baud(l->cfg.target_baud, l->ops.ctx))
++            {
++                l->state = GNSS_LINK_FAILED;
++                notify(l);
++                break;
++            }
++            l->baud = l->cfg.target_baud;
++            gnss_diag_init(&l->diag);
++            l->t0 = now_ms;
++            l->state = GNSS_LINK_VERIFY;
++            notify(l);
++        }
++        break;
++
++    case GNSS_LINK_VERIFY:
++        if (l->diag.sentences_ok != 0U)
++        {
++            finish(l, GNSS_LINK_READY);
++        }
++        else if (elapsed(l, now_ms, l->cfg.probe_ms))
++        {
++            /* Модуль не заговорил на новой скорости: назад на заводскую. */
++            l->probed = 0U;
++            enter_probe(l, l->cfg.default_baud, now_ms);
++        }
++        break;
++
++    default:
++        break;
++    }
++}
++
++gnss_link_state_t gnss_link_state(const gnss_link_t *l)
++{
++    return (l != NULL) ? l->state : GNSS_LINK_IDLE;
++}
++
++uint32_t gnss_link_baud(const gnss_link_t *l)
++{
++    return (l != NULL) ? l->baud : 0U;
++}
++
++bool gnss_link_busy(const gnss_link_t *l)
++{
++    return (l != NULL) &&
++           ((l->state == GNSS_LINK_PROBE) || (l->state == GNSS_LINK_SWITCH) ||
++            (l->state == GNSS_LINK_VERIFY));
++}
++
++const char *gnss_link_state_name(gnss_link_state_t state)
++{
++    switch (state)
++    {
++    case GNSS_LINK_IDLE:     return "IDLE";
++    case GNSS_LINK_PROBE:    return "PROBE";
++    case GNSS_LINK_SWITCH:   return "SWITCH";
++    case GNSS_LINK_VERIFY:   return "VERIFY";
++    case GNSS_LINK_READY:    return "READY";
++    case GNSS_LINK_DEGRADED: return "DEGRADED";
++    case GNSS_LINK_FAILED:   return "FAILED";
++    default:                 return "?";
++    }
++}
+diff --git a/apps/stm32/common/gnss_link/gnss_link.h b/apps/stm32/common/gnss_link/gnss_link.h
+new file mode 100644
+index 0000000..26a93cd
+--- /dev/null
++++ b/apps/stm32/common/gnss_link/gnss_link.h
+@@ -0,0 +1,117 @@
++#ifndef PURRGO_GNSS_LINK_H
++#define PURRGO_GNSS_LINK_H
++
++/*
++ * Установление связи с GNSS-модулем: определение скорости UART и переход с
++ * заводской скорости модуля на рабочую.
++ *
++ * Модуль после включения работает на заводской скорости (G10A F30: 38400), а
++ * после сброса одного МК (без выключения модуля) может оставаться на рабочей.
++ * Алгоритм (все ожидания - без блокировки, по gnss_link_poll()):
++ *
++ *   PROBE   слушать на одной скорости probe_ms; корректное предложение NMEA
++ *           (верная контрольная сумма) - модуль найден.
++ *             * это рабочая скорость            -> READY;
++ *             * это заводская, рабочая другая   -> отправить команду смены
++ *               скорости, SWITCH;
++ *             * тишина                          -> другая скорость (рабочая
++ *               после заводской и наоборот); обе без ответа - новый цикл.
++ *   SWITCH  пауза settle_ms, чтобы модуль применил скорость, затем UART на
++ *           рабочую скорость.
++ *   VERIFY  слушать на рабочей скорости; NMEA есть -> READY; нет -> вернуться
++ *           на заводскую (PROBE): модуль не переключился, команду можно
++ *           повторить.
++ *   READY     связь на рабочей скорости (можно отправлять настройку NMEA);
++ *   DEGRADED  модуль отвечает, но не переключается (после attempts команд):
++ *             работа на заводской скорости;
++ *   FAILED    модуль молчит на обеих скоростях attempts циклов подряд: UART
++ *             остаётся на заводской скорости (диагностика - gnss_monitor).
++ *
++ * Модуль не зависит от HAL и ядра PurrGO: UART и команды приёмника подключаются
++ * функциями (gnss_link_ops_t), поэтому логика проверяется host-тестом
++ * (tests/host/test_gnss_link.c). Все функции вызываются из основного цикла.
++ */
++
++#include <stdbool.h>
++#include <stddef.h>
++#include <stdint.h>
++
++#include "gnss_diag.h"
++
++typedef enum
++{
++    GNSS_LINK_IDLE = 0,   /* не запущен (GNSS выключен) */
++    GNSS_LINK_PROBE,
++    GNSS_LINK_SWITCH,
++    GNSS_LINK_VERIFY,
++    GNSS_LINK_READY,
++    GNSS_LINK_DEGRADED,
++    GNSS_LINK_FAILED
++} gnss_link_state_t;
++
++typedef struct
++{
++    /* Перенастроить UART на скорость и перезапустить приём; false - ошибка железа. */
++    bool (*set_baud)(uint32_t baud, void *ctx);
++    /*
++     * Отправить модулю команду смены скорости на baud; вернуться после полной
++     * передачи. false - команду отправить нельзя (модель не умеет, ошибка TX).
++     */
++    bool (*send_baud_cmd)(uint32_t baud, void *ctx);
++    /* Смена состояния; baud - скорость UART в этом состоянии. Может быть NULL. */
++    void (*on_state)(gnss_link_state_t state, uint32_t baud, void *ctx);
++    void *ctx;
++} gnss_link_ops_t;
++
++typedef struct
++{
++    uint32_t default_baud;   /* заводская скорость модуля */
++    uint32_t target_baud;    /* рабочая скорость (может совпадать с default_baud) */
++    uint32_t probe_ms;       /* сколько слушать на одной скорости (>= 1100 при 1 Гц) */
++    uint32_t settle_ms;      /* пауза после команды смены скорости */
++    uint8_t attempts;        /* попыток смены скорости и циклов поиска (>= 1) */
++} gnss_link_cfg_t;
++
++typedef struct
++{
++    gnss_link_cfg_t cfg;
++    gnss_link_ops_t ops;
++    gnss_link_state_t state;
++    uint32_t baud;           /* текущая скорость UART */
++    uint32_t t0;             /* начало текущего ожидания, мс */
++    uint8_t probed;          /* скорости, прослушанные в этом цикле (1 - заводская, 2 - рабочая) */
++    uint8_t cycles;          /* циклов поиска без ответа */
++    uint8_t switch_tries;    /* отправленных команд смены скорости */
++    gnss_diag_t diag;        /* разбор NMEA, пока идёт поиск */
++} gnss_link_t;
++
++/** @brief Подготовить структуру (состояние IDLE). */
++void gnss_link_init(gnss_link_t *l, const gnss_link_cfg_t *cfg, const gnss_link_ops_t *ops);
++
++/**
++ * @brief Начать поиск: UART на заводскую скорость, слушать. Вызывать после
++ *        включения модуля (EN в High) и запуска приёма.
++ */
++void gnss_link_start(gnss_link_t *l, uint32_t now_ms);
++
++/** @brief Остановить (GNSS выключен): состояние IDLE, байты игнорируются. */
++void gnss_link_stop(gnss_link_t *l);
++
++/** @brief Учесть принятый байт (только PROBE и VERIFY, иначе сразу возврат). */
++void gnss_link_feed(gnss_link_t *l, uint8_t byte);
++
++/** @brief Продвинуть автомат (таймауты, переходы). Вызывать из основного цикла. */
++void gnss_link_poll(gnss_link_t *l, uint32_t now_ms);
++
++gnss_link_state_t gnss_link_state(const gnss_link_t *l);
++
++/** @brief Текущая скорость UART. */
++uint32_t gnss_link_baud(const gnss_link_t *l);
++
++/** @brief true, пока идёт поиск или смена скорости (PROBE, SWITCH, VERIFY). */
++bool gnss_link_busy(const gnss_link_t *l);
++
++/** @brief Имя состояния для лога. */
++const char *gnss_link_state_name(gnss_link_state_t state);
++
++#endif /* PURRGO_GNSS_LINK_H */
+diff --git a/include/purrgo/gnss_receiver.h b/include/purrgo/gnss_receiver.h
+index 78d2ee4..33553e4 100644
+--- a/include/purrgo/gnss_receiver.h
++++ b/include/purrgo/gnss_receiver.h
+@@ -31,6 +31,16 @@ void purrgo_gnss_receiver_configure(purrgo_gnss_tx_fn tx);
+ /* Реализация для u-blox M10 (всегда доступна, в том числе для host-тестов). */
+ void purrgo_gnss_receiver_configure_ubx(purrgo_gnss_tx_fn tx);
+ 
++/*
++ * Собирает команду смены скорости UART приёмника на baud бит/с (u-blox M10:
++ * UBX-CFG-VALSET, CFG-UART1-BAUDRATE, слой PURRGO_GNSS_UBX_LAYERS). Отправляет
++ * вызывающий (после передачи нужно выдержать паузу и переключить свой UART).
++ * Возвращает длину кадра; 0, если выбранная модель не умеет менять скорость
++ * (PURRGO_GNSS_RECEIVER_NONE), baud == 0 или кадр не помещается в out
++ * (нужно 20 байт).
++ */
++size_t purrgo_gnss_receiver_build_baud(uint8_t *out, size_t out_size, uint32_t baud);
++
+ /*
+  * UBX (u-blox M10, интерфейс SPG 5.x).
+  *
+diff --git a/include/purrgo/hardware_config.h b/include/purrgo/hardware_config.h
+index 21c19cb..dd2e9c9 100644
+--- a/include/purrgo/hardware_config.h
++++ b/include/purrgo/hardware_config.h
+@@ -59,14 +59,59 @@
+ #endif
+ 
+ /*
+- * Повторная отправка настройки через столько мс после старта (0 - не
+- * повторять). Модуль, запитанный одновременно с МК, может ещё не принимать
+- * команды в момент первой отправки; настройка идемпотентна.
++ * Повторная отправка настройки (набор NMEA) через столько мс после установления
++ * связи с модулем (0 - не повторять). Связь установлена, когда от модуля принято
++ * корректное предложение NMEA на рабочей скорости (см. PURRGO_GNSS_BAUD_*);
++ * повтор нужен на случай потерянной команды, настройка идемпотентна.
+  */
+ #ifndef PURRGO_GNSS_CONFIG_RETRY_MS
+ #define PURRGO_GNSS_CONFIG_RETRY_MS 2000
+ #endif
+ 
++/*
++ * Скорость UART связи с GNSS-модулем (только STM32, apps/stm32/common/gnss_link).
++ *
++ * PURRGO_GNSS_BAUD_DEFAULT - скорость модуля после включения (G10A F30: 38400,
++ * настройка слоя RAM пропадает при выключении по EN).
++ * PURRGO_GNSS_BAUD_TARGET  - рабочая скорость. Если она равна DEFAULT, скорость
++ * не меняется, но настройка NMEA всё равно отправляется только после приёма
++ * корректного предложения от модуля.
++ *
++ * Порядок при включении: слушать DEFAULT; при корректном NMEA отправить команду
++ * смены скорости (UBX-CFG-VALSET CFG-UART1-BAUDRATE, слой PURRGO_GNSS_UBX_LAYERS),
++ * переключить UART на TARGET и дождаться NMEA; если NMEA нет - вернуться на
++ * DEFAULT и повторить. Если модуль уже работает на TARGET (сброс МК без
++ * выключения модуля или настройка сохранена в BBR/Flash), он находится слушанием
++ * TARGET. После PURRGO_GNSS_LINK_ATTEMPTS неудач остаётся DEFAULT (или ошибка,
++ * если модуль молчит).
++ *
++ * PURRGO_GNSS_LINK_PROBE_MS - сколько слушать на одной скорости; модуль выдаёт
++ * NMEA раз в секунду, поэтому меньше 1100 мс ставить нельзя.
++ */
++#ifndef PURRGO_GNSS_BAUD_DEFAULT
++#define PURRGO_GNSS_BAUD_DEFAULT 38400U
++#endif
++#ifndef PURRGO_GNSS_BAUD_TARGET
++#define PURRGO_GNSS_BAUD_TARGET 115200U
++#endif
++#ifndef PURRGO_GNSS_LINK_PROBE_MS
++#define PURRGO_GNSS_LINK_PROBE_MS 1300U
++#endif
++#ifndef PURRGO_GNSS_LINK_ATTEMPTS
++#define PURRGO_GNSS_LINK_ATTEMPTS 3U
++#endif
++
++#if (PURRGO_GNSS_BAUD_DEFAULT < 9600U) || (PURRGO_GNSS_BAUD_DEFAULT > 921600U) || \
++    (PURRGO_GNSS_BAUD_TARGET < 9600U) || (PURRGO_GNSS_BAUD_TARGET > 921600U)
++#error "PURRGO_GNSS_BAUD_DEFAULT/TARGET must be in 9600..921600"
++#endif
++#if (PURRGO_GNSS_LINK_PROBE_MS < 1100U)
++#error "PURRGO_GNSS_LINK_PROBE_MS must be >= 1100 (NMEA at 1 Hz)"
++#endif
++#if (PURRGO_GNSS_LINK_ATTEMPTS < 1U)
++#error "PURRGO_GNSS_LINK_ATTEMPTS must be >= 1"
++#endif
++
+ 
+ /*
+  * ============================================================================
+diff --git a/src/core/gnss_receiver.c b/src/core/gnss_receiver.c
+index 2e779dd..c36e666 100644
+--- a/src/core/gnss_receiver.c
++++ b/src/core/gnss_receiver.c
+@@ -96,7 +96,8 @@ size_t purrgo_ubx_build_valset(uint8_t *out, size_t out_size, uint8_t layers,
+  * Interface Description (раздел Configuration defaults).
+  *
+  * Оставляем GGA, GSA и RMC (их разбирает gnss_adapter.c), GLL, GSV и VTG
+- * выключаем: меньше трафика UART и работы разбора. Скорость UART не меняется.
++ * выключаем: меньше трафика UART и работы разбора. Скорость UART меняет отдельная
++ * команда (purrgo_gnss_receiver_build_baud), её отправляет gnss_link.
+  */
+ #define UBX_KEY_RATE_MEAS            0x30210001U  /* U2, мс */
+ #define UBX_KEY_RATE_NAV             0x30210002U  /* U2, циклов измерения на решение */
+@@ -136,6 +137,32 @@ void purrgo_gnss_receiver_configure_ubx(purrgo_gnss_tx_fn tx)
+     tx(frame, len);
+ }
+ 
++/*
++ * Смена скорости UART1 модуля: UBX-CFG-VALSET с ключом CFG-UART1-BAUDRATE
++ * (U4, бит/с). Слой - PURRGO_GNSS_UBX_LAYERS (по умолчанию RAM: после
++ * выключения по EN модуль снова стартует на заводской скорости).
++ * Подтверждение (ACK) модуль может отправить уже на новой скорости, поэтому
++ * успех смены определяется по NMEA на новой скорости (gnss_link), а не по ACK.
++ */
++#define UBX_KEY_UART1_BAUDRATE       0x40520001U  /* U4, бит/с */
++
++size_t purrgo_gnss_receiver_build_baud(uint8_t *out, size_t out_size, uint32_t baud)
++{
++#if (PURRGO_HW_GNSS_RECEIVER == PURRGO_GNSS_RECEIVER_UBX)
++    const purrgo_ubx_cfg_item_t item = { UBX_KEY_UART1_BAUDRATE, baud };
++
++    if (baud == 0U) {
++        return 0U;
++    }
++    return purrgo_ubx_build_valset(out, out_size, (uint8_t)PURRGO_GNSS_UBX_LAYERS, &item, 1U);
++#else
++    (void)out;
++    (void)out_size;
++    (void)baud;
++    return 0U;
++#endif
++}
++
+ void purrgo_gnss_receiver_configure(purrgo_gnss_tx_fn tx)
+ {
+ #if (PURRGO_HW_GNSS_RECEIVER == PURRGO_GNSS_RECEIVER_UBX)
+diff --git a/tests/host/CMakeLists.txt b/tests/host/CMakeLists.txt
+index 6c38f30..fa4addf 100644
+--- a/tests/host/CMakeLists.txt
++++ b/tests/host/CMakeLists.txt
+@@ -46,6 +46,17 @@ if(TARGET test_gnss_diag)
+         ${PROJECT_SOURCE_DIR}/apps/stm32/common/gnss_diag)
+ endif()
+ 
++# test_gnss_link проверяет поиск скорости UART и смену скорости GNSS-модуля
++# (HAL-независимый модуль прошивки STM32, использует gnss_diag).
++if(TARGET test_gnss_link)
++    target_sources(test_gnss_link PRIVATE
++        ${PROJECT_SOURCE_DIR}/apps/stm32/common/gnss_link/gnss_link.c
++        ${PROJECT_SOURCE_DIR}/apps/stm32/common/gnss_diag/gnss_diag.c)
++    target_include_directories(test_gnss_link PRIVATE
++        ${PROJECT_SOURCE_DIR}/apps/stm32/common/gnss_link
++        ${PROJECT_SOURCE_DIR}/apps/stm32/common/gnss_diag)
++endif()
++
+ # test_gnss_pps проверяет статистику импульсов 1PPS (HAL-независимый модуль прошивки STM32).
+ if(TARGET test_gnss_pps)
+     target_sources(test_gnss_pps PRIVATE
+diff --git a/tests/host/run.sh b/tests/host/run.sh
+index 472327f..007edea 100644
+--- a/tests/host/run.sh
++++ b/tests/host/run.sh
+@@ -53,6 +53,9 @@ for t in tests/host/test_*.c; do
+             extra="apps/stm32/common/gnss_diag/gnss_diag.c -Iapps/stm32/common/gnss_diag" ;;
+         test_gnss_pps)
+             extra="apps/stm32/common/gnss_pps/gnss_pps.c -Iapps/stm32/common/gnss_pps" ;;
++        test_gnss_link)
++            extra="apps/stm32/common/gnss_link/gnss_link.c apps/stm32/common/gnss_diag/gnss_diag.c \
++                -Iapps/stm32/common/gnss_link -Iapps/stm32/common/gnss_diag" ;;
+         test_display_eink)
+             if [ ! -f $EPD/src/epd4g.c ]; then echo "== $name"; echo "SKIP (нет сабмодуля eink_part_refresh)"; continue; fi
+             extra="apps/stm32/common/Src/display_eink.c $EPD/src/epd4g.c $EPD/src/epd4g_fb.c \
+diff --git a/tests/host/test_gnss_link.c b/tests/host/test_gnss_link.c
+new file mode 100644
+index 0000000..8fad62a
+--- /dev/null
++++ b/tests/host/test_gnss_link.c
+@@ -0,0 +1,453 @@
++/*
++ * Host-тест установления связи с GNSS (apps/stm32/common/gnss_link): поиск скорости
++ * UART, смена скорости модуля и откат. Модуль и UART моделируются: модуль раз в
++ * секунду выдаёт предложение NMEA на своей скорости; если скорость UART другая,
++ * в автомат приходит мусор (как при неверной скорости).
++ */
++#include <stdbool.h>
++#include <stdint.h>
++#include <stdio.h>
++#include <string.h>
++
++#include "gnss_link.h"
++#include "test_common.h"
++
++#define DEF_BAUD 38400U
++#define TGT_BAUD 115200U
++#define STEP_MS  10U
++
++typedef struct
++{
++    /* Модель модуля. */
++    uint32_t module_baud;     /* 0 - модуль молчит (нет питания / не подключён) */
++    uint32_t boot_ms;         /* с этого момента выдаёт NMEA раз в секунду */
++    int ignore_cmds;          /* сколько первых команд смены скорости модуль не применит */
++    bool bad_checksum;        /* предложения с неверной контрольной суммой */
++    /* Модель платформы. */
++    bool can_send;            /* send_baud_cmd возвращает true */
++    bool fail_set_baud;       /* set_baud возвращает false */
++    uint32_t uart_baud;
++    int set_calls;
++    int cmds;
++    uint32_t last_cmd_baud;
++    /* Журнал состояний. */
++    gnss_link_state_t states[32];
++    uint32_t state_baud[32];
++    int n_states;
++} sim_t;
++
++static bool op_set_baud(uint32_t baud, void *ctx)
++{
++    sim_t *s = (sim_t *)ctx;
++
++    s->set_calls++;
++    if (s->fail_set_baud)
++    {
++        return false;
++    }
++    s->uart_baud = baud;
++    return true;
++}
++
++static bool op_send_baud_cmd(uint32_t baud, void *ctx)
++{
++    sim_t *s = (sim_t *)ctx;
++
++    if (!s->can_send)
++    {
++        return false;
++    }
++    s->cmds++;
++    s->last_cmd_baud = baud;
++    if (s->ignore_cmds > 0)
++    {
++        s->ignore_cmds--;
++    }
++    else if (s->module_baud != 0U)
++    {
++        s->module_baud = baud;
++    }
++    return true;
++}
++
++static void op_on_state(gnss_link_state_t st, uint32_t baud, void *ctx)
++{
++    sim_t *s = (sim_t *)ctx;
++
++    if (s->n_states < 32)
++    {
++        s->states[s->n_states] = st;
++        s->state_baud[s->n_states] = baud;
++        s->n_states++;
++    }
++}
++
++static void feed_sentence(gnss_link_t *l, const char *body, bool bad_checksum)
++{
++    uint8_t x = 0U;
++    char tail[8];
++
++    gnss_link_feed(l, (uint8_t)'$');
++    for (const char *p = body; *p != '\0'; p++)
++    {
++        gnss_link_feed(l, (uint8_t)*p);
++        x ^= (uint8_t)*p;
++    }
++    if (bad_checksum)
++    {
++        x ^= 0x55U;
++    }
++    (void)snprintf(tail, sizeof tail, "*%02X\r\n", (unsigned)x);
++    for (const char *p = tail; *p != '\0'; p++)
++    {
++        gnss_link_feed(l, (uint8_t)*p);
++    }
++}
++
++/* Выдача модуля за один шаг моделирования. */
++static void module_step(sim_t *s, gnss_link_t *l, uint32_t t)
++{
++    if ((s->module_baud == 0U) || (t < s->boot_ms) || (((t - s->boot_ms) % 1000U) != 0U))
++    {
++        return;
++    }
++    if (s->uart_baud == s->module_baud)
++    {
++        feed_sentence(l, "GNGGA,123519.00,5354.1234,N,02734.5678,E,1,08,0.9,200.0,M,25.0,M,,", s->bad_checksum);
++        feed_sentence(l, "GNRMC,123519.00,A,5354.1234,N,02734.5678,E,0.0,0.0,090126,,,A", s->bad_checksum);
++    }
++    else
++    {
++        for (unsigned i = 0U; i < 60U; i++)    /* мусор при неверной скорости */
++        {
++            gnss_link_feed(l, (uint8_t)(0x80U | ((i * 37U) & 0x7FU)));
++        }
++    }
++}
++
++static bool terminal(gnss_link_state_t st)
++{
++    return (st == GNSS_LINK_READY) || (st == GNSS_LINK_DEGRADED) || (st == GNSS_LINK_FAILED);
++}
++
++static void make_link(gnss_link_t *l, sim_t *s, uint32_t def, uint32_t tgt)
++{
++    const gnss_link_cfg_t cfg = { def, tgt, 1300U, 100U, 3U };
++    const gnss_link_ops_t ops = { op_set_baud, op_send_baud_cmd, op_on_state, s };
++
++    gnss_link_init(l, &cfg, &ops);
++}
++
++/* Моделирование до терминального состояния или limit_ms; возвращает время, мс. */
++static uint32_t run(sim_t *s, gnss_link_t *l, uint32_t start_ms, uint32_t limit_ms)
++{
++    uint32_t t = start_ms;
++
++    gnss_link_start(l, t);
++    while ((t - start_ms) < limit_ms && !terminal(gnss_link_state(l)))
++    {
++        t += STEP_MS;
++        module_step(s, l, t);
++        gnss_link_poll(l, t);
++    }
++    return t - start_ms;
++}
++
++static void test_fresh_module(void)
++{
++    sim_t s;
++    gnss_link_t l;
++
++    memset(&s, 0, sizeof s);
++    s.module_baud = DEF_BAUD;
++    s.boot_ms = 300U;
++    s.can_send = true;
++    make_link(&l, &s, DEF_BAUD, TGT_BAUD);
++
++    const uint32_t t = run(&s, &l, 0U, 20000U);
++
++    CHECK(gnss_link_state(&l) == GNSS_LINK_READY);
++    CHECK(gnss_link_baud(&l) == TGT_BAUD);
++    CHECK(s.uart_baud == TGT_BAUD);
++    CHECK(s.module_baud == TGT_BAUD);
++    CHECK(s.cmds == 1);
++    CHECK(s.last_cmd_baud == TGT_BAUD);
++    CHECK(t < 2500U);
++    CHECK(!gnss_link_busy(&l));
++
++    /* Последовательность: PROBE(38400) -> SWITCH -> VERIFY(115200) -> READY(115200). */
++    CHECK(s.n_states == 4);
++    CHECK(s.states[0] == GNSS_LINK_PROBE && s.state_baud[0] == DEF_BAUD);
++    CHECK(s.states[1] == GNSS_LINK_SWITCH);
++    CHECK(s.states[2] == GNSS_LINK_VERIFY && s.state_baud[2] == TGT_BAUD);
++    CHECK(s.states[3] == GNSS_LINK_READY && s.state_baud[3] == TGT_BAUD);
++}
++
++static void test_module_already_at_target(void)
++{
++    sim_t s;
++    gnss_link_t l;
++
++    memset(&s, 0, sizeof s);
++    s.module_baud = TGT_BAUD;     /* сброс МК без выключения модуля */
++    s.boot_ms = 0U;
++    s.can_send = true;
++    make_link(&l, &s, DEF_BAUD, TGT_BAUD);
++
++    const uint32_t t = run(&s, &l, 0U, 20000U);
++
++    CHECK(gnss_link_state(&l) == GNSS_LINK_READY);
++    CHECK(s.uart_baud == TGT_BAUD);
++    CHECK(s.cmds == 0);           /* команда смены скорости не нужна */
++    CHECK(t < 3500U);
++}
++
++static void test_late_boot(void)
++{
++    sim_t s;
++    gnss_link_t l;
++
++    memset(&s, 0, sizeof s);
++    s.module_baud = DEF_BAUD;
++    s.boot_ms = 2200U;            /* первый цикл поиска ничего не слышит */
++    s.can_send = true;
++    make_link(&l, &s, DEF_BAUD, TGT_BAUD);
++
++    run(&s, &l, 0U, 20000U);
++
++    CHECK(gnss_link_state(&l) == GNSS_LINK_READY);
++    CHECK(s.uart_baud == TGT_BAUD);
++    CHECK(s.cmds == 1);
++}
++
++static void test_lost_first_command(void)
++{
++    sim_t s;
++    gnss_link_t l;
++
++    memset(&s, 0, sizeof s);
++    s.module_baud = DEF_BAUD;
++    s.boot_ms = 300U;
++    s.can_send = true;
++    s.ignore_cmds = 1;            /* первая команда потеряна */
++    make_link(&l, &s, DEF_BAUD, TGT_BAUD);
++
++    run(&s, &l, 0U, 20000U);
++
++    CHECK(gnss_link_state(&l) == GNSS_LINK_READY);
++    CHECK(s.cmds == 2);
++    CHECK(s.uart_baud == TGT_BAUD);
++}
++
++static void test_module_never_switches(void)
++{
++    sim_t s;
++    gnss_link_t l;
++
++    memset(&s, 0, sizeof s);
++    s.module_baud = DEF_BAUD;
++    s.boot_ms = 300U;
++    s.can_send = true;
++    s.ignore_cmds = 1000;
++    make_link(&l, &s, DEF_BAUD, TGT_BAUD);
++
++    run(&s, &l, 0U, 30000U);
++
++    CHECK(gnss_link_state(&l) == GNSS_LINK_DEGRADED);
++    CHECK(s.cmds == 3);                 /* attempts */
++    CHECK(s.uart_baud == DEF_BAUD);     /* работа на заводской скорости */
++    CHECK(gnss_link_baud(&l) == DEF_BAUD);
++}
++
++static void test_receiver_cannot_switch(void)
++{
++    sim_t s;
++    gnss_link_t l;
++
++    memset(&s, 0, sizeof s);
++    s.module_baud = DEF_BAUD;
++    s.boot_ms = 300U;
++    s.can_send = false;                 /* модель приёмника без смены скорости */
++    make_link(&l, &s, DEF_BAUD, TGT_BAUD);
++
++    run(&s, &l, 0U, 20000U);
++
++    CHECK(gnss_link_state(&l) == GNSS_LINK_DEGRADED);
++    CHECK(s.cmds == 0);
++    CHECK(s.uart_baud == DEF_BAUD);
++}
++
++static void test_silent_module(void)
++{
++    sim_t s;
++    gnss_link_t l;
++
++    memset(&s, 0, sizeof s);
++    s.module_baud = 0U;                 /* модуль не отвечает */
++    s.can_send = true;
++    make_link(&l, &s, DEF_BAUD, TGT_BAUD);
++
++    const uint32_t t = run(&s, &l, 0U, 30000U);
++
++    CHECK(gnss_link_state(&l) == GNSS_LINK_FAILED);
++    CHECK(s.uart_baud == DEF_BAUD);     /* UART оставлен на заводской скорости */
++    CHECK(s.cmds == 0);                 /* команд не отправляли */
++    CHECK(t >= 3U * 2U * 1300U);        /* 3 цикла по две скорости */
++    CHECK(t <= 3U * 2U * 1300U + 100U);
++}
++
++static void test_bad_checksum_is_not_nmea(void)
++{
++    sim_t s;
++    gnss_link_t l;
++
++    memset(&s, 0, sizeof s);
++    s.module_baud = DEF_BAUD;
++    s.boot_ms = 0U;
++    s.bad_checksum = true;              /* поток похож на NMEA, но контрольная сумма неверна */
++    s.can_send = true;
++    make_link(&l, &s, DEF_BAUD, TGT_BAUD);
++
++    run(&s, &l, 0U, 30000U);
++
++    CHECK(gnss_link_state(&l) == GNSS_LINK_FAILED);
++    CHECK(s.cmds == 0);
++}
++
++static void test_same_baud(void)
++{
++    sim_t s;
++    gnss_link_t l;
++
++    memset(&s, 0, sizeof s);
++    s.module_baud = DEF_BAUD;
++    s.boot_ms = 300U;
++    s.can_send = true;
++    make_link(&l, &s, DEF_BAUD, DEF_BAUD);    /* скорость не меняется */
++
++    run(&s, &l, 0U, 20000U);
++
++    CHECK(gnss_link_state(&l) == GNSS_LINK_READY);
++    CHECK(gnss_link_baud(&l) == DEF_BAUD);
++    CHECK(s.cmds == 0);
++    CHECK(s.set_calls == 1);
++
++    /* Молчащий модуль при одинаковых скоростях: FAILED, без зацикливания. */
++    memset(&s, 0, sizeof s);
++    s.can_send = true;
++    make_link(&l, &s, DEF_BAUD, DEF_BAUD);
++    run(&s, &l, 0U, 30000U);
++    CHECK(gnss_link_state(&l) == GNSS_LINK_FAILED);
++}
++
++static void test_set_baud_failure(void)
++{
++    sim_t s;
++    gnss_link_t l;
++
++    memset(&s, 0, sizeof s);
++    s.module_baud = DEF_BAUD;
++    s.can_send = true;
++    s.fail_set_baud = true;
++    make_link(&l, &s, DEF_BAUD, TGT_BAUD);
++
++    run(&s, &l, 0U, 1000U);
++
++    CHECK(gnss_link_state(&l) == GNSS_LINK_FAILED);
++    CHECK(s.cmds == 0);
++}
++
++static void test_stop_and_restart(void)
++{
++    sim_t s;
++    gnss_link_t l;
++
++    memset(&s, 0, sizeof s);
++    s.module_baud = DEF_BAUD;
++    s.boot_ms = 300U;
++    s.can_send = true;
++    make_link(&l, &s, DEF_BAUD, TGT_BAUD);
++
++    run(&s, &l, 0U, 20000U);
++    CHECK(gnss_link_state(&l) == GNSS_LINK_READY);
++
++    /* Выключение GNSS: IDLE, байты и poll игнорируются. */
++    gnss_link_stop(&l);
++    CHECK(gnss_link_state(&l) == GNSS_LINK_IDLE);
++    gnss_link_feed(&l, 0x24U);
++    gnss_link_poll(&l, 100000U);
++    CHECK(gnss_link_state(&l) == GNSS_LINK_IDLE);
++    CHECK(!gnss_link_busy(&l));
++
++    /* Модуль после EN Low -> High снова на заводской скорости. */
++    s.module_baud = DEF_BAUD;
++    s.boot_ms = 100000U + 300U;
++    s.cmds = 0;
++    s.n_states = 0;
++    run(&s, &l, 100000U, 20000U);
++    CHECK(gnss_link_state(&l) == GNSS_LINK_READY);
++    CHECK(s.cmds == 1);
++    CHECK(s.uart_baud == TGT_BAUD);
++}
++
++static void test_null_args(void)
++{
++    gnss_link_init(NULL, NULL, NULL);
++    gnss_link_start(NULL, 0U);
++    gnss_link_stop(NULL);
++    gnss_link_feed(NULL, 0U);
++    gnss_link_poll(NULL, 0U);
++    CHECK(gnss_link_state(NULL) == GNSS_LINK_IDLE);
++    CHECK(gnss_link_baud(NULL) == 0U);
++    CHECK(!gnss_link_busy(NULL));
++    CHECK(strcmp(gnss_link_state_name(GNSS_LINK_READY), "READY") == 0);
++}
++
++static void test_time_wrap(void)
++{
++    sim_t s;
++    gnss_link_t l;
++
++    memset(&s, 0, sizeof s);
++    s.module_baud = DEF_BAUD;
++    s.boot_ms = 0xFFFFFFFFU - 500U;           /* таймер HAL_GetTick() переполняется во время поиска */
++    s.can_send = true;
++    make_link(&l, &s, DEF_BAUD, TGT_BAUD);
++
++    /* module_step сравнивает t с boot_ms без переполнения: сдвигаем начало к границе. */
++    uint32_t t = 0xFFFFFFFFU - 1000U;
++    gnss_link_start(&l, t);
++    for (int i = 0; i < 1000 && !terminal(gnss_link_state(&l)); i++)
++    {
++        t += STEP_MS;
++        /* выдача раз в секунду от начала */
++        if (((t - (0xFFFFFFFFU - 1000U)) % 1000U) == 300U)
++        {
++            if (s.uart_baud == s.module_baud)
++            {
++                feed_sentence(&l, "GNGGA,1,2,3", false);
++            }
++        }
++        gnss_link_poll(&l, t);
++    }
++    CHECK(gnss_link_state(&l) == GNSS_LINK_READY);
++    CHECK(s.uart_baud == TGT_BAUD);
++}
++
++int main(void)
++{
++    test_fresh_module();
++    test_module_already_at_target();
++    test_late_boot();
++    test_lost_first_command();
++    test_module_never_switches();
++    test_receiver_cannot_switch();
++    test_silent_module();
++    test_bad_checksum_is_not_nmea();
++    test_same_baud();
++    test_set_baud_failure();
++    test_stop_and_restart();
++    test_null_args();
++    test_time_wrap();
++    return test_finish("test_gnss_link");
++}
+diff --git a/tests/host/test_gnss_receiver.c b/tests/host/test_gnss_receiver.c
+index 86f10e3..43737ab 100644
+--- a/tests/host/test_gnss_receiver.c
++++ b/tests/host/test_gnss_receiver.c
+@@ -142,8 +142,44 @@ static void test_configure(void)
+ #endif
+ }
+ 
++static void test_build_baud(void)
++{
++    uint8_t out[32];
++
++#if (PURRGO_HW_GNSS_RECEIVER == PURRGO_GNSS_RECEIVER_UBX)
++    /* Эталоны: UBX-CFG-VALSET, слой RAM (PURRGO_GNSS_UBX_LAYERS = 0x01), CFG-UART1-BAUDRATE
++     * (ключ 0x40520001, U4). Контрольная сумма посчитана независимо (Fletcher-8). */
++    static const uint8_t expect_115200[] = {
++        0xB5, 0x62, 0x06, 0x8A, 0x0C, 0x00, 0x00, 0x01, 0x00, 0x00, 0x01, 0x00,
++        0x52, 0x40, 0x00, 0xC2, 0x01, 0x00, 0xF3, 0xA5
++    };
++    static const uint8_t expect_38400[] = {
++        0xB5, 0x62, 0x06, 0x8A, 0x0C, 0x00, 0x00, 0x01, 0x00, 0x00, 0x01, 0x00,
++        0x52, 0x40, 0x00, 0x96, 0x00, 0x00, 0xC6, 0x1F
++    };
++
++    CHECK(PURRGO_GNSS_UBX_LAYERS == 0x01);
++    size_t n = purrgo_gnss_receiver_build_baud(out, sizeof out, 115200U);
++    CHECK(n == sizeof expect_115200);
++    CHECK(memcmp(out, expect_115200, sizeof expect_115200) == 0);
++
++    n = purrgo_gnss_receiver_build_baud(out, sizeof out, 38400U);
++    CHECK(n == sizeof expect_38400);
++    CHECK(memcmp(out, expect_38400, sizeof expect_38400) == 0);
++
++    /* Граница размера и некорректные аргументы. */
++    CHECK(purrgo_gnss_receiver_build_baud(out, 20, 115200U) == 20);
++    CHECK(purrgo_gnss_receiver_build_baud(out, 19, 115200U) == 0);
++    CHECK(purrgo_gnss_receiver_build_baud(NULL, 32, 115200U) == 0);
++    CHECK(purrgo_gnss_receiver_build_baud(out, sizeof out, 0U) == 0);
++#else
++    CHECK(purrgo_gnss_receiver_build_baud(out, sizeof out, 115200U) == 0);
++#endif
++}
++
+ int main(void)
+ {
++    test_build_baud();
+     test_ubx_frame();
+     test_ubx_configure();
+     test_configure();

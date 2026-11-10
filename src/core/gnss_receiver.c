@@ -96,7 +96,8 @@ size_t purrgo_ubx_build_valset(uint8_t *out, size_t out_size, uint8_t layers,
  * Interface Description (раздел Configuration defaults).
  *
  * Оставляем GGA, GSA и RMC (их разбирает gnss_adapter.c), GLL, GSV и VTG
- * выключаем: меньше трафика UART и работы разбора. Скорость UART не меняется.
+ * выключаем: меньше трафика UART и работы разбора. Скорость UART меняет отдельная
+ * команда (purrgo_gnss_receiver_build_baud), её отправляет gnss_link.
  */
 #define UBX_KEY_RATE_MEAS            0x30210001U  /* U2, мс */
 #define UBX_KEY_RATE_NAV             0x30210002U  /* U2, циклов измерения на решение */
@@ -134,6 +135,32 @@ void purrgo_gnss_receiver_configure_ubx(purrgo_gnss_tx_fn tx)
     }
 
     tx(frame, len);
+}
+
+/*
+ * Смена скорости UART1 модуля: UBX-CFG-VALSET с ключом CFG-UART1-BAUDRATE
+ * (U4, бит/с). Слой - PURRGO_GNSS_UBX_LAYERS (по умолчанию RAM: после
+ * выключения по EN модуль снова стартует на заводской скорости).
+ * Подтверждение (ACK) модуль может отправить уже на новой скорости, поэтому
+ * успех смены определяется по NMEA на новой скорости (gnss_link), а не по ACK.
+ */
+#define UBX_KEY_UART1_BAUDRATE       0x40520001U  /* U4, бит/с */
+
+size_t purrgo_gnss_receiver_build_baud(uint8_t *out, size_t out_size, uint32_t baud)
+{
+#if (PURRGO_HW_GNSS_RECEIVER == PURRGO_GNSS_RECEIVER_UBX)
+    const purrgo_ubx_cfg_item_t item = { UBX_KEY_UART1_BAUDRATE, baud };
+
+    if (baud == 0U) {
+        return 0U;
+    }
+    return purrgo_ubx_build_valset(out, out_size, (uint8_t)PURRGO_GNSS_UBX_LAYERS, &item, 1U);
+#else
+    (void)out;
+    (void)out_size;
+    (void)baud;
+    return 0U;
+#endif
 }
 
 void purrgo_gnss_receiver_configure(purrgo_gnss_tx_fn tx)

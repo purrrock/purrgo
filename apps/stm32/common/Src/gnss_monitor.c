@@ -9,6 +9,7 @@
 #include "gnss_diag.h"
 #include "gnss_pps.h"
 #include "main.h"
+#include "purrgo/hardware_config.h"
 #include "purrgo/logger.h"
 
 #include <stdbool.h>
@@ -36,6 +37,10 @@ static uint32_t s_ubx_ack_reported = 0U;
 static uint32_t s_ubx_nak_reported = 0U;
 static bool s_last_reported_fix;
 
+/* Связь с модулем (gnss_link): скорость UART и признак "поиск скорости закончен". */
+static uint32_t s_baud = PURRGO_GNSS_BAUD_DEFAULT;
+static bool s_link_ready = true;
+
 void purrgo_gnss_monitor_init(void)
 {
     gnss_diag_init(&s_diag);
@@ -51,6 +56,30 @@ void purrgo_gnss_monitor_init(void)
     s_ubx_ack_reported = 0U;
     s_ubx_nak_reported = 0U;
     s_started = true;
+}
+
+void purrgo_gnss_monitor_link(uint32_t baud, bool ready)
+{
+    s_baud = baud;
+    s_link_ready = ready;
+    if (!ready)
+    {
+        return;
+    }
+
+    /*
+     * Всё, что пришло во время поиска скорости (мусор на неверной скорости,
+     * ошибки кадра), в диагностику не входит: счётчики с нуля, первый отчёт
+     * через MONITOR_FIRST_REPORT_MS. Время отсчёта s_t_start не меняется:
+     * "FIX after N s" по-прежнему считается от запуска GNSS.
+     */
+    gnss_diag_init(&s_diag);
+    s_bytes_at_last = 0U;
+    s_last_state = GNSS_DIAG_NO_DATA;
+    s_last_reported_fix = false;
+    s_ubx_ack_reported = 0U;
+    s_ubx_nak_reported = 0U;
+    s_t_next = HAL_GetTick() + MONITOR_FIRST_REPORT_MS;
 }
 
 void purrgo_gnss_monitor_stop(void)
@@ -151,6 +180,11 @@ void purrgo_gnss_monitor_process(void)
 
     pps_report(now);
 
+    if (!s_link_ready)
+    {
+        return;
+    }
+
     if ((int32_t)(now - s_t_next) < 0)
     {
         return;
@@ -209,10 +243,11 @@ void purrgo_gnss_monitor_process(void)
             : (unsigned long)(((uint64_t)s_diag.printable * 100U) / s_diag.bytes);
 
         PURRGO_LOGW("GNSS: NOT NMEA after %lu s: bytes=%lu (+%lu) printable=%lu%% bad=%lu FE=%lu NE=%lu "
-                   "ORE=%lu. Wrong baud (expected 38400), noise or bad wiring\r\n",
+                   "ORE=%lu. Wrong baud (UART at %lu), noise or bad wiring\r\n",
                    up_s, (unsigned long)s_diag.bytes, (unsigned long)delta, pct,
                    (unsigned long)s_diag.sentences_bad, (unsigned long)s_diag.err_fe,
-                   (unsigned long)s_diag.err_ne, (unsigned long)s_diag.err_ore);
+                   (unsigned long)s_diag.err_ne, (unsigned long)s_diag.err_ore,
+                   (unsigned long)s_baud);
         break;
     }
 
