@@ -16,7 +16,7 @@ The generated map uses **PurrGO Map Format V3**.
 For the binary format, see:
 
 ```text
-docs/purrgo_map_specification_v3.md
+docs/map-format-v3.md
 ```
 
 ---
@@ -130,7 +130,7 @@ The value `*` matches any value of the key, e.g. `barrier=*,access=private`.
 The detailed semantics of the feature codes and generated map format are defined in:
 
 ```text
-docs/purrgo_map_specification_v3.md
+docs/map-format-v3.md
 ```
 
 ---

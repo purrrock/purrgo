@@ -108,7 +108,7 @@ PGB хранит текст (а не растровые изображения �
 5.  Нормализовать переводы строк и управляющие символы.
 6.  Выполнить переносы строк и разбиение на страницы.
 
-Таблица PurrGO-256 описана в `docs/PurrGO_font_encoding.md`; её единый
+Таблица PurrGO-256 описана в `docs/font-encoding.md`; её единый
 источник для компьютерных инструментов --- `_PGO_CHAR_MAP` в
 `tools/map-compiler/purrgo_models.py`, прошивка использует копию в
 `src/core/pgo_text.c` (сверка: `tests/check_pgo_text_table.py`).
@@ -514,7 +514,7 @@ name="cover">` или `properties="cover-image"` и теги `<img src>` и SVG
     пикселей, положение текста и вывод страницы-картинки.
 -   `include/purrgo/font5x7.h` --- объявление встроенного шрифта
     `font5x7[256][5]`.
--   `docs/PurrGO_font_encoding.md` --- таблица кодировки PurrGO-256.
+-   `docs/font-encoding.md` --- таблица кодировки PurrGO-256.
 -   `src/core/pgo_text.c` --- преобразование Unicode/UTF-8 в PurrGO-256.
 -   `include/purrgo/pgb.h`, `src/core/pgb.c` --- чтение PGB, проверка
     заголовка, индекса, страниц (текст и картинки) и декодер LZ4
@@ -526,4 +526,4 @@ name="cover">` или `properties="cover-image"` и теги `<img src>` и SVG
 
 Эта спецификация задаёт формат файла. Разбор PGB реализован в `pgb.c` (в том
 числе чтение страницы из образа книги в RAM), режим чтения - в `book_reader.c`
-и `ui/ui_book.c` (описание: `E-books.md`).
+и `ui/ui_book.c` (описание: `docs/e-books.md`).

@@ -32,7 +32,7 @@ PurrGO **не выполняет turn-by-turn route calculation**. Это нав
 - **Питание**: выбор типа батарей (шесть источников) с кривыми разряда, остановка записи на SD при низком
   напряжении, выключение (POWER OFF) с финальным экраном.
 
-Подробности по кнопкам - [`docs/PURRGO_KEYS.md`](docs/PURRGO_KEYS.md), по читалке - [`E-books.md`](E-books.md).
+Подробности по кнопкам - [`docs/user-guide.md`](docs/user-guide.md), по читалке - [`docs/e-books.md`](docs/e-books.md).
 
 ---
 
@@ -77,7 +77,7 @@ PurrGO **не выполняет turn-by-turn route calculation**. Это нав
 MCU: **STM32U585CIU6**, GNSS: G10A F30 (u-blox M10), дисплей: Waveshare 2.7" e-Paper HAT (176 × 264, 4 gray),
 microSD по SPI2.
 
-Подробности аппаратной части находятся в [`HARDWARE.md`](HARDWARE.md).
+Подробности аппаратной части находятся в [`docs/hardware.md`](docs/hardware.md).
 
 ---
 
@@ -123,8 +123,8 @@ map.name
 
 Подробности:
 
-- [`docs/purrgo_map_specification_v3.md`](docs/purrgo_map_specification_v3.md) — нормативная спецификация Map Format V3;
-- [`docs/PurrGO Map Format V3 — Binary Format Conformance.md`](docs/PurrGO%20Map%20Format%20V3%20%E2%80%94%20Binary%20Format%20Conformance.md) — требования соответствия;
+- [`docs/map-format-v3.md`](docs/map-format-v3.md) — нормативная спецификация Map Format V3;
+- [`docs/map-conformance.md`](docs/map-conformance.md) — требования соответствия;
 - [`tools/map-compiler/README.md`](tools/map-compiler/README.md) — как создать карту для PurrGO.
 
 ---
@@ -139,7 +139,7 @@ purrgo/
 │       ├── common/         # STM32-адаптеры: дисплей, кнопки, ФС, логгер, SD по SPI, FatFs
 │       └── PurrGO_STM32U5/ # CubeMX-проект; Core/Src: GNSS (UART+DMA), SD, питание
 │
-├── docs/                   # Project documentation
+├── docs/                   # Документация: hardware, user-guide, architecture, форматы карты, design/, datasheets/
 ├── include/
 │   └── purrgo/             # Public interfaces
 │
@@ -161,8 +161,6 @@ purrgo/
 ├── .github/workflows/      # CI (GitHub Actions)
 ├── CMakeLists.txt          # Единая точка входа сборки
 ├── CMakePresets.json       # Пресеты: win-mingw-*, linux-gcc-*, stm32u5-*
-├── E-books.md
-├── HARDWARE.md
 ├── PurrGO_STM32U585_PINOUT.md
 ├── TODO.md
 └── README.md
@@ -216,7 +214,7 @@ cmake --build --preset stm32u5-debug
 
 | Параметр | Назначение |
 |---|---|
-| `-DPURRGO_HW_TEST=SD_SPEED\|EINK_4GRAY\|EINK_PARTIAL` | Аппаратный тест вместо навигатора, см. [`HARDWARE.md`](HARDWARE.md) |
+| `-DPURRGO_HW_TEST=SD_SPEED\|EINK_4GRAY\|EINK_PARTIAL` | Аппаратный тест вместо навигатора, см. [`docs/hardware.md`](docs/hardware.md) |
 | `-DPURRGO_TRACK_DIAG=ON` | Диагностическая запись трека (каждая эпоха GNSS), см. [`docs/track-field-test.md`](docs/track-field-test.md) |
 | `-DPURRGO_WERROR=ON` | Предупреждения - ошибки (кроме `-Wconversion`) |
 
@@ -344,20 +342,22 @@ cmake --preset linux-gcc-debug -DPURRGO_MOCK_LAT_1E7=315590000 \
 | Документ | Содержание |
 |---|---|
 | [`docs/architecture.md`](docs/architecture.md) | Архитектура программного обеспечения |
-| [`HARDWARE.md`](HARDWARE.md) | Аппаратная конфигурация |
+| [`docs/hardware.md`](docs/hardware.md) | Аппаратная конфигурация |
+| [`docs/eink.md`](docs/eink.md) | Драйвер E-Ink (epd4g) |
+| [`docs/design/poi-search.md`](docs/design/poi-search.md), [`docs/design/pgo-v4.md`](docs/design/pgo-v4.md) | Проекты: поиск объектов, блочный индекс карты V4 |
 | [`TODO.md`](TODO.md) | Текущие задачи |
-| [`docs/purrgo_map_specification_v3.md`](docs/purrgo_map_specification_v3.md) | Формат карт V3 |
-| [`docs/PurrGO Map Format V3 — Binary Format Conformance.md`](docs/PurrGO%20Map%20Format%20V3%20%E2%80%94%20Binary%20Format%20Conformance.md) | Conformance V3 |
+| [`docs/map-format-v3.md`](docs/map-format-v3.md) | Формат карт V3 |
+| [`docs/map-conformance.md`](docs/map-conformance.md) | Conformance V3 |
 | [`tools/map-compiler/README.md`](tools/map-compiler/README.md) | Создание карт |
 | [`tools/book-compiler/README.md`](tools/book-compiler/README.md), [`PGB-format.md`](tools/book-compiler/PGB-format.md) | Конвертер книг и формат PGB |
-| [`E-books.md`](E-books.md) | Режим чтения книг |
+| [`docs/e-books.md`](docs/e-books.md) | Режим чтения книг |
 | [`PurrGO_STM32U585_PINOUT.md`](PurrGO_STM32U585_PINOUT.md) | Распиновка платы |
-| [`docs/PURRGO_KEYS.md`](docs/PURRGO_KEYS.md) | Назначение кнопок |
-| [`docs/MAP_RENDER_LAYERS.md`](docs/MAP_RENDER_LAYERS.md) | Порядок и стиль слоёв карты |
+| [`docs/user-guide.md`](docs/user-guide.md) | Назначение кнопок |
+| [`docs/map-rendering.md`](docs/map-rendering.md) | Порядок и стиль слоёв карты |
 | [`docs/SD_SPI_MODE.md`](docs/SD_SPI_MODE.md) | microSD в SPI-режиме |
 | [`docs/track-field-test.md`](docs/track-field-test.md) | Полевой тест фильтров трека |
 | [`docs/WEB_EMULATOR.md`](docs/WEB_EMULATOR.md) | Эмулятор в браузере |
-| [`docs/PurrGO_font_encoding.md`](docs/PurrGO_font_encoding.md) | Кодировка PurrGO-256 |
+| [`docs/font-encoding.md`](docs/font-encoding.md) | Кодировка PurrGO-256 |
 
 ---
 
