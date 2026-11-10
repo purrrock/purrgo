@@ -122,6 +122,7 @@ bool purrgo_fs_replace(const char* s, const char* d) {
     snprintf(files[i].name, sizeof(files[i].name), "%s", d);
     return true;
 }
+bool purrgo_fs_exists(const char* p) { return find(p) >= 0; }
 /* Каталог = файлы с именем "<путь>/<имя>" (без вложенных); подкаталогов нет. */
 purrgo_dir_t* purrgo_fs_opendir(const char* p) {
     if (fdir.used) return NULL;

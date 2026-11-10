@@ -437,12 +437,11 @@ static bool logger_start_impl(const purrgo_gnss_solution_t* first_fix, bool keep
     bool name_found = false;
     for (uint32_t attempt = 0; attempt < LOGGER_NAME_MAX_ATTEMPTS; attempt++, track_id++) {
         make_track_filename(filename, sizeof(filename), track_id);
-        purrgo_file_t* probe = purrgo_fs_open(filename, FS_READ);
-        if (probe == NULL) {
+        /* purrgo_fs_exists(): без открытия файла, поэтому нет ложного "open error: 4" в логе */
+        if (!purrgo_fs_exists(filename)) {
             name_found = true;
             break;
         }
-        (void)purrgo_fs_close(probe);
     }
     if (!name_found) {
         PURRGO_LOGE("Track logger: no free file name\r\n");
