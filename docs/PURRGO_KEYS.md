@@ -31,18 +31,33 @@ DOUBLE_PRESS пока не поддерживается.
 | SHORT_PRESS  | PAN_LEFT | PAN_RIGHT | PAN_UP | PAN_DOWN                   |
 | LONG_PRESS   | ZOOM_OUT | ZOOM_IN   | CENTER | NEXT_SCREEN → TRIP_COMPUTER|
 
+CENTER (долгое K3) возвращает автоследование и ставит маркёр GNSS в центр карты. Пока автоследование
+выключено (карта сдвинута кнопками), в центре карты рисуется перекрестие: это точка для
+WAYPOINT > MAP CENTER.
+
 ## Trip computer
 
 | Event        | KEY1 | KEY2 | KEY3 | KEY4                          |
 |--------------|------|------|------|-------------------------------|
-| SHORT_PRESS  | NONE | NONE | NONE | NEXT_SCREEN → CONFIG_MENU     |
-| LONG_PRESS   | NONE | NONE | NONE | NEXT_SCREEN → CONFIG_MENU     |
+| SHORT_PRESS  | NONE | NONE | NONE | NEXT_SCREEN → MENU            |
+| LONG_PRESS   | NONE | NONE | NONE | NEXT_SCREEN → MENU            |
 
 ## Menu screens
 
 | Event        | KEY1 | KEY2 | KEY3   | KEY4 |
 |--------------|------|------|--------|------|
 | SHORT_PRESS  | UP   | DOWN | SELECT | BACK |
+| LONG_PRESS   | UP   | DOWN | SELECT | BACK |
+
+Главное меню (заголовок `==== MENU ====`) и его подэкраны (каталог карты, маршрут, WAYPOINT, MAP LAYERS)
+реагируют одинаково на короткое и длинное нажатие. BACK из главного меню применяет и сохраняет изменённые настройки и переходит на карту.
+
+## Трекер с отключённым дисплеем
+
+Пункт меню `TRACKER (SCREEN OFF)` (сразу под `POWER OFF`): трек пишется как в режиме EXPEDITION, экран
+не обновляется. Все кнопки игнорируются, кроме одновременного удержания **K1 и K4** в течение
+`PURRGO_BTN_COMBO_HOLD_MS` (1 с): это событие `PURRGO_BTN_COMBO_K1_K4`, выход на карту. Вне режима трекера
+комбинация ничего не делает.
 
 ## On-screen keyboard (En/Ru)
 
@@ -64,8 +79,8 @@ DOUBLE_PRESS пока не поддерживается.
 
 | Screen / event       | KEY1                  | KEY2                  | KEY3                       | KEY4                       |
 |----------------------|-----------------------|-----------------------|----------------------------|----------------------------|
-| List, SHORT / LONG   | вверх / на 8          | вниз / на 8           | открыть книгу              | выход в CONFIG             |
-| Page, SHORT          | страница назад        | страница вперёд       | переход по процентам       | выход в CONFIG             |
+| List, SHORT / LONG   | вверх / на 8          | вниз / на 8           | открыть книгу              | выход в главное меню       |
+| Page, SHORT          | страница назад        | страница вперёд       | переход по процентам       | выход в главное меню       |
 | Page, LONG           | на 10 страниц назад   | на 10 страниц вперёд  | список книг                | **поиск по книге**         |
 | Go to %, SHORT/LONG  | -1% / -10%            | +1% / +10%            | перейти                    | отмена                     |
 | Search found         | предыдущее совпадение | следующее совпадение  | новый запрос (LONG: список)| закончить поиск            |

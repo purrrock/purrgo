@@ -48,31 +48,26 @@ Prepare the input file as:
 map.osm
 ```
 
-For large areas, `osm_optimizer.py` can optionally be used before compilation:
+For large areas, `purrgo_osm_optimizer.py` can optionally be used before compilation:
 
 ```bash
-python osm_optimizer.py map.osm map_optimized.osm
+python purrgo_osm_optimizer.py map.osm map_optimized.osm
 ```
 
 ---
 
 ## 3. Compile
 
-Place the following in the compiler working directory:
-
-```text
-purrgo_map_compiler.py
-features.csv
-map.osm
-```
-
-Run:
+`features.csv` is read from the directory of `purrgo_map_compiler.py`. The input file is the optional
+argument (default `map.osm`):
 
 ```bash
-python purrgo_map_compiler.py
+python purrgo_map_compiler.py                  # compiles map.osm
+python purrgo_map_compiler.py london.osm       # compiles london.osm
 ```
 
-The compiler processes the OSM data according to `features.csv` and creates the map files.
+The compiler processes the OSM data according to `features.csv` and writes the map files to a folder next to
+the script, named after the input file without the extension (`london/`).
 
 Compilation time and RAM usage depend on the size of the OSM extract.
 
@@ -142,17 +137,18 @@ docs/purrgo_map_specification_v3.md
 
 ## 6. Install the Map
 
-Create a directory for the map on the PurrGO SD card:
+Create a directory for the map on the PurrGO SD card, inside `PURRGO/MAPS/` (created by the device on the
+first start):
 
 ```text
-maps/
+PURRGO/MAPS/
 └── London/
 ```
 
 Copy all generated map files into that directory:
 
 ```text
-maps/
+PURRGO/MAPS/
 └── London/
     ├── map.name
     ├── roads.idx
@@ -171,7 +167,7 @@ maps/
     └── pois.db
 ```
 
-Then safely eject the SD card and insert it into PurrGO.
+Then safely eject the SD card and insert it into PurrGO; the map is selected in the main menu, item `MAP DIR`.
 
 ---
 

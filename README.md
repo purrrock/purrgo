@@ -17,6 +17,23 @@ PurrGO предназначен для:
 
 PurrGO **не выполняет turn-by-turn route calculation**. Это навигатор и трекер, а не routing engine.
 
+### Что уже есть в прошивке
+
+- **Карта**: предкомпилированные векторные карты Map Format V3 (слои landuse, water, waterways, roads, POI),
+  4 уровня серого, автоследование за GNSS и ручной сдвиг (в ручном режиме в центре карты перекрестие),
+  включение слоёв в меню MAP LAYERS.
+- **Trip computer**: время (UTC и местное), скорость, курс, координаты, высота, качество фикса,
+  цель навигации (расстояние и пеленг).
+- **Запись трека** в GPX на microSD с фильтрацией точек (режимы OFF / STANDARD / EXPEDITION) и режим
+  **трекера с отключённым дисплеем** (пункт меню TRACKER (SCREEN OFF), выход - K1+K4).
+- **Путевые точки и маршруты**: цель навигации (WAYPOINT: HERE, MAP CENTER, точка из GPX), слой Waypoints,
+  слой Route из GPX-файла.
+- **Читалка книг** (BOOKS): формат PGB, поиск по книге, GNSS на время чтения выключен.
+- **Питание**: выбор типа батарей (шесть источников) с кривыми разряда, остановка записи на SD при низком
+  напряжении, выключение (POWER OFF) с финальным экраном.
+
+Подробности по кнопкам - [`docs/PURRGO_KEYS.md`](docs/PURRGO_KEYS.md), по читалке - [`E-books.md`](E-books.md).
+
 ---
 
 ## Статус проекта
@@ -57,7 +74,8 @@ PurrGO **не выполняет turn-by-turn route calculation**. Это нав
 
 ## Release hardware
 
- MCU  STM32U585CIU6
+MCU: **STM32U585CIU6**, GNSS: G10A F30 (u-blox M10), дисплей: Waveshare 2.7" e-Paper HAT (176 × 264, 4 gray),
+microSD по SPI2.
 
 Подробности аппаратной части находятся в [`HARDWARE.md`](HARDWARE.md).
 
@@ -134,7 +152,7 @@ purrgo/
 │   ├── host/               # Host-тесты ядра (ctest, ASan/UBSan) и тестовые данные
 │   └── audit_maps.py       # Аудит бинарных файлов карт
 ├── third_party/            # External dependencies (сабмодули: minmea, eink_part_refresh (драйвер E-Ink epd4g))
-├── tools/                  # Development/build tools
+├── tools/                  # Компиляторы карт и книг, анализ треков, калибровка батареи, редакторы шрифта и иконок
 │
 ├── cmake/
 │   ├── toolchains/         # CMake toolchain file (STM32U5)
@@ -143,7 +161,9 @@ purrgo/
 ├── .github/workflows/      # CI (GitHub Actions)
 ├── CMakeLists.txt          # Единая точка входа сборки
 ├── CMakePresets.json       # Пресеты: win-mingw-*, linux-gcc-*, stm32u5-*
+├── E-books.md
 ├── HARDWARE.md
+├── PurrGO_STM32U585_PINOUT.md
 ├── TODO.md
 └── README.md
 ```
@@ -168,6 +188,7 @@ git submodule update --init --recursive
 | `linux-gcc-debug`, `linux-gcc-release` | PC-эмулятор (SDL2) | Linux, GCC, Ninja, `libsdl2-dev` |
 | `linux-gcc-test` | Только ядро + host-тесты, ASan/UBSan (без SDL2) | Linux, GCC, Ninja |
 | `stm32u5-debug`, `stm32u5-release` | Прошивка STM32U585 | `arm-none-eabi-gcc` в `PATH`, Ninja |
+| `web-release` | Эмулятор в браузере (WebAssembly) | Emscripten, см. [`docs/WEB_EMULATOR.md`](docs/WEB_EMULATOR.md) |
 
 Пресеты, неподходящие для текущей ОС, в списке не показываются.
 
@@ -190,6 +211,14 @@ cmake --build --preset stm32u5-debug
 `PURRGO_LOG_LEVEL`: 0 NONE, 1 ERROR, 2 WARN, 3 INFO, 4 DEBUG. По умолчанию Release собирается
 с уровнем 1 (только ошибки, светодиод PC13 не мигает), остальные типы сборки - с 3. Пример:
 `cmake --preset stm32u5-release -DPURRGO_LOG_LEVEL=3`.
+
+Другие параметры сборки прошивки:
+
+| Параметр | Назначение |
+|---|---|
+| `-DPURRGO_HW_TEST=SD_SPEED\|EINK_4GRAY\|EINK_PARTIAL` | Аппаратный тест вместо навигатора, см. [`HARDWARE.md`](HARDWARE.md) |
+| `-DPURRGO_TRACK_DIAG=ON` | Диагностическая запись трека (каждая эпоха GNSS), см. [`docs/track-field-test.md`](docs/track-field-test.md) |
+| `-DPURRGO_WERROR=ON` | Предупреждения - ошибки (кроме `-Wconversion`) |
 
 Результат сборки: `out/build/<пресет>/`. Прошивка — `out/build/stm32u5-*/PurrGO_STM32U5.elf`,
 эмулятор — `out/build/<пресет>/apps/emulator/purrgo_emulator`.
@@ -224,15 +253,39 @@ ctest --preset linux-gcc-test
 | Тест | Что проверяет |
 |---|---|
 | `test_gnss` | Кольцевой буфер приёма GNSS (`purrgo/gnss_ring.h`), разбор NMEA на записанном логе `tests/host/data/gnss_sample.nmea`, повреждённые и усечённые фразы, GSA от разных навигационных систем |
+| `test_gnss_receiver` | Настройка приёмника: формат UBX-кадра, контрольная сумма Fletcher-8, UBX-CFG-VALSET, стартовая конфигурация G10A F30 |
+| `test_gnss_link` | Установление связи с модулем (`gnss_link`): поиск скорости UART, смена 38400 → 115200, откат при неудаче |
+| `test_gnss_diag` | Диагностика связи с GNSS: разбор NMEA, контрольная сумма, ошибки UART, определение состояния |
+| `test_gnss_pps` | Статистика 1PPS: число фронтов, классификация интервалов, пропуски, переход через 2^32 мс |
 | `test_map` | Парсер Map Format V3: корректная карта, повреждённые заголовки PGO/SQT/MLP, лимит глубины дерева, `v3_jump`, усечение и подмена байтов (фаззинг) |
-| `test_time_logger` | `purrgo_time` и `track_logger` на границах: високосные годы, 2099, полночь и Новый год с часовым поясом, год < 26, прореживание и фильтры точек (качество фикса, стоянка, выбросы), периодический `sync`, имена файлов, RAM-кольцо трека |
-| `test_track_filter` | фильтр «незначительных изменений» трека: прямая не пишется, поворот и разворот («туда и обратно») пишутся, допуски STANDARD/EXPEDITION, шаг и предельная хорда, потеря направления после стоянки и сброса по выбросам, хорда в пол-Земли без переполнения, теги `<fix>/<sat>/<hdop>`/`pg:spd` в точке GPX |
-| `test_track_diag` | диагностическая сборка трека (`PURRGO_TRACK_DIAG=1`): в GPX каждая эпоха, `pg:rej` показывает причины отбраковки, экранный трек не меняется, `sync` |
+| `test_map_mlp_stream` | Буферизованное чтение геометрии MLP: границы секторов, число обращений к ФС, усечённый файл |
+| `test_geometry_clip` | Геометрия далёких вершин: проекция без насыщения int16, отсечение отрезков, заливка составных полигонов против независимого эталона |
 | `test_gfx_fast_paths` | Быстрые пути без изменения результата: `fill_span` (2-bpp) против пиксельной заливки на случайных операциях, `project_to_screen` с 32-битным делением против 64-битного эталона |
+| `test_marker_pan_battery` | Маркёр GNSS (порог перерисовки), шаг ручного сдвига карты, заряд батареи в строке статуса и в GPX, общий монитор заряда |
+| `test_ui_refresh_fixes` | Обновление экрана: смена значения пункта меню, отрезки трека между обновлениями, маркёр, лимит частичных обновлений до полного, сдвиг карты |
+| `test_display_eink` | Очередь E-Ink (`display_eink.c`) поверх библиотеки `epd4g` и модели панели: сбросы, активации, deep sleep, объём SPI-данных (нужен сабмодуль `eink_part_refresh`) |
+| `test_time_logger` | `purrgo_time` и `track_logger` на границах: високосные годы, 2099, полночь и Новый год с часовым поясом, год < 26, прореживание и фильтры точек (качество фикса, стоянка, выбросы), периодический `sync`, имена файлов, RAM-кольцо трека |
+| `test_track_filter` | Фильтр «незначительных изменений» трека: прямая не пишется, поворот и разворот («туда и обратно») пишутся, допуски STANDARD/EXPEDITION, шаг и предельная хорда, потеря направления после стоянки и сброса по выбросам, хорда в пол-Земли без переполнения, теги `<fix>/<sat>/<hdop>`/`pg:spd` в точке GPX |
+| `test_track_diag` | Диагностическая сборка трека (`PURRGO_TRACK_DIAG=1`): в GPX каждая эпоха, `pg:rej` показывает причины отбраковки, экранный трек не меняется, `sync` |
+| `test_tracker_mode` | Режим «трекер с отключённым дисплеем»: пункт меню, вход (логгер в EXPEDITION, одно предупреждение на экране), запись без перерисовок, выход по K1+K4 |
+| `test_navigation` | Расстояние и азимут до точки (`geo.c`, `navigation.c`): эталонные пары, стороны света, 180-й меридиан, радиус прибытия |
+| `test_waypoint` | Цель навигации: чтение `<wpt>` из GPX, цель в `PURRGO.CFG`, меню WAYPOINT (HERE, MAP CENTER), запись точки MAP CENTER в WAYPTS |
+| `test_wpt_layer` | Слой Waypoints: точки маршрута и всех GPX каталога WAYPTS, фильтр имён, кэш, предел 64 точек, отрисовка иконки |
+| `test_route` | Маршрут из GPX: разбор `trkpt`/`rtept`, прореживание, загрузка из каталога ROUTES, отрисовка, ключ `ROUTE_FILE`, выбор файла в меню |
 | `test_power_off_screen` | Экран выключения: карта и маркер остаются, верхняя и нижняя строки - инверсный «POWER OFF», масштаб карты сохраняется |
-| `test_power_source` | Выбор источника питания: POWER_SRC в PURRGO.CFG, порядок пунктов меню CONFIG (источник, POWER OFF, TZ, ...), перебор шести источников, кривые разряда и индикация «5V» |
+| `test_power_sequence` | Последовательность `purrgo_system_power_off`: логгер остановлен, конфиг записан, файлы закрыты, размонтирование раньше входа в Standby |
+| `test_power_source` | Выбор источника питания: `POWER_SRC` в PURRGO.CFG, порядок пунктов главного меню (BOOKS, источник, POWER OFF, TRACKER, TZ, ...), перебор шести источников, кривые разряда и индикация «5V» |
+| `test_supply_low` | Низкое напряжение (PVD и АЦП): трек закрывается, карта остаётся доступной для чтения, возобновление записи новым файлом |
 | `test_negative_altitude` | Отрицательная высота (-430 м): разбор GGA, перерисовка Trip computer, вывод `-430 m`, `<ele>` в GPX, восход/закат |
 | `test_refact_critical` | Исправления критичных ошибок (патч 0007): таймаут фикса, ошибки записи SD, атомарное сохранение конфига, политика перерисовки |
+| `test_pgb`, `test_book_reader`, `test_book_search`, `test_book_resume_track` | Читалка: формат PGB (LZ4, CRC), список книг, предзагрузка в RAM, поиск по книге, возобновление трека после выхода из читалки |
+| `test_keyboard` | Экранная клавиатура En/Ru: раскладки, ввод, Shift/Caps, курсор, отрисовка |
+| `test_pgo_text` | Перекодировка имён с SD (UTF-8 → PurrGO-256) |
+| `test_sd_spi` | Протокол microSD в SPI-режиме на модели карты (SDHC, SDSC v1/v2, сбои) |
+
+Python-проверки в CI: `tests/check_pgo_text_table.py` (таблица PurrGO-256 в прошивке и компиляторе совпадает) и
+`python3 -m unittest tests/test_book_compiler.py` (конвертер книг). `tests/audit_maps.py` (аудит бинарных файлов карты)
+запускается вручную и рекурсивно проверяет все карты в каталоге: `python3 tests/audit_maps.py <каталог с картами>`.
 
 Тесты на железе (SD, дисплей, ток, время кадра) в этот набор не входят.
 
@@ -293,10 +346,18 @@ cmake --preset linux-gcc-debug -DPURRGO_MOCK_LAT_1E7=315590000 \
 | [`docs/architecture.md`](docs/architecture.md) | Архитектура программного обеспечения |
 | [`HARDWARE.md`](HARDWARE.md) | Аппаратная конфигурация |
 | [`TODO.md`](TODO.md) | Текущие задачи |
-| [`TODO_refact.md`](TODO_refact.md) | Результаты ревью кода и план исправлений |
 | [`docs/purrgo_map_specification_v3.md`](docs/purrgo_map_specification_v3.md) | Формат карт V3 |
 | [`docs/PurrGO Map Format V3 — Binary Format Conformance.md`](docs/PurrGO%20Map%20Format%20V3%20%E2%80%94%20Binary%20Format%20Conformance.md) | Conformance V3 |
 | [`tools/map-compiler/README.md`](tools/map-compiler/README.md) | Создание карт |
+| [`tools/book-compiler/README.md`](tools/book-compiler/README.md), [`PGB-format.md`](tools/book-compiler/PGB-format.md) | Конвертер книг и формат PGB |
+| [`E-books.md`](E-books.md) | Режим чтения книг |
+| [`PurrGO_STM32U585_PINOUT.md`](PurrGO_STM32U585_PINOUT.md) | Распиновка платы |
+| [`docs/PURRGO_KEYS.md`](docs/PURRGO_KEYS.md) | Назначение кнопок |
+| [`docs/MAP_RENDER_LAYERS.md`](docs/MAP_RENDER_LAYERS.md) | Порядок и стиль слоёв карты |
+| [`docs/SD_SPI_MODE.md`](docs/SD_SPI_MODE.md) | microSD в SPI-режиме |
+| [`docs/track-field-test.md`](docs/track-field-test.md) | Полевой тест фильтров трека |
+| [`docs/WEB_EMULATOR.md`](docs/WEB_EMULATOR.md) | Эмулятор в браузере |
+| [`docs/PurrGO_font_encoding.md`](docs/PurrGO_font_encoding.md) | Кодировка PurrGO-256 |
 
 ---
 
