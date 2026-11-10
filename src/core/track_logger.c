@@ -12,6 +12,19 @@
 
 #define GPX_BUFFER_SIZE 512
 
+/*
+ * Диагностический режим (сборка с -DPURRGO_TRACK_DIAG=1, CMake: -DPURRGO_TRACK_DIAG=ON):
+ * в файл пишется КАЖДАЯ валидная эпоха GNSS (1 точка в секунду), а в <extensions>
+ * каждой точки стоит pg:rej - битовая маска фильтров (LOGGER_REJ_*), которые в
+ * обычной сборке эту точку отбросили бы (0 - обычная сборка точку записала бы).
+ * Состояние фильтров ведётся как в обычной сборке, поэтому по такому файлу можно
+ * подобрать пороги и проверить прореживание. Экранный трек (RAM) не меняется.
+ * Объём записи ~0,9 МБ в час. Для штатной работы выключено.
+ */
+#ifndef PURRGO_TRACK_DIAG
+#define PURRGO_TRACK_DIAG 0
+#endif
+
 static purrgo_file_t* active_file = NULL;
 static track_logger_state_t current_state = LOGGER_STATE_IDLE;
 static char s_active_filename[64] = {0};
@@ -235,17 +248,26 @@ static const logger_filter_params_t* filter_params(void) {
     return (current_mode == LOGGER_MODE_EXPEDITION) ? &FILTER_EXPEDITION : &FILTER_STANDARD;
 }
 
-static bool fix_quality_ok(const purrgo_gnss_solution_t* fix) {
+/* Причины отбраковки точки (pg:rej в диагностическом режиме). */
+#define LOGGER_REJ_FIX_TYPE   0x01U   /* fix_type < 3 */
+#define LOGGER_REJ_HDOP       0x02U   /* HDOP > 5.0 */
+#define LOGGER_REJ_SATS       0x04U   /* меньше 4 спутников в решении */
+#define LOGGER_REJ_STATIONARY 0x08U   /* стоим: скорость < 0.5 уз */
+#define LOGGER_REJ_OUTLIER    0x10U   /* скачок быстрее LOGGER_MAX_SPEED_MPS */
+#define LOGGER_REJ_DECIMATED  0x20U   /* трек не изменился заметно (прореживание) */
+
+static uint8_t quality_reject_mask(const purrgo_gnss_solution_t* fix) {
+    uint8_t mask = 0U;
     if (fix->fix_type != 0 && fix->fix_type < LOGGER_MIN_FIX_TYPE) {
-        return false;
+        mask |= LOGGER_REJ_FIX_TYPE;
     }
     if (fix->hdop_100 > LOGGER_MAX_HDOP_100) {
-        return false;
+        mask |= LOGGER_REJ_HDOP;
     }
     if (fix->satellites_tracked != 0 && fix->satellites_tracked < LOGGER_MIN_SATELLITES) {
-        return false;
+        mask |= LOGGER_REJ_SATS;
     }
-    return true;
+    return mask;
 }
 
 static uint64_t isqrt_u64(uint64_t n) {
@@ -463,10 +485,145 @@ bool purrgo_logger_start(const purrgo_gnss_solution_t* first_fix) {
     return logger_start_impl(first_fix, false);
 }
 
+/*
+ * Периодическая синхронизация FAT. Точка уже в буфере (и, для записанной, в
+ * RAM-треке), поэтому при сбое она не теряется: после дозаписи файла уйдёт на SD.
+ */
+static void sync_if_due(uint32_t utc_epoch) {
+    if (last_sync_time == 0) {
+        last_sync_time = utc_epoch;
+    }
+    points_since_sync++;
+    if (points_since_sync >= LOGGER_SYNC_POINTS ||
+        (utc_epoch >= last_sync_time && utc_epoch - last_sync_time >= LOGGER_SYNC_INTERVAL_S)) {
+        if (sync_active_file()) {
+            points_since_sync = 0;
+            last_sync_time = utc_epoch;
+        } else {
+            enter_error_state("sync");
+        }
+    }
+}
+
+/* Значение <fix> GPX 1.1 по данным GSA/GGA; NULL - неизвестно (приёмник не присылает). */
+static const char* gpx_fix_name(const purrgo_gnss_solution_t* fix) {
+    switch (fix->fix_type) {
+        case 1:  return "none";
+        case 2:  return "2d";
+        case 3:  return (fix->fix_quality == 2U) ? "dgps" : "3d";
+        default: return NULL;
+    }
+}
+
+/*
+ * Формирует <trkpt> и кладёт его в буфер записи. Порядок дочерних тегов - по схеме
+ * GPX 1.1: ele, time, fix, sat, hdop, extensions. Параметры, равные 0 (приёмник их
+ * не присылает), не пишутся.
+ *   <fix>, <sat>, <hdop> - из GSA/GGA: нужны, чтобы сверять фильтры качества;
+ *   pg:spd - скорость над землёй, сотые доли узла (в тех же единицах, что порог
+ *            стоянки LOGGER_STATIONARY_KNOTS_100);
+ *   pg:bat, pg:vbat - заряд батареи (для анализа энергопотребления);
+ *   pg:rej - только в диагностическом сборке, см. PURRGO_TRACK_DIAG.
+ * ВАЖНО: внутри GPX (тег <time>) пишутся оригинальные данные fix (UTC время).
+ * Возвращает false при сбое записи (логгер уходит в ERROR, повтор - из app_fsm).
+ */
+static bool buffer_point(const purrgo_gnss_solution_t* fix, uint8_t rej) {
+    int32_t lat_abs = fix->lat_1e7 < 0 ? -fix->lat_1e7 : fix->lat_1e7;
+    int32_t lon_abs = fix->lon_1e7 < 0 ? -fix->lon_1e7 : fix->lon_1e7;
+    (void)rej;
+
+    char opt[96] = "";
+    size_t opt_len = 0U;
+    const char* fix_name = gpx_fix_name(fix);
+    if (fix_name != NULL) {
+        opt_len += (size_t)purrgo_snprintf(opt + opt_len, sizeof(opt) - opt_len,
+                                           "  <fix>%s</fix>\n", fix_name);
+    }
+    if (fix->satellites_tracked != 0U) {
+        opt_len += (size_t)purrgo_snprintf(opt + opt_len, sizeof(opt) - opt_len,
+                                           "  <sat>%u</sat>\n", (unsigned int)fix->satellites_tracked);
+    }
+    if (fix->hdop_100 > 0) {
+        int32_t hdop = fix->hdop_100 > 9999 ? 9999 : fix->hdop_100;
+        opt_len += (size_t)purrgo_snprintf(opt + opt_len, sizeof(opt) - opt_len,
+                                           "  <hdop>%d.%02d</hdop>\n", (int)(hdop / 100), (int)(hdop % 100));
+    }
+    if (opt_len >= sizeof(opt)) {
+        return false;   /* не должно случаться: размер буфера рассчитан на максимум */
+    }
+
+    char ext[128];
+    int ext_len = purrgo_snprintf(ext, sizeof(ext), "  <extensions>");
+    purrgo_battery_t bat;
+    if (purrgo_battery_read(&bat) && bat.percent >= 0) {
+        ext_len += purrgo_snprintf(ext + ext_len, sizeof(ext) - (size_t)ext_len,
+                                   "<pg:bat>%d</pg:bat>", (int)bat.percent);
+        if (bat.millivolts != 0) {
+            ext_len += purrgo_snprintf(ext + ext_len, sizeof(ext) - (size_t)ext_len,
+                                       "<pg:vbat>%u</pg:vbat>", (unsigned int)bat.millivolts);
+        }
+    }
+    int32_t spd = fix->speed_knots < 0 ? 0 : (fix->speed_knots > 9999999 ? 9999999 : fix->speed_knots);
+    ext_len += purrgo_snprintf(ext + ext_len, sizeof(ext) - (size_t)ext_len, "<pg:spd>%d</pg:spd>", (int)spd);
+#if PURRGO_TRACK_DIAG
+    ext_len += purrgo_snprintf(ext + ext_len, sizeof(ext) - (size_t)ext_len, "<pg:rej>%u</pg:rej>", (unsigned int)rej);
+#endif
+    ext_len += purrgo_snprintf(ext + ext_len, sizeof(ext) - (size_t)ext_len, "</extensions>\n");
+    if (ext_len < 0 || (size_t)ext_len >= sizeof(ext)) {
+        return false;
+    }
+
+    char point_str[448];
+    int n = purrgo_snprintf(point_str, sizeof(point_str),
+             "<trkpt lat=\"%s%d.%07d\" lon=\"%s%d.%07d\">\n"
+             "  <ele>%d</ele>\n"
+             "  <time>20%02d-%02d-%02dT%02d:%02d:%02dZ</time>\n"
+             "%s"
+             "%s"
+             "</trkpt>\n",
+             fix->lat_1e7 < 0 ? "-" : "", (int)(lat_abs / 10000000), (int)(lat_abs % 10000000),
+             fix->lon_1e7 < 0 ? "-" : "", (int)(lon_abs / 10000000), (int)(lon_abs % 10000000),
+             (int)fix->alt_m,
+             fix->year, fix->month, fix->day,
+             fix->hours, fix->minutes, fix->seconds,
+             opt, ext);
+    if (n < 0 || (size_t)n >= sizeof(point_str)) {
+        return false;
+    }
+
+    if (!write_to_buffer(point_str)) {
+        enter_error_state("write");
+        return false;
+    }
+    return true;
+}
+
+/*
+ * Точка отбракована фильтром. Обычная сборка: ничего не пишет. Диагностическая:
+ * пишет её в GPX с маской причин (в RAM-трек и в состояние фильтров не попадает).
+ * Всегда возвращает false - как purrgo_logger_add_point() для незаписанной точки.
+ */
+static bool reject_point(const purrgo_gnss_solution_t* fix, uint8_t rej) {
+#if PURRGO_TRACK_DIAG
+    uint32_t utc_epoch = 0;
+    if (current_state == LOGGER_STATE_RECORDING &&
+        purrgo_time_datetime_to_epoch(fix->year, fix->month, fix->day,
+                                      fix->hours, fix->minutes, fix->seconds, &utc_epoch) &&
+        buffer_point(fix, rej)) {
+        sync_if_due(utc_epoch);
+    }
+#else
+    (void)fix;
+    (void)rej;
+#endif
+    return false;
+}
+
 bool purrgo_logger_add_point(const purrgo_gnss_solution_t* fix) {
     if (current_mode == LOGGER_MODE_OFF) return false;
     if (current_state != LOGGER_STATE_RECORDING || !fix || !fix->valid) return false;
-    if (!fix_quality_ok(fix)) return false;
+    uint8_t quality_rej = quality_reject_mask(fix);
+    if (quality_rej != 0U) return reject_point(fix, quality_rej);
 
     uint32_t utc_epoch = 0;
     if (!purrgo_time_datetime_to_epoch(fix->year, fix->month, fix->day,
@@ -509,7 +666,7 @@ bool purrgo_logger_add_point(const purrgo_gnss_solution_t* fix) {
             // Точка отбрасывается, пока цепочка выбросов не наберёт LOGGER_OUTLIER_RESET_COUNT:
             // тогда опорная точка считается ошибочной, и эта точка записывается как новая.
             if (!outlier_note(fix, utc_epoch)) {
-                return false;
+                return reject_point(fix, LOGGER_REJ_OUTLIER);
             }
             should_record = true;
             reference_reset = true;
@@ -518,7 +675,7 @@ bool purrgo_logger_add_point(const purrgo_gnss_solution_t* fix) {
 
             // Стоим на месте: смещение в пределах шума GNSS не пишем, остаётся точка по таймауту.
             if (!timeout && fix->speed_knots < LOGGER_STATIONARY_KNOTS_100) {
-                return false;
+                return reject_point(fix, LOGGER_REJ_STATIONARY);
             }
 
             if (timeout) {
@@ -533,50 +690,11 @@ bool purrgo_logger_add_point(const purrgo_gnss_solution_t* fix) {
         }
     }
 
-    if (!should_record) return false;
-
+    if (!should_record) return reject_point(fix, LOGGER_REJ_DECIMATED);
 
     // Запись точки в файл.
-    // ВАЖНО: Внутри GPX файла (тег <time>) мы обязаны писать оригинальные данные fix (UTC время).
-    int32_t lat_abs = fix->lat_1e7 < 0 ? -fix->lat_1e7 : fix->lat_1e7;
-    int32_t lon_abs = fix->lon_1e7 < 0 ? -fix->lon_1e7 : fix->lon_1e7;
-
-    /*
-     * Заряд батареи пишется в <extensions> точки (расширение pg:, см. GPX_HEADER),
-     * чтобы по треку анализировать энергопотребление. Сейчас данные - заглушка
-     * (purrgo/battery.h). Напряжение пишется, только если оно измерено.
-     */
-    char bat_str[96] = "";
-    purrgo_battery_t bat;
-    if (purrgo_battery_read(&bat) && bat.percent >= 0) {
-        if (bat.millivolts != 0) {
-            purrgo_snprintf(bat_str, sizeof(bat_str),
-                     "  <extensions><pg:bat>%d</pg:bat><pg:vbat>%u</pg:vbat></extensions>\n",
-                     (int)bat.percent, (unsigned int)bat.millivolts);
-        } else {
-            purrgo_snprintf(bat_str, sizeof(bat_str),
-                     "  <extensions><pg:bat>%d</pg:bat></extensions>\n",
-                     (int)bat.percent);
-        }
-    }
-
-    char point_str[288];
-    purrgo_snprintf(point_str, sizeof(point_str),
-             "<trkpt lat=\"%s%d.%07d\" lon=\"%s%d.%07d\">\n"
-             "  <ele>%d</ele>\n"
-             "  <time>20%02d-%02d-%02dT%02d:%02d:%02dZ</time>\n"
-             "%s"
-             "</trkpt>\n",
-             fix->lat_1e7 < 0 ? "-" : "", (int)(lat_abs / 10000000), (int)(lat_abs % 10000000),
-             fix->lon_1e7 < 0 ? "-" : "", (int)(lon_abs / 10000000), (int)(lon_abs % 10000000),
-             (int)fix->alt_m,
-             fix->year, fix->month, fix->day,
-             fix->hours, fix->minutes, fix->seconds,
-             bat_str);
-
-    if (!write_to_buffer(point_str)) {
+    if (!buffer_point(fix, 0U)) {
         // Сбой записи на SD: точка потеряна, логгер уходит в ERROR (повтор - из app_fsm).
-        enter_error_state("write");
         return false;
     }
 
@@ -593,10 +711,6 @@ bool purrgo_logger_add_point(const purrgo_gnss_solution_t* fix) {
     last_recorded_time = utc_epoch; // Фильтр хранит историю в UTC
     is_first_point = false;
     max_along = 0;
-    if (last_sync_time == 0) {
-        last_sync_time = utc_epoch;
-    }
-
     // Also add to the RAM circular buffer
     ram_track_buffer[ram_track_head].lat_1e7 = fix->lat_1e7;
     ram_track_buffer[ram_track_head].lon_1e7 = fix->lon_1e7;
@@ -606,18 +720,7 @@ bool purrgo_logger_add_point(const purrgo_gnss_solution_t* fix) {
     }
     ram_track_serial++;
 
-    // Периодическая синхронизация FAT. Точка уже в буфере и в RAM-треке,
-    // поэтому при сбое она не теряется: после дозаписи файла уйдёт на SD.
-    points_since_sync++;
-    if (points_since_sync >= LOGGER_SYNC_POINTS ||
-        (utc_epoch >= last_sync_time && utc_epoch - last_sync_time >= LOGGER_SYNC_INTERVAL_S)) {
-        if (sync_active_file()) {
-            points_since_sync = 0;
-            last_sync_time = utc_epoch;
-        } else {
-            enter_error_state("sync");
-        }
-    }
+    sync_if_due(utc_epoch);
 
     return true;
 }
