@@ -5,6 +5,20 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+/* Границы диапазонов feature code по слоям (включительно). */
+#define PURRGO_FEATURE_ROADS_FIRST      0u
+#define PURRGO_FEATURE_ROADS_LAST      31u
+#define PURRGO_FEATURE_WATERWAYS_FIRST 32u
+#define PURRGO_FEATURE_WATERWAYS_LAST  63u
+#define PURRGO_FEATURE_WATER_FIRST     64u
+#define PURRGO_FEATURE_WATER_LAST      95u
+#define PURRGO_FEATURE_LANDUSE_FIRST   96u
+#define PURRGO_FEATURE_LANDUSE_LAST   127u
+#define PURRGO_FEATURE_POI_FIRST      128u
+#define PURRGO_FEATURE_POI_LAST       191u
+#define PURRGO_FEATURE_RESERVED_FIRST 192u
+#define PURRGO_FEATURE_RESERVED_LAST  255u
+
 /*
  * PurrGO feature codes.
  *
@@ -15,8 +29,21 @@
  *
  * OSM -> PurrGO feature code выполняется компилятором карт.
  * Навигатор работает только с уже скомпилированным feature code.
+ *
+ * Диапазоны кодов (docs/map-format-v3.md, раздел 8.1):
+ *
+ *       0..31   ROADS
+ *      32..63   WATERWAYS
+ *      64..95   WATER
+ *      96..127  LANDUSE
+ *     128..191  POI
+ *     192..255  RESERVED
+ *
+ * Новый класс добавляется в конец диапазона своего слоя. Код, однажды
+ * попавший в карты, не переназначается.
  */
 typedef enum {
+    /* --- 0..31: ROADS (слой roads) --- */
     PURRGO_FEATURE_NO_CLASS       = 0,
 
     PURRGO_FEATURE_ROAD_MAJOR     = 1,
@@ -27,24 +54,33 @@ typedef enum {
     PURRGO_FEATURE_ROAD_PATH      = 6,
     PURRGO_FEATURE_RAILWAY        = 7,
 
-    PURRGO_FEATURE_LANDUSE_NATURAL = 8,
-    PURRGO_FEATURE_LANDUSE_HUMAN   = 9,
+    /* --- 32..63: WATERWAYS (линейные водные объекты, слой waterways) --- */
+    PURRGO_FEATURE_WATERWAY_MAJOR = 32,
+    PURRGO_FEATURE_WATERWAY_MINOR = 33,
 
-    PURRGO_FEATURE_WATER          = 10,
+    /* --- 64..95: WATER (полигоны слоя water) --- */
+    PURRGO_FEATURE_WATER          = 64,
+    /* Рисуются штриховкой, а не чёрной заливкой. */
+    PURRGO_FEATURE_WETLAND        = 65,
+    PURRGO_FEATURE_GLACIER        = 66,
 
-    PURRGO_FEATURE_POI_BIG        = 11,
-    PURRGO_FEATURE_POI_SMALL      = 12,
+    /* --- 96..127: LANDUSE (полигоны слоя landuse) --- */
+    PURRGO_FEATURE_LANDUSE_NATURAL = 96,
+    PURRGO_FEATURE_LANDUSE_HUMAN   = 97,
+    /* Пляж, песок, дюны, галька, осыпь: рисуются точками. */
+    PURRGO_FEATURE_SAND            = 98,
 
-    /* Линейные водные объекты (слой waterways). Коды 13..36 заняты POI. */
-    PURRGO_FEATURE_WATERWAY_MAJOR = 37,
-    PURRGO_FEATURE_WATERWAY_MINOR = 38,
+    /*
+     * --- 128..191: POI (слой pois) ---
+     *
+     * Номер иконки в purrgo_poi_icons[] равен feature code.
+     * Прочие коды POI (130..) заданы в features.csv; здесь перечислены
+     * только те, что нужны прошивке по имени.
+     */
+    PURRGO_FEATURE_POI_BIG        = 128,
+    PURRGO_FEATURE_POI_SMALL      = 129
 
-    /* Полигоны слоя water, рисуемые штриховкой, а не чёрной заливкой. */
-    PURRGO_FEATURE_WETLAND        = 39,
-    PURRGO_FEATURE_GLACIER        = 40,
-
-    /* Полигоны слоя landuse, рисуемые точками: пляж, песок, дюны, галька, осыпь. */
-    PURRGO_FEATURE_SAND           = 41
+    /* --- 192..255: RESERVED --- */
 
 } purrgo_feature_code_t;
 

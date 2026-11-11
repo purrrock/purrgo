@@ -11,6 +11,8 @@
 #include <string.h>
 #include "purrgo/map.h"
 #include "purrgo/fs_hal.h"
+#include "purrgo/map_style.h"
+#include "purrgo/purrgo_poi_icons.h"
 #include "map_internal.h"
 #include "map_culling.h"
 #include "fake_fs.h"
@@ -183,7 +185,7 @@ static void test_valid_polygon(void)
 {
     static blob_t idx, mlp;
     uint8_t node[25];
-    data_node(node, 100, 100, 900, 900, 10 /* WATER */, GEOM_V1, 0);
+    data_node(node, 100, 100, 900, 900, PURRGO_FEATURE_WATER, GEOM_V1, 0);
     build_idx(&idx, node, sizeof node, 0, 1);
     uint32_t parts[1] = { 0 };
     int32_t xy[8] = { 100, 100, 900, 100, 900, 900, 100, 900 };
@@ -359,7 +361,7 @@ static void test_poi_layer(void)
 {
     static blob_t idx;
     uint8_t node[25];
-    data_node(node, 500, 500, 500, 500, 11 /* POI_BIG */, 0, 0);
+    data_node(node, 500, 500, 500, 500, PURRGO_FEATURE_POI_BIG, 0, 0);
     build_idx(&idx, node, sizeof node, 0, 1);
 
     defaults();
@@ -433,7 +435,7 @@ static void test_water_polygon_style(void)
 {
     static blob_t idx, mlp;
     uint8_t node[25];
-    data_node(node, 100, 100, 900, 900, 10 /* WATER */, GEOM_V1, 0);
+    data_node(node, 100, 100, 900, 900, PURRGO_FEATURE_WATER, GEOM_V1, 0);
     build_idx(&idx, node, sizeof node, 0, 1);
     uint32_t parts[1] = { 0 };
     int32_t xy[10] = { 100, 100, 900, 100, 900, 900, 100, 900, 100, 100 };
@@ -461,14 +463,14 @@ static void test_waterway_line_style(void)
     static blob_t idx, mlp;
 
     /* Малый водоток: чёрная линия 1 px, без обводки. */
-    waterway_line(&idx, &mlp, 38 /* WATERWAY_MINOR */);
+    waterway_line(&idx, &mlp, PURRGO_FEATURE_WATERWAY_MINOR);
     CHECK(render(&idx, &mlp, NULL, MAP_LAYER_LINES) > 20);
     CHECK(g_fb[32 * SCR_W + 32] == FB_BLACK);
     CHECK(g_fb[31 * SCR_W + 32] == 0 && g_fb[33 * SCR_W + 32] == 0);
     CHECK(count_fb(FB_DARK_GRAY) == 0);
 
     /* Крупный водоток: чёрная линия 3 px, без обводки. */
-    waterway_line(&idx, &mlp, 37 /* WATERWAY_MAJOR */);
+    waterway_line(&idx, &mlp, PURRGO_FEATURE_WATERWAY_MAJOR);
     CHECK(render(&idx, &mlp, NULL, MAP_LAYER_LINES) > 20);
     CHECK(g_fb[31 * SCR_W + 32] == FB_BLACK);
     CHECK(g_fb[32 * SCR_W + 32] == FB_BLACK);
@@ -478,7 +480,7 @@ static void test_waterway_line_style(void)
 
     /* Излом: оба звена чёрные, вершина без разрыва. */
     uint8_t node[25];
-    data_node(node, 100, 100, 900, 900, 38, GEOM_V1, 0);
+    data_node(node, 100, 100, 900, 900, PURRGO_FEATURE_WATERWAY_MINOR, GEOM_V1, 0);
     build_idx(&idx, node, sizeof node, 0, 1);
     uint32_t parts[1] = { 0 };
     int32_t xy[6] = { 100, 500, 500, 500, 500, 900 };
@@ -496,7 +498,7 @@ static void test_long_geometry(void)
     static int32_t xy[2 * 2000];
 
     uint8_t node[25];
-    data_node(node, 100, 500, 900, 500, 37, GEOM_V1, 0);
+    data_node(node, 100, 500, 900, 500, PURRGO_FEATURE_WATERWAY_MAJOR, GEOM_V1, 0);
     build_idx(&idx, node, sizeof node, 0, 1);
     uint32_t parts[1] = { 0 };
 
@@ -514,7 +516,7 @@ static void test_long_geometry(void)
     CHECK(render(&idx, &mlp, NULL, MAP_LAYER_LINES) == 0);
 
     /* Полигон воды из 1000 точек (окружность): заливка и контур на месте. */
-    data_node(node, 100, 100, 900, 900, 10, GEOM_V1, 0);
+    data_node(node, 100, 100, 900, 900, PURRGO_FEATURE_WATER, GEOM_V1, 0);
     build_idx(&idx, node, sizeof node, 0, 1);
     for (int i = 0; i < 1000; i++) {
         double a = 6.283185307179586 * i / 999.0;
@@ -532,12 +534,12 @@ static void test_water_layers_viewport(void)
 {
     static blob_t widx, wmlp, lidx, lmlp;
     uint8_t node[25];
-    data_node(node, 100, 100, 900, 900, 10, GEOM_V1, 0);
+    data_node(node, 100, 100, 900, 900, PURRGO_FEATURE_WATER, GEOM_V1, 0);
     build_idx(&widx, node, sizeof node, 0, 1);
     uint32_t parts[1] = { 0 };
     int32_t xy[10] = { 100, 100, 900, 100, 900, 900, 100, 900, 100, 100 };
     build_mlp(&wmlp, 1, parts, 5, xy);
-    waterway_line(&lidx, &lmlp, 38);
+    waterway_line(&lidx, &lmlp, PURRGO_FEATURE_WATERWAY_MINOR);
 
     /* Карта без water.* и waterways.*: слой включён, кадр успешен, ошибок нет. */
     fake_fs_reset();
@@ -670,13 +672,13 @@ static void test_small_features_skipped(void)
 
     /* Полигон 2.6 px (< 3) пропускается, 3.8 px рисуется. */
     int32_t small_poly[8] = { 500, 500, 540, 500, 540, 540, 500, 540 };
-    data_node(node, 500, 500, 540, 540, 10 /* WATER */, GEOM_V1, 0);
+    data_node(node, 500, 500, 540, 540, PURRGO_FEATURE_WATER, GEOM_V1, 0);
     build_idx(&idx, node, sizeof node, 0, 1);
     build_mlp(&mlp, 1, parts, 4, small_poly);
     CHECK(render(&idx, &mlp, NULL, MAP_LAYER_POLYGONS) == 0);
 
     int32_t poly[8] = { 500, 500, 560, 500, 560, 560, 500, 560 };
-    data_node(node, 500, 500, 560, 560, 10, GEOM_V1, 0);
+    data_node(node, 500, 500, 560, 560, PURRGO_FEATURE_WATER, GEOM_V1, 0);
     build_idx(&idx, node, sizeof node, 0, 1);
     build_mlp(&mlp, 1, parts, 4, poly);
     CHECK(render(&idx, &mlp, NULL, MAP_LAYER_POLYGONS) > 0);
@@ -704,7 +706,7 @@ static void test_viewport_read_ahead_and_poi_skip(void)
     purrgo_map_shutdown();
 
     uint8_t node[25];
-    data_node(node, 500, 500, 500, 500, 11 /* POI_BIG */, 0, 0);
+    data_node(node, 500, 500, 500, 500, PURRGO_FEATURE_POI_BIG, 0, 0);
     build_idx(&poi, node, sizeof node, 0, 1);
 
     fake_fs_reset();
@@ -831,6 +833,67 @@ static void test_viewport_failures(void)
     CHECK(fake_fs_open_handles() == 0);
 }
 
+/*
+ * Диапазоны feature code по слоям (docs/map-format-v3.md, 8.1) и таблица иконок:
+ * номер иконки POI равен feature code, а вне диапазона POI занят только UI-иконками.
+ */
+static int in_range(uint32_t code, uint32_t first, uint32_t last)
+{
+    return code >= first && code <= last;
+}
+
+static int icon_is_empty(unsigned no)
+{
+    for (unsigned r = 0; r < PURRGO_POI_ICON_HEIGHT; r++) {
+        for (unsigned c = 0; c < PURRGO_POI_ICON_WIDTH; c++) {
+            if (purrgo_poi_icons[no][r][c] & PURRGO_POI_ALPHA) { return 0; }
+        }
+    }
+    return 1;
+}
+
+static void test_feature_code_ranges(void)
+{
+    CHECK(in_range(PURRGO_FEATURE_NO_CLASS, PURRGO_FEATURE_ROADS_FIRST, PURRGO_FEATURE_ROADS_LAST));
+    CHECK(in_range(PURRGO_FEATURE_ROAD_MAJOR, PURRGO_FEATURE_ROADS_FIRST, PURRGO_FEATURE_ROADS_LAST));
+    CHECK(in_range(PURRGO_FEATURE_RAILWAY, PURRGO_FEATURE_ROADS_FIRST, PURRGO_FEATURE_ROADS_LAST));
+    CHECK(in_range(PURRGO_FEATURE_WATERWAY_MAJOR, PURRGO_FEATURE_WATERWAYS_FIRST, PURRGO_FEATURE_WATERWAYS_LAST));
+    CHECK(in_range(PURRGO_FEATURE_WATERWAY_MINOR, PURRGO_FEATURE_WATERWAYS_FIRST, PURRGO_FEATURE_WATERWAYS_LAST));
+    CHECK(in_range(PURRGO_FEATURE_WATER, PURRGO_FEATURE_WATER_FIRST, PURRGO_FEATURE_WATER_LAST));
+    CHECK(in_range(PURRGO_FEATURE_WETLAND, PURRGO_FEATURE_WATER_FIRST, PURRGO_FEATURE_WATER_LAST));
+    CHECK(in_range(PURRGO_FEATURE_GLACIER, PURRGO_FEATURE_WATER_FIRST, PURRGO_FEATURE_WATER_LAST));
+    CHECK(in_range(PURRGO_FEATURE_LANDUSE_NATURAL, PURRGO_FEATURE_LANDUSE_FIRST, PURRGO_FEATURE_LANDUSE_LAST));
+    CHECK(in_range(PURRGO_FEATURE_LANDUSE_HUMAN, PURRGO_FEATURE_LANDUSE_FIRST, PURRGO_FEATURE_LANDUSE_LAST));
+    CHECK(in_range(PURRGO_FEATURE_SAND, PURRGO_FEATURE_LANDUSE_FIRST, PURRGO_FEATURE_LANDUSE_LAST));
+    CHECK(in_range(PURRGO_FEATURE_POI_BIG, PURRGO_FEATURE_POI_FIRST, PURRGO_FEATURE_POI_LAST));
+    CHECK(in_range(PURRGO_FEATURE_POI_SMALL, PURRGO_FEATURE_POI_FIRST, PURRGO_FEATURE_POI_LAST));
+
+    /* Каждый код, у которого есть стиль, лежит в диапазоне линий/полигонов. */
+    for (uint32_t code = 0; code <= 255; code++) {
+        if (!purrgo_map_style_is_visible(code)) { continue; }
+        if (code == PURRGO_FEATURE_POI_BIG || code == PURRGO_FEATURE_POI_SMALL) { continue; }
+        CHECK(code < PURRGO_FEATURE_POI_FIRST);
+    }
+
+    /* Старые коды 8..41 (до разделения диапазонов) стилей больше не имеют. */
+    for (uint32_t code = 8; code <= 31; code++) {
+        CHECK(!purrgo_map_style_is_visible(code));
+    }
+    for (uint32_t code = 34; code <= 41; code++) {
+        CHECK(!purrgo_map_style_is_visible(code));
+    }
+
+    /* Иконки: непустые только в диапазоне POI и у UI-иконок (35, 46, 47). */
+    for (unsigned no = 0; no < PURRGO_POI_ICON_COUNT; no++) {
+        const int is_ui = (no == 35u || no == 46u || no == 47u);
+        if (!in_range(no, PURRGO_FEATURE_POI_FIRST, PURRGO_FEATURE_POI_LAST) && !is_ui) {
+            CHECK(icon_is_empty(no));
+        }
+    }
+    CHECK(!icon_is_empty(PURRGO_FEATURE_POI_BIG));
+    CHECK(!icon_is_empty(PURRGO_FEATURE_POI_SMALL));
+}
+
 int main(void)
 {
     defaults();
@@ -852,5 +915,6 @@ int main(void)
     test_feature_too_small();
     test_small_features_skipped();
     test_viewport_read_ahead_and_poi_skip();
+    test_feature_code_ranges();
     return test_finish("test_map");
 }
