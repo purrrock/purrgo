@@ -580,7 +580,23 @@ bool purrgo_gnss_read_byte(uint8_t *byte)
     {
         head = purrgo_gnss_ring_head_from_ndtr(&gnss_ring,
                                                __HAL_DMA_GET_COUNTER(hlpuart1.hdmarx));
-        gnss_last_head = head;
+
+        /*
+         * Прерывание ошибки могло сработать между проверкой флага и чтением счётчика:
+         * HAL_UART_AbortReceive() уже обнулил CBR1, и head выше посчитан по нулю
+         * (трактуется как 0), а не по реальному положению DMA. Проверяем флаг ещё раз
+         * ПОСЛЕ чтения счётчика (без запрета прерываний): если флаг теперь установлен,
+         * счётчику верить нельзя. Если ISR сработает уже после этой проверки, head
+         * получен до остановки DMA и остаётся достоверным.
+         */
+        if (gnss_rx_error_flag)
+        {
+            head = gnss_last_head;
+        }
+        else
+        {
+            gnss_last_head = head;
+        }
     }
 
     /*
