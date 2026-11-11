@@ -4,7 +4,8 @@ from typing import Dict, Tuple, List, Optional
 from dataclasses import dataclass
 
 # Диапазоны feature code по слоям (включительно), docs/map-format-v3.md, раздел 8.1.
-# 192..255 зарезервированы, ни один слой их не использует.
+# 192..223 - иконки интерфейса (не коды карты), 224..255 зарезервированы;
+# ни один слой их не использует.
 LAYER_CODE_RANGES: Dict[str, Tuple[int, int]] = {
     "roads": (0, 31),
     "waterways": (32, 63),

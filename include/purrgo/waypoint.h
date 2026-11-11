@@ -26,6 +26,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "purrgo/gfx_renderer.h"
+#include "purrgo/purrgo_poi_icons.h"
 #include "purrgo/gnss_types.h"
 #include "purrgo/map.h"
 #include "purrgo/navigation.h"
@@ -37,7 +38,7 @@
 
 /* Номер иконки цели навигации в purrgo_poi_icons (src/core/purrgo_poi_icons.c). */
 #ifndef PURRGO_WPT_TARGET_ICON
-#define PURRGO_WPT_TARGET_ICON 35
+#define PURRGO_WPT_TARGET_ICON PURRGO_UI_ICON_WPT_TARGET
 #endif
 
 /* Радиус прибытия, м. */

@@ -16,7 +16,9 @@
 #define PURRGO_FEATURE_LANDUSE_LAST   127u
 #define PURRGO_FEATURE_POI_FIRST      128u
 #define PURRGO_FEATURE_POI_LAST       191u
-#define PURRGO_FEATURE_RESERVED_FIRST 192u
+#define PURRGO_FEATURE_UI_FIRST       192u   /* иконки интерфейса, в картах не хранятся */
+#define PURRGO_FEATURE_UI_LAST        223u
+#define PURRGO_FEATURE_RESERVED_FIRST 224u
 #define PURRGO_FEATURE_RESERVED_LAST  255u
 
 /*
@@ -37,7 +39,8 @@
  *      64..95   WATER
  *      96..127  LANDUSE
  *     128..191  POI
- *     192..255  RESERVED
+ *     192..223  UI (иконки интерфейса; в картах не встречаются)
+ *     224..255  RESERVED
  *
  * Новый класс добавляется в конец диапазона своего слоя. Код, однажды
  * попавший в карты, не переназначается.
@@ -80,7 +83,7 @@ typedef enum {
     PURRGO_FEATURE_POI_BIG        = 128,
     PURRGO_FEATURE_POI_SMALL      = 129
 
-    /* --- 192..255: RESERVED --- */
+    /* --- 192..223: UI-иконки (purrgo_poi_icons.h), 224..255: RESERVED --- */
 
 } purrgo_feature_code_t;
 

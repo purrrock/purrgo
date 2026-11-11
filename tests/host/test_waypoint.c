@@ -7,7 +7,7 @@
  *   - расчёт расстояния и пеленга по текущему решению;
  *   - меню WAYPOINT (строки, выбор, прокрутка, сохранение, HERE, MAP CENTER);
  *   - запись точки MAP CENTER в WAYPTS (MPnnnnnn.GPX) и её чтение обратно;
- *   - иконка цели (35, остриё в точке цели) и перекрестие центра карты (47) в
+ *   - иконка цели (192, остриё в точке цели) и перекрестие центра карты (194) в
  *     ручном режиме карты, блок цели на экране Trip computer.
  */
 #include <stdio.h>
@@ -498,7 +498,7 @@ static void test_render(void)
     purrgo_bbox_t cam = { 280000000, 530000000, 280064000, 530048000 };
     purrgo_viewport_t vp = { W, H, 0, 0 };
 
-    CHECK(PURRGO_WPT_TARGET_ICON == 35);
+    CHECK(PURRGO_WPT_TARGET_ICON == 192);
 
     fake_fs_reset();
     purrgo_config_init();
@@ -513,7 +513,7 @@ static void test_render(void)
     purrgo_wpt_render(&g_gfx, NULL, &vp);
     purrgo_wpt_render(&g_gfx, &cam, NULL);
 
-    /* Иконка 35 пиксель в пиксель, остриё (нижний центр) ровно в точке цели. */
+    /* Иконка 192 пиксель в пиксель, остриё (нижний центр) ровно в точке цели. */
     canvas();
     purrgo_wpt_render(&g_gfx, &cam, &vp);
     CHECK(icon_mismatch(PURRGO_WPT_TARGET_ICON, 32, 24) == 0);
@@ -969,12 +969,12 @@ static void test_map_crosshair(void)
     /* Автоследование включено: перекрестия нет. */
     CHECK(!map_app_is_manual_pan_active());
 
-    /* Сдвиг карты кнопкой: ручной режим, перекрестие (иконка 47) в центре окна карты. */
+    /* Сдвиг карты кнопкой: ручной режим, перекрестие (иконка 194) в центре окна карты. */
     CHECK(purrgo_map_controller_handle_button(PURRGO_ACTION_LEFT));
     CHECK(map_app_is_manual_pan_active() && purrgo_ui_dirty_test(UI_DIRTY_MAP));
     memset(g_ffb, 0, sizeof g_ffb);
     purrgo_app_ui_render(&g, purrgo_app_get_gnss_solution(), NULL);
-    CHECK(fmismatch_icon(47, cx, cy) == 0);
+    CHECK(fmismatch_icon(PURRGO_UI_ICON_MAP_CROSSHAIR, cx, cy) == 0);
     CHECK(fcount(cx - 5, cy - 5, cx + 6, cy + 6) > 20);
 
     /* Точка, взятая через MAP CENTER, - это координаты под перекрестием. */

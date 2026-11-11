@@ -835,7 +835,7 @@ static void test_viewport_failures(void)
 
 /*
  * Диапазоны feature code по слоям (docs/map-format-v3.md, 8.1) и таблица иконок:
- * номер иконки POI равен feature code, а вне диапазона POI занят только UI-иконками.
+ * номер иконки POI равен feature code, UI-иконки лежат в 192..223, остальные иконки пусты.
  */
 static int in_range(uint32_t code, uint32_t first, uint32_t last)
 {
@@ -885,13 +885,17 @@ static void test_feature_code_ranges(void)
 
     /* Иконки: непустые только в диапазоне POI и у UI-иконок (35, 46, 47). */
     for (unsigned no = 0; no < PURRGO_POI_ICON_COUNT; no++) {
-        const int is_ui = (no == 35u || no == 46u || no == 47u);
+        const int is_ui = in_range(no, PURRGO_UI_ICON_FIRST, PURRGO_UI_ICON_LAST);
         if (!in_range(no, PURRGO_FEATURE_POI_FIRST, PURRGO_FEATURE_POI_LAST) && !is_ui) {
             CHECK(icon_is_empty(no));
         }
     }
     CHECK(!icon_is_empty(PURRGO_FEATURE_POI_BIG));
     CHECK(!icon_is_empty(PURRGO_FEATURE_POI_SMALL));
+    CHECK(!icon_is_empty(PURRGO_UI_ICON_WPT_TARGET));
+    CHECK(!icon_is_empty(PURRGO_UI_ICON_WPT_LAYER));
+    CHECK(!icon_is_empty(PURRGO_UI_ICON_MAP_CROSSHAIR));
+    CHECK(PURRGO_UI_ICON_FIRST == PURRGO_FEATURE_UI_FIRST && PURRGO_UI_ICON_LAST == PURRGO_FEATURE_UI_LAST);
 }
 
 int main(void)
