@@ -97,6 +97,16 @@
 #endif
 
 /*
+ * UBX-SEC-SIG (глушение и спуфинг) есть только в SPG 5.30 и новее. В SPG 5.10
+ * (G10A-F30, "ROM SPG 5.10") ключа CFG-MSGOUT-UBX_SEC_SIG_UART1 нет, модуль отвечает NAK.
+ * Включать (-DPURRGO_GNSS_SEC_SIG=1) только для модуля с прошивкой 5.30+; в UI строка
+ * SIG при выключенном сообщении показывает "---".
+ */
+#ifndef PURRGO_GNSS_SEC_SIG
+#define PURRGO_GNSS_SEC_SIG 0
+#endif
+
+/*
  * Модель динамики приёмника (CFG-NAVSPG-DYNMODEL), только при PURRGO_GNSS_UBX = 1.
  * Отправляется отдельной командой UBX-CFG-VALSET: если модуль не знает значения
  * (NAK), остальная настройка не страдает, а модель остаётся прежней.

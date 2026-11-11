@@ -113,8 +113,9 @@ size_t purrgo_ubx_build_valset(uint8_t *out, size_t out_size, uint8_t layers,
 /*
  * Расширения UBX (PURRGO_GNSS_UBX = 1, см. hardware_config.h). Каждая группа
  * отправляется отдельным UBX-CFG-VALSET: модуль применяет набор целиком или
- * отклоняет целиком (NAK), и отказ по одному ключу (например, неподдерживаемая
- * модель динамики) не должен отменять остальное.
+ * отклоняет целиком (NAK), и отказ по одному ключу (например, SEC-SIG в SPG 5.10
+ * или неподдерживаемая модель динамики) не должен отменять остальное. Сообщения
+ * включаются по одному ключу на команду.
  */
 #define UBX_KEY_MSGOUT_PVT_UART1     0x20910007U  /* U1: UBX-NAV-PVT */
 #define UBX_KEY_MSGOUT_ODO_UART1     0x2091007FU  /* U1: UBX-NAV-ODO */
@@ -158,13 +159,14 @@ void purrgo_gnss_receiver_configure_ubx(purrgo_gnss_tx_fn tx)
     send_valset(tx, items, sizeof items / sizeof items[0]);
 
 #if PURRGO_GNSS_UBX
-    /* 2. Бинарные сообщения раз в эпоху (1 Гц при PURRGO_GNSS_UPDATE_PERIOD_MS = 1000). */
-    static const purrgo_ubx_cfg_item_t msgs[] = {
-        { UBX_KEY_MSGOUT_PVT_UART1,     1U },
-        { UBX_KEY_MSGOUT_ODO_UART1,     1U },
-        { UBX_KEY_MSGOUT_MON_RF_UART1,  1U },
-        { UBX_KEY_MSGOUT_SEC_SIG_UART1, 1U },
-    };
+    /*
+     * 2. Бинарные сообщения раз в эпоху (1 Гц при PURRGO_GNSS_UPDATE_PERIOD_MS = 1000).
+     * Каждое - отдельным VALSET: если прошивка не знает ключа (SEC-SIG нет в SPG 5.10),
+     * NAK получает только он, а NAV-PVT, NAV-ODO и MON-RF остаются включёнными.
+     */
+    static const purrgo_ubx_cfg_item_t msg_pvt = { UBX_KEY_MSGOUT_PVT_UART1,    1U };
+    static const purrgo_ubx_cfg_item_t msg_odo = { UBX_KEY_MSGOUT_ODO_UART1,    1U };
+    static const purrgo_ubx_cfg_item_t msg_rf  = { UBX_KEY_MSGOUT_MON_RF_UART1, 1U };
     /* 3. Одометр: без USE_ODO UBX-NAV-ODO отдаёт нули. */
     static const purrgo_ubx_cfg_item_t odo[] = {
         { UBX_KEY_ODO_USE_ODO, 1U },
@@ -175,7 +177,13 @@ void purrgo_gnss_receiver_configure_ubx(purrgo_gnss_tx_fn tx)
         { UBX_KEY_NAVSPG_DYNMODEL, (uint32_t)PURRGO_GNSS_DYNMODEL },
     };
 
-    send_valset(tx, msgs, sizeof msgs / sizeof msgs[0]);
+    send_valset(tx, &msg_pvt, 1U);
+    send_valset(tx, &msg_odo, 1U);
+    send_valset(tx, &msg_rf, 1U);
+#if PURRGO_GNSS_SEC_SIG
+    static const purrgo_ubx_cfg_item_t msg_sig = { UBX_KEY_MSGOUT_SEC_SIG_UART1, 1U };
+    send_valset(tx, &msg_sig, 1U);
+#endif
     send_valset(tx, odo, sizeof odo / sizeof odo[0]);
     send_valset(tx, dyn, sizeof dyn / sizeof dyn[0]);
 

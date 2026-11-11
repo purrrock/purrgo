@@ -3,23 +3,25 @@
 #include "map_projection.h"
 #include "purrgo/gfx_line.h"
 
-void purrgo_track_render(
+/*
+ * Трек: чёрная линия 1 px с белой обводкой (по 1 px с каждой стороны).
+ * Обводка отличает трек от ручья (чёрная линия 1 px без обводки) и
+ * от маршрута (чёрная линия 3 px с белой осевой линией).
+ */
+#define TRACK_CASING_PX 3
+
+/*
+ * Один проход по всему треку. Сначала белая обводка всех отрезков, потом
+ * чёрная линия поверх: иначе обводка следующего отрезка затирала бы
+ * чёрную линию в стыках.
+ */
+static void track_render_pass(
     gfx_context_t *gfx,
     const purrgo_bbox_t *camera,
     const purrgo_viewport_t *vp,
-    const char *gpx_filepath)
+    size_t num_points,
+    bool casing)
 {
-    if (!gfx || !camera || !vp || !gpx_filepath) return;
-
-    size_t num_points = purrgo_logger_get_track_point_count();
-
-    if (num_points == 0) {
-        return;
-    }
-
-    // Oтрисовывать трек нужно тонкой черной линией.
-    gfx_set_color(gfx, BLACK, gfx->color_bg);
-
     bool has_prev = false;
     int32_t prev_sx = 0, prev_sy = 0;
 
@@ -34,7 +36,12 @@ void purrgo_track_render(
                 int32_t x0 = prev_sx, y0 = prev_sy, x1 = sx, y1 = sy;
 
                 if (map_clip_segment_to_safe(&x0, &y0, &x1, &y1)) {
-                    gfx_draw_line(gfx, (int16_t)x0, (int16_t)y0, (int16_t)x1, (int16_t)y1);
+                    if (casing) {
+                        gfx_draw_thick_line(gfx, (int16_t)x0, (int16_t)y0,
+                                            (int16_t)x1, (int16_t)y1, TRACK_CASING_PX);
+                    } else {
+                        gfx_draw_line(gfx, (int16_t)x0, (int16_t)y0, (int16_t)x1, (int16_t)y1);
+                    }
                 }
             }
             prev_sx = sx;
@@ -42,6 +49,27 @@ void purrgo_track_render(
             has_prev = true;
         }
     }
+}
+
+void purrgo_track_render(
+    gfx_context_t *gfx,
+    const purrgo_bbox_t *camera,
+    const purrgo_viewport_t *vp,
+    const char *gpx_filepath)
+{
+    if (!gfx || !camera || !vp || !gpx_filepath) return;
+
+    size_t num_points = purrgo_logger_get_track_point_count();
+
+    if (num_points == 0) {
+        return;
+    }
+
+    gfx_set_color(gfx, WHITE, gfx->color_bg);
+    track_render_pass(gfx, camera, vp, num_points, true);
+
+    gfx_set_color(gfx, BLACK, gfx->color_bg);
+    track_render_pass(gfx, camera, vp, num_points, false);
 }
 
 /* Объединение прямоугольников (rect_valid - есть ли в acc уже что-то). */
@@ -72,6 +100,7 @@ static bool draw_segment(
     const purrgo_viewport_t *vp,
     const track_point_t *p0,
     const track_point_t *p1,
+    bool casing,
     purrgo_rect_t *out_rect)
 {
     int32_t x0, y0, x1, y1;
@@ -98,7 +127,12 @@ static bool draw_segment(
         return false;
     }
 
-    gfx_draw_line(gfx, (int16_t)x0, (int16_t)y0, (int16_t)x1, (int16_t)y1);
+    if (casing) {
+        gfx_draw_thick_line(gfx, (int16_t)x0, (int16_t)y0, (int16_t)x1, (int16_t)y1,
+                            TRACK_CASING_PX);
+    } else {
+        gfx_draw_line(gfx, (int16_t)x0, (int16_t)y0, (int16_t)x1, (int16_t)y1);
+    }
 
     if (min_x < vp->offset_x) min_x = vp->offset_x;
     if (max_x >= vp->offset_x + vp->width) max_x = (int16_t)(vp->offset_x + vp->width - 1);
@@ -139,22 +173,37 @@ bool purrgo_track_render_new_segments(
     const int16_t old_clip_w = gfx->clip_w;
     const int16_t old_clip_h = gfx->clip_h;
     gfx_set_clip(gfx, vp->offset_x, vp->offset_y, (int16_t)vp->width, (int16_t)vp->height);
-    gfx_set_color(gfx, BLACK, gfx->color_bg);
-
     bool any = false;
-    track_point_t prev;
-    /* Отрезок до первой новой точки связывает её с уже нарисованной. */
-    size_t i = (first_new > 0U) ? first_new : 1U;
 
-    if (purrgo_logger_get_track_point(i - 1U, &prev)) {
-        for (; i < count; i++) {
+    /* Отрезок до первой новой точки связывает её с уже нарисованной. */
+    const size_t i0 = (first_new > 0U) ? first_new : 1U;
+
+    /*
+     * Обводка нового отрезка затирает конец предыдущей чёрной линии у стыка,
+     * поэтому чёрная линия перерисовывается на один отрезок глубже (i0 - 1,
+     * уже нарисованный, без своей обводки). Сначала белая обводка новых
+     * отрезков, потом чёрная линия.
+     */
+    const size_t black_from = (i0 >= 2U) ? (i0 - 1U) : i0;
+
+    for (int pass = 0; pass < 2; pass++) {
+        const bool casing = (pass == 0);
+        const size_t from = casing ? i0 : black_from;
+        track_point_t prev;
+
+        gfx_set_color(gfx, casing ? WHITE : BLACK, gfx->color_bg);
+
+        if (!purrgo_logger_get_track_point(from - 1U, &prev)) {
+            continue;
+        }
+        for (size_t i = from; i < count; i++) {
             track_point_t cur;
             purrgo_rect_t r;
 
             if (!purrgo_logger_get_track_point(i, &cur)) {
                 break;
             }
-            if (draw_segment(gfx, camera, vp, &prev, &cur, &r)) {
+            if (draw_segment(gfx, camera, vp, &prev, &cur, casing, &r)) {
                 rect_union(out_rect, &any, &r);
             }
             prev = cur;
