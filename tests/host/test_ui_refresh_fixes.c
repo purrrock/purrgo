@@ -281,9 +281,17 @@ static void test_map_shift_is_partial_refresh(void)
 #if PURRGO_MAP_SHIFT_PARTIAL_REFRESH
     /*
      * Лимит частичных от сдвигов подряд: после PURRGO_MAP_SHIFT_PARTIALS_BEFORE_FULL
-     * (уже было LEFT и PLUS) очередной сдвиг - полное обновление, затем счёт заново.
+     * частичных (выше уже были LEFT и PLUS) очередной сдвиг - полное обновление, затем счёт заново.
+     * Значение не зашито в тест: его меняют по результатам проверки на железе.
      */
-    CHECK(PURRGO_MAP_SHIFT_PARTIALS_BEFORE_FULL == 2);
+    CHECK(PURRGO_MAP_SHIFT_PARTIALS_BEFORE_FULL >= 2);
+    for (int i = 2; i < PURRGO_MAP_SHIFT_PARTIALS_BEFORE_FULL; i++) {
+        pc_display_stats_reset();
+        CHECK(purrgo_map_controller_handle_button((i & 1) ? PURRGO_ACTION_LEFT : PURRGO_ACTION_RIGHT));
+        render(&g);
+        st = pc_display_stats_get();
+        CHECK(st.fulls == 0 && st.partials == 1);
+    }
     pc_display_stats_reset();
     CHECK(purrgo_map_controller_handle_button(PURRGO_ACTION_RIGHT));
     render(&g);
