@@ -94,10 +94,19 @@ typedef struct {
 static gsa_slot_t s_gsa[GSA_SYS_COUNT];
 static uint32_t s_gsa_epoch = 0;
 
+/* Сколько эпох RMC ещё считается, что решением владеет UBX-NAV-PVT (0 - владеет NMEA). */
+static uint8_t s_pvt_hold = 0;
+
 void purrgo_gnss_adapter_reset(void)
 {
     memset(s_gsa, 0, sizeof(s_gsa));
     s_gsa_epoch = 0;
+    s_pvt_hold = 0;
+}
+
+void purrgo_gnss_adapter_pvt_applied(void)
+{
+    s_pvt_hold = (uint8_t)PURRGO_GNSS_PVT_HOLD_EPOCHS;
 }
 
 static int32_t minmea_to_100(struct minmea_float f)
@@ -186,6 +195,24 @@ static void gsa_merge_into(purrgo_gnss_solution_t *solution)
     if (s_gsa[best].pdop_100 >= 0) solution->pdop_100 = s_gsa[best].pdop_100;
 }
 
+/*
+ * То же, что gsa_merge_into(), но пока решением владеет PVT: тип фикса и PDOP остаются
+ * из PVT, а из GSA берутся только HDOP/VDOP (в PVT их нет).
+ */
+static void gsa_merge_respecting_pvt(purrgo_gnss_solution_t *solution)
+{
+    if (s_pvt_hold == 0U) {
+        gsa_merge_into(solution);
+        return;
+    }
+    const uint8_t fix_type = solution->fix_type;
+    const int32_t pdop = solution->pdop_100;
+
+    gsa_merge_into(solution);
+    solution->fix_type = fix_type;
+    solution->pdop_100 = pdop;
+}
+
 bool purrgo_gnss_process_nmea(const char *nmea_line, purrgo_gnss_solution_t *solution) {
     bool rmc_parsed = false;
 
@@ -201,7 +228,15 @@ bool purrgo_gnss_process_nmea(const char *nmea_line, purrgo_gnss_solution_t *sol
             if (minmea_parse_rmc(&frame, nmea_line)) {
                 rmc_parsed = true;
                 s_gsa_epoch++;      /* новая эпоха: устаревшие GSA отбрасываются */
-                gsa_merge_into(solution);
+                /* Владеет ли решением PVT в этой эпохе; без PVT счётчик не растёт и не убывает. */
+                const bool pvt_owns = (s_pvt_hold != 0U);
+                if (pvt_owns) {
+                    s_pvt_hold--;
+                }
+                gsa_merge_respecting_pvt(solution);
+                if (pvt_owns) {
+                    break;          /* RMC лишь подтвердил, что приёмник жив */
+                }
                 solution->valid = frame.valid;
                 if (frame.valid) {
                     solution->lat_1e7 = convert_to_1e7(frame.latitude);
@@ -233,11 +268,13 @@ bool purrgo_gnss_process_nmea(const char *nmea_line, purrgo_gnss_solution_t *sol
         case MINMEA_SENTENCE_GGA: {
             struct minmea_sentence_gga frame;
             if (minmea_parse_gga(&frame, nmea_line)) {
-                solution->satellites_tracked = (uint8_t)frame.satellites_tracked;
-                if (frame.altitude.scale != 0) {
-                    solution->alt_m = frame.altitude.value / frame.altitude.scale;
+                if (s_pvt_hold == 0U) {     /* пока PVT владеет решением, из GGA берётся только HDOP */
+                    solution->satellites_tracked = (uint8_t)frame.satellites_tracked;
+                    if (frame.altitude.scale != 0) {
+                        solution->alt_m = frame.altitude.value / frame.altitude.scale;
+                    }
+                    solution->fix_quality = (uint8_t)frame.fix_quality;
                 }
-                solution->fix_quality = (uint8_t)frame.fix_quality;
                 if (frame.hdop.scale != 0) {
                     solution->hdop_100 = (int32_t)(((int64_t)frame.hdop.value * 100) / frame.hdop.scale);
                 }
@@ -254,7 +291,7 @@ bool purrgo_gnss_process_nmea(const char *nmea_line, purrgo_gnss_solution_t *sol
                 slot->hdop_100 = minmea_to_100(frame.hdop);
                 slot->vdop_100 = minmea_to_100(frame.vdop);
                 slot->pdop_100 = minmea_to_100(frame.pdop);
-                gsa_merge_into(solution);
+                gsa_merge_respecting_pvt(solution);
             }
             break;
         }

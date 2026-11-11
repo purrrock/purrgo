@@ -9,6 +9,9 @@
 #include "purrgo/gfx_line.h"
 #include "purrgo/gfx_circle.h"
 #include "purrgo/gfx_polygon.h"
+#include "purrgo/hardware_config.h"
+#include "purrgo/trip_computer.h"
+#include "purrgo/gnss_ubx.h"
 #include <string.h>
 
 /* Порядок строк (шаг 12 px, первая строка y = 10). */
@@ -25,7 +28,12 @@
 #define TRIP_ROW_LAT   8
 #define TRIP_ROW_LON   9
 #define TRIP_ROW_ALT   10
-#define TRIP_ROW_SUN   11  /* SUN, TO SUNSET/SUNRISE, DAY */
+#define TRIP_ROW_SUN   11  /* SUN, TO SUNSET/SUNRISE, DAY (блок очищает строки 11..14) */
+/* Данные UBX (PURRGO_GNSS_UBX = 1): ниже блока SUN. */
+#define TRIP_ROW_TRP   15  /* дистанция с начала записи трека */
+#define TRIP_ROW_ACC   16  /* точность hAcc / vAcc */
+#define TRIP_ROW_SIG   17  /* глушение и спуфинг */
+#define TRIP_ROW_RF    18  /* помехи (CW, AGC) и антенна */
 
 /*
  * Компас на цель (по наброску): кольцо с 8 засечками, буквы N/E/S/W снаружи,
@@ -194,7 +202,79 @@ void ui_trip_render_grid(gfx_context_t* gfx) {
     gfx_draw_string(gfx, 10, TRIP_ROW_Y(TRIP_ROW_LAT), "LAT:");
     gfx_draw_string(gfx, 10, TRIP_ROW_Y(TRIP_ROW_LON), "LON:");
     gfx_draw_string(gfx, 10, TRIP_ROW_Y(TRIP_ROW_ALT), "ALT:");
+#if PURRGO_GNSS_UBX
+    gfx_draw_string(gfx, 10, TRIP_ROW_Y(TRIP_ROW_TRP), "TRP:");
+    gfx_draw_string(gfx, 10, TRIP_ROW_Y(TRIP_ROW_ACC), "ACC:");
+    gfx_draw_string(gfx, 10, TRIP_ROW_Y(TRIP_ROW_SIG), "SIG:");
+    gfx_draw_string(gfx, 10, TRIP_ROW_Y(TRIP_ROW_RF), "RF:");
+#endif
 }
+
+#if PURRGO_GNSS_UBX
+/*
+ * Строки данных UBX из снимка путевого компьютера (обновляется раз в секунду).
+ * "---" - данных нет (UBX не приходит или нет фикса).
+ */
+static void ui_trip_render_ubx(gfx_context_t* gfx, int16_t val_x)
+{
+    static const char* const k_jam[] = { "--", "OK", "WARN!" };
+    static const char* const k_spoof[] = { "--", "OK", "IND!", "AFF!!" };
+    const purrgo_trip_info_t* t = purrgo_trip_computer_info();
+    char buf[48];
+
+    /* TRP: километры с двумя знаками. */
+    if (t->dist_valid) {
+        purrgo_snprintf(buf, sizeof(buf), "%u.%02u km", (unsigned int)(t->dist_m / 1000U),
+                        (unsigned int)((t->dist_m % 1000U) / 10U));
+    } else {
+        purrgo_snprintf(buf, sizeof(buf), "---");
+    }
+    pad_to(buf, sizeof(buf), TRIP_VALUE_CHARS);
+    gfx_draw_string(gfx, val_x, TRIP_ROW_Y(TRIP_ROW_TRP), buf);
+
+    /* ACC: горизонтальная и вертикальная точность, метры с десятыми. */
+    if (t->acc_valid) {
+        purrgo_snprintf(buf, sizeof(buf), "H%u.%u m V%u.%u m",
+                        (unsigned int)(t->hacc_dm / 10U), (unsigned int)(t->hacc_dm % 10U),
+                        (unsigned int)(t->vacc_dm / 10U), (unsigned int)(t->vacc_dm % 10U));
+    } else {
+        purrgo_snprintf(buf, sizeof(buf), "---");
+    }
+    pad_to(buf, sizeof(buf), TRIP_VALUE_CHARS);
+    gfx_draw_string(gfx, val_x, TRIP_ROW_Y(TRIP_ROW_ACC), buf);
+
+    /* SIG: глушение и спуфинг (UBX-SEC-SIG). */
+    if (t->sig_valid) {
+        const char* jam = (t->jam_state < (sizeof k_jam / sizeof k_jam[0])) ? k_jam[t->jam_state] : "--";
+        const char* spf = (t->spoof_state < (sizeof k_spoof / sizeof k_spoof[0])) ? k_spoof[t->spoof_state] : "--";
+
+        purrgo_snprintf(buf, sizeof(buf), "JAM %s SPF %s", jam, spf);
+    } else {
+        purrgo_snprintf(buf, sizeof(buf), "---");
+    }
+    pad_to(buf, sizeof(buf), TRIP_VALUE_CHARS);
+    gfx_draw_string(gfx, val_x, TRIP_ROW_Y(TRIP_ROW_SIG), buf);
+
+    /* RF: CW-помеха и AGC в процентах, состояние антенны (UBX-MON-RF). */
+    if (t->rf_valid) {
+        const char* ant = "--";
+
+        if (t->ant_status == PURRGO_UBX_ANT_OK) {
+            ant = "OK";
+        } else if (t->ant_status == PURRGO_UBX_ANT_SHORT) {
+            ant = "SHORT!";
+        } else if (t->ant_status == PURRGO_UBX_ANT_OPEN) {
+            ant = "OPEN!";
+        }
+        purrgo_snprintf(buf, sizeof(buf), "CW%u AGC%u A:%s", (unsigned int)t->cw_percent,
+                        (unsigned int)t->agc_percent, ant);
+    } else {
+        purrgo_snprintf(buf, sizeof(buf), "---");
+    }
+    pad_to(buf, sizeof(buf), TRIP_VALUE_CHARS);
+    gfx_draw_string(gfx, val_x, TRIP_ROW_Y(TRIP_ROW_RF), buf);
+}
+#endif
 
 void ui_trip_render_values(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const purrgo_sun_info_t* sun) {
     char buf[64];
@@ -256,6 +336,10 @@ void ui_trip_render_values(gfx_context_t* gfx, const purrgo_gnss_solution_t* gns
     // ALT
     purrgo_snprintf(buf, sizeof(buf), "%d m        ", (int)gnss->alt_m);
     gfx_draw_string(gfx, val_x, TRIP_ROW_Y(TRIP_ROW_ALT), buf);
+
+#if PURRGO_GNSS_UBX
+    ui_trip_render_ubx(gfx, val_x);
+#endif
 
     int16_t y_pos = TRIP_ROW_Y(TRIP_ROW_SUN);
 

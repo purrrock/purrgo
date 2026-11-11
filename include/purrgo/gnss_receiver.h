@@ -28,7 +28,12 @@ typedef void (*purrgo_gnss_tx_fn)(const uint8_t *data, size_t len);
  */
 void purrgo_gnss_receiver_configure(purrgo_gnss_tx_fn tx);
 
-/* Реализация для u-blox M10 (всегда доступна, в том числе для host-тестов). */
+/*
+ * Реализация для u-blox M10 (всегда доступна, в том числе для host-тестов).
+ * Отправляет несколько кадров подряд: базовую настройку (частота, NMEA GGA/RMC/GSA),
+ * а при PURRGO_GNSS_UBX = 1 ещё отдельными UBX-CFG-VALSET бинарные сообщения
+ * (PVT, ODO, MON-RF, SEC-SIG), одометр, модель динамики и опрос UBX-MON-VER.
+ */
 void purrgo_gnss_receiver_configure_ubx(purrgo_gnss_tx_fn tx);
 
 /*

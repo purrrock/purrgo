@@ -30,6 +30,15 @@ typedef enum {
 void purrgo_logger_set_mode(track_logger_mode_t mode);
 track_logger_mode_t purrgo_logger_get_mode(void);
 
+/*
+ * Колбэк "начат новый трек": вызывается, когда создан новый GPX-файл (первый старт,
+ * смена суток). Повторное открытие того же файла после сбоя записи его не вызывает.
+ * Приложение использует его, чтобы обнулить дистанцию трека (UBX-NAV-RESETODO).
+ * NULL - снять колбэк. Переживает purrgo_logger_reset().
+ */
+typedef void (*purrgo_logger_new_track_cb_t)(void);
+void purrgo_logger_set_new_track_callback(purrgo_logger_new_track_cb_t cb);
+
 bool purrgo_logger_start(const purrgo_gnss_solution_t* first_fix);
 bool purrgo_logger_add_point(const purrgo_gnss_solution_t* fix);
 void purrgo_logger_stop(void);

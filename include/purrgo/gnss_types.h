@@ -16,7 +16,9 @@
 //   over ground value. Course validity is independent from position validity,
 //   because a GNSS receiver may have a valid position but no valid course.
 // - Other fields (like alt_m, speed, hdop) are merged continuously from
-//   available NMEA sentences (RMC, GGA, GSA).
+//   available NMEA sentences (RMC, GGA, GSA). With PURRGO_GNSS_UBX the UBX-NAV-PVT
+//   message owns position, time, speed, course, fix and satellites while it keeps
+//   arriving (see gnss_adapter.h); NMEA still supplies HDOP/VDOP.
 //   If a specific sentence omits optional data, the previous value is retained.
 // - If the parser state is reset or no valid fix has ever been obtained,
 //   these fields may contain 0.
@@ -56,6 +58,15 @@ typedef struct {
                               // 0=Invalid, 1=GPS, 2=DGPS)
     uint8_t fix_type;         // Тип фикса (из $GPGSA:
                               // 1=Нет фикса, 2=2D, 3=3D)
+
+    // Оценки точности из UBX-NAV-PVT (только при PURRGO_GNSS_UBX = 1).
+    // acc_valid - признак того, что ниже лежат значения текущего решения: без PVT
+    // (NMEA-режим, PVT не приходит, нет фикса) он false, а поля нельзя считать
+    // достоверными (0 - не признак точности).
+    bool acc_valid;
+    uint32_t hacc_mm;         // Горизонтальная точность (hAcc), мм
+    uint32_t vacc_mm;         // Вертикальная точность (vAcc), мм
+    uint32_t sacc_mm_s;       // Точность скорости (sAcc), мм/с
 } purrgo_gnss_solution_t;
 
 #endif // PURRGO_GNSS_TYPES_H

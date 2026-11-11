@@ -52,4 +52,15 @@ void purrgo_gnss_power_on(void);
  */
 void purrgo_gnss_power_off(void);
 
+/**
+ * @brief Отправить байты приёмнику GNSS (команды UBX из ядра: опрос версии, сброс одометра).
+ *
+ * STM32: блокирующая передача по LPUART1; false, если GNSS выключен или идёт поиск
+ * скорости UART (gnss_link). PC: с эмулятором GNSS - команда уходит в мок, с
+ * реальным COM-портом передача не поддерживается (false).
+ *
+ * @return true, если данные переданы.
+ */
+bool purrgo_gnss_write(const uint8_t *data, uint16_t length);
+
 #endif /* PURRGO_GNSS_IO_H */

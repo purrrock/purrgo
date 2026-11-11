@@ -1,4 +1,5 @@
 #include <purrgo/pc_gnss_mock.h>
+#include <purrgo/hardware_config.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -20,8 +21,18 @@
 
 static purrgo_gnss_solution_t state;
 static char nmea_buffer[384];
-static size_t nmea_len = 0;
+/* Поток к приложению: NMEA, затем (при PURRGO_GNSS_UBX) кадры UBX. */
+static uint8_t stream_buffer[1024];
+static size_t nmea_len = 0;     /* длина всего потока */
 static size_t nmea_pos = 0;
+
+#if PURRGO_GNSS_UBX
+/* Одометр мока: дистанция растёт на MOCK_STEP_M за каждое обновление (раз в секунду). */
+#define MOCK_STEP_M 3U
+static uint32_t mock_odo_m;
+static uint32_t mock_odo_total_m = 12345U;
+static bool mock_ver_pending;
+#endif
 
 static void format_lat(int32_t lat_1e7, char* buf, size_t size) {
     int32_t abs_lat = lat_1e7 < 0 ? -lat_1e7 : lat_1e7;
@@ -94,8 +105,112 @@ static void generate_nmea(void) {
     snprintf(nmea_buffer, sizeof(nmea_buffer), "%s%02X\r\n%s%02X\r\n",
              rmc, (int)rmc_cksum, gga, (int)gga_cksum);
     nmea_len = strlen(nmea_buffer);
+    memcpy(stream_buffer, nmea_buffer, nmea_len);
     nmea_pos = 0;
 }
+
+#if PURRGO_GNSS_UBX
+static void put_u16(uint8_t *p, uint16_t v) { p[0] = (uint8_t)v; p[1] = (uint8_t)(v >> 8); }
+static void put_u32(uint8_t *p, uint32_t v)
+{
+    p[0] = (uint8_t)v; p[1] = (uint8_t)(v >> 8); p[2] = (uint8_t)(v >> 16); p[3] = (uint8_t)(v >> 24);
+}
+
+/* Добавляет кадр UBX в конец потока (контрольная сумма Fletcher-8). */
+static void append_ubx(uint8_t cls, uint8_t id, const uint8_t *payload, uint16_t len)
+{
+    if (nmea_len + (size_t)len + 8U > sizeof stream_buffer) {
+        return;
+    }
+    uint8_t *f = &stream_buffer[nmea_len];
+    uint8_t a = 0, b = 0;
+
+    f[0] = 0xB5; f[1] = 0x62; f[2] = cls; f[3] = id;
+    put_u16(&f[4], len);
+    if (len != 0U) {
+        memcpy(&f[6], payload, len);
+    }
+    for (size_t i = 2; i < 6U + (size_t)len; i++) {
+        a = (uint8_t)(a + f[i]);
+        b = (uint8_t)(b + a);
+    }
+    f[6U + len] = a;
+    f[7U + len] = b;
+    nmea_len += (size_t)len + 8U;
+}
+
+static void generate_ubx(void)
+{
+    uint8_t pvt[92];
+    uint8_t odo[20];
+    uint8_t sec[4];
+    uint8_t rf[28];
+
+    memset(pvt, 0, sizeof pvt);
+    put_u16(&pvt[4], (uint16_t)(2000U + state.year));
+    pvt[6] = state.month; pvt[7] = state.day;
+    pvt[8] = state.hours; pvt[9] = state.minutes; pvt[10] = state.seconds;
+    pvt[11] = 0x03;                                  /* validDate, validTime */
+    pvt[20] = 3;                                     /* 3D */
+    pvt[21] = 0x01;                                  /* gnssFixOK */
+    pvt[23] = state.satellites_tracked;
+    put_u32(&pvt[24], (uint32_t)state.lon_1e7);
+    put_u32(&pvt[28], (uint32_t)state.lat_1e7);
+    put_u32(&pvt[36], (uint32_t)((int32_t)state.alt_m * 1000));
+    put_u32(&pvt[40], 3500U);                        /* hAcc 3.5 м */
+    put_u32(&pvt[44], 5200U);                        /* vAcc 5.2 м */
+    put_u32(&pvt[60], (uint32_t)(((int64_t)state.speed_knots * 1852) / 360));
+    put_u32(&pvt[64], (uint32_t)(state.course_deg_100 * 1000));
+    put_u32(&pvt[68], 300U);                         /* sAcc */
+    put_u32(&pvt[72], 200000U);                      /* headAcc 2 градуса */
+    put_u16(&pvt[76], 150U);                         /* pDOP 1.5 */
+    append_ubx(0x01, 0x07, pvt, sizeof pvt);
+
+    memset(odo, 0, sizeof odo);
+    put_u32(&odo[8], mock_odo_m);
+    put_u32(&odo[12], mock_odo_total_m);
+    put_u32(&odo[16], 2U);
+    append_ubx(0x01, 0x09, odo, sizeof odo);
+
+    memset(sec, 0, sizeof sec);
+    sec[0] = 2;
+    sec[1] = (uint8_t)(0x01 | (1U << 1) | 0x08 | (1U << 4));   /* детекторы включены, всё чисто */
+    append_ubx(0x27, 0x09, sec, sizeof sec);
+
+    memset(rf, 0, sizeof rf);
+    rf[1] = 1;
+    rf[4 + 2] = 2;                                   /* antStatus OK */
+    rf[4 + 3] = 1;                                   /* antPower ON */
+    put_u16(&rf[4 + 12], 90U);                       /* noisePerMS */
+    put_u16(&rf[4 + 14], 3000U);                     /* agcCnt ~37% */
+    rf[4 + 16] = 12;                                 /* cwSuppression */
+    append_ubx(0x0A, 0x38, rf, sizeof rf);
+
+    if (mock_ver_pending) {
+        uint8_t ver[70];
+
+        memset(ver, 0, sizeof ver);
+        memcpy(&ver[0], "EXT CORE 5.30 (mock)", 20);
+        memcpy(&ver[30], "000A0000", 8);
+        memcpy(&ver[40], "PROTVER=34.30", 13);
+        append_ubx(0x0A, 0x04, ver, sizeof ver);
+        mock_ver_pending = false;
+    }
+}
+
+bool pc_gnss_mock_write(const uint8_t *data, uint16_t length)
+{
+    if (data == NULL || length < 8U || data[0] != 0xB5 || data[1] != 0x62) {
+        return false;
+    }
+    if (data[2] == 0x01 && data[3] == 0x10) {        /* UBX-NAV-RESETODO */
+        mock_odo_m = 0U;
+    } else if (data[2] == 0x0A && data[3] == 0x04) { /* UBX-MON-VER (опрос) */
+        mock_ver_pending = true;
+    }
+    return true;
+}
+#endif
 
 void pc_gnss_mock_init(void) {
     memset(&state, 0, sizeof(state));
@@ -124,6 +239,10 @@ void pc_gnss_mock_init(void) {
     state.year = 24;
 
     generate_nmea();
+#if PURRGO_GNSS_UBX
+    mock_odo_m = 0U;
+    generate_ubx();
+#endif
 }
 
 void pc_gnss_mock_update(void) {
@@ -161,13 +280,20 @@ void pc_gnss_mock_update(void) {
         state.course_deg_100 -= 36000;
     }
 
+#if PURRGO_GNSS_UBX
+    mock_odo_m += MOCK_STEP_M;
+    mock_odo_total_m += MOCK_STEP_M;
+#endif
     generate_nmea();
+#if PURRGO_GNSS_UBX
+    generate_ubx();
+#endif
 }
 
 bool pc_gnss_mock_read_byte(uint8_t *byte) {
     if (nmea_pos < nmea_len) {
         if (byte) {
-            *byte = (uint8_t)nmea_buffer[nmea_pos];
+            *byte = stream_buffer[nmea_pos];
         }
         nmea_pos++;
         return true;

@@ -1,6 +1,7 @@
 #ifndef FAKE_POWER_H
 #define FAKE_POWER_H
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 /*
  * Тестовые платформенные хуки выключения (purrgo_platform_storage_unmount,
@@ -31,4 +32,13 @@ void fake_power_set_battery_pin_mv(uint16_t mv);
 uint16_t fake_power_pin_for_pack_mv(uint32_t pack_mv);
 /* Низкое напряжение питания, которое вернёт purrgo_platform_supply_low() (по умолчанию false). */
 void fake_power_set_supply_low(bool low);
+
+/*
+ * Команды, отправленные ядром приёмнику через purrgo_gnss_write() (сброс одометра,
+ * опрос версии). fake_power_reset() их тоже очищает.
+ */
+void fake_gnss_tx_reset(void);
+void fake_gnss_tx_set_fail(bool fail);   /* purrgo_gnss_write() вернёт false */
+int fake_gnss_tx_frames(void);           /* число успешных вызовов */
+const uint8_t *fake_gnss_tx_data(size_t *len);
 #endif

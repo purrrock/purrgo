@@ -12,6 +12,8 @@
 #define UBX_SYNC2            0x62U
 #define UBX_CLASS_CFG        0x06U
 #define UBX_ID_CFG_VALSET    0x8AU
+#define UBX_CLASS_MON        0x0AU
+#define UBX_ID_MON_VER       0x04U
 #define UBX_VALSET_MAX_ITEMS 64U
 
 size_t purrgo_ubx_build_frame(uint8_t *out, size_t out_size, uint8_t msg_class,
@@ -108,6 +110,33 @@ size_t purrgo_ubx_build_valset(uint8_t *out, size_t out_size, uint8_t layers,
 #define UBX_KEY_MSGOUT_RMC_UART1     0x209100ACU
 #define UBX_KEY_MSGOUT_VTG_UART1     0x209100B1U
 
+/*
+ * Расширения UBX (PURRGO_GNSS_UBX = 1, см. hardware_config.h). Каждая группа
+ * отправляется отдельным UBX-CFG-VALSET: модуль применяет набор целиком или
+ * отклоняет целиком (NAK), и отказ по одному ключу (например, неподдерживаемая
+ * модель динамики) не должен отменять остальное.
+ */
+#define UBX_KEY_MSGOUT_PVT_UART1     0x20910007U  /* U1: UBX-NAV-PVT */
+#define UBX_KEY_MSGOUT_ODO_UART1     0x2091007FU  /* U1: UBX-NAV-ODO */
+#define UBX_KEY_MSGOUT_MON_RF_UART1  0x2091035AU  /* U1: UBX-MON-RF */
+#define UBX_KEY_MSGOUT_SEC_SIG_UART1 0x20910635U  /* U1: UBX-SEC-SIG */
+#define UBX_KEY_ODO_USE_ODO          0x10220001U  /* L: одометр (по умолчанию выключен) */
+#define UBX_KEY_ODO_PROFILE          0x20220005U  /* E1: 0 RUN, 1 CYCL, 2 SWIM, 3 CAR */
+#define UBX_KEY_NAVSPG_DYNMODEL      0x20110021U  /* E1: модель динамики */
+
+static void send_valset(purrgo_gnss_tx_fn tx, const purrgo_ubx_cfg_item_t *items, size_t count)
+{
+    uint8_t frame[96];
+    const size_t len = purrgo_ubx_build_valset(frame, sizeof frame,
+                                               (uint8_t)PURRGO_GNSS_UBX_LAYERS, items, count);
+
+    if (len == 0U) {
+        PURRGO_LOGE("GNSS: UBX-CFG-VALSET build failed\r\n");
+        return;
+    }
+    tx(frame, len);
+}
+
 void purrgo_gnss_receiver_configure_ubx(purrgo_gnss_tx_fn tx)
 {
     static const purrgo_ubx_cfg_item_t items[] = {
@@ -120,21 +149,44 @@ void purrgo_gnss_receiver_configure_ubx(purrgo_gnss_tx_fn tx)
         { UBX_KEY_MSGOUT_GSV_UART1, 0U },
         { UBX_KEY_MSGOUT_VTG_UART1, 0U },
     };
-    uint8_t frame[96];
 
     if (tx == NULL) {
         return;
     }
 
-    size_t len = purrgo_ubx_build_valset(frame, sizeof frame,
-                                         (uint8_t)PURRGO_GNSS_UBX_LAYERS,
-                                         items, sizeof items / sizeof items[0]);
-    if (len == 0U) {
-        PURRGO_LOGE("GNSS: UBX-CFG-VALSET build failed\r\n");
-        return;
-    }
+    /* 1. Частота решений и набор NMEA (как и без UBX-расширений). */
+    send_valset(tx, items, sizeof items / sizeof items[0]);
 
-    tx(frame, len);
+#if PURRGO_GNSS_UBX
+    /* 2. Бинарные сообщения раз в эпоху (1 Гц при PURRGO_GNSS_UPDATE_PERIOD_MS = 1000). */
+    static const purrgo_ubx_cfg_item_t msgs[] = {
+        { UBX_KEY_MSGOUT_PVT_UART1,     1U },
+        { UBX_KEY_MSGOUT_ODO_UART1,     1U },
+        { UBX_KEY_MSGOUT_MON_RF_UART1,  1U },
+        { UBX_KEY_MSGOUT_SEC_SIG_UART1, 1U },
+    };
+    /* 3. Одометр: без USE_ODO UBX-NAV-ODO отдаёт нули. */
+    static const purrgo_ubx_cfg_item_t odo[] = {
+        { UBX_KEY_ODO_USE_ODO, 1U },
+        { UBX_KEY_ODO_PROFILE, (uint32_t)PURRGO_GNSS_ODO_PROFILE },
+    };
+    /* 4. Модель динамики (модуль может отклонить неподдерживаемое значение). */
+    static const purrgo_ubx_cfg_item_t dyn[] = {
+        { UBX_KEY_NAVSPG_DYNMODEL, (uint32_t)PURRGO_GNSS_DYNMODEL },
+    };
+
+    send_valset(tx, msgs, sizeof msgs / sizeof msgs[0]);
+    send_valset(tx, odo, sizeof odo / sizeof odo[0]);
+    send_valset(tx, dyn, sizeof dyn / sizeof dyn[0]);
+
+    /* 5. Опрос версии прошивки: ответ UBX-MON-VER разбирает gnss_ubx.c и пишет в лог. */
+    uint8_t ver[8];
+    const size_t ver_len = purrgo_ubx_build_frame(ver, sizeof ver, UBX_CLASS_MON, UBX_ID_MON_VER,
+                                                  NULL, 0U);
+    if (ver_len != 0U) {
+        tx(ver, ver_len);
+    }
+#endif
 }
 
 /*
