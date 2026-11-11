@@ -8,14 +8,6 @@
 // Максимальное значение дня в году (високосный год)
 #define MAX_DAY_OF_YEAR 366
 
-// Таблица арккосинуса (от -10000 до 10000 -> углы от 180 до 0 градусов)
-// 201 элемент (шаг 0.01) позволяет получить точность до ~1 градуса (4 минуты времени)
-extern const uint8_t acos_lut[201]; 
-
-// Целочисленный синус для широты (дополнительная таблица или использование geo.c)
-extern const int16_t sin_lut[91]; 
-extern const int16_t cos_lut[91];
-
 // Расчет дня в году
 static uint16_t get_day_of_year(uint8_t year_2digit, uint8_t month, uint8_t day) {
     static const uint16_t days_before_month[] = {

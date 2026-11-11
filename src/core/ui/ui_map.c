@@ -97,7 +97,7 @@ static struct {
 //}
 
 #include "purrgo/gfx_polygon.h"
-#include "purrgo/sun_tables.h"
+#include "purrgo/trig.h"
 #include "../map_projection.h"
 #include "purrgo/purrgo_format.h"
 #include <string.h>
@@ -131,26 +131,6 @@ static struct {
 #define PURRGO_MAP_POS_MARK_DIRECTION_HALF_WIDTH_PX 5
 
 extern int dbg_map_render_calls;
-
-// Helper: Get sine * 10000 for angle in degrees
-static int32_t get_sin_10k(int16_t deg) {
-    deg = deg % 360;
-    if (deg < 0) deg += 360;
-    if (deg <= 90) return sin_lut[deg];
-    if (deg <= 180) return sin_lut[180 - deg];
-    if (deg <= 270) return -sin_lut[deg - 180];
-    return -sin_lut[360 - deg];
-}
-
-// Helper: Get cosine * 10000 for angle in degrees
-static int32_t get_cos_10k(int16_t deg) {
-    deg = deg % 360;
-    if (deg < 0) deg += 360;
-    if (deg <= 90) return cos_lut[deg];
-    if (deg <= 180) return -cos_lut[180 - deg];
-    if (deg <= 270) return -cos_lut[deg - 180];
-    return cos_lut[360 - deg];
-}
 
 /* Деление на 10000 с округлением к ближайшему (а не усечением к нулю). */
 static int32_t div_round_10k(int32_t v) {
@@ -274,8 +254,8 @@ static void ui_calc_marker_state(
          * At a 12 px marker size, the additional 1/100 degree precision
          * has no meaningful effect on the rasterized result.
          */
-        int32_t s = get_sin_10k(out_state->course_deg);
-        int32_t c = get_cos_10k(out_state->course_deg);
+        int32_t s = purrgo_sin_10k(out_state->course_deg);
+        int32_t c = purrgo_cos_10k(out_state->course_deg);
 
         for (uint8_t i = 0; i < 3; i++) {
             /*

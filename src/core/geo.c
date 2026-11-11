@@ -1,13 +1,8 @@
 #include "purrgo/geo.h"
+#include "purrgo/sun_tables.h" /* cos_lut[91]: общая таблица, см. purrgo/trig.h */
 
 // Тригонометрические Look-Up Tables (LUT) для целочисленной арифметики.
 // Позволяют избежать использования тяжелой библиотеки <math.h> и эмуляции FPU на STM32F103/U5.
-
-// LUT косинусов для углов от 0 до 90 градусов с шагом 10 градусов.
-// Масштабный коэффициент: 10000.
-static const int16_t cos_lut[10] = {
-    10000, 9848, 9396, 8660, 7660, 6427, 5000, 3420, 1736, 0
-};
 
 // LUT арктангенса для соотношения a = min(x,y)/max(x,y)
 // Индекс массива соответствует a * 10 (от 0.0 до 1.0 с шагом 0.1).
@@ -199,17 +194,17 @@ uint16_t purrgo_geo_azimuth_deg(int32_t lat1, int32_t lon1, int32_t lat2, int32_
 
 int32_t purrgo_geo_cos_10k(int32_t lat_1e7) {
     int32_t lat_abs = lat_1e7 < 0 ? -lat_1e7 : lat_1e7;
-    int32_t lat_deg = lat_abs / 10000000;
-    if (lat_deg > 90) lat_deg = 90;
-
-    int32_t idx = lat_deg / 10;
-    int32_t frac = lat_deg % 10;
-    int32_t cos_lat = cos_lut[idx];
-    if (idx < 9) {
-        cos_lat -= ((cos_lut[idx] - cos_lut[idx+1]) * frac) / 10;
+    if (lat_abs >= 900000000) {
+        return 0; /* полюс */
     }
 
-    return cos_lat;
+    /* Таблица cos_lut с шагом 1 градус, линейная интерполяция по дробной части градуса. */
+    int32_t deg = lat_abs / 10000000;
+    int32_t frac = lat_abs % 10000000; /* 0..9999999 */
+    int32_t c0 = cos_lut[deg];
+    int32_t c1 = cos_lut[deg + 1];
+
+    return c0 - (int32_t)(((int64_t)(c0 - c1) * frac) / 10000000);
 }
 
 int32_t purrgo_geo_wrap_lon(int64_t lon_1e7) {
