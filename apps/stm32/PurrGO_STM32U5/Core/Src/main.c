@@ -104,6 +104,10 @@ int main(void)
   MX_ADC1_Init();
   MX_LPUART1_UART_Init();
   /* USER CODE BEGIN 2 */
+  /* ADC1 нужен только для редкого измерения батареи (battery_adc.c): сразу
+   * обесточиваем регулятор АЦП, VREFINT и тактирование, измерение включит их
+   * на время опроса. */
+  (void)HAL_ADC_DeInit(&hadc1);
   
 // #define PURRGO_EINK_SELFTEST_4GRAY
 #if defined(PURRGO_EINK_SELFTEST_4GRAY)
