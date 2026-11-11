@@ -162,10 +162,10 @@ static bool map_idx_parse_node_impl(
                 radius = PURRGO_POI_ICON_WIDTH / 2;
                 gfx_draw_icon_11x11(gfx, sx, sy, purrgo_poi_icons[obj_type]);
             } else if (params->poi_mode == PURRGO_POI_MODE_CIRCLES) {
-                if (obj_type == 11) {
+                if (obj_type == PURRGO_FEATURE_POI_BIG) {
                     radius = PURRGO_POI_BIG_RADIUS;
                     gfx_draw_poi_circle(gfx, sx, sy, radius);
-                } else if (obj_type > 11) {
+                } else if (obj_type > PURRGO_FEATURE_POI_BIG) {
                     radius = PURRGO_POI_SMALL_RADIUS;
                     gfx_draw_poi_circle(gfx, sx, sy, radius);
                 }
@@ -184,7 +184,7 @@ static bool map_idx_parse_node_impl(
                     int16_t text_w = (int16_t)(len * 6); // Ширина: 5px символ + 1px промежуток
                     int16_t text_h = 8;       // Высота: 8px
                     
-                    if (obj_type == 11)  {
+                    if (obj_type == PURRGO_FEATURE_POI_BIG) {
                         // Для POI_BIG: центрируем текст строго под маркером
                         int16_t text_x = sx - (text_w / 2);
                         int16_t text_y = (int16_t)(sy + radius + 2);

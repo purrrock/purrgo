@@ -410,6 +410,29 @@ The firmware uses this numeric code to identify the PurrGO feature class and ren
 
 The original OSM tags are not required by the firmware.
 
+### 8.1.1. Code ranges
+
+The `Type` field is `uint8`. The code space is split into fixed ranges, one per layer:
+
+| Range       | Layer / purpose | Classes                                                       |
+| ----------: | --------------- | ------------------------------------------------------------- |
+|    `0..31`  | `roads`         | `NO_CLASS` (0), `ROAD_*`, `RAILWAY`                           |
+|   `32..63`  | `waterways`     | `WATERWAY_MAJOR` (32), `WATERWAY_MINOR` (33)                  |
+|   `64..95`  | `water`         | `WATER` (64), `WETLAND` (65), `GLACIER` (66)                  |
+|  `96..127`  | `landuse`       | `LANDUSE_NATURAL` (96), `LANDUSE_HUMAN` (97), `SAND` (98)     |
+| `128..191`  | `pois`          | `POI_BIG` (128), `POI_SMALL` (129), other POI classes (130..) |
+| `192..255`  | reserved        | not used by any layer                                         |
+
+Rules:
+
+- A rule in `features.csv` must use a code from the range of its own `Layer`. The map compiler checks this (also for disabled rules) and stops with an error otherwise.
+- A new class is added at the end of the range of its layer: the next free code after the highest one in use. A code that has appeared in compiled maps is never reassigned to another class.
+- Several rules may share one code (one class, many OSM tags). Code `4` is an existing exception: it is used by both `ROAD_NORMAL` and `ROAD_MINOR` rules.
+- Codes `192..255` are reserved for future needs (for example new layers). The firmware treats a code without a style as "do not draw".
+- POI icons are indexed by the code itself, see 9.6.
+
+A map compiled with the previous code assignment (`WATER` = 10, `LANDUSE_*` = 8/9, `POI_*` = 11..36, `WATERWAY_*` = 37/38, `WETLAND` = 39, `GLACIER` = 40, `SAND` = 41) is not compatible with the current firmware: water, landuse and POI would not be drawn. Such maps must be recompiled. Road and railway codes (`1..7`) did not change.
+
 For example:
 
 ```text
@@ -494,9 +517,9 @@ Code;PG_class;STYLE;LOD;Layer;OSM_Tags;Description;Enabled;Icon
 1;ROAD_MAJOR;DARK_GRAY_THICK_LINE;2;roads;highway=motorway;Автомагистраль;1;
 2;ROAD_NORMAL;DARK_GRAY_SEMITHICK_LINE;1;roads;highway=primary;Главная дорога;1;
 3;ROAD_MINOR;DARK_GRAY_LINE;0;roads;highway=residential;Жилая улица;1;
-10;WATER;WATER_FILL;1;water;natural=water;Водоем;1;
-37;WATERWAY_MAJOR;WATER_THICK_LINE;2;waterways;waterway=river;Река;1;
-12;POI_SMALL;DARK_GRAY_CIRCLE;0;pois;amenity=pharmacy;Аптека;1;cross
+64;WATER;WATER_FILL;1;water;natural=water;Водоем;1;
+32;WATERWAY_MAJOR;WATER_THICK_LINE;2;waterways;waterway=river;Река;1;
+129;POI_SMALL;DARK_GRAY_CIRCLE;0;pois;amenity=pharmacy;Аптека;1;cross
 ```
 
 The exact set of feature classes and styles is defined by the current `features.csv`.
@@ -512,8 +535,8 @@ Therefore more specific rules must precede more general rules.
 Example:
 
 ```text
-11;POI_BIG;...;place=city, capital=yes;Столица;1;circle
-11;POI_BIG;...;place=city;Город;1;circle
+128;POI_BIG;...;place=city, capital=yes;Столица;1;circle
+128;POI_BIG;...;place=city;Город;1;circle
 ```
 
 An object matching both rules is classified by the first rule.
@@ -563,9 +586,7 @@ POI_BIG
 POI_SMALL
 ```
 
-Feature codes `37` (`WATERWAY_MAJOR`) and `38` (`WATERWAY_MINOR`) are assigned to linear water objects of the `waterways` layer. The `Type` field of a Data Node is `uint8`, so codes must not exceed `255`.
-
-Feature codes `39` (`WETLAND`) and `40` (`GLACIER`) are polygons of the `water` layer that the firmware draws with horizontal hatching (wetland) and a small snowflake pattern (glacier) instead of the solid black water fill. Feature code `41` (`SAND`) is a polygon of the `landuse` layer (beach, sand, dune, shingle, scree) that the firmware draws as a dot pattern instead of the light gray fill. Maps compiled before these codes were introduced store wetlands and glaciers as code `10` and must be recompiled to get the hatching.
+The classes of the `waterways` layer (`WATERWAY_MAJOR`, `WATERWAY_MINOR`) are linear water objects. `WETLAND` and `GLACIER` are polygons of the `water` layer that the firmware draws with horizontal hatching (wetland) and a small snowflake pattern (glacier) instead of the solid black water fill. `SAND` is a polygon of the `landuse` layer (beach, sand, dune, shingle, scree) that the firmware draws as a dot pattern instead of the light gray fill. Their codes are listed in 8.1.1.
 
 The binary map stores only the numeric `Code`.
 
@@ -615,7 +636,9 @@ attraction
 
 Bitmap/icon assets are not embedded in the map format.
 
-Current PurrGO POIs use a native renderer representation, typically a circle.
+The firmware draws a POI with the 11x11 icon `purrgo_poi_icons[Type]` (`src/core/purrgo_poi_icons.c`): the icon number is the feature code, so POI icons occupy numbers `128..191`. Icon numbers outside this range are not POI codes; the numbers `35`, `46` and `47` hold UI icons (navigation target, waypoint, map centre crosshair). A new POI class gets the next free code in `128..191` and its icon is drawn under the same number.
+
+In the circle mode the firmware draws `POI_BIG` as a large circle and every other POI code as a small one.
 
 The `Icon` field is retained for future native icon support.
 

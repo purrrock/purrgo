@@ -35,6 +35,13 @@ LRU_ENTRIES = 32                      # fs_hal_stm32.c
 PER_METER_1E7 = 90                    # PURRGO_1E7_PER_METER (≈ 89.93)
 MAX_PARTS, MAX_POINTS = 32, 2000
 MAX_DEPTH = 32
+# Feature codes, у которых в прошивке есть стиль линии/полигона (src/core/map_style.c).
+# Диапазоны: 0..31 roads, 32..63 waterways, 64..95 water, 96..127 landuse, 128..191 POI.
+STYLED_CODES = frozenset(
+    list(range(1, 8)) +      # ROAD_*, RAILWAY
+    [32, 33] +               # WATERWAY_MAJOR/MINOR
+    [64, 65, 66] +           # WATER, WETLAND, GLACIER
+    [96, 97, 98])            # LANDUSE_NATURAL/HUMAN, SAND
 NAME_OFF = 32 + 129 + 17              # смещение имени в .db
 REC = 117
 
@@ -317,7 +324,7 @@ class Renderer:
                 if self.p["labels"] and v2 > 0 and db is not None:
                     self.read_name(db, v2, True)
                 return True
-            if obj_type == 0 or obj_type > 12:
+            if obj_type not in STYLED_CODES:
                 return True
             if v1 > 0:
                 if self.too_small(xmin, ymin, xmax, ymax, cam, layer):

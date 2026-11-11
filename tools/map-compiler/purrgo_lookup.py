@@ -3,6 +3,17 @@ import csv
 from typing import Dict, Tuple, List, Optional
 from dataclasses import dataclass
 
+# Диапазоны feature code по слоям (включительно), docs/map-format-v3.md, раздел 8.1.
+# 192..255 зарезервированы, ни один слой их не использует.
+LAYER_CODE_RANGES: Dict[str, Tuple[int, int]] = {
+    "roads": (0, 31),
+    "waterways": (32, 63),
+    "water": (64, 95),
+    "landuse": (96, 127),
+    "pois": (128, 191),
+}
+
+
 @dataclass
 class FeatureRule:
     code: int
@@ -46,6 +57,15 @@ class LookupTables:
                         lod = int(row[3].strip())
                     except ValueError:
                         continue
+
+                    # Проверяем и отключённые правила: их включат позже.
+                    layer_name = row[4].strip()
+                    code_range = LAYER_CODE_RANGES.get(layer_name)
+                    if code_range is not None and not (code_range[0] <= code <= code_range[1]):
+                        raise ValueError(
+                            f"code {code} ({row[1].strip()}) is outside the range "
+                            f"{code_range[0]}..{code_range[1]} of layer '{layer_name}'"
+                        )
 
                     enabled = row[7].strip()
                     if enabled not in ("1", "true", "yes", "on"):

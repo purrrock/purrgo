@@ -127,6 +127,10 @@ Rules are evaluated from top to bottom:
 `OSM_Tags` is a comma-separated list of `key=value` pairs that must all match.
 The value `*` matches any value of the key, e.g. `barrier=*,access=private`.
 
+The `Code` of a rule must lie in the range of its `Layer`: `roads` 0..31, `waterways` 32..63, `water` 64..95,
+`landuse` 96..127, `pois` 128..191 (192..255 are reserved). A new class takes the next free code at the end of
+its range. The compiler stops with an error if a rule uses a code outside the range of its layer.
+
 The detailed semantics of the feature codes and generated map format are defined in:
 
 ```text
