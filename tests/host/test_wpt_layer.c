@@ -284,7 +284,7 @@ static void test_render(void)
     purrgo_bbox_t cam = { 280000000, 530000000, 280064000, 530048000 };
     purrgo_viewport_t vp = { W, H, 0, 0 };
 
-    /* Иконка 46 в репозитории может быть ещё не нарисована (прозрачна). */
+    /* Иконка 193 в репозитории может быть ещё не нарисована (прозрачна). */
     XFAIL(icon_has_pixels(), "иконка PURRGO_WPT_LAYER_ICON в purrgo_poi_icons.c пустая");
 
     reset_all();

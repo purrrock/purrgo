@@ -23,7 +23,7 @@
 
 /* Номер иконки перекрестия центра карты в purrgo_poi_icons (src/core/purrgo_poi_icons.c). */
 #ifndef PURRGO_MAP_CROSSHAIR_ICON
-#define PURRGO_MAP_CROSSHAIR_ICON 47
+#define PURRGO_MAP_CROSSHAIR_ICON PURRGO_UI_ICON_MAP_CROSSHAIR
 #endif
 _Static_assert(PURRGO_MAP_CROSSHAIR_ICON < PURRGO_POI_ICON_COUNT, "crosshair icon out of range");
 

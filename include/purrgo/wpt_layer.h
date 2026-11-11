@@ -24,6 +24,7 @@
 #include "purrgo/gfx_renderer.h"
 #include "purrgo/map.h"
 #include "purrgo/navigation.h"
+#include "purrgo/purrgo_poi_icons.h"
 
 /* Максимум одновременно отображаемых путевых точек (маршрут + WAYPTS вместе). */
 #ifndef PURRGO_WPT_LAYER_MAX
@@ -32,7 +33,7 @@
 
 /* Номер иконки в purrgo_poi_icons (src/core/purrgo_poi_icons.c). */
 #ifndef PURRGO_WPT_LAYER_ICON
-#define PURRGO_WPT_LAYER_ICON 46
+#define PURRGO_WPT_LAYER_ICON PURRGO_UI_ICON_WPT_LAYER
 #endif
 
 /*

@@ -127,7 +127,7 @@ purrgo_map_style_t purrgo_map_style_from_feature(
     /*
      * Feature codes разнесены по диапазонам слоёв (0..31 roads,
      * 32..63 waterways, 64..95 water, 96..127 landuse, 128..191 POI,
-     * 192..255 reserved). Остальные коды POI (130..) в таблице не
+     * 192..223 UI-иконки, 224..255 reserved). Остальные коды POI (130..) в таблице не
      * перечислены: слой pois рисуется иконкой purrgo_poi_icons[code]
      * или кругом и этой таблицей не пользуется.
      *

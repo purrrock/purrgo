@@ -421,14 +421,16 @@ The `Type` field is `uint8`. The code space is split into fixed ranges, one per 
 |   `64..95`  | `water`         | `WATER` (64), `WETLAND` (65), `GLACIER` (66)                  |
 |  `96..127`  | `landuse`       | `LANDUSE_NATURAL` (96), `LANDUSE_HUMAN` (97), `SAND` (98)     |
 | `128..191`  | `pois`          | `POI_BIG` (128), `POI_SMALL` (129), other POI classes (130..) |
-| `192..255`  | reserved        | not used by any layer                                         |
+| `192..223`  | UI icons        | icon numbers of `purrgo_poi_icons`, never stored in maps      |
+| `224..255`  | reserved        | not used by any layer                                         |
 
 Rules:
 
 - A rule in `features.csv` must use a code from the range of its own `Layer`. The map compiler checks this (also for disabled rules) and stops with an error otherwise.
 - A new class is added at the end of the range of its layer: the next free code after the highest one in use. A code that has appeared in compiled maps is never reassigned to another class.
 - Several rules may share one code (one class, many OSM tags). Code `4` is an existing exception: it is used by both `ROAD_NORMAL` and `ROAD_MINOR` rules.
-- Codes `192..255` are reserved for future needs (for example new layers). The firmware treats a code without a style as "do not draw".
+- Numbers `192..223` are used by the firmware for UI icons (target, waypoint, crosshair; later battery, antenna and similar). They are not feature codes: a map must not contain them, and the compiler never assigns them. A new UI icon takes the next free number in this range.
+- Codes `224..255` are reserved for future needs (for example new layers). The firmware treats a code without a style as "do not draw".
 - POI icons are indexed by the code itself, see 9.6.
 
 A map compiled with the previous code assignment (`WATER` = 10, `LANDUSE_*` = 8/9, `POI_*` = 11..36, `WATERWAY_*` = 37/38, `WETLAND` = 39, `GLACIER` = 40, `SAND` = 41) is not compatible with the current firmware: water, landuse and POI would not be drawn. Such maps must be recompiled. Road and railway codes (`1..7`) did not change.
@@ -636,7 +638,7 @@ attraction
 
 Bitmap/icon assets are not embedded in the map format.
 
-The firmware draws a POI with the 11x11 icon `purrgo_poi_icons[Type]` (`src/core/purrgo_poi_icons.c`): the icon number is the feature code, so POI icons occupy numbers `128..191`. Icon numbers outside this range are not POI codes; the numbers `35`, `46` and `47` hold UI icons (navigation target, waypoint, map centre crosshair). A new POI class gets the next free code in `128..191` and its icon is drawn under the same number.
+The firmware draws a POI with the 11x11 icon `purrgo_poi_icons[Type]` (`src/core/purrgo_poi_icons.c`): the icon number is the feature code, so POI icons occupy numbers `128..191`. UI icons (navigation target `192`, waypoint `193`, map centre crosshair `194`) use the range `192..223`. A new POI class gets the next free code in `128..191` and its icon is drawn under the same number.
 
 In the circle mode the firmware draws `POI_BIG` as a large circle and every other POI code as a small one.
 
