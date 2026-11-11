@@ -27,12 +27,163 @@ static size_t nmea_len = 0;     /* длина всего потока */
 static size_t nmea_pos = 0;
 
 #if PURRGO_GNSS_UBX
-/* Одометр мока: дистанция растёт на MOCK_STEP_M за каждое обновление (раз в секунду). */
-#define MOCK_STEP_M 3U
+/* Одометр мока: дистанция растёт на пройденный за секунду путь (см. mock_advance_path). */
 static uint32_t mock_odo_m;
 static uint32_t mock_odo_total_m = 12345U;
 static bool mock_ver_pending;
 #endif
+
+/*
+ * Траектория мока: не прямая, а ломаная, похожая на путь пешехода.
+ *
+ * Позиция интегрируется из курса и скорости (раз в секунду). Курс держится
+ * на отрезке 15-45 с, затем выбирается новый: чаще небольшой поворот
+ * (5-45 градусов), изредка угол (70-110). К целевому курсу руль доворачивается
+ * не быстрее MOCK_SLEW_DEG_PER_S, поэтому поворот растягивается на несколько
+ * точек. Скорость слегка гуляет около 5 км/ч, к каждой точке добавляется шум
+ * позиции около 0.7 м (накапливаться он не должен: идеальная траектория
+ * хранится отдельно).
+ *
+ * Генератор псевдослучайных чисел детерминированный, поэтому путь повторяется
+ * от запуска к запуску: удобно сравнивать отрисовку и запись трека.
+ * libm не используется (эмулятор и тесты не обязаны её линковать).
+ */
+#define MOCK_SLEW_DEG_PER_S   12
+#define MOCK_SEG_MIN_S        15U
+#define MOCK_SEG_SPAN_S       30U
+#define MOCK_POS_NOISE_CM     70
+#define MOCK_SPEED_BASE_CKN   269   /* 2.69 уз ~ 5 км/ч */
+#define MOCK_SPEED_SWING_CKN  45
+#define MOCK_M_PER_1E7DEG     0.0111195    /* метров на 1e-7 градуса широты */
+#define MOCK_KNOT_MPS         0.514444
+
+static uint32_t mock_rng = 0x5047304FU;
+static double mock_true_lat;                /* в единицах 1e-7 градуса */
+static double mock_true_lon;
+static int32_t mock_heading_cdeg;           /* текущий курс, 0.01 градуса */
+static int32_t mock_target_cdeg;            /* курс, к которому доворачиваем */
+static uint32_t mock_seg_left_s;
+static int32_t mock_speed_cknot;            /* сглаженная скорость, 0.01 узла */
+static double mock_odo_frac_m;              /* дробная часть метров одометра */
+
+static uint32_t mock_rand(void)
+{
+    mock_rng = mock_rng * 1664525U + 1013904223U;
+    return mock_rng >> 8;
+}
+
+/* Равномерно в [-range; +range]. */
+static int32_t mock_rand_sym(int32_t range)
+{
+    return (int32_t)(mock_rand() % (uint32_t)(2 * range + 1)) - range;
+}
+
+static int32_t mock_wrap_cdeg(int32_t a)
+{
+    while (a < 0) {
+        a += 36000;
+    }
+    while (a >= 36000) {
+        a -= 36000;
+    }
+    return a;
+}
+
+/* sin по параболической аппроксимации (погрешность ~0.1 %), аргумент в градусах. */
+static double mock_sin_deg(double deg)
+{
+    while (deg < -180.0) {
+        deg += 360.0;
+    }
+    while (deg > 180.0) {
+        deg -= 360.0;
+    }
+    const double x = deg * (3.14159265358979 / 180.0);
+    double y = 1.27323954 * x - 0.405284735 * x * (x < 0 ? -x : x);
+    y = 0.225 * (y * (y < 0 ? -y : y) - y) + y;
+    return y;
+}
+
+static double mock_cos_deg(double deg)
+{
+    return mock_sin_deg(deg + 90.0);
+}
+
+/* Выбор нового отрезка пути: длительность и целевой курс. */
+static void mock_pick_segment(void)
+{
+    int32_t turn_cdeg;
+
+    mock_seg_left_s = MOCK_SEG_MIN_S + (mock_rand() % MOCK_SEG_SPAN_S);
+    if (mock_rand() % 6U == 0U) {
+        turn_cdeg = (int32_t)(7000U + mock_rand() % 4001U);      /* угол 70-110 */
+    } else {
+        turn_cdeg = (int32_t)(500U + mock_rand() % 4001U);       /* изгиб 5-45 */
+    }
+    if (mock_rand() & 1U) {
+        turn_cdeg = -turn_cdeg;
+    }
+    mock_target_cdeg = mock_wrap_cdeg(mock_heading_cdeg + turn_cdeg);
+}
+
+/* Один шаг пути за 1 с: курс, скорость, позиция. */
+static void mock_advance_path(void)
+{
+    int32_t diff;
+    int32_t slew = MOCK_SLEW_DEG_PER_S * 100;
+
+    if (mock_seg_left_s == 0U) {
+        mock_pick_segment();
+    }
+    mock_seg_left_s--;
+
+    /* Кратчайший доворот к целевому курсу, не быстрее slew. */
+    diff = mock_wrap_cdeg(mock_target_cdeg - mock_heading_cdeg);
+    if (diff > 18000) {
+        diff -= 36000;
+    }
+    if (diff > slew) {
+        diff = slew;
+    } else if (diff < -slew) {
+        diff = -slew;
+    }
+    mock_heading_cdeg = mock_wrap_cdeg(mock_heading_cdeg + diff);
+
+    /* Скорость: медленный дрейф вокруг базового значения. */
+    mock_speed_cknot += mock_rand_sym(8);
+    if (mock_speed_cknot > MOCK_SPEED_BASE_CKN + MOCK_SPEED_SWING_CKN) {
+        mock_speed_cknot = MOCK_SPEED_BASE_CKN + MOCK_SPEED_SWING_CKN;
+    } else if (mock_speed_cknot < MOCK_SPEED_BASE_CKN - MOCK_SPEED_SWING_CKN) {
+        mock_speed_cknot = MOCK_SPEED_BASE_CKN - MOCK_SPEED_SWING_CKN;
+    }
+
+    {
+        const double deg = (double)mock_heading_cdeg / 100.0;
+        const double step_m = (double)mock_speed_cknot / 100.0 * MOCK_KNOT_MPS;
+        const double lat_deg = mock_true_lat / 1.0e7;
+        double cos_lat = mock_cos_deg(lat_deg);
+
+        if (cos_lat < 0.05) {
+            cos_lat = 0.05;
+        }
+        mock_true_lat += step_m * mock_cos_deg(deg) / MOCK_M_PER_1E7DEG;
+        mock_true_lon += step_m * mock_sin_deg(deg) / (MOCK_M_PER_1E7DEG * cos_lat);
+        mock_odo_frac_m += step_m;
+    }
+
+    /* Шум позиции поверх идеальной траектории. */
+    {
+        const int32_t noise_lat = mock_rand_sym(MOCK_POS_NOISE_CM);
+        const int32_t noise_lon = mock_rand_sym(MOCK_POS_NOISE_CM);
+        const double units_per_cm = 1.0 / (MOCK_M_PER_1E7DEG * 100.0);
+
+        state.lat_1e7 = (int32_t)(mock_true_lat + noise_lat * units_per_cm);
+        state.lon_1e7 = (int32_t)(mock_true_lon + noise_lon * units_per_cm);
+    }
+
+    state.speed_knots = mock_speed_cknot;
+    state.course_deg_100 = mock_heading_cdeg;
+}
 
 static void format_lat(int32_t lat_1e7, char* buf, size_t size) {
     int32_t abs_lat = lat_1e7 < 0 ? -lat_1e7 : lat_1e7;
@@ -221,8 +372,18 @@ void pc_gnss_mock_init(void) {
     state.lat_1e7 = PURRGO_MOCK_LAT_1E7;
     state.lon_1e7 = PURRGO_MOCK_LON_1E7;
 
+    // Начальные условия траектории (курс 45 градусов, ~5 км/ч).
+    mock_rng = 0x5047304FU;
+    mock_true_lat = (double)PURRGO_MOCK_LAT_1E7;
+    mock_true_lon = (double)PURRGO_MOCK_LON_1E7;
+    mock_heading_cdeg = 4500;
+    mock_target_cdeg = 4500;
+    mock_seg_left_s = MOCK_SEG_MIN_S;
+    mock_speed_cknot = MOCK_SPEED_BASE_CKN;
+    mock_odo_frac_m = 0.0;
+
     // Static Mock data
-    state.speed_knots = 269; // 5km/h ~ 2.69 knots -> 269
+    state.speed_knots = MOCK_SPEED_BASE_CKN; // 5km/h ~ 2.69 knots -> 269
     state.alt_m = PURRGO_MOCK_ALT_M;
     state.satellites_tracked = 9;
 
@@ -263,26 +424,22 @@ void pc_gnss_mock_update(void) {
         }
     }
 
-    // Simulate movement by slightly changing coordinates.
-    // Adding 200 to latitude (approx 20 meter)
-    state.lat_1e7 += 200;
-    // Adding 150 to longitude (approx 25 meters)
-    state.lon_1e7 += 250;
+    // Движение по ломаной траектории (курс, скорость, позиция).
+    mock_advance_path();
 
     // Toggle course_valid based on seconds to simulate GPS loss of course
     if (state.seconds % 10 == 0) {
         state.course_valid = !state.course_valid;
     }
 
-    // Increment course slightly, wrapping around 360 degrees
-    state.course_deg_100 += 150; // Add 1.5 degrees
-    if (state.course_deg_100 >= 36000) {
-        state.course_deg_100 -= 36000;
-    }
-
 #if PURRGO_GNSS_UBX
-    mock_odo_m += MOCK_STEP_M;
-    mock_odo_total_m += MOCK_STEP_M;
+    {
+        const uint32_t whole_m = (uint32_t)mock_odo_frac_m;
+
+        mock_odo_frac_m -= (double)whole_m;
+        mock_odo_m += whole_m;
+        mock_odo_total_m += whole_m;
+    }
 #endif
     generate_nmea();
 #if PURRGO_GNSS_UBX
