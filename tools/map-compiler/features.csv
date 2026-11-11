@@ -117,7 +117,7 @@ Code;PG_class;STYLE;LOD;Layer;OSM_Tags;Description;Enabled;Icon
 135;POI_SMALL;DARK_GRAY_CIRCLE;1;pois;tourism=camp_site;Кемпинг;1;палатка
 134;POI_SMALL;DARK_GRAY_CIRCLE;1;pois;tourism=alpine_hut;Альпийский домик;1;домик
 134;POI_SMALL;DARK_GRAY_CIRCLE;1;pois;tourism=wilderness_hut;Лесная избушка;1;домик
-135;POI_SMALL;DARK_GRAY_CIRCLE;1;pois;tourism=caravan_site;Стоянка автодомов;1;палатка
+165;POI_SMALL;DARK_GRAY_CIRCLE;1;pois;tourism=caravan_site;Стоянка автодомов;1;автодом
 131;POI_SMALL;DARK_GRAY_CIRCLE;0;pois;shop=supermarket;Супермаркет;1;тележка
 131;POI_SMALL;DARK_GRAY_CIRCLE;0;pois;shop=bakery;Пекарня;1;тележка
 131;POI_SMALL;DARK_GRAY_CIRCLE;0;pois;shop=kiosk;Киоск;0;тележка
