@@ -109,11 +109,11 @@ Code;PG_class;STYLE;LOD;Layer;OSM_Tags;Description;Enabled;Icon
 167;POI_SMALL;DARK_GRAY_CIRCLE;1;pois;tourism=guest_house;Гостевой дом;1;кровать
 167;POI_SMALL;DARK_GRAY_CIRCLE;1;pois;tourism=hostel;Хостел;1;кровать
 134;POI_SMALL;DARK_GRAY_CIRCLE;0;pois;tourism=chalet;Шале;0;домик
-135;POI_SMALL;DARK_GRAY_CIRCLE;1;pois;shelter_type=lean_to;Укрытие;1;палатка
+159;POI_SMALL;DARK_GRAY_CIRCLE;1;pois;shelter_type=lean_to;Укрытие;1;беседка
 159;POI_SMALL;DARK_GRAY_CIRCLE;1;pois;shelter_type=picnic_shelter;Укрытие;1;беседка
-135;POI_SMALL;DARK_GRAY_CIRCLE;1;pois;shelter_type=basic_hut;Укрытие;1;палатка
-135;POI_SMALL;DARK_GRAY_CIRCLE;1;pois;shelter_type=weather_shelter;Укрытие;1;палатка
-135;POI_SMALL;DARK_GRAY_CIRCLE;0;pois;amenity=shelter;Укрытие;0;палатка
+159;POI_SMALL;DARK_GRAY_CIRCLE;1;pois;shelter_type=basic_hut;Укрытие;1;беседка
+159;POI_SMALL;DARK_GRAY_CIRCLE;1;pois;shelter_type=weather_shelter;Укрытие;1;беседка
+159;POI_SMALL;DARK_GRAY_CIRCLE;0;pois;amenity=shelter;Укрытие;0;беседка
 135;POI_SMALL;DARK_GRAY_CIRCLE;1;pois;tourism=camp_site;Кемпинг;1;палатка
 134;POI_SMALL;DARK_GRAY_CIRCLE;1;pois;tourism=alpine_hut;Альпийский домик;1;домик
 134;POI_SMALL;DARK_GRAY_CIRCLE;1;pois;tourism=wilderness_hut;Лесная избушка;1;домик
