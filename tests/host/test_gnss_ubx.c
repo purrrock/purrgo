@@ -301,12 +301,14 @@ static void test_pvt_over_nmea(void)
     CHECK(s.lat_1e7 == 507654321);
     purrgo_gnss_process_nmea(line, &s);                  /* третья */
     CHECK(s.lat_1e7 == 507654321);
+    CHECK(s.acc_valid && s.hacc_mm == 3500);             /* пока владеет PVT, его точность действует */
     purrgo_gnss_process_nmea(line, &s);                  /* четвёртая: удержание закончилось */
     CHECK(s.lat_1e7 / 100000 == 4811);
+    CHECK(!s.acc_valid);                                 /* hAcc от старого PVT к позиции из RMC не относится */
 
     /* PVT снова пошёл - владелец PVT. */
     CHECK(purrgo_gnss_ubx_process_frame(0x01, 0x07, p, 92, &s, g_now));
-    CHECK(s.lat_1e7 == 507654321);
+    CHECK(s.lat_1e7 == 507654321 && s.acc_valid);
 
     /* PVT без фикса переводит решение в невалидное, NMEA этого не перебивает. */
     v = good_pvt(); v.fix_type = 0; v.flags = 0;

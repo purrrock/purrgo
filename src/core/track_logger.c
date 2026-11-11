@@ -554,7 +554,7 @@ static const char* gpx_fix_name(const purrgo_gnss_solution_t* fix) {
  *            TrackPointExtension v2;
  *   pg:hacc - горизонтальная точность hAcc, метры (UBX-NAV-PVT; без PVT не пишется);
  *   pg:bat, pg:vbat - заряд батареи (для анализа энергопотребления);
- *   pg:rej - только в диагностическом сборке, см. PURRGO_TRACK_DIAG.
+ *   pg:sacc, pg:rej - только в диагностической сборке, см. PURRGO_TRACK_DIAG.
  * ВАЖНО: внутри GPX (тег <time>) пишутся оригинальные данные fix (UTC время).
  * Возвращает false при сбое записи (логгер уходит в ERROR, повтор - из app_fsm).
  */
@@ -617,6 +617,13 @@ static bool buffer_point(const purrgo_gnss_solution_t* fix, uint8_t rej) {
         }
     }
 #if PURRGO_TRACK_DIAG
+    if (fix->acc_valid) {
+        /* sAcc UBX-NAV-PVT, мм/с -> м/с: для сверки порога стоянки (скорость на месте сравнивается с sAcc). */
+        uint32_t sacc = fix->sacc_mm_s > 9999999U ? 9999999U : fix->sacc_mm_s;
+        ext_len += purrgo_snprintf(ext + ext_len, sizeof(ext) - (size_t)ext_len,
+                                   "<pg:sacc>%u.%03u</pg:sacc>",
+                                   (unsigned int)(sacc / 1000U), (unsigned int)(sacc % 1000U));
+    }
     ext_len += purrgo_snprintf(ext + ext_len, sizeof(ext) - (size_t)ext_len, "<pg:rej>%u</pg:rej>", (unsigned int)rej);
 #endif
     ext_len += purrgo_snprintf(ext + ext_len, sizeof(ext) - (size_t)ext_len, "</extensions>\n");

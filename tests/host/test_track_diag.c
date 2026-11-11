@@ -93,6 +93,55 @@ static void test_diag_logs_every_epoch_with_reasons(void)
     free(t);
 }
 
+static void test_diag_hacc_and_sacc(void)
+{
+    /* UBX: при известной hAcc HDOP не учитывается; hAcc выше порога - бит LOGGER_REJ_HACC. */
+    purrgo_logger_reset();
+    fake_fs_reset();
+    app_config.tz_offset_minutes = 0;
+
+    purrgo_gnss_solution_t f = mk(0, 0);
+    f.acc_valid = true; f.hacc_mm = 3500; f.sacc_mm_s = 120;
+    CHECK(purrgo_logger_start(&f));
+    CHECK(purrgo_logger_add_point(&f));                           /* #0: записана */
+
+    f = mk(1, 10);
+    f.acc_valid = true; f.hacc_mm = PURRGO_GNSS_TRACK_MAX_HACC_M * 1000U + 1U;
+    f.hdop_100 = 900; f.sacc_mm_s = 450;                          /* HDOP выше порога, но hAcc точнее */
+    CHECK(!purrgo_logger_add_point(&f));                          /* #1: hAcc > порога */
+
+    f = mk(2, 20);
+    f.acc_valid = true; f.hacc_mm = 4000; f.hdop_100 = 900;
+    CHECK(purrgo_logger_add_point(&f));                           /* #2: hAcc в норме, HDOP не смотрим */
+
+    f = mk(3, 30);                                                /* без PVT: фильтр по HDOP, sAcc не пишется */
+    f.hdop_100 = 900;
+    CHECK(!purrgo_logger_add_point(&f));                          /* #3: HDOP > 5 */
+
+    char name[64];
+    snprintf(name, sizeof name, "%s", purrgo_logger_get_active_filename());
+    purrgo_logger_stop();
+    uint32_t sz = 0;
+    const uint8_t *d = fake_fs_data(name, &sz);
+    CHECK(d != NULL);
+    if (!d) { return; }
+    char *t = malloc((size_t)sz + 1u);
+    memcpy(t, d, sz); t[sz] = 0;
+
+    CHECK(count_points(t) == 4);
+    CHECK(rej_of_point(t, 0) == 0);
+    CHECK(rej_of_point(t, 1) == LOGGER_REJ_HACC);                 /* без бита HDOP */
+    CHECK(rej_of_point(t, 2) == 0);
+    CHECK(rej_of_point(t, 3) == LOGGER_REJ_HDOP);
+    CHECK(strstr(t, "<pg:sacc>0.120</pg:sacc>") != NULL);
+    CHECK(strstr(t, "<pg:sacc>0.450</pg:sacc>") != NULL);
+    /* sAcc только у точек с оценками PVT: у #3 его нет (всего 3 тега на 4 точки). */
+    int sacc_tags = 0;
+    for (const char *q = t; (q = strstr(q, "<pg:sacc>")); q += 9) { sacc_tags++; }
+    CHECK(sacc_tags == 3);
+    free(t);
+}
+
 static void test_diag_sync_cadence(void)
 {
     /* Диагностические точки идут на карту: sync по числу точек, как у обычных. */
@@ -114,6 +163,7 @@ static void test_diag_sync_cadence(void)
 int main(void)
 {
     test_diag_logs_every_epoch_with_reasons();
+    test_diag_hacc_and_sacc();
     test_diag_sync_cadence();
     return test_finish("test_track_diag");
 }

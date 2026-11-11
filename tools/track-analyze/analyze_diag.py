@@ -9,7 +9,8 @@
 --from/--to (UTC, ISO) оставляют один сценарий теста; без них анализируется весь файл.
 
 Читает на каждую точку: fix, sat, hdop, gpxtpx:speed (м/с, Garmin TrackPointExtension v2; у старых
-файлов pg:spd - сотые доли узла), pg:hacc (м, только UBX), pg:rej (маска фильтров).
+файлов pg:spd - сотые доли узла), pg:hacc (м, только UBX), pg:sacc (м/с, только UBX и диагностическая
+сборка), pg:rej (маска фильтров).
 """
 import math
 import re
@@ -20,6 +21,9 @@ from datetime import datetime, timezone
 REJ = [(0x01, "fix_type < 3"), (0x02, "HDOP > 5.0"), (0x04, "спутников < 4"),
        (0x08, "стоянка (< 0.5 уз)"), (0x10, "выброс (> 500 м/с)"), (0x20, "прореживание"),
        (0x40, "hAcc > порога")]
+# Биты отбраковки по качеству/стоянке/выбросу: такие эпохи в оценку точности ломаной не входят
+# (без бита прореживания 0x20, который и проверяется).
+QUALITY_MASK = 0x01 | 0x02 | 0x04 | 0x08 | 0x10 | 0x40
 
 
 def load(path):
@@ -41,7 +45,7 @@ def load(path):
             lat=float(m.group(1)), lon=float(m.group(2)),
             t=datetime.fromisoformat(t.group(1).replace("Z", "+00:00")).timestamp(),
             fix=tag("fix", str), sat=tag("sat", int), hdop=tag("hdop"),
-            spd=spd, hacc=tag("pg:hacc"), rej=tag("pg:rej", int)))
+            spd=spd, hacc=tag("pg:hacc"), sacc=tag("pg:sacc"), rej=tag("pg:rej", int)))
     return pts
 
 
@@ -73,7 +77,7 @@ def report(pts):
 
     print("\n2. Качество приёма (все эпохи)")
     print("   fix:", dict(Counter(p["fix"] for p in pts)))
-    for key, label in (("sat", "спутников в решении"), ("hdop", "HDOP"), ("hacc", "hAcc, м")):
+    for key, label in (("sat", "спутников в решении"), ("hdop", "HDOP"), ("hacc", "hAcc, м"), ("sacc", "sAcc, м/с")):
         vals = [p[key] for p in pts if p[key] is not None]
         if vals:
             print(f"   {label}: медиана {pct(vals, .5)}, p90 {pct(vals, .9)}, p99 {pct(vals, .99)}, max {max(vals)}")
@@ -83,6 +87,11 @@ def report(pts):
     for thr in (3, 4, 5, 6):
         c = sum(1 for p in pts if p["sat"] is not None and p["sat"] < thr)
         print(f"   спутников < {thr}: {100 * c / n:.2f} % эпох")
+    if any(p["hacc"] is not None for p in pts):
+        for thr in (5.0, 10.0, 20.0, 30.0):
+            c = sum(1 for p in pts if p["hacc"] is not None and p["hacc"] > thr)
+            print(f"   hAcc > {thr}: {100 * c / n:.2f} % эпох")
+        print("   (при UBX фильтр качества работает по hAcc, HDOP не ограничивает: бит 2 ставится только без PVT)")
 
     print("\n3. Влияние HDOP на дрейф: скачок позиции за 1 с (эпохи подряд, скорость < 1 уз)")
     by = {}
@@ -95,6 +104,20 @@ def report(pts):
         if key in by:
             v = by[key]
             print(f"   HDOP {key:5s}: эпох {len(v):6d}, шаг медиана {pct(v, .5):.1f} м, p95 {pct(v, .95):.1f} м, max {max(v):.1f} м")
+
+    if any(p["hacc"] is not None for p in pts):
+        print("\n3a. Влияние hAcc на дрейф: скачок позиции за 1 с (эпохи подряд, скорость < 1 уз)")
+        byh = {}
+        for a, b in zip(pts, pts[1:]):
+            if b["t"] - a["t"] != 1 or a["hacc"] is None or (a["spd"] or 0) >= 100 or (b["spd"] or 0) >= 100:
+                continue
+            key = "<2" if a["hacc"] < 2 else "2-5" if a["hacc"] < 5 else "5-10" if a["hacc"] < 10 else "10-20" if a["hacc"] <= 20 else ">20"
+            byh.setdefault(key, []).append(dist(a, b))
+        for key in ("<2", "2-5", "5-10", "10-20", ">20"):
+            if key in byh:
+                v = byh[key]
+                print(f"   hAcc {key:6s} м: эпох {len(v):6d}, шаг медиана {pct(v, .5):.1f} м, p95 {pct(v, .95):.1f} м, max {max(v):.1f} м")
+        print("   (порог hAcc разумен там, где p95 шага уже выходит за допуск прореживания, 5 м)")
 
     print("\n4. Порог стоянки: шаг позиции за 1 с в зависимости от скорости по приёмнику")
     bins = [(0, 10), (10, 25), (25, 50), (50, 100), (100, 200), (200, 500)]
@@ -121,8 +144,8 @@ def report(pts):
         devs = []
         for a, b in zip(idx, idx[1:]):
             for i in range(a + 1, b):
-                if pts[i]["rej"] & 0x1f:
-                    continue           # забракованные по качеству эпохи в оценку не входят
+                if pts[i]["rej"] & QUALITY_MASK:
+                    continue           # забракованные по качеству/стоянке/выбросу эпохи в оценку не входят
                 devs.append(seg_dist(pts[i], pts[a], pts[b]))
         if devs:
             print(f"   отклонение: медиана {pct(devs, .5):.1f} м, p99 {pct(devs, .99):.1f} м, max {max(devs):.1f} м")

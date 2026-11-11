@@ -237,6 +237,11 @@ bool purrgo_gnss_process_nmea(const char *nmea_line, purrgo_gnss_solution_t *sol
                 if (pvt_owns) {
                     break;          /* RMC лишь подтвердил, что приёмник жив */
                 }
+                /*
+                 * PVT не приходит: hAcc/vAcc/sAcc остались от старого PVT и к позиции из RMC
+                 * не относятся. Без этого фильтр трека продолжал бы работать по устаревшей hAcc.
+                 */
+                solution->acc_valid = false;
                 solution->valid = frame.valid;
                 if (frame.valid) {
                     solution->lat_1e7 = convert_to_1e7(frame.latitude);
