@@ -194,7 +194,7 @@
 - [x] **[HW]** SD read throughput (теоретически ~1,25 МБ/с при 10 МГц, ~2,5 МБ/с при 20 МГц). Тест: `-DPURRGO_HW_TEST=SD_SPEED`.
 - [ ] **[HW]** Время чтения geometry, integer projection, line rendering, polygon rendering, полный кадр, worst-case кадр.
 - [ ] **[HW]** Стек `parse_node()` и geometry parser, worst-case geometry, stack margin.
-- [ ] Определить максимальные буферы с учётом 768 КБ ОЗУ; поднять `Heap`/`Stack` при необходимости **[CubeMX]**.
+- [ ] Определить максимальные буферы с учётом 768 КБ ОЗУ.
 - [ ] Пересмотреть кэширование заголовков PGO/SQT-карты и размер RAM-трека (отложено до МК с большим ОЗУ, теперь доступно).
 - [ ] Решение по тактовой частоте (D4).
 
