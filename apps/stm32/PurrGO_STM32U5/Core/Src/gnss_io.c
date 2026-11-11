@@ -2,7 +2,7 @@
 #include "purrgo/gnss_ring.h"
 #include "purrgo/gnss_receiver.h"
 #include "usart.h"
-#include "gpdma.h"
+#include "lpdma.h"
 #include "main.h"
 #include "purrgo/hardware_config.h"
 
@@ -16,15 +16,17 @@
 #include "gnss_link.h"
 
 /*
- * GNSS на STM32U585: LPUART1_RX -> GPDMA1 Channel 0, linked-list в круговом
+ * GNSS на STM32U585: LPUART1_RX -> LPDMA1 Channel 0, linked-list в круговом
  * режиме (один узел, ссылающийся на себя):
  *   - очередь узлов собирается здесь, а не берётся из linked_list.c CubeMX:
- *     CubeMX создаёт узел GPDMA_2D, а канал 0 линейный (HAL_DMAEx_List_LinkQ
- *     вернул бы HAL_ERROR), и канал инициализируется им в режиме NORMAL;
+ *     MX_LPDMA1_Init() инициализирует канал в режиме LINKEDLIST_NORMAL, а
+ *     замкнутая очередь допустима только в LINKEDLIST_CIRCULAR
+ *     (HAL_DMAEx_List_LinkQ), поэтому канал инициализируется заново;
  *   - HAL_UART_Receive_DMA() сам записывает в узел размер блока, адрес RDR и
  *     адрес буфера, поэтому узел собирается с нулевыми адресами;
- *   - LPUART1 обслуживается GPDMA1 (запрос LPUART1_RX); LPDMA1 и режим Stop 2
- *     пока не используются, при их внедрении изменится только канал и запрос;
+ *   - LPUART1 обслуживается LPDMA1 (запрос LPDMA1_REQUEST_LPUART1_RX); режим
+ *     Stop 2 пока не используется. Для него потребуется разместить
+ *     gnss_rx_buffer и узел очереди в SRAM4 (в Stop 2 LPDMA1 видит только её);
  *   - остаток блока читается из CBR1.BNDT (__HAL_DMA_GET_COUNTER); его
  *     семантика для кольцевого буфера соответствует
  *     purrgo_gnss_ring_head_from_ndtr() из gnss_ring.h;
@@ -119,7 +121,7 @@ static DMA_QListTypeDef gnss_rx_queue;
 
 /**
  * @brief Собрать круговую очередь из одного линейного узла и привязать её
- *        к каналу GPDMA1 и к LPUART1 (приёмник).
+ *        к каналу LPDMA1 и к LPUART1 (приёмник).
  *
  * @return true при успехе.
  */
@@ -132,17 +134,14 @@ static bool gnss_dma_setup(void)
     memset(&gnss_rx_node, 0, sizeof gnss_rx_node);
     memset(&gnss_rx_queue, 0, sizeof gnss_rx_queue);
 
-    node_cfg.NodeType = DMA_GPDMA_LINEAR_NODE;
-    node_cfg.Init.Request = GPDMA1_REQUEST_LPUART1_RX;
+    node_cfg.NodeType = DMA_LPDMA_LINEAR_NODE;
+    node_cfg.Init.Request = LPDMA1_REQUEST_LPUART1_RX;
     node_cfg.Init.BlkHWRequest = DMA_BREQ_SINGLE_BURST;
     node_cfg.Init.Direction = DMA_PERIPH_TO_MEMORY;
     node_cfg.Init.SrcInc = DMA_SINC_FIXED;
     node_cfg.Init.DestInc = DMA_DINC_INCREMENTED;
     node_cfg.Init.SrcDataWidth = DMA_SRC_DATAWIDTH_BYTE;
     node_cfg.Init.DestDataWidth = DMA_DEST_DATAWIDTH_BYTE;
-    node_cfg.Init.SrcBurstLength = 1U;
-    node_cfg.Init.DestBurstLength = 1U;
-    node_cfg.Init.TransferAllocatedPort = DMA_SRC_ALLOCATED_PORT0 | DMA_DEST_ALLOCATED_PORT0;
     node_cfg.Init.TransferEventMode = DMA_TCEM_BLOCK_TRANSFER;
     node_cfg.Init.Mode = DMA_NORMAL;
     node_cfg.TriggerConfig.TriggerPolarity = DMA_TRIG_POLARITY_MASKED;
@@ -154,16 +153,16 @@ static bool gnss_dma_setup(void)
     ret |= HAL_DMAEx_List_SetCircularMode(&gnss_rx_queue);
 
     /*
-     * MX_GPDMA1_Init() инициализировал канал в режиме LINKEDLIST_NORMAL, а
+     * MX_LPDMA1_Init() инициализировал канал в режиме LINKEDLIST_NORMAL, а
      * очередь с замыканием на себя допустима только в LINKEDLIST_CIRCULAR
      * (HAL_DMAEx_List_LinkQ). Канал инициализируется заново.
      */
-    handle_GPDMA1_Channel0.InitLinkedList.LinkedListMode = DMA_LINKEDLIST_CIRCULAR;
-    ret |= HAL_DMAEx_List_Init(&handle_GPDMA1_Channel0);
-    ret |= HAL_DMA_ConfigChannelAttributes(&handle_GPDMA1_Channel0, DMA_CHANNEL_NPRIV);
-    ret |= HAL_DMAEx_List_LinkQ(&handle_GPDMA1_Channel0, &gnss_rx_queue);
+    handle_LPDMA1_Channel0.InitLinkedList.LinkedListMode = DMA_LINKEDLIST_CIRCULAR;
+    ret |= HAL_DMAEx_List_Init(&handle_LPDMA1_Channel0);
+    ret |= HAL_DMA_ConfigChannelAttributes(&handle_LPDMA1_Channel0, DMA_CHANNEL_NPRIV);
+    ret |= HAL_DMAEx_List_LinkQ(&handle_LPDMA1_Channel0, &gnss_rx_queue);
 
-    __HAL_LINKDMA(&hlpuart1, hdmarx, handle_GPDMA1_Channel0);
+    __HAL_LINKDMA(&hlpuart1, hdmarx, handle_LPDMA1_Channel0);
 
     return (ret == HAL_OK);
 }
@@ -316,7 +315,7 @@ void purrgo_gnss_power_on(void)
 }
 
 /**
- * @brief Принудительно вернуть канал GPDMA в состояние READY.
+ * @brief Принудительно вернуть канал LPDMA в состояние READY.
  *
  * Нужен, если DMA застрял в ABORT/SUSPEND/ERROR (например, вторая ошибка UART
  * пришла до завершения suspend, и HAL_DMA_Abort_IT вернул ошибку). Повторяет то,
@@ -324,7 +323,7 @@ void purrgo_gnss_power_on(void)
  */
 static void gnss_dma_force_ready(void)
 {
-    DMA_HandleTypeDef *const h = &handle_GPDMA1_Channel0;
+    DMA_HandleTypeDef *const h = &handle_LPDMA1_Channel0;
 
     h->Instance->CCR |= DMA_CCR_RESET;
     __HAL_DMA_CLEAR_FLAG(h, (DMA_FLAG_TC | DMA_FLAG_HT | DMA_FLAG_DTE | DMA_FLAG_ULE |
@@ -356,8 +355,8 @@ static bool gnss_rx_restart(void)
     /* Здесь коды - от неудавшегося перезапуска (DMA err 0x40 = BUSY), а не исходной ошибки. */
     PURRGO_LOGE("GNSS RX restart: channel busy, forcing READY (uart err 0x%lX, dma err 0x%lX, dma state %d)\r\n",
                (unsigned long)hlpuart1.ErrorCode,
-               (unsigned long)handle_GPDMA1_Channel0.ErrorCode,
-               (int)handle_GPDMA1_Channel0.State);
+               (unsigned long)handle_LPDMA1_Channel0.ErrorCode,
+               (int)handle_LPDMA1_Channel0.State);
 
     gnss_dma_force_ready();
 
@@ -632,8 +631,8 @@ bool purrgo_gnss_read_byte(uint8_t *byte)
         {
             PURRGO_LOGE("GNSS RX RESTART ERROR! (uart err 0x%lX, dma err 0x%lX, dma state %d)\r\n",
                        (unsigned long)hlpuart1.ErrorCode,
-                       (unsigned long)handle_GPDMA1_Channel0.ErrorCode,
-                       (int)handle_GPDMA1_Channel0.State);
+                       (unsigned long)handle_LPDMA1_Channel0.ErrorCode,
+                       (int)handle_LPDMA1_Channel0.State);
         }
         return false;
     }
@@ -707,7 +706,7 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
  * @brief Фронт 1PPS (PA8, EXTI8, Rising).
  *
  * Вызывается из прерывания EXTI8. Приоритет EXTI8 в NVIC должен быть ниже
- * (числом больше), чем у GPDMA1 и LPUART1, чтобы импульс не вытеснял приём
+ * (числом больше), чем у LPDMA1 и LPUART1, чтобы импульс не вытеснял приём
  * GNSS (настройка в CubeMX). При выключенном GNSS (EN Low) фронты игнорируются:
  * линия PPS у отключённого модуля не должна давать срабатываний, а если они
  * есть, это видно по отсутствию счёта в мониторе.

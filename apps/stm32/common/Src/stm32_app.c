@@ -134,7 +134,7 @@ void purrgo_stm32_init(void)
    * -------------------------------------------------------------------------
    * GNSS.
    * -------------------------------------------------------------------------
-   * G10A F30 подключён к LPUART1 (PA3 RX, PA2 TX), приём через GPDMA1.
+   * G10A F30 подключён к LPUART1 (PA3 RX, PA2 TX), приём через LPDMA1.
    */
   purrgo_gnss_init();
   PURRGO_LOG("GNSS LPUART1 INIT FINISHED\r\n");
