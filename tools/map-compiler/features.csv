@@ -103,11 +103,11 @@ Code;PG_class;STYLE;LOD;Layer;OSM_Tags;Description;Enabled;Icon
 149;POI_SMALL;DARK_GRAY_CIRCLE;0;pois;amenity=bar;Бар;1;кружка
 133;POI_SMALL;DARK_GRAY_CIRCLE;0;pois;amenity=food_court;Фуд-корт;1;вилка и нож
 149;POI_SMALL;DARK_GRAY_CIRCLE;0;pois;amenity=biergarten;Пивной сад;0;кружка
-134;POI_SMALL;DARK_GRAY_CIRCLE;1;pois;tourism=hotel;Отель;1;домик
-134;POI_SMALL;DARK_GRAY_CIRCLE;1;pois;tourism=motel;Мотель;1;домик
-134;POI_SMALL;DARK_GRAY_CIRCLE;1;pois;tourism=bed_and_breakfast;Мини-гостиница (B&B);1;домик
-134;POI_SMALL;DARK_GRAY_CIRCLE;1;pois;tourism=guest_house;Гостевой дом;1;домик
-134;POI_SMALL;DARK_GRAY_CIRCLE;1;pois;tourism=hostel;Хостел;1;домик
+167;POI_SMALL;DARK_GRAY_CIRCLE;1;pois;tourism=hotel;Отель;1;кровать
+167;POI_SMALL;DARK_GRAY_CIRCLE;1;pois;tourism=motel;Мотель;1;кровать
+167;POI_SMALL;DARK_GRAY_CIRCLE;1;pois;tourism=bed_and_breakfast;Мини-гостиница (B&B);1;кровать
+167;POI_SMALL;DARK_GRAY_CIRCLE;1;pois;tourism=guest_house;Гостевой дом;1;кровать
+167;POI_SMALL;DARK_GRAY_CIRCLE;1;pois;tourism=hostel;Хостел;1;кровать
 134;POI_SMALL;DARK_GRAY_CIRCLE;0;pois;tourism=chalet;Шале;0;домик
 135;POI_SMALL;DARK_GRAY_CIRCLE;1;pois;shelter_type=lean_to;Укрытие;1;палатка
 159;POI_SMALL;DARK_GRAY_CIRCLE;1;pois;shelter_type=picnic_shelter;Укрытие;1;беседка
@@ -177,7 +177,7 @@ Code;PG_class;STYLE;LOD;Layer;OSM_Tags;Description;Enabled;Icon
 141;POI_SMALL;DARK_GRAY_CIRCLE;0;pois;historic=wayside_shrine;Часовня;0;храм
 141;POI_SMALL;DARK_GRAY_CIRCLE;0;pois;historic=battlefield;Поле битвы;0;крепость
 141;POI_SMALL;DARK_GRAY_CIRCLE;0;pois;historic=fort;Форт;1;крепость
-135;POI_SMALL;DARK_GRAY_CIRCLE;0;pois;tourism=picnic_site;Место для пикника;1;палатка
+166;POI_SMALL;DARK_GRAY_CIRCLE;0;pois;tourism=picnic_site;Место для пикника;1;стол
 153;POI_SMALL;DARK_GRAY_CIRCLE;0;pois;tourism=viewpoint;Смотровая площадка;1;фотоаппарат
 141;POI_SMALL;DARK_GRAY_CIRCLE;0;pois;tourism=zoo;Зоопарк;0;крепость
 141;POI_SMALL;DARK_GRAY_CIRCLE;0;pois;tourism=theme_park;Парк развлечений;0;крепость
