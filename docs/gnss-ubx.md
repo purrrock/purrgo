@@ -1,8 +1,10 @@
-# UBX-расширения GNSS (u-blox M10, SPG 5.30)
+# UBX-расширения GNSS (u-blox M10, SPG 5.10 / 5.30)
 
 Переключатель сборки: `PURRGO_GNSS_UBX` в `include/purrgo/hardware_config.h`
 (`-DPURRGO_GNSS_UBX=0` - только NMEA, `1` - с UBX; по умолчанию 1 для приёмника UBX).
-Модуль G10A-F30 - u-blox M10 (UBX-M10050-KB, L1), документ: SPG 5.30, протокол 34.30.
+Модуль G10A-F30 - u-blox M10 (UBX-M10050-KB, L1). Установленный экземпляр сообщает
+`ROM SPG 5.10`, протокол 34.10 (документ в `docs/datasheets/GNSS_modules/U-blox M10`);
+более новые прошивки - SPG 5.30, протокол 34.30. Ключи ниже есть в обеих, кроме SEC-SIG.
 Документ SPG 7.0x (протокол 52, L1+L5) для этого модуля не подходит.
 
 ## Что включено при `PURRGO_GNSS_UBX=1`
@@ -11,22 +13,23 @@
 |---|---|---|
 | UBX-NAV-PVT | `0x20910007` | время, позиция, скорость, курс, hAcc/vAcc/sAcc; главнее RMC/GGA/GSA |
 | UBX-NAV-ODO | `0x2091007F` | дистанция трека (нужен `CFG-ODO-USE_ODO`, по умолчанию выключен) |
-| UBX-SEC-SIG | `0x20910635` | глушение и спуфинг |
+| UBX-SEC-SIG | `0x20910635` | глушение и спуфинг; только SPG 5.30+, в 5.10 нет (NAK), по умолчанию выключено (`PURRGO_GNSS_SEC_SIG`) |
 | UBX-MON-RF | `0x2091035A` | CW-помеха, AGC, антенна |
 | UBX-MON-VER | опрос | версия прошивки в лог |
 
 NMEA GGA/RMC/GSA остаются: HDOP/VDOP есть только в них, и они резерв, если PVT пропал
 (после `PURRGO_GNSS_PVT_HOLD_EPOCHS` эпох RMC без PVT решением снова владеет NMEA).
 
-Настройка уходит четырьмя отдельными `UBX-CFG-VALSET` (базовая NMEA, сообщения,
-одометр, модель динамики) и опросом MON-VER: отказ модуля (NAK) по одному кадру не отменяет
-остальные. NAK пишется в лог (`GNSS: module rejected UBX class .. id ..`).
+Настройка уходит отдельными `UBX-CFG-VALSET` (базовая NMEA, по одному на каждое
+сообщение PVT/ODO/MON-RF, одометр, модель динамики) и опросом MON-VER: модуль применяет
+VALSET целиком или отклоняет целиком, поэтому NAK по одному кадру не отменяет остальные. NAK пишется в лог (`GNSS: module rejected UBX class .. id ..`).
 
 ## Параметры сборки
 
 | Define | По умолчанию | Смысл |
 |---|---|---|
 | `PURRGO_GNSS_UBX` | 1 (для UBX-приёмника) | 0 - только NMEA |
+| `PURRGO_GNSS_SEC_SIG` | 0 | 1 - включить UBX-SEC-SIG (нужна прошивка SPG 5.30+) |
 | `PURRGO_GNSS_DYNMODEL` | `PURRGO_GNSS_DYN_BICYCLE` (= Portable, 0) | `CFG-NAVSPG-DYNMODEL`; значения `PURRGO_GNSS_DYN_*` |
 | `PURRGO_GNSS_ODO_PROFILE` | `PURRGO_GNSS_ODO_CYCL` (1) | `CFG-ODO-PROFILE` |
 | `PURRGO_GNSS_TRACK_MAX_HACC_M` | 20 | точка с hAcc выше в трек не пишется |
