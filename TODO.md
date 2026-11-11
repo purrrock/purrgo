@@ -228,7 +228,6 @@
 |---|---|
 | GPDMA1 / LPDMA1 | Использовать: SD (выше), GNSS (уже), LPDMA1 при Stop 2 (см. P1) |
 | E-Ink SPI через DMA | Определить необходимость: `epd4g_poll()` укладывается в ~1 мс (CS и D/C пачками); EXTI по BUSY — в P1 |
-| CORDIC | Backlog, см. ниже |
 
 ---
 

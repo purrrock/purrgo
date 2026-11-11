@@ -6,6 +6,7 @@
 #include "purrgo/logger.h"
 #include "purrgo/purrgo_format.h"
 #include "purrgo/supply.h"
+#include "purrgo/trig.h"
 #include "purrgo/purrgo_poi_icons.h"
 #include "map_projection.h"
 #include <string.h>
@@ -309,47 +310,6 @@ bool purrgo_wpt_arrow_angle(const purrgo_gnss_solution_t *fix, uint16_t bearing_
     return course_up;
 }
 
-/* sin(0..90 градусов) * 10000 с шагом 5 градусов. */
-static const int16_t k_sin_10k[19] = {
-    0, 872, 1736, 2588, 3420, 4226, 5000, 5736, 6428, 7071,
-    7660, 8192, 8660, 9063, 9397, 9659, 9848, 9962, 10000
-};
-
-static int32_t sin_10k_0_90(int32_t deg)
-{
-    const int32_t i = deg / 5;
-    const int32_t f = deg % 5;
-
-    if (i >= 18) {
-        return 10000;
-    }
-    return k_sin_10k[i] + ((k_sin_10k[i + 1] - k_sin_10k[i]) * f) / 5;
-}
-
-static int32_t sin_10k(int32_t deg)
-{
-    deg %= 360;
-    if (deg < 0) {
-        deg += 360;
-    }
-
-    if (deg <= 90) {
-        return sin_10k_0_90(deg);
-    }
-    if (deg <= 180) {
-        return sin_10k_0_90(180 - deg);
-    }
-    if (deg <= 270) {
-        return -sin_10k_0_90(deg - 180);
-    }
-    return -sin_10k_0_90(360 - deg);
-}
-
-static int32_t cos_10k(int32_t deg)
-{
-    return sin_10k(deg + 90);
-}
-
 /* v * k / 10000 с округлением к ближайшему. */
 static int16_t scale_10k(int32_t v, int32_t k)
 {
@@ -362,8 +322,8 @@ void purrgo_wpt_arrow_points(int16_t cx, int16_t cy, int16_t r, uint16_t angle_d
                              purrgo_wpt_pt_t pts[4])
 {
     /* Направление остриё: (sin a, -cos a) в экранных координатах (y вниз); поперёк: (cos a, sin a). */
-    const int32_t s = sin_10k(angle_deg);
-    const int32_t c = cos_10k(angle_deg);
+    const int32_t s = purrgo_sin_10k(angle_deg);
+    const int32_t c = purrgo_cos_10k(angle_deg);
     const int32_t dx = s, dy = -c;
     const int32_t px = c, py = s;
 
@@ -392,8 +352,8 @@ void purrgo_wpt_polar(int16_t cx, int16_t cy, int16_t r, uint16_t angle_deg,
     if (out == NULL) {
         return;
     }
-    out->x = (int16_t)(cx + scale_10k(r, sin_10k(angle_deg)));
-    out->y = (int16_t)(cy - scale_10k(r, cos_10k(angle_deg)));
+    out->x = (int16_t)(cx + scale_10k(r, purrgo_sin_10k(angle_deg)));
+    out->y = (int16_t)(cy - scale_10k(r, purrgo_cos_10k(angle_deg)));
 }
 
 void purrgo_wpt_format_distance(char *buf, size_t size, uint32_t meters)
