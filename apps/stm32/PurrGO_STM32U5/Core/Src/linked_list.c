@@ -55,7 +55,7 @@ HAL_StatusTypeDef MX_LPUART1_RX_Queue_Config(void)
   DMA_NodeConfTypeDef pNodeConfig;
 
   /* Set node configuration ################################################*/
-  pNodeConfig.NodeType = DMA_GPDMA_LINEAR_NODE;
+  pNodeConfig.NodeType = DMA_LPDMA_LINEAR_NODE;
   pNodeConfig.Init.Request = GPDMA1_REQUEST_LPUART1_RX;
   pNodeConfig.Init.BlkHWRequest = DMA_BREQ_SINGLE_BURST;
   pNodeConfig.Init.Direction = DMA_PERIPH_TO_MEMORY;
@@ -65,7 +65,6 @@ HAL_StatusTypeDef MX_LPUART1_RX_Queue_Config(void)
   pNodeConfig.Init.DestDataWidth = DMA_DEST_DATAWIDTH_BYTE;
   pNodeConfig.Init.SrcBurstLength = 1;
   pNodeConfig.Init.DestBurstLength = 1;
-  pNodeConfig.Init.TransferAllocatedPort = DMA_SRC_ALLOCATED_PORT0|DMA_DEST_ALLOCATED_PORT0;
   pNodeConfig.Init.TransferEventMode = DMA_TCEM_BLOCK_TRANSFER;
   pNodeConfig.Init.Mode = DMA_NORMAL;
   pNodeConfig.TriggerConfig.TriggerPolarity = DMA_TRIG_POLARITY_MASKED;
