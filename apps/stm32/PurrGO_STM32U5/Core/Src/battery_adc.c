@@ -11,7 +11,10 @@
  *     VREFINT и по заводской калибровке вычисляется реальное VDDA;
  *   - на каждый канал по BATT_SAMPLES преобразований, берётся среднее;
  *   - время выборки максимальное: источник - делитель на мегаомных резисторах;
- *   - после измерения АЦП отключается (HAL_ADC_Stop), чтобы не расходовать ток;
+ *   - между измерениями АЦП полностью обесточен: HAL_ADC_DeInit() выключает
+ *     регулятор АЦП (ADVREGEN=0, DEEPPWD=1), сбрасывает VREFEN (источник
+ *     VREFINT) и тактирование ADC12; поэтому перед каждым измерением
+ *     повторяется HAL_ADC_Init() и калибровка (в deep power-down она теряется);
  *   - измерение не чаще PURRGO_HW_BATT_PERIOD_MS, между ними возвращается
  *     последнее значение (вызывают из отрисовки строки состояния и логгера).
  */
@@ -31,7 +34,6 @@
 #define BATT_VDDA_MIN_MV    2000u
 #define BATT_VDDA_MAX_MV    3600u
 
-static bool     s_calibrated;
 static bool     s_have_value;
 static uint16_t s_last_pin_mv;
 static uint32_t s_last_tick_ms;
@@ -74,18 +76,12 @@ static bool adc_read_average(uint32_t channel, uint32_t* out_avg)
     return ok;
 }
 
-/* Одно измерение: напряжение на PB1, мВ; 0 при ошибке. */
-static uint16_t measure_pin_mv(void)
+/*
+ * Одно измерение с АЦП, который уже проинициализирован и откалиброван:
+ * напряжение на PB1, мВ; 0 при ошибке.
+ */
+static uint16_t measure_pin_mv_adc_on(void)
 {
-    if (!s_calibrated) {
-        if (HAL_ADCEx_Calibration_Start(&hadc1, ADC_CALIB_OFFSET_LINEARITY,
-                                        ADC_SINGLE_ENDED) != HAL_OK) {
-            PURRGO_LOGE("BATT: ADC calibration failed\r\n");
-            return 0;
-        }
-        s_calibrated = true;
-    }
-
     uint32_t vref_raw = 0;
     uint32_t bat_raw = 0;
 
@@ -112,6 +108,27 @@ static uint16_t measure_pin_mv(void)
                 (unsigned)purrgo_battery_pack_mv_from_pin(pin_mv));
 
     return (uint16_t)pin_mv;
+}
+
+/*
+ * Одно измерение: включить АЦП, откалибровать, измерить, обесточить АЦП
+ * полностью (регулятор, VREFINT, тактирование). 0 при ошибке.
+ */
+static uint16_t measure_pin_mv(void)
+{
+    uint16_t mv = 0;
+
+    if (HAL_ADC_Init(&hadc1) != HAL_OK) {
+        PURRGO_LOGE("BATT: ADC init failed\r\n");
+    } else if (HAL_ADCEx_Calibration_Start(&hadc1, ADC_CALIB_OFFSET_LINEARITY,
+                                           ADC_SINGLE_ENDED) != HAL_OK) {
+        PURRGO_LOGE("BATT: ADC calibration failed\r\n");
+    } else {
+        mv = measure_pin_mv_adc_on();
+    }
+
+    (void)HAL_ADC_DeInit(&hadc1);
+    return mv;
 }
 
 uint16_t purrgo_platform_battery_pin_mv(void)
