@@ -88,7 +88,7 @@ ctest --preset linux-gcc-test
 
 | Подсистема | Тесты |
 |---|---|
-| GNSS | `test_gnss` (кольцевой буфер, разбор NMEA на записанном логе), `test_gnss_receiver` (UBX-кадры, UBX-CFG-VALSET), `test_gnss_link` (поиск скорости и её смена), `test_gnss_diag`, `test_gnss_pps` |
+| GNSS | `test_gnss` (кольцевой буфер, разбор NMEA на записанном логе), `test_gnss_receiver` (UBX-кадры, UBX-CFG-VALSET), `test_gnss_ubx` (UBX-расширения M10: PVT, ODO, hAcc, SEC-SIG, MON-RF/VER, [`docs/gnss-ubx.md`](gnss-ubx.md)), `test_gnss_link` (поиск скорости и её смена), `test_gnss_diag`, `test_gnss_pps` |
 | Карта и графика | `test_map` (парсер Map Format V3, фаззинг), `test_map_mlp_stream`, `test_geometry_clip`, `test_gfx_fast_paths` |
 | Экран и интерфейс | `test_marker_pan_battery`, `test_ui_refresh_fixes`, `test_display_eink` (очередь E-Ink поверх `epd4g`, нужен сабмодуль), `test_keyboard`, `test_pgo_text` |
 | Трек и время | `test_time_logger`, `test_track_filter`, `test_track_diag`, `test_tracker_mode`, `test_negative_altitude` |
@@ -289,14 +289,18 @@ HDOP ≤ 5, ≥ 4 спутников), стоянка (< 0,5 уз), выброс
   <sat>9</sat>                   <!-- спутников в решении (GGA) -->
   <hdop>0.90</hdop>              <!-- GSA/GGA -->
   <extensions>
+    <gpxtpx:TrackPointExtension>   <!-- Garmin TrackPointExtension v2 -->
+      <gpxtpx:speed>0.08</gpxtpx:speed>    <!-- скорость над землёй, м/с -->
+      <gpxtpx:course>84.40</gpxtpx:course> <!-- курс, градусы; только при надёжном курсе -->
+    </gpxtpx:TrackPointExtension>
+    <pg:hacc>3.52</pg:hacc>      <!-- hAcc, м; только с UBX-NAV-PVT (PURRGO_GNSS_UBX=1) -->
     <pg:bat>100</pg:bat><pg:vbat>4793</pg:vbat>
-    <pg:spd>15</pg:spd>          <!-- скорость над землёй, сотые доли узла: 15 = 0,15 уз -->
     <pg:rej>6</pg:rej>           <!-- только диагностическая сборка, маска ниже -->
   </extensions>
 </trkpt>
 ```
 
-`<fix>`, `<sat>`, `<hdop>`, `pg:spd` пишутся и в обычной сборке (тег пропускается, если приёмник
+`<fix>`, `<sat>`, `<hdop>`, `gpxtpx:speed` пишутся и в обычной сборке (тег пропускается, если приёмник
 значение не прислал). `pg:rej` — только в диагностической; это сумма битов:
 
 | бит | значение | причина |
@@ -307,6 +311,7 @@ HDOP ≤ 5, ≥ 4 спутников), стоянка (< 0,5 уз), выброс
 | 8 | стоянка | скорость < 0,5 уз |
 | 16 | выброс | скачок быстрее 500 м/с от опорной точки |
 | 32 | прореживание | трек не изменился заметно |
+| 64 | hAcc > порога | оценка точности UBX выше `PURRGO_GNSS_TRACK_MAX_HACC_M` (20 м); при известной hAcc бит 2 (HDOP) не ставится |
 
 `pg:rej="0"` — обычная сборка записала бы эту точку. Примеры: `6` = HDOP > 5 и мало спутников;
 `32` = точка на прямой, пропущена прореживанием.

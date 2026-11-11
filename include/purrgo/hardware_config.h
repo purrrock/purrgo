@@ -59,6 +59,100 @@
 #endif
 
 /*
+ * ============================================================================
+ * Расширения UBX (u-blox M10, SPG 5.x): PURRGO_GNSS_UBX
+ * ============================================================================
+ *
+ *   PURRGO_GNSS_UBX = 0 - только NMEA (GGA, RMC, GSA), как раньше. Точность
+ *                         (hAcc), одометр модуля, индикаторы помех/глушения/
+ *                         спуфинга и версия прошивки недоступны; в логе трека
+ *                         нет pg:hacc, фильтр точек работает по HDOP, строки
+ *                         TRP/ACC/SIG/RF на экране Trip computer не рисуются.
+ *   PURRGO_GNSS_UBX = 1 - дополнительно UBX (по умолчанию для приёмника UBX):
+ *     - при старте опрос UBX-MON-VER, версия прошивки пишется в лог;
+ *     - UBX-NAV-PVT (время, позиция, скорость, оценки точности hAcc/vAcc/sAcc);
+ *       пока PVT приходит, он главнее RMC/GGA/GSA (те дают только HDOP/VDOP и
+ *       резерв при пропаже PVT);
+ *     - UBX-NAV-ODO: дистанция с начала записи трека (при старте нового трека
+ *       отправляется UBX-NAV-RESETODO);
+ *     - UBX-SEC-SIG (глушение, спуфинг) и UBX-MON-RF (уровень помех, антенна).
+ *   Включается автоматически только вместе с PURRGO_HW_GNSS_RECEIVER =
+ *   PURRGO_GNSS_RECEIVER_UBX (для GY-NEO6MV2 и т.п. ставьте 0).
+ *   Все данные выдаются модулем раз в PURRGO_GNSS_UPDATE_PERIOD_MS, а ядро берёт
+ *   их и показывает не чаще раза в секунду.
+ */
+#ifndef PURRGO_GNSS_UBX
+#if (PURRGO_HW_GNSS_RECEIVER == PURRGO_GNSS_RECEIVER_UBX)
+#define PURRGO_GNSS_UBX 1
+#else
+#define PURRGO_GNSS_UBX 0
+#endif
+#endif
+
+#if (PURRGO_GNSS_UBX != 0) && (PURRGO_GNSS_UBX != 1)
+#error "PURRGO_GNSS_UBX must be 0 or 1"
+#endif
+#if (PURRGO_GNSS_UBX == 1) && (PURRGO_HW_GNSS_RECEIVER != PURRGO_GNSS_RECEIVER_UBX)
+#error "PURRGO_GNSS_UBX=1 requires PURRGO_HW_GNSS_RECEIVER = PURRGO_GNSS_RECEIVER_UBX"
+#endif
+
+/*
+ * Модель динамики приёмника (CFG-NAVSPG-DYNMODEL), только при PURRGO_GNSS_UBX = 1.
+ * Отправляется отдельной командой UBX-CFG-VALSET: если модуль не знает значения
+ * (NAK), остальная настройка не страдает, а модель остаётся прежней.
+ *
+ * Модели, перечисленные в даташите G10A-F30: Portable, Stationary, Pedestrian,
+ * Automotive, Sea, Airborne 1g/2g/4g, Wrist. Велосипедной модели у приёмника нет:
+ * значение BIKE (10) в SPG 5.30 - МОТОЦИКЛ ("не во всех продуктах"), в даташите
+ * модуля его нет. Для велосипеда подходит Portable (универсальная, до 310 м/с);
+ * Pedestrian (до 30 м/с, сильнее сглаживает) - вариант для очень медленной езды.
+ * Выбор: -DPURRGO_GNSS_DYNMODEL=<число или PURRGO_GNSS_DYN_*>.
+ */
+#define PURRGO_GNSS_DYN_PORTABLE     0
+#define PURRGO_GNSS_DYN_STATIONARY   2
+#define PURRGO_GNSS_DYN_PEDESTRIAN   3
+#define PURRGO_GNSS_DYN_AUTOMOTIVE   4
+#define PURRGO_GNSS_DYN_SEA          5
+#define PURRGO_GNSS_DYN_AIRBORNE_1G  6
+#define PURRGO_GNSS_DYN_AIRBORNE_2G  7
+#define PURRGO_GNSS_DYN_AIRBORNE_4G  8
+#define PURRGO_GNSS_DYN_WRIST        9
+#define PURRGO_GNSS_DYN_BICYCLE      PURRGO_GNSS_DYN_PORTABLE
+
+#ifndef PURRGO_GNSS_DYNMODEL
+#define PURRGO_GNSS_DYNMODEL PURRGO_GNSS_DYN_BICYCLE
+#endif
+#if (PURRGO_GNSS_DYNMODEL < 0) || (PURRGO_GNSS_DYNMODEL > 15)
+#error "PURRGO_GNSS_DYNMODEL must be 0..15 (see CFG-NAVSPG-DYNMODEL)"
+#endif
+
+/*
+ * Профиль одометра (CFG-ODO-PROFILE): 0 RUN, 1 CYCL (велосипед), 2 SWIM, 3 CAR.
+ * Одометр включается ключом CFG-ODO-USE_ODO (по умолчанию он выключен).
+ */
+#define PURRGO_GNSS_ODO_RUN   0
+#define PURRGO_GNSS_ODO_CYCL  1
+#define PURRGO_GNSS_ODO_SWIM  2
+#define PURRGO_GNSS_ODO_CAR   3
+
+#ifndef PURRGO_GNSS_ODO_PROFILE
+#define PURRGO_GNSS_ODO_PROFILE PURRGO_GNSS_ODO_CYCL
+#endif
+#if (PURRGO_GNSS_ODO_PROFILE < 0) || (PURRGO_GNSS_ODO_PROFILE > 4)
+#error "PURRGO_GNSS_ODO_PROFILE must be 0..4 (see CFG-ODO-PROFILE)"
+#endif
+
+/*
+ * Фильтр точек трека по оценке горизонтальной точности hAcc (UBX-NAV-PVT), метры:
+ * точка с hAcc выше порога в трек не пишется. Когда hAcc недоступна (NMEA-режим
+ * или PVT не приходит), работает прежний фильтр по HDOP. Порог подобран без
+ * полевых данных: сверить на записанных треках (pg:hacc в GPX).
+ */
+#ifndef PURRGO_GNSS_TRACK_MAX_HACC_M
+#define PURRGO_GNSS_TRACK_MAX_HACC_M 20U
+#endif
+
+/*
  * Повторная отправка настройки (набор NMEA) через столько мс после установления
  * связи с модулем (0 - не повторять). Связь установлена, когда от модуля принято
  * корректное предложение NMEA на рабочей скорости (см. PURRGO_GNSS_BAUD_*);

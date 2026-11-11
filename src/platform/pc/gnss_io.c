@@ -1,4 +1,6 @@
 #include "purrgo/gnss_io.h"
+#include "purrgo/hardware_config.h"
+#include <purrgo/pc_gnss_mock.h>
 
 #ifndef USE_MOCK_GNSS
 
@@ -37,6 +39,21 @@ bool purrgo_gnss_read_byte(uint8_t *byte)
 }
 
 #endif /* USE_MOCK_GNSS */
+
+/*
+ * Команды приёмнику (сброс одометра, опрос версии). Эмулятор GNSS принимает их;
+ * с реальным COM-портом передача на PC не поддерживается (serial_hal только читает).
+ */
+bool purrgo_gnss_write(const uint8_t *data, uint16_t length)
+{
+#if defined(USE_MOCK_GNSS) && PURRGO_GNSS_UBX
+    return pc_gnss_mock_write(data, length);
+#else
+    (void)data;
+    (void)length;
+    return false;
+#endif
+}
 
 /*
  * Управление питанием GNSS на PC: приёмник эмулируется (serial_hal или mock),

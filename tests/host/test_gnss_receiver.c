@@ -77,7 +77,8 @@ static void test_ubx_configure(void)
     purrgo_gnss_receiver_configure_ubx(fake_tx);
     purrgo_gnss_receiver_configure_ubx(NULL);
 
-    CHECK(g_sent_count == 1);
+    /* Базовая настройка + при PURRGO_GNSS_UBX три отдельных VALSET (сообщения, одометр, модель) и MON-VER. */
+    CHECK(g_sent_count == (PURRGO_GNSS_UBX ? 5 : 1));
 
     const uint8_t *f = (const uint8_t *)g_sent[0];
     const size_t len = g_sent_len[0];
@@ -135,7 +136,7 @@ static void test_configure(void)
     purrgo_gnss_receiver_configure(NULL);       /* без функции отправки - ничего, без падения */
 
 #if (PURRGO_HW_GNSS_RECEIVER == PURRGO_GNSS_RECEIVER_UBX)
-    CHECK(g_sent_count == 1);
+    CHECK(g_sent_count == (PURRGO_GNSS_UBX ? 5 : 1));
     CHECK((uint8_t)g_sent[0][0] == 0xB5 && (uint8_t)g_sent[0][1] == 0x62);
 #else
     CHECK(g_sent_count == 0);

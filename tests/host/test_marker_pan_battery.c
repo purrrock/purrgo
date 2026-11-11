@@ -210,7 +210,9 @@ static void test_track_battery(void)
         purrgo_battery_t b;
         CHECK(purrgo_battery_read(&b) && b.percent == 100);
         CHECK(strstr(t, "xmlns:pg=") != NULL);
-        CHECK(strstr(t, "<extensions><pg:bat>100</pg:bat><pg:spd>500</pg:spd></extensions>") != NULL);
+        /* 5,00 уз = 2,57 м/с; курс не задан - gpxtpx:course не пишется; батарея - свой тег. */
+        CHECK(strstr(t, "<extensions><gpxtpx:TrackPointExtension><gpxtpx:speed>2.57</gpxtpx:speed>"
+                        "</gpxtpx:TrackPointExtension><pg:bat>100</pg:bat></extensions>") != NULL);
         /* <extensions> - последний элемент точки (порядок по схеме GPX 1.1). */
         const char *ext = strstr(t, "<extensions>");
         const char *tm = strstr(t, "<time>");

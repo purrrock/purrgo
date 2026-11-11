@@ -8,7 +8,8 @@
 
 --from/--to (UTC, ISO) оставляют один сценарий теста; без них анализируется весь файл.
 
-Читает на каждую точку: fix, sat, hdop, pg:spd (сотые доли узла), pg:rej (маска фильтров).
+Читает на каждую точку: fix, sat, hdop, gpxtpx:speed (м/с, Garmin TrackPointExtension v2; у старых
+файлов pg:spd - сотые доли узла), pg:hacc (м, только UBX), pg:rej (маска фильтров).
 """
 import math
 import re
@@ -17,7 +18,8 @@ from collections import Counter
 from datetime import datetime, timezone
 
 REJ = [(0x01, "fix_type < 3"), (0x02, "HDOP > 5.0"), (0x04, "спутников < 4"),
-       (0x08, "стоянка (< 0.5 уз)"), (0x10, "выброс (> 500 м/с)"), (0x20, "прореживание")]
+       (0x08, "стоянка (< 0.5 уз)"), (0x10, "выброс (> 500 м/с)"), (0x20, "прореживание"),
+       (0x40, "hAcc > порога")]
 
 
 def load(path):
@@ -33,11 +35,13 @@ def load(path):
             r = re.search(r"<%s>([^<]+)</%s>" % (name, name), seg)
             return cast(r.group(1)) if r else None
 
+        mps = tag("gpxtpx:speed")
+        spd = int(round(mps * 100 * 3600 / 1852)) if mps is not None else tag("pg:spd", int)
         pts.append(dict(
             lat=float(m.group(1)), lon=float(m.group(2)),
             t=datetime.fromisoformat(t.group(1).replace("Z", "+00:00")).timestamp(),
             fix=tag("fix", str), sat=tag("sat", int), hdop=tag("hdop"),
-            spd=tag("pg:spd", int), rej=tag("pg:rej", int)))
+            spd=spd, hacc=tag("pg:hacc"), rej=tag("pg:rej", int)))
     return pts
 
 
@@ -69,7 +73,7 @@ def report(pts):
 
     print("\n2. Качество приёма (все эпохи)")
     print("   fix:", dict(Counter(p["fix"] for p in pts)))
-    for key, label in (("sat", "спутников в решении"), ("hdop", "HDOP")):
+    for key, label in (("sat", "спутников в решении"), ("hdop", "HDOP"), ("hacc", "hAcc, м")):
         vals = [p[key] for p in pts if p[key] is not None]
         if vals:
             print(f"   {label}: медиана {pct(vals, .5)}, p90 {pct(vals, .9)}, p99 {pct(vals, .99)}, max {max(vals)}")

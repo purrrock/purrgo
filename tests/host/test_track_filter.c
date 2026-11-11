@@ -318,7 +318,11 @@ static void test_gpx_quality_tags(void)
         const char *ex = strstr(t, "<extensions>");
         CHECK(ele && tm && fx && sat && hd && ex);
         CHECK(ele < tm && tm < fx && fx < sat && sat < hd && hd < ex);
-        CHECK(strstr(t, "<pg:spd>1234</pg:spd>") != NULL);
+        /* 12,34 уз = 6,34 м/с: скорость в формате Garmin TrackPointExtension v2 (м/с). */
+        CHECK(strstr(t, "<gpxtpx:TrackPointExtension><gpxtpx:speed>6.34</gpxtpx:speed>") != NULL);
+        CHECK(strstr(t, "xmlns=\"http://www.topografix.com/GPX/1/1\"") != NULL);
+        CHECK(strstr(t, "xmlns:gpxtpx=\"http://www.garmin.com/xmlschemas/TrackPointExtension/v2\"") != NULL);
+        CHECK(strstr(t, "pg:spd") == NULL);
 #if defined(PURRGO_TRACK_DIAG) && PURRGO_TRACK_DIAG
         CHECK(strstr(t, "pg:rej") != NULL);
 #else
@@ -338,7 +342,7 @@ static void test_gpx_quality_tags(void)
     t = finish_and_read();
     if (t) {
         CHECK(strstr(t, "<fix>dgps</fix>") && strstr(t, "<sat>14</sat>") && strstr(t, "<hdop>4.00</hdop>"));
-        CHECK(strstr(t, "<pg:spd>0</pg:spd>") != NULL);  /* отрицательная скорость -> 0 */
+        CHECK(strstr(t, "<gpxtpx:speed>0.00</gpxtpx:speed>") != NULL);  /* отрицательная скорость -> 0 */
         free(t);
     }
 
@@ -350,7 +354,7 @@ static void test_gpx_quality_tags(void)
     t = finish_and_read();
     if (t) {
         CHECK(!strstr(t, "<fix>") && !strstr(t, "<sat>") && !strstr(t, "<hdop>"));
-        CHECK(strstr(t, "<pg:spd>") != NULL);
+        CHECK(strstr(t, "<gpxtpx:speed>") != NULL);
         free(t);
     }
 }

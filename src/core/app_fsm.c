@@ -5,6 +5,7 @@
 #include "purrgo/system_time.h"
 #include "purrgo/gnss.h"
 #include "purrgo/gnss_adapter.h"
+#include "purrgo/gnss_ubx.h"
 #include "purrgo/sun.h"
 #include "purrgo/purrgo_time.h"
 #include "purrgo/map_controller.h"
@@ -51,6 +52,9 @@ static bool first_fix_obtained = false;
 static uint32_t last_sun_update_ms = 0;
 static uint32_t last_gnss_update_ms = 0;
 static purrgo_gnss_parser_t gnss_parser;
+#if PURRGO_GNSS_UBX
+static purrgo_ubx_parser_t ubx_parser;
+#endif
 
 // Таймаут фикса GNSS
 static uint32_t last_rmc_ms = 0;
@@ -130,6 +134,7 @@ static void gnss_solution_invalidate(void) {
     internal_gnss_solution.course_valid = false;
     internal_gnss_solution.speed_knots = 0;
     internal_gnss_solution.fix_quality = 0;
+    internal_gnss_solution.acc_valid = false;   // оценки точности относятся к потерянному решению
     /*
      * fix_type = 0 - "тип фикса неизвестен" (как после старта): значение 1 из GSA
      * ("нет фикса") выставляет только адаптер. Если здесь поставить 1, а приёмник
@@ -201,9 +206,24 @@ bool purrgo_app_tracker_mode_active(void) {
     return current_state == APP_STATE_TRACKER_SCREEN_OFF;
 }
 
+#if PURRGO_GNSS_UBX
+/*
+ * Начат новый трек (новый GPX-файл): дистанция трека отсчитывается заново - сброс
+ * одометра модуля (UBX-NAV-RESETODO). Вызывается логгером из track_logger_service().
+ */
+static void on_new_track(void) {
+    purrgo_gnss_ubx_reset_trip(purrgo_system_time_ms());
+}
+#endif
+
 void purrgo_app_init(void) {
     next_logger_retry_ms = 0;
     purrgo_gnss_parser_init(&gnss_parser);
+#if PURRGO_GNSS_UBX
+    purrgo_ubx_parser_init(&ubx_parser);
+    purrgo_gnss_ubx_init();
+    purrgo_logger_set_new_track_callback(on_new_track);
+#endif
     first_fix_obtained = false;
     last_sun_update_ms = 0;
     last_gnss_update_ms = purrgo_system_time_ms();
@@ -418,6 +438,31 @@ const purrgo_sun_info_t* purrgo_app_get_sun_info(void) {
 }
 
 void purrgo_app_feed_gnss_byte(uint8_t byte) {
+#if PURRGO_GNSS_UBX
+    /*
+     * В потоке вперемешку NMEA-строки и бинарные кадры UBX. Кадр может начаться,
+     * только пока NMEA-строка не начата (после её конца разборщик пуст): иначе
+     * байт B5 внутри текста сорвал бы разбор. Принятый PVT, как и RMC, означает,
+     * что приёмник жив (таймаут фикса).
+     */
+    if (gnss_parser.length == 0U || purrgo_ubx_parser_active(&ubx_parser)) {
+        const purrgo_ubx_feed_t fed = purrgo_ubx_parser_feed(&ubx_parser, byte);
+
+        if (fed == PURRGO_UBX_FEED_FRAME) {
+            const uint32_t now = purrgo_system_time_ms();
+
+            if (purrgo_gnss_ubx_process_frame(ubx_parser.msg_class, ubx_parser.msg_id,
+                                              ubx_parser.payload, ubx_parser.length,
+                                              &internal_gnss_solution, now)) {
+                last_rmc_ms = now;
+            }
+            return;
+        }
+        if (fed == PURRGO_UBX_FEED_CONSUMED) {
+            return;
+        }
+    }
+#endif
     if (purrgo_gnss_parser_feed(&gnss_parser, byte)) {
         if (purrgo_gnss_process_nmea(gnss_parser.line, &internal_gnss_solution)) {
             last_rmc_ms = purrgo_system_time_ms();
@@ -606,6 +651,13 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
     /* Расстояние и пеленг до цели (раз в секунду, вместе с остальными данными). */
     purrgo_wpt_update(current_fix);
 
+    /*
+     * Снимок данных путевого компьютера (дистанция трека, точность, помехи) - раз в
+     * секунду на любом экране, чтобы при открытии экрана данные уже были свежими.
+     */
+    purrgo_trip_computer_update(current_fix);
+    const bool trip_info_changed = purrgo_trip_computer_take_changed();
+
     const bool use_marker_ref = (current_state == APP_STATE_MAP);
     const bool ref_valid = use_marker_ref ? last_rendered_pos_valid : shown_pos_valid;
     const int32_t ref_lat = use_marker_ref ? last_rendered_fix.lat_1e7 : shown_lat_1e7;
@@ -646,6 +698,9 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
                         current_fix->hours != prev_fix.hours;
 
     if (current_state == APP_STATE_TRIP_COMPUTER) {
+        if (trip_info_changed) {
+            data_changed = true;
+        }
         int32_t dv = current_fix->speed_knots - shown_speed_knots_100;
         int32_t da = current_fix->alt_m - shown_alt_m;
         if (dv < 0) dv = -dv;
@@ -719,8 +774,7 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
             break;
 
         case APP_STATE_TRIP_COMPUTER:
-            purrgo_trip_computer_update(current_fix);
-            break;
+            break;  // снимок путевого компьютера обновлён выше, одинаково для всех экранов
 
         case APP_STATE_MENU_MAIN:
         case APP_STATE_MENU_DIR_SELECT:

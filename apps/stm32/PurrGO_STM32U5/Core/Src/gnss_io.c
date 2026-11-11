@@ -501,6 +501,22 @@ static void gnss_link_begin(void)
 }
 
 /**
+ * @brief Отправить байты приёмнику GNSS (команды UBX из ядра, см. purrgo/gnss_io.h).
+ *
+ * Не отправляет, пока GNSS выключен по EN, не запущен приём (DMA) или идёт поиск
+ * скорости UART (gnss_link): в этих состояниях команда пропала бы или сбила поиск.
+ */
+bool purrgo_gnss_write(const uint8_t *data, uint16_t length)
+{
+    if ((data == NULL) || (length == 0U) || !gnss_powered || (hlpuart1.hdmarx == NULL) ||
+        gnss_link_busy(&gnss_link))
+    {
+        return false;
+    }
+    return gnss_tx_raw(data, length);
+}
+
+/**
  * @brief Забрать байт из кольцевого буфера и показать его монитору связи.
  */
 static bool gnss_pop(uint16_t head, uint8_t *byte)

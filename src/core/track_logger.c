@@ -4,13 +4,15 @@
 #include "purrgo/geo.h"
 #include "purrgo/battery.h"
 #include "purrgo/config.h" // Подключаем доступ к app_config.timezone_offset_h
+#include "purrgo/hardware_config.h"
 #include <string.h>
 
 #include "purrgo/logger.h"
 
 
 
-#define GPX_BUFFER_SIZE 512
+/* Размер буфера записи. Одна точка с расширениями - до ~500 байт, заголовок GPX - ~600. */
+#define GPX_BUFFER_SIZE 1024
 
 /*
  * Диагностический режим (сборка с -DPURRGO_TRACK_DIAG=1, CMake: -DPURRGO_TRACK_DIAG=ON):
@@ -100,17 +102,36 @@ static size_t ram_track_head = 0;
 static size_t ram_track_count = 0;
 /* Сколько точек всего попало в RAM-трек (монотонно, при очистке буфера не сбрасывается). */
 static uint32_t ram_track_serial = 0;
-// Стандартный заголовок файла GPX 1.1
-static const char* GPX_HEADER = 
+/*
+ * Заголовок файла GPX 1.1. Пространства имён:
+ *   (по умолчанию) GPX 1.1 - обязательно для Garmin (BaseCamp, Connect) и большинства программ;
+ *   gpxtpx - Garmin TrackPointExtension v2 (скорость, курс; в v1 их нет);
+ *   pg     - собственные теги PurrGO (hacc, bat, vbat, rej).
+ */
+static const char* GPX_HEADER =
     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
     "<gpx version=\"1.1\" creator=\"PurrGo\" "
-    "xmlns:pg=\"https://github.com/purrrock/purrgo\">\n"
+    "xmlns=\"http://www.topografix.com/GPX/1/1\" "
+    "xmlns:gpxtpx=\"http://www.garmin.com/xmlschemas/TrackPointExtension/v2\" "
+    "xmlns:pg=\"https://github.com/purrrock/purrgo\" "
+    "xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" "
+    "xsi:schemaLocation=\"http://www.topografix.com/GPX/1/1 "
+    "http://www.topografix.com/GPX/1/1/gpx.xsd "
+    "http://www.garmin.com/xmlschemas/TrackPointExtension/v2 "
+    "http://www8.garmin.com/xmlschemas/TrackPointExtensionv2.xsd\">\n"
     "<trk><trkseg>\n";
 
 // Закрывающие теги
 static const char* GPX_FOOTER = 
     "</trkseg></trk>\n"
     "</gpx>\n";
+
+/* Начало нового трека (новый файл): приложение сбрасывает дистанцию трека и т.п. */
+static purrgo_logger_new_track_cb_t s_new_track_cb = NULL;
+
+void purrgo_logger_set_new_track_callback(purrgo_logger_new_track_cb_t cb) {
+    s_new_track_cb = cb;
+}
 
 // Установка режима логгера
 void purrgo_logger_set_mode(track_logger_mode_t mode) {
@@ -215,7 +236,8 @@ static bool finalize_active_file(void) {
  * GSA/GGA), считается неизвестным и точку не отклоняет.
  */
 #define LOGGER_MIN_FIX_TYPE        3U      /* только 3D-фикс (GSA) */
-#define LOGGER_MAX_HDOP_100        500     /* HDOP > 5.0 - точку не пишем */
+#define LOGGER_MAX_HDOP_100        500     /* HDOP > 5.0 - точку не пишем (если нет hAcc) */
+#define LOGGER_MAX_HACC_MM         ((uint32_t)PURRGO_GNSS_TRACK_MAX_HACC_M * 1000U)  /* hAcc выше - не пишем */
 #define LOGGER_MIN_SATELLITES      4U      /* меньше 4 спутников в решении - не пишем */
 #define LOGGER_STATIONARY_KNOTS_100 50     /* < 0.5 уз - стоим, дрейф координат - шум */
 #define LOGGER_MAX_SPEED_MPS       500U    /* быстрее - выброс (скачок координат) */
@@ -255,13 +277,19 @@ static const logger_filter_params_t* filter_params(void) {
 #define LOGGER_REJ_STATIONARY 0x08U   /* стоим: скорость < 0.5 уз */
 #define LOGGER_REJ_OUTLIER    0x10U   /* скачок быстрее LOGGER_MAX_SPEED_MPS */
 #define LOGGER_REJ_DECIMATED  0x20U   /* трек не изменился заметно (прореживание) */
+#define LOGGER_REJ_HACC       0x40U   /* hAcc (UBX-NAV-PVT) выше PURRGO_GNSS_TRACK_MAX_HACC_M */
 
 static uint8_t quality_reject_mask(const purrgo_gnss_solution_t* fix) {
     uint8_t mask = 0U;
     if (fix->fix_type != 0 && fix->fix_type < LOGGER_MIN_FIX_TYPE) {
         mask |= LOGGER_REJ_FIX_TYPE;
     }
-    if (fix->hdop_100 > LOGGER_MAX_HDOP_100) {
+    if (fix->acc_valid) {
+        /* Прямая оценка погрешности точнее HDOP: HDOP не учитывает качество сигнала. */
+        if (fix->hacc_mm > LOGGER_MAX_HACC_MM) {
+            mask |= LOGGER_REJ_HACC;
+        }
+    } else if (fix->hdop_100 > LOGGER_MAX_HDOP_100) {
         mask |= LOGGER_REJ_HDOP;
     }
     if (fix->satellites_tracked != 0 && fix->satellites_tracked < LOGGER_MIN_SATELLITES) {
@@ -477,6 +505,9 @@ static bool logger_start_impl(const purrgo_gnss_solution_t* first_fix, bool keep
         return false;
     }
     current_state = LOGGER_STATE_RECORDING;
+    if (s_new_track_cb != NULL) {
+        s_new_track_cb();   /* новый файл; продолжение после сбоя записи сюда не доходит */
+    }
     return true;
 }
 
@@ -519,8 +550,9 @@ static const char* gpx_fix_name(const purrgo_gnss_solution_t* fix) {
  * GPX 1.1: ele, time, fix, sat, hdop, extensions. Параметры, равные 0 (приёмник их
  * не присылает), не пишутся.
  *   <fix>, <sat>, <hdop> - из GSA/GGA: нужны, чтобы сверять фильтры качества;
- *   pg:spd - скорость над землёй, сотые доли узла (в тех же единицах, что порог
- *            стоянки LOGGER_STATIONARY_KNOTS_100);
+ *   gpxtpx:speed, gpxtpx:course - скорость (м/с) и курс (градусы) в формате Garmin
+ *            TrackPointExtension v2;
+ *   pg:hacc - горизонтальная точность hAcc, метры (UBX-NAV-PVT; без PVT не пишется);
  *   pg:bat, pg:vbat - заряд батареи (для анализа энергопотребления);
  *   pg:rej - только в диагностическом сборке, см. PURRGO_TRACK_DIAG.
  * ВАЖНО: внутри GPX (тег <time>) пишутся оригинальные данные fix (UTC время).
@@ -551,8 +583,30 @@ static bool buffer_point(const purrgo_gnss_solution_t* fix, uint8_t rej) {
         return false;   /* не должно случаться: размер буфера рассчитан на максимум */
     }
 
-    char ext[128];
-    int ext_len = purrgo_snprintf(ext, sizeof(ext), "  <extensions>");
+    /*
+     * <extensions>: gpxtpx:speed - скорость над землёй, м/с (Garmin TrackPointExtension v2),
+     * gpxtpx:course - курс, градусы (только при надёжном курсе); дальше собственные теги.
+     */
+    char ext[320];
+    int ext_len = purrgo_snprintf(ext, sizeof(ext), "  <extensions><gpxtpx:TrackPointExtension>");
+    int32_t spd_knots = fix->speed_knots < 0 ? 0 : (fix->speed_knots > 9999999 ? 9999999 : fix->speed_knots);
+    uint32_t mps_100 = (uint32_t)(((int64_t)spd_knots * 1852) / 3600);   /* сотые доли узла -> сотые доли м/с */
+    ext_len += purrgo_snprintf(ext + ext_len, sizeof(ext) - (size_t)ext_len,
+                               "<gpxtpx:speed>%u.%02u</gpxtpx:speed>",
+                               (unsigned int)(mps_100 / 100U), (unsigned int)(mps_100 % 100U));
+    if (fix->course_valid && fix->course_deg_100 >= 0) {
+        uint32_t crs = (uint32_t)fix->course_deg_100 % 36000U;
+        ext_len += purrgo_snprintf(ext + ext_len, sizeof(ext) - (size_t)ext_len,
+                                   "<gpxtpx:course>%u.%02u</gpxtpx:course>",
+                                   (unsigned int)(crs / 100U), (unsigned int)(crs % 100U));
+    }
+    ext_len += purrgo_snprintf(ext + ext_len, sizeof(ext) - (size_t)ext_len, "</gpxtpx:TrackPointExtension>");
+    if (fix->acc_valid) {
+        uint32_t hacc = fix->hacc_mm > 9999999U ? 9999999U : fix->hacc_mm;   /* мм -> м, 2 знака */
+        ext_len += purrgo_snprintf(ext + ext_len, sizeof(ext) - (size_t)ext_len,
+                                   "<pg:hacc>%u.%02u</pg:hacc>",
+                                   (unsigned int)(hacc / 1000U), (unsigned int)((hacc % 1000U) / 10U));
+    }
     purrgo_battery_t bat;
     if (purrgo_battery_read(&bat) && bat.percent >= 0) {
         ext_len += purrgo_snprintf(ext + ext_len, sizeof(ext) - (size_t)ext_len,
@@ -562,8 +616,6 @@ static bool buffer_point(const purrgo_gnss_solution_t* fix, uint8_t rej) {
                                        "<pg:vbat>%u</pg:vbat>", (unsigned int)bat.millivolts);
         }
     }
-    int32_t spd = fix->speed_knots < 0 ? 0 : (fix->speed_knots > 9999999 ? 9999999 : fix->speed_knots);
-    ext_len += purrgo_snprintf(ext + ext_len, sizeof(ext) - (size_t)ext_len, "<pg:spd>%d</pg:spd>", (int)spd);
 #if PURRGO_TRACK_DIAG
     ext_len += purrgo_snprintf(ext + ext_len, sizeof(ext) - (size_t)ext_len, "<pg:rej>%u</pg:rej>", (unsigned int)rej);
 #endif
@@ -572,7 +624,7 @@ static bool buffer_point(const purrgo_gnss_solution_t* fix, uint8_t rej) {
         return false;
     }
 
-    char point_str[448];
+    char point_str[640];
     int n = purrgo_snprintf(point_str, sizeof(point_str),
              "<trkpt lat=\"%s%d.%07d\" lon=\"%s%d.%07d\">\n"
              "  <ele>%d</ele>\n"
