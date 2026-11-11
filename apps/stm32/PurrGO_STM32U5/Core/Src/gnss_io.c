@@ -25,8 +25,10 @@
  *   - HAL_UART_Receive_DMA() сам записывает в узел размер блока, адрес RDR и
  *     адрес буфера, поэтому узел собирается с нулевыми адресами;
  *   - LPUART1 обслуживается LPDMA1 (запрос LPDMA1_REQUEST_LPUART1_RX); режим
- *     Stop 2 пока не используется. Для него потребуется разместить
- *     gnss_rx_buffer и узел очереди в SRAM4 (в Stop 2 LPDMA1 видит только её);
+ *     Stop 2 пока не используется;
+ *   - LPDMA1 (домен SmartRun) является мастером только шины SRD и видит из всех
+ *     SRAM лишь SRAM4 (RM0456, 2.1.13) - и в Run, и в Stop. Поэтому буфер приёма
+ *     и узел linked-list размещены в секции .sram4 (линкер-скрипт, SRAM4);
  *   - остаток блока читается из CBR1.BNDT (__HAL_DMA_GET_COUNTER); его
  *     семантика для кольцевого буфера соответствует
  *     purrgo_gnss_ring_head_from_ndtr() из gnss_ring.h;
@@ -59,7 +61,7 @@
  * DMA является владельцем записи в этот массив.
  * Потребитель читает данные через purrgo_gnss_read_byte().
  */
-static uint8_t gnss_rx_buffer[GNSS_RX_BUFFER_SIZE];
+static uint8_t gnss_rx_buffer[GNSS_RX_BUFFER_SIZE] __attribute__((section(".sram4"), aligned(4)));
 
 /*
  * Потребитель кольцевого буфера (индекс tail и расчёт положения DMA по счётчику).
@@ -115,8 +117,11 @@ static volatile uint16_t gnss_last_head = 0U;
  */
 static volatile bool gnss_powered = true;
 
-/* Узел и очередь linked-list: узел обязан быть выровнен по 4 байтам. */
-static DMA_NodeTypeDef gnss_rx_node __attribute__((aligned(32)));
+/*
+ * Узел и очередь linked-list: узел обязан быть выровнен по 4 байтам и лежать
+ * в SRAM4 (доступна LPDMA1). Очередь (DMA_QListTypeDef) читает только CPU.
+ */
+static DMA_NodeTypeDef gnss_rx_node __attribute__((section(".sram4"), aligned(32)));
 static DMA_QListTypeDef gnss_rx_queue;
 
 /**
@@ -129,6 +134,9 @@ static bool gnss_dma_setup(void)
 {
     DMA_NodeConfTypeDef node_cfg;
     HAL_StatusTypeDef ret = HAL_OK;
+
+    /* SRAM4 должна быть тактирована: из неё читает и в неё пишет LPDMA1. */
+    __HAL_RCC_SRAM4_CLK_ENABLE();
 
     memset(&node_cfg, 0, sizeof node_cfg);
     memset(&gnss_rx_node, 0, sizeof gnss_rx_node);
@@ -621,8 +629,10 @@ bool purrgo_gnss_read_byte(uint8_t *byte)
         /* При поиске скорости ошибки кадра ожидаемы (приём на неверной скорости): без лога. */
         if (!gnss_link_busy(&gnss_link))
         {
-            PURRGO_LOGE("GNSS RX error 0x%lX (PE=1 NE=2 FE=4 ORE=8 DMA=0x10), restarting RX\r\n",
-                       (unsigned long)gnss_rx_error_code);
+            PURRGO_LOGE("GNSS RX error 0x%lX (PE=1 NE=2 FE=4 ORE=8 DMA=0x10), dma err 0x%lX"
+                       " (DTE=1 ULE=2 USE=4), restarting RX\r\n",
+                       (unsigned long)gnss_rx_error_code,
+                       (unsigned long)handle_LPDMA1_Channel0.ErrorCode);
         }
 
         gnss_last_head = 0U;

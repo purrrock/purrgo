@@ -125,7 +125,7 @@
 - [ ] Интегрировать button interrupts (сейчас опрос `BUTTON_POLL_PERIOD_MS`).
 - [ ] **[проверить]** Приём GNSS в Stop: по RM0456 USART1 будит только из Stop 0/1, из Stop 2 — LPUART1; LPDMA1 (домен SRD) работает в Stop, GPDMA1 — нет.
   - Вариант A: оставить USART1 + GPDMA1, ограничиться Stop 0/1.
-  - Вариант B: GNSS на LPUART1 + LPDMA1 для Stop 2 (LPUART1 на PA2/PA3 и приём через LPDMA1 Channel 0 — уже сделаны, в Run). Остаётся Stop 2: разместить `gnss_rx_buffer` и узел очереди в SRAM4 (в Stop 2 LPDMA1 видит только её), пробуждение по заполнению буфера/IDLE.
+  - Вариант B: GNSS на LPUART1 + LPDMA1 для Stop 2 (LPUART1 на PA2/PA3 и приём через LPDMA1 Channel 0 — уже сделаны, в Run). Буфер приёма и узел очереди уже в SRAM4 (LPDMA1 видит только её). Остаётся Stop 2: пробуждение по заполнению буфера/IDLE.
 - [ ] **[решение]** Standby или Shutdown для выключения (Shutdown — минимальный ток, но сбрасывает SRAM и backup).
 - [ ] Динамическая частота: 80 МГц только на рендер/обмен с SD, в остальное время HSI16/MSI; при низкой частоте Range 3/4. Решение по D4 (80 / 160 МГц и ниже) — по замерам времени кадра и тока.
 

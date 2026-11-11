@@ -62,7 +62,7 @@ EN
 Какой вывод куда запаян - в [`PINOUT`](../PurrGO_STM32U585_PINOUT.md).
 
 - UART: LPUART1 (PA2 - TX в сторону модуля, PA3 - RX с внутренней подтяжкой к питанию), 8N1, тактирование HSI16. Приём - LPDMA1
-  Channel 0, запрос `LPDMA1_REQUEST_LPUART1_RX`, linked-list circular (`gnss_io.c`). Режим Stop 2 пока не используется.
+  Channel 0, запрос `LPDMA1_REQUEST_LPUART1_RX`, linked-list circular (`gnss_io.c`). Режим Stop 2 пока не используется. LPDMA1 видит только SRAM4, поэтому буфер приёма и узел лежат в секции `.sram4`.
 - Скорость: после включения модуль работает на 38400 (`PURRGO_GNSS_BAUD_DEFAULT`), прошивка переводит его и LPUART1 на 115200
   (`PURRGO_GNSS_BAUD_TARGET`, `hardware_config.h`; в CubeMX остаётся 38400).
 - `GNSS_EN` (PB0): GPIO_Output, Push-Pull, без подтяжки, начальный уровень High. High или неподключённый EN - модуль работает, Low -
