@@ -154,6 +154,17 @@ static uint32_t s_odo_hold_until;
 static bool s_ver_logged;
 static uint32_t s_ver_logged_ms;
 
+/* Сопоставление ответов ACK/NAK на VALSET группам настройки. */
+static const char *const *s_cfg_names;
+static uint8_t s_cfg_count;
+static uint8_t s_cfg_replies;
+static uint32_t s_cfg_nak_mask;
+
+/* Периодическая диагностическая строка по PVT. */
+#define PVT_LOG_INTERVAL_MS 5000U
+static bool s_pvt_logged;
+static uint32_t s_pvt_logged_ms;
+
 void purrgo_gnss_ubx_init(void)
 {
     memset(&s_st, 0, sizeof s_st);
@@ -165,6 +176,52 @@ void purrgo_gnss_ubx_init(void)
     s_odo_hold_until = 0U;
     s_ver_logged = false;
     s_ver_logged_ms = 0U;
+    s_cfg_names = NULL;
+    s_cfg_count = 0U;
+    s_cfg_replies = 0U;
+    s_cfg_nak_mask = 0U;
+    s_pvt_logged = false;
+    s_pvt_logged_ms = 0U;
+}
+
+void purrgo_gnss_ubx_cfg_begin(const char *const *names, uint8_t count)
+{
+    s_cfg_names = names;
+    s_cfg_count = (count > PURRGO_UBX_CFG_MAX_TRACKED) ? (uint8_t)PURRGO_UBX_CFG_MAX_TRACKED : count;
+    s_cfg_replies = 0U;
+    s_cfg_nak_mask = 0U;
+}
+
+uint32_t purrgo_gnss_ubx_cfg_nak_mask(void)
+{
+    return s_cfg_nak_mask;
+}
+
+uint8_t purrgo_gnss_ubx_cfg_replies(void)
+{
+    return s_cfg_replies;
+}
+
+/* Ответ приёмника на UBX-CFG-VALSET (класс 0x06, id 0x8A): ACK или NAK. */
+static void process_cfg_reply(bool nak, const uint8_t *payload)
+{
+    if (payload[0] != 0x06U || payload[1] != 0x8AU) {
+        if (nak) {
+            PURRGO_LOGW("GNSS: module rejected UBX class 0x%02X id 0x%02X (NAK)\r\n",
+                        (unsigned)payload[0], (unsigned)payload[1]);
+        }
+        return;
+    }
+    if (s_cfg_names != NULL && s_cfg_replies < s_cfg_count) {
+        const uint8_t idx = s_cfg_replies++;
+
+        if (nak) {
+            s_cfg_nak_mask |= (1UL << idx);
+            PURRGO_LOGW("GNSS: config \"%s\" rejected by module (NAK)\r\n", s_cfg_names[idx]);
+        }
+    } else if (nak) {
+        PURRGO_LOGW("GNSS: module rejected UBX-CFG-VALSET (NAK)\r\n");
+    }
 }
 
 const purrgo_gnss_ubx_status_t *purrgo_gnss_ubx_status(void)
@@ -377,6 +434,15 @@ bool purrgo_gnss_ubx_process_frame(uint8_t msg_class, uint8_t msg_id, const uint
             if (!purrgo_gnss_ubx_apply_pvt(payload, length, solution)) {
                 return false;
             }
+            /* Раз в несколько секунд: видно, есть ли время без позиции (PPS мигает уже по времени). */
+            if (!s_pvt_logged || (uint32_t)(now_ms - s_pvt_logged_ms) >= PVT_LOG_INTERVAL_MS) {
+                s_pvt_logged = true;
+                s_pvt_logged_ms = now_ms;
+                PURRGO_LOGI("GNSS: PVT fixType=%u fixOK=%u sv=%u validTime=%u hAcc=%lu mm pDOP=%u\r\n",
+                            (unsigned)payload[20], (unsigned)(payload[21] & 1U), (unsigned)payload[23],
+                            (unsigned)((payload[11] >> 1) & 1U), (unsigned long)rd_u32(&payload[40]),
+                            (unsigned)rd_u16(&payload[76]));
+            }
             purrgo_gnss_adapter_pvt_applied();
             return true;
         }
@@ -391,9 +457,9 @@ bool purrgo_gnss_ubx_process_frame(uint8_t msg_class, uint8_t msg_id, const uint
         } else if (msg_id == PURRGO_UBX_ID_MON_VER) {
             process_mon_ver(payload, length, now_ms);
         }
-    } else if (msg_class == PURRGO_UBX_CLASS_ACK && msg_id == PURRGO_UBX_ID_ACK_NAK && length == 2U) {
-        PURRGO_LOGW("GNSS: module rejected UBX class 0x%02X id 0x%02X (NAK)\r\n",
-                    (unsigned)payload[0], (unsigned)payload[1]);
+    } else if (msg_class == PURRGO_UBX_CLASS_ACK && length == 2U &&
+               (msg_id == PURRGO_UBX_ID_ACK_NAK || msg_id == PURRGO_UBX_ID_ACK_ACK)) {
+        process_cfg_reply(msg_id == PURRGO_UBX_ID_ACK_NAK, payload);
     }
     return false;
 }
