@@ -9,6 +9,10 @@
 # поэтому здесь исправляются две вещи, зависящие от этого предположения:
 #   1. путь к linker script (-T ".../STM32U585xx_FLASH.ld");
 #   2. имя map-файла (CMAKE_PROJECT_NAME на момент чтения тулчейна ещё не задан).
+#
+# Кроме того, CubeMX перезаписывает STM32U585xx_FLASH.ld при каждой генерации,
+# поэтому собирается его копия STM32U585xx_PURRGO.ld с пользовательской секцией
+# .sram4 (LPDMA1 видит только SRAM4). Подмена имени - ниже.
 
 get_filename_component(PURRGO_CUBEMX_DIR
     "${CMAKE_CURRENT_LIST_DIR}/../../apps/stm32/PurrGO_STM32U5" ABSOLUTE)
@@ -16,6 +20,9 @@ get_filename_component(PURRGO_CUBEMX_DIR
 include("${PURRGO_CUBEMX_DIR}/cmake/gcc-arm-none-eabi.cmake")
 
 string(REPLACE "${CMAKE_SOURCE_DIR}/" "${PURRGO_CUBEMX_DIR}/"
+    CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS}")
+
+string(REPLACE "STM32U585xx_FLASH.ld" "STM32U585xx_PURRGO.ld"
     CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS}")
 
 string(REGEX REPLACE "-Wl,-Map=[^ ]*"

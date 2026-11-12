@@ -206,6 +206,22 @@ bool purrgo_app_tracker_mode_active(void) {
     return current_state == APP_STATE_TRACKER_SCREEN_OFF;
 }
 
+/*
+ * Режим чтения в покое: перерисовки нет и ждать нечего, кроме кнопок и редких
+ * тиков (сохранение позиции, заряд батареи, питание), которые платформа
+ * отрабатывает периодическим пробуждением. На карте, в меню и в трекере GNSS
+ * и экран живут по таймеру, глубокий сон там не нужен.
+ */
+bool purrgo_app_deep_sleep_allowed(uint32_t now_ms) {
+    if (!is_book_state(current_state)) {
+        return false;
+    }
+    if (purrgo_book_reader_search_running()) {
+        return false;
+    }
+    return !purrgo_app_ui_needs_render(now_ms);
+}
+
 #if PURRGO_GNSS_UBX
 /*
  * Начат новый трек (новый GPX-файл): дистанция трека отсчитывается заново - сброс

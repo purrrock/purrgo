@@ -337,6 +337,18 @@ bool display_eink_is_busy(void)
     return s_op != OP_NONE || request_pending();
 }
 
+bool display_eink_can_stop(void)
+{
+    /*
+     * Нет операции, запроса и отложенной повторной попытки; панель уже в deep
+     * sleep (или не инициализирована) и библиотека не доделывает автоотключение
+     * питания. Пока условие не выполнено, display_eink_poll() нужен по таймеру
+     * (SysTick), поэтому Stop запрещён.
+     */
+    return s_op == OP_NONE && !request_pending() && !s_have_retry &&
+           (s_hw == HW_OFF || s_mono_asleep) && !epd4g_is_busy();
+}
+
 void display_eink_set_partial_limits(unsigned gray, unsigned mono)
 {
     epd4g_set_partials_before_full((gray != 0U) ? gray : PURRGO_EINK_GRAY_PARTIALS_BEFORE_FULL,

@@ -104,6 +104,14 @@ purrgo_state_t purrgo_app_get_state(void);
  */
 bool purrgo_app_tracker_mode_active(void);
 
+/*
+ * true, если приложение в покое и платформа может остановить таймер и уйти в
+ * глубокий сон до кнопки или ближайшего периодического тика (читалка без
+ * поиска и без ожидающей перерисовки). Остальные условия (дисплей, кнопки)
+ * проверяет платформа.
+ */
+bool purrgo_app_deep_sleep_allowed(uint32_t now_ms);
+
 /* purrgo_map_scale_t определён в map_types.h */
 
 /*

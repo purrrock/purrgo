@@ -87,6 +87,8 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Core/Src/battery_adc.c
     # Контроль напряжения VDD (PVD): остановка записи на SD при просадке питания
     Core/Src/supply_pvd.c
+    # Stop 2 в режиме чтения (LPTIM1 на LSI восстанавливает время HAL)
+    Core/Src/stop_mode.c
 
     # Application wrapper
     ${PURRGO_STM32_COMMON}/Src/stm32_app.c
@@ -123,6 +125,7 @@ purrgo_sources_warnings(
     Core/Src/power_stm32.c
     Core/Src/battery_adc.c
     Core/Src/supply_pvd.c
+    Core/Src/stop_mode.c
     ${PURRGO_STM32_COMMON}/Src/stm32_app.c
     ${PURRGO_STM32_COMMON}/Src/display_eink.c
     ${PURRGO_STM32_COMMON}/Src/eink_test.c

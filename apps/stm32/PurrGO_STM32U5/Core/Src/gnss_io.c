@@ -28,7 +28,7 @@
  *     Stop 2 пока не используется;
  *   - LPDMA1 (домен SmartRun) является мастером только шины SRD и видит из всех
  *     SRAM лишь SRAM4 (RM0456, 2.1.13) - и в Run, и в Stop. Поэтому буфер приёма
- *     и узел linked-list размещены в секции .sram4 (линкер-скрипт, SRAM4);
+ *     и узел linked-list размещены в секции .sram4 (STM32U585xx_PURRGO.ld, SRAM4);
  *   - остаток блока читается из CBR1.BNDT (__HAL_DMA_GET_COUNTER); его
  *     семантика для кольцевого буфера соответствует
  *     purrgo_gnss_ring_head_from_ndtr() из gnss_ring.h;

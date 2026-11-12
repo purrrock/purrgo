@@ -11,7 +11,7 @@ PurrGO — автономный GNSS-навигатор и трекер без �
 
 ## Аппаратная платформа
 
-Поддерживаемая плата - **WeAct STM32U585CIU6** (схема в `datasheets/STM32U585CIU6/`).
+Поддерживаемая плата - **WeAct STM32U585CIU6** Firmware version 5.10, Protocol version 34.10, (схема в `datasheets/STM32U585CIU6/`).
 
 | Параметр | Значение |
 |---|---|
@@ -62,7 +62,7 @@ EN
 Какой вывод куда запаян - в [`PINOUT`](../PurrGO_STM32U585_PINOUT.md).
 
 - UART: LPUART1 (PA2 - TX в сторону модуля, PA3 - RX с внутренней подтяжкой к питанию), 8N1, тактирование HSI16. Приём - LPDMA1
-  Channel 0, запрос `LPDMA1_REQUEST_LPUART1_RX`, linked-list circular (`gnss_io.c`). Режим Stop 2 пока не используется. LPDMA1 видит только SRAM4, поэтому буфер приёма и узел лежат в секции `.sram4`.
+  Channel 0, запрос `LPDMA1_REQUEST_LPUART1_RX`, linked-list circular (`gnss_io.c`). Режим Stop 2 пока не используется. LPDMA1 видит только SRAM4, поэтому буфер приёма и узел лежат в секции `.sram4` (линкер-скрипт `STM32U585xx_PURRGO.ld`, копия сгенерированного CubeMX файла `STM32U585xx_FLASH.ld`, который CubeMX перезаписывает).
 - Скорость: после включения модуль работает на 38400 (`PURRGO_GNSS_BAUD_DEFAULT`), прошивка переводит его и LPUART1 на 115200
   (`PURRGO_GNSS_BAUD_TARGET`, `hardware_config.h`; в CubeMX остаётся 38400).
 - `GNSS_EN` (PB0): GPIO_Output, Push-Pull, без подтяжки, начальный уровень High. High или неподключённый EN - модуль работает, Low -

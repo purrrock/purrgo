@@ -169,6 +169,9 @@ bool purrgo_book_reader_is_active(void);
 /* Позиция в RAM не записана на SD. */
 bool purrgo_book_reader_position_dirty(void);
 
+/* Идёт поиск по книге: purrgo_book_reader_tick() выполняет очередную порцию, МК должен работать. */
+bool purrgo_book_reader_search_running(void);
+
 /* Данные для отрисовки. */
 void purrgo_book_reader_get_view(purrgo_book_view_t *view);
 /* Клавиатура ввода запроса (состояние APP_STATE_BOOK_SEARCH_INPUT). */

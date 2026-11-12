@@ -190,6 +190,28 @@ static size_t event_queue_count = 0U;
 
 
 /*
+ * true - можно останавливать SysTick: все кнопки отпущены и стабильны, событий
+ * в очереди нет. Нажатую кнопку надо доопрашивать по таймеру (debounce, LONG).
+ */
+bool purrgo_stm32_buttons_idle(void)
+{
+    if (event_queue_count != 0U)
+    {
+        return false;
+    }
+    for (size_t i = 0U; i < (sizeof(buttons) / sizeof(buttons[0])); i++)
+    {
+        if (buttons[i].raw_state != GPIO_PIN_SET ||
+            buttons[i].stable_state != GPIO_PIN_SET)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+
+/*
  * Convert a physical button index to the corresponding SHORT event.
  */
 static purrgo_btn_t button_short_event(size_t index)
