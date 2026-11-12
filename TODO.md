@@ -41,7 +41,6 @@
   - [ ] **[проверить]** По Interface Description u-blox M10: когда модуль отправляет ACK на команду смены скорости (на старой или новой скорости). Код от этого не зависит
     (успех смены определяется по NMEA на новой скорости).
 - [ ] Проверить 1PPS.
-  - [x] **[CubeMX]** Приоритет EXTI8 понижен до preemption 5 (ниже LPDMA1 и LPUART1), PPS не вытесняет приём GNSS.
   - [x] Обработчик `HAL_GPIO_EXTI_Rising_Callback(GNSS_PPS_Pin)` (`gnss_io.c`): считает фронты через
     `purrgo_gnss_monitor_pps_edge()`, при выключенном GNSS игнорирует. Статистика в `apps/stm32/common/gnss_pps`
     (host-тест `test_gnss_pps.c`): число фронтов, интервалы (ok / короткие / пропуски / дрожание), min и max.
@@ -82,7 +81,6 @@
 
 Инициализация, монтирование, чтение конфига и карты работают.
 
-- [x] Вызов `purrgo_map_shutdown()` при переходе SD в `READY` (`stm32_app.c`, после `purrgo_sd_poll()`).
 - [x] Измерить фактическую скорость чтения (МБ/с) при `/8` (10 МГц). Входит в P2. Тест готов: сборка `-DPURRGO_HW_TEST=SD_SPEED` (см. `docs/development.md`, «Аппаратные тесты»). Результат в `docs/measurements/SD-speed-test-result.txt`.
 - [ ] **[HW]** Повторить `SD_SPEED` на текущей сборке (SPI `/4`, быстрый обмен `PURRGO_SD_SPI_FAST_XFER`, см. `docs/hardware.md`, раздел microSD): записанный результат (~1,13 МБ/с при 10 и 20 МГц) получен до быстрого обмена.
 
