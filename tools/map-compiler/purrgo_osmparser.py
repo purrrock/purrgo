@@ -33,7 +33,7 @@ MAX_GEOMETRY_POINTS = 1999
 # Global immutable tuple of toponymic descriptors.
 # Strictly sorted by descending length for the startswith algorithm.
 _STOP_WORDS = (
-    "restaurant", "praspiekt", "boulevard", "проспект", "переулок", "ресторан",
+    "памятная доска","restaurant", "praspiekt", "boulevard", "проспект", "переулок", "ресторан",
     "праспект", "рэстаран", "praspekt", "stancyya", "prypynak", "restaran",
     "площадь", "бульвар", "станция", "магазин", "завулак", "станцыя", "highway",
     "grocery", "station", "zavulak", "voziera", "вуліца", "плошча", "возера",
@@ -82,7 +82,7 @@ def _sanitize_name_cached(name: str) -> str:
 
 # Приоритет тегов для названия объекта
 _NAME_TAG_PRIORITY = (
-    'name:ru', 'name:be', 'int_name',
+    'short_name:ru','name:ru','short_name:be', 'name:be', 'int_name',
     'short_name:en', 'name:en', 'short_name', 'name',
 )
 
