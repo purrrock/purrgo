@@ -57,6 +57,9 @@ extern "C" {
 #define PURRGO_UBX_ANT_SHORT     3U
 #define PURRGO_UBX_ANT_OPEN      4U
 
+/* Ответы приёмника на UBX-CFG-VALSET (ACK/NAK) приходят в порядке отправки. */
+#define PURRGO_UBX_CFG_MAX_TRACKED 16U
+
 /* Данные считаются устаревшими, если сообщение не приходило дольше (мс). */
 #define PURRGO_UBX_STALE_MS 3500U
 
@@ -162,6 +165,19 @@ bool purrgo_gnss_ubx_apply_pvt(const uint8_t *payload, uint16_t length,
 /* ------------------------------------------------------------------------- */
 /* Команды приёмнику и дистанция трека                                        */
 /* ------------------------------------------------------------------------- */
+
+/*
+ * Перед отправкой серии UBX-CFG-VALSET: имена групп в порядке отправки (строки должны
+ * жить дольше вызова, не более PURRGO_UBX_CFG_MAX_TRACKED). Ответы ACK/NAK на VALSET
+ * сопоставляются группам по порядку, отказ пишется в лог с именем группы.
+ */
+void purrgo_gnss_ubx_cfg_begin(const char *const *names, uint8_t count);
+
+/* Битовая маска групп (по индексу в names), на которые приёмник ответил NAK. */
+uint32_t purrgo_gnss_ubx_cfg_nak_mask(void);
+
+/* Сколько ответов (ACK или NAK) на группы получено с последнего cfg_begin(). */
+uint8_t purrgo_gnss_ubx_cfg_replies(void);
 
 /* Отправить UBX-MON-VER (опрос версии) через purrgo_gnss_write(). true - передано. */
 bool purrgo_gnss_ubx_poll_version(void);

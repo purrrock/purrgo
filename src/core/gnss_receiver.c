@@ -1,4 +1,5 @@
 #include "purrgo/gnss_receiver.h"
+#include "purrgo/gnss_ubx.h"
 #include "purrgo/hardware_config.h"
 #include "purrgo/logger.h"
 
@@ -154,6 +155,22 @@ void purrgo_gnss_receiver_configure_ubx(purrgo_gnss_tx_fn tx)
     if (tx == NULL) {
         return;
     }
+
+#if PURRGO_GNSS_UBX
+    /*
+     * Имена групп в порядке отправки: ответы ACK/NAK на VALSET приходят по порядку, и
+     * gnss_ubx.c по ним пишет в лог, какая именно группа отклонена. Вызывать до первой
+     * отправки: ответ на первый кадр может прийти сразу.
+     */
+    static const char *const group_names[] = {
+        "NMEA/rate", "NAV-PVT", "NAV-ODO", "MON-RF",
+#if PURRGO_GNSS_SEC_SIG
+        "SEC-SIG",
+#endif
+        "ODO enable/profile", "DYNMODEL"
+    };
+    purrgo_gnss_ubx_cfg_begin(group_names, (uint8_t)(sizeof group_names / sizeof group_names[0]));
+#endif
 
     /* 1. Частота решений и набор NMEA (как и без UBX-расширений). */
     send_valset(tx, items, sizeof items / sizeof items[0]);
