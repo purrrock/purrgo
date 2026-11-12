@@ -216,7 +216,7 @@ static void process_cfg_reply(bool nak, const uint8_t *payload)
         const uint8_t idx = s_cfg_replies++;
 
         if (nak) {
-            s_cfg_nak_mask |= (1UL << idx);
+            s_cfg_nak_mask |= ((uint32_t)1U << idx);
             PURRGO_LOGW("GNSS: config \"%s\" rejected by module (NAK)\r\n", s_cfg_names[idx]);
         }
     } else if (nak) {
