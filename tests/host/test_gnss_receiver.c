@@ -7,13 +7,20 @@
 #include "purrgo/hardware_config.h"
 #include "test_common.h"
 
-static char g_sent[8][128];
-static size_t g_sent_len[8];
+/*
+ * Кадры настройки: базовая + (набор систем) + (PSM) + при PURRGO_GNSS_UBX по VALSET на PVT, ODO, MON-RF,
+ * (SEC-SIG), одометр, модель динамики и опрос MON-VER.
+ */
+#define EXPECTED_FRAMES (1 + PURRGO_GNSS_SIGNALS_ACTIVE + PURRGO_GNSS_PSM_ACTIVE + \
+                         (PURRGO_GNSS_UBX ? (6 + PURRGO_GNSS_SEC_SIG) : 0))
+
+static char g_sent[16][128];
+static size_t g_sent_len[16];
 static int g_sent_count;
 
 static void fake_tx(const uint8_t *data, size_t len)
 {
-    if (g_sent_count < 8 && len < sizeof g_sent[0]) {
+    if (g_sent_count < 16 && len < sizeof g_sent[0]) {
         memcpy(g_sent[g_sent_count], data, len);
         g_sent[g_sent_count][len] = '\0';
         g_sent_len[g_sent_count] = len;
@@ -79,7 +86,7 @@ static void test_ubx_configure(void)
 
     /* Базовая настройка + при PURRGO_GNSS_UBX: по VALSET на каждое сообщение (PVT, ODO, MON-RF, при
      * PURRGO_GNSS_SEC_SIG ещё SEC-SIG), одометр, модель динамики и опрос MON-VER. */
-    CHECK(g_sent_count == (PURRGO_GNSS_UBX ? (7 + PURRGO_GNSS_SEC_SIG) : 1));
+    CHECK(g_sent_count == EXPECTED_FRAMES);
 
     const uint8_t *f = (const uint8_t *)g_sent[0];
     const size_t len = g_sent_len[0];
@@ -130,6 +137,81 @@ static void test_ubx_configure(void)
     }
 }
 
+/* Разбор VALSET-кадра в пары ключ-значение; возвращает число пар. */
+static size_t parse_valset(const uint8_t *f, size_t len, uint32_t *keys, uint32_t *values, size_t max)
+{
+    size_t pos = 10;
+    size_t n = 0;
+
+    while (pos + 4U <= len - 2U && n < max) {
+        uint32_t key = (uint32_t)f[pos] | ((uint32_t)f[pos + 1] << 8) |
+                       ((uint32_t)f[pos + 2] << 16) | ((uint32_t)f[pos + 3] << 24);
+        size_t vsize = (((key >> 28) & 7U) == 3U) ? 2U : (((key >> 28) & 7U) == 4U) ? 4U : 1U;
+        uint32_t value = 0;
+        for (size_t b = 0; b < vsize; b++) {
+            value |= (uint32_t)f[pos + 4U + b] << (8U * b);
+        }
+        keys[n] = key;
+        values[n] = value;
+        n++;
+        pos += 4U + vsize;
+    }
+    return n;
+}
+
+/* Ищет среди отправленных кадров VALSET, содержащий ключ; возвращает значение или -1. */
+static int64_t find_key(uint32_t key, size_t *frame_index, size_t *pairs_in_frame)
+{
+    for (int i = 0; i < g_sent_count; i++) {
+        const uint8_t *f = (const uint8_t *)g_sent[i];
+        if (g_sent_len[i] < 12 || f[2] != 0x06 || f[3] != 0x8A) {
+            continue;
+        }
+        uint32_t keys[16], values[16];
+        size_t n = parse_valset(f, g_sent_len[i], keys, values, 16);
+        for (size_t k = 0; k < n; k++) {
+            if (keys[k] == key) {
+                *frame_index = (size_t)i;
+                *pairs_in_frame = n;
+                return (int64_t)values[k];
+            }
+        }
+    }
+    return -1;
+}
+
+static void test_power_save(void)
+{
+    size_t frame = 0, pairs = 0;
+
+    g_sent_count = 0;
+    purrgo_gnss_receiver_configure_ubx(fake_tx);
+
+    /* PSM: ключи CFG-PM, отдельным кадром (отказ не затрагивает остальную настройку). */
+    const int64_t mode = find_key(0x20D00001U, &frame, &pairs);
+#if PURRGO_GNSS_PSM_ACTIVE
+    CHECK(mode == PURRGO_GNSS_PSM);
+    CHECK(pairs == 3);
+    CHECK(frame >= 1);                                   /* после базовой настройки */
+    size_t f2 = 0, p2 = 0;
+    CHECK(find_key(0x10D00008U, &f2, &p2) == 1 && f2 == frame);   /* DONOTENTEROFF */
+    CHECK(find_key(0x10D0000AU, &f2, &p2) == 1 && f2 == frame);   /* UPDATEEPH */
+    CHECK(find_key(0x30210001U, &f2, &p2) >= 0 && f2 != frame);   /* частота решений - в другом кадре */
+#else
+    CHECK(mode == -1);
+#endif
+
+    /* Набор систем: GLONASS и BeiDou выключаются только при PURRGO_GNSS_SIG_GPS_GAL. */
+    const int64_t glo = find_key(0x10310025U, &frame, &pairs);
+    const int64_t bds = find_key(0x10310022U, &frame, &pairs);
+#if PURRGO_GNSS_SIGNALS_ACTIVE
+    CHECK(glo == 0 && bds == 0);
+    CHECK(pairs == 2);
+#else
+    CHECK(glo == -1 && bds == -1);
+#endif
+}
+
 static void test_configure(void)
 {
     g_sent_count = 0;
@@ -137,7 +219,7 @@ static void test_configure(void)
     purrgo_gnss_receiver_configure(NULL);       /* без функции отправки - ничего, без падения */
 
 #if (PURRGO_HW_GNSS_RECEIVER == PURRGO_GNSS_RECEIVER_UBX)
-    CHECK(g_sent_count == (PURRGO_GNSS_UBX ? (7 + PURRGO_GNSS_SEC_SIG) : 1));
+    CHECK(g_sent_count == EXPECTED_FRAMES);
     CHECK((uint8_t)g_sent[0][0] == 0xB5 && (uint8_t)g_sent[0][1] == 0x62);
 #else
     CHECK(g_sent_count == 0);
@@ -184,6 +266,7 @@ int main(void)
     test_build_baud();
     test_ubx_frame();
     test_ubx_configure();
+    test_power_save();
     test_configure();
     return test_finish("test_gnss_receiver");
 }

@@ -226,6 +226,15 @@ static void test_pvt_mapping(void)
     v = good_pvt(); v.fix_type = 4;                      /* GNSS + dead reckoning */
     CHECK(apply(&v, &s) && s.valid && s.fix_type == 3);
 
+    /* psmState (flags бит 4..2): 4 - слежение с оптимизацией мощности. */
+    v = good_pvt(); v.flags = (uint8_t)(0x01 | (4 << 2));
+    CHECK(apply(&v, &s) && s.valid);
+    CHECK(purrgo_gnss_ubx_status()->psm_valid && purrgo_gnss_ubx_status()->psm_state == 4);
+    v = good_pvt(); v.flags = (uint8_t)(0x01 | (3 << 2));
+    CHECK(apply(&v, &s) && purrgo_gnss_ubx_status()->psm_state == 3);
+    v = good_pvt();
+    CHECK(apply(&v, &s) && purrgo_gnss_ubx_status()->psm_state == 0);
+
     /* Нет фикса: позиция невалидна, скорость, курс и точность сброшены. */
     int32_t keep_lat = s.lat_1e7;
     v = good_pvt(); v.fix_type = 0; v.flags = 0;
@@ -487,13 +496,13 @@ static void test_trip_distance(void)
 /* Стартовая настройка приёмника                                             */
 /* ------------------------------------------------------------------------- */
 
-static uint8_t g_cfg[8][128];
-static size_t g_cfg_len[8];
+static uint8_t g_cfg[16][128];
+static size_t g_cfg_len[16];
 static int g_cfg_count;
 
 static void cfg_tx(const uint8_t *data, size_t len)
 {
-    if (g_cfg_count < 8 && len <= sizeof g_cfg[0]) {
+    if (g_cfg_count < 16 && len <= sizeof g_cfg[0]) {
         memcpy(g_cfg[g_cfg_count], data, len);
         g_cfg_len[g_cfg_count++] = len;
     }
@@ -516,6 +525,19 @@ static bool valset_value(int frame_idx, uint32_t key, uint32_t *value)
     return false;
 }
 
+/* Индекс кадра VALSET, содержащего ключ; -1, если такого кадра нет. */
+static int frame_with_key(uint32_t key)
+{
+    uint32_t v;
+
+    for (int i = 0; i < g_cfg_count; i++) {
+        if (g_cfg_len[i] > 12 && g_cfg[i][2] == 0x06 && g_cfg[i][3] == 0x8A && valset_value(i, key, &v)) {
+            return i;
+        }
+    }
+    return -1;
+}
+
 static void test_configure_frames(void)
 {
 #if PURRGO_GNSS_UBX
@@ -526,12 +548,21 @@ static void test_configure_frames(void)
 
     g_cfg_count = 0;
     purrgo_gnss_receiver_configure_ubx(cfg_tx);
+
     CHECK(g_cfg_count == 7 + sig);
 
     for (int i = 0; i < poll; i++) {                     /* все VALSET: слой - PURRGO_GNSS_UBX_LAYERS */
+=======
+
+    /* Базовая + (набор систем) + (PSM) + PVT, ODO, MON-RF, (SEC-SIG), одометр, динамика + опрос версии. */
+    CHECK(g_cfg_count == 1 + PURRGO_GNSS_SIGNALS_ACTIVE + PURRGO_GNSS_PSM_ACTIVE + 6 + PURRGO_GNSS_SEC_SIG);
+
+    /* Все кадры, кроме последнего (опрос версии), - VALSET, слой PURRGO_GNSS_UBX_LAYERS. */
+    for (int i = 0; i < g_cfg_count - 1; i++) {
         CHECK(g_cfg[i][2] == 0x06 && g_cfg[i][3] == 0x8A && g_cfg[i][7] == (uint8_t)PURRGO_GNSS_UBX_LAYERS);
     }
-    /* 0: базовая настройка не изменилась. */
+
+    /* Базовая настройка не изменилась и идёт первым кадром. */
     CHECK(valset_value(0, 0x209100BBU, &v) && v == 1);   /* GGA */
     CHECK(valset_value(0, 0x209100B1U, &v) && v == 0);   /* VTG выключен */
     CHECK(!valset_value(0, 0x20910007U, &v));            /* PVT не в базовом кадре */
@@ -582,10 +613,48 @@ static void test_configure_frames(void)
     g_cfg_count = 0;
     purrgo_gnss_receiver_configure_ubx(cfg_tx);
     CHECK(purrgo_gnss_ubx_cfg_replies() == 0 && purrgo_gnss_ubx_cfg_nak_mask() == 0);
+=======
+
+    /* Бинарные сообщения раз в эпоху: каждое отдельным кадром (отказ не отменяет остальные). */
+    const int pvt = frame_with_key(0x20910007U);
+    const int odo = frame_with_key(0x2091007FU);
+    const int rf  = frame_with_key(0x2091035AU);
+    CHECK(pvt > 0 && odo > 0 && rf > 0);
+    CHECK(pvt != odo && odo != rf && pvt != rf);
+    CHECK(valset_value(pvt, 0x20910007U, &v) && v == 1);
+    CHECK(valset_value(odo, 0x2091007FU, &v) && v == 1);
+    CHECK(valset_value(rf, 0x2091035AU, &v) && v == 1);
+    CHECK((frame_with_key(0x20910635U) > 0) == (PURRGO_GNSS_SEC_SIG != 0));   /* SEC-SIG */
+
+    /* Одометр включён, профиль из конфигурации. */
+    const int od = frame_with_key(0x10220001U);
+    CHECK(od > 0);
+    CHECK(valset_value(od, 0x10220001U, &v) && v == 1);
+    CHECK(valset_value(od, 0x20220005U, &v) && v == (uint32_t)PURRGO_GNSS_ODO_PROFILE);
+
+    /* Модель динамики - отдельным кадром. */
+    const int dyn = frame_with_key(0x20110021U);
+    CHECK(dyn > 0 && dyn != od);
+    CHECK(valset_value(dyn, 0x20110021U, &v) && v == (uint32_t)PURRGO_GNSS_DYNMODEL);
+
+    /* Энергосбережение: PSMCT отдельным кадром, не в базовом. */
+    const int pm = frame_with_key(0x20D00001U);
+#if PURRGO_GNSS_PSM_ACTIVE
+    CHECK(pm > 0);
+    CHECK(valset_value(pm, 0x20D00001U, &v) && v == (uint32_t)PURRGO_GNSS_PSM);
+    CHECK(valset_value(pm, 0x10D00008U, &v) && v == 1);   /* DONOTENTEROFF */
+    CHECK(valset_value(pm, 0x10D0000AU, &v) && v == 1);   /* UPDATEEPH */
+#else
+    CHECK(pm == -1);
+#endif
+
+    /* Последний кадр - опрос версии. */
+    static const uint8_t poll_frame[8] = { 0xB5, 0x62, 0x0A, 0x04, 0x00, 0x00, 0x0E, 0x34 };
+    CHECK(g_cfg_len[g_cfg_count - 1] == 8 && memcmp(g_cfg[g_cfg_count - 1], poll_frame, 8) == 0);
 #else
     g_cfg_count = 0;
     purrgo_gnss_receiver_configure_ubx(cfg_tx);
-    CHECK(g_cfg_count == 1);                             /* только NMEA-настройка */
+    CHECK(g_cfg_count == 1 + PURRGO_GNSS_SIGNALS_ACTIVE + PURRGO_GNSS_PSM_ACTIVE);
 #endif
 }
 

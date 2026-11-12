@@ -49,6 +49,72 @@
 #endif
 
 /*
+ * Энергосбережение приёмника u-blox M10 (CFG-PM-OPERATEMODE, UBX-M10 SPG 5.10).
+ *
+ *   PURRGO_GNSS_PSM_OFF (0) - полная мощность (заводской режим).
+ *   PURRGO_GNSS_PSM_CT  (2) - PSMCT, циклическое слежение: приёмник продолжает
+ *                             выдавать решения каждую эпоху (NMEA и UBX идут как
+ *                             обычно), но периодически отключает часть тракта.
+ *                             По умолчанию.
+ *
+ * Режим PSMOO (ON/OFF, значение 1) не поддержан намеренно: между фиксами приёмник
+ * молчит, а ядро (таймаут фикса, запись трека раз в секунду) и связь с модулем
+ * (gnss_link: контроль молчания) рассчитаны на поток данных каждую секунду.
+ *
+ * Вместе с PSMCT отправляются CFG-PM-DONOTENTEROFF = 1 (при потере фикса
+ * приёмник продолжает поиск, а не замолкает на CFG-PM-ACQPERIOD) и
+ * CFG-PM-UPDATEEPH = 1 (эфемериды обновляются регулярно). Всё уходит отдельным
+ * UBX-CFG-VALSET: отказ (NAK) оставит приёмник на полной мощности, остальная
+ * настройка не пострадает. Результат виден в логе: UBX-NAV-PVT.psmState = 4
+ * (Power optimized tracking), ответы ACK/NAK - в сообщении "GNSS: UBX replies".
+ * Выключить: -DPURRGO_GNSS_PSM=0.
+ */
+#define PURRGO_GNSS_PSM_OFF 0
+#define PURRGO_GNSS_PSM_CT  2
+
+#ifndef PURRGO_GNSS_PSM
+#define PURRGO_GNSS_PSM PURRGO_GNSS_PSM_CT
+#endif
+#if (PURRGO_GNSS_PSM != PURRGO_GNSS_PSM_OFF) && (PURRGO_GNSS_PSM != PURRGO_GNSS_PSM_CT)
+#error "PURRGO_GNSS_PSM must be PURRGO_GNSS_PSM_OFF (0) or PURRGO_GNSS_PSM_CT (2)"
+#endif
+
+/* Кадр настройки PSM уходит только приёмнику UBX. */
+#if (PURRGO_HW_GNSS_RECEIVER == PURRGO_GNSS_RECEIVER_UBX) && (PURRGO_GNSS_PSM != PURRGO_GNSS_PSM_OFF)
+#define PURRGO_GNSS_PSM_ACTIVE 1
+#else
+#define PURRGO_GNSS_PSM_ACTIVE 0
+#endif
+
+/*
+ * Набор спутниковых систем (CFG-SIGNAL-*), только для приёмника UBX. Меньше систем -
+ * меньше каналов и ток (даташит G10A-F30), но и меньше видимых спутников в плотной
+ * застройке и под листвой.
+ *
+ *   PURRGO_GNSS_SIG_FACTORY (0) - заводской набор модуля (GPS, Galileo, GLONASS,
+ *                                 BeiDou B1C, QZSS, SBAS): ничего не отправляется.
+ *   PURRGO_GNSS_SIG_GPS_GAL (1) - GPS и Galileo (SBAS и QZSS остаются, им нужен
+ *                                 GPS); GLONASS и BeiDou выключаются.
+ *
+ * Смена набора перезапускает ГНСС-подсистему приёмника, поэтому команда уходит
+ * только при настройке после включения, до первого фикса. По умолчанию - заводской.
+ */
+#define PURRGO_GNSS_SIG_FACTORY 0
+#define PURRGO_GNSS_SIG_GPS_GAL 1
+
+#ifndef PURRGO_GNSS_SIGNALS
+#define PURRGO_GNSS_SIGNALS PURRGO_GNSS_SIG_FACTORY
+#endif
+#if (PURRGO_GNSS_SIGNALS != PURRGO_GNSS_SIG_FACTORY) && (PURRGO_GNSS_SIGNALS != PURRGO_GNSS_SIG_GPS_GAL)
+#error "PURRGO_GNSS_SIGNALS must be PURRGO_GNSS_SIG_FACTORY (0) or PURRGO_GNSS_SIG_GPS_GAL (1)"
+#endif
+#if (PURRGO_HW_GNSS_RECEIVER == PURRGO_GNSS_RECEIVER_UBX) && (PURRGO_GNSS_SIGNALS != PURRGO_GNSS_SIG_FACTORY)
+#define PURRGO_GNSS_SIGNALS_ACTIVE 1
+#else
+#define PURRGO_GNSS_SIGNALS_ACTIVE 0
+#endif
+
+/*
  * Слои конфигурации UBX-CFG-VALSET (битовая маска: 0x01 RAM, 0x02 BBR,
  * 0x04 Flash). По умолчанию только RAM: настройка отправляется при каждом
  * старте, а ресурс Flash модуля не расходуется. Значение 0x07 сохранит

@@ -115,6 +115,11 @@ purrgo_ubx_feed_t purrgo_ubx_parser_feed(purrgo_ubx_parser_t *parser, uint8_t by
 /* ------------------------------------------------------------------------- */
 
 typedef struct {
+    /* UBX-NAV-PVT.flags.psmState (0 PSM выключен, 1 включается, 2 поиск, 3 слежение,
+     * 4 слежение с оптимизацией мощности, 5 неактивен); psm_valid - PVT уже приходил. */
+    bool psm_valid;
+    uint8_t psm_state;
+
     /* UBX-NAV-ODO */
     bool odo_valid;
     uint32_t odo_distance_m;     /* с последнего сброса модуля */
