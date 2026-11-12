@@ -225,17 +225,6 @@ SECTIONS
     . = ALIGN(8);
   } >RAM
 
-  /*
-   * SRAM4: единственная SRAM, доступная LPDMA1 (буфер приёма GNSS и узел
-   * linked-list). Не обнуляется при старте (NOLOAD), поэтому переменные в
-   * этой секции инициализируются кодом.
-   */
-  .sram4 (NOLOAD) : ALIGN(32)
-  {
-    *(.sram4 .sram4.*)
-    . = ALIGN(32);
-  } >SRAM4
-
   /* Remove information from the compiler libraries */
   /DISCARD/ :
   {

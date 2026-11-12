@@ -146,6 +146,11 @@ bool purrgo_book_reader_position_dirty(void)
     return s.pos_dirty;
 }
 
+bool purrgo_book_reader_search_running(void)
+{
+    return s.active && s.open && s.find == PURRGO_BOOK_FIND_RUNNING;
+}
+
 bool purrgo_book_reader_flush(void)
 {
     if (!s.pos_dirty) {

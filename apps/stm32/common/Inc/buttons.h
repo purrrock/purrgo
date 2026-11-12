@@ -48,6 +48,9 @@ void purrgo_stm32_buttons_init(void);
  */
 void purrgo_stm32_buttons_update(void);
 
+/* true - все кнопки отпущены, debounce закончен, событий нет (можно в Stop 2). */
+bool purrgo_stm32_buttons_idle(void);
+
 /**
  * @brief Get the next pending button event.
  *

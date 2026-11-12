@@ -23,6 +23,7 @@
 #include "sd_card.h"
 #include "supply_stm32.h"
 #include "gnss_monitor.h"
+#include "stop_mode.h"
 
 /*
  * Интервал обновления логики GNSS/FSM.
@@ -34,6 +35,22 @@
 
 /* Состояние SD на прошлом проходе цикла: для реакции на вставку карты. */
 static purrgo_sd_state_t s_prev_sd_state = PURRGO_SD_NO_CARD;
+
+/*
+ * Stop 2 в читалке (см. stop_mode.h). -DPURRGO_STOP2=0 отключает его целиком.
+ */
+#ifndef PURRGO_STOP2
+#define PURRGO_STOP2 1
+#endif
+
+/*
+ * Наибольшая длительность одного сна в Stop 2, мс. По этому периоду ядро
+ * получает тик: сохранение позиции, опрос батареи, PVD, вставка/извлечение SD,
+ * отложенная перерисовка. Кнопки будят сразу.
+ */
+#ifndef PURRGO_STOP2_MAX_MS
+#define PURRGO_STOP2_MAX_MS 5000U
+#endif
 
 /*
  * Период опроса кнопок.
@@ -88,6 +105,28 @@ static void process_buttons(void)
     {
         purrgo_app_handle_button(event);
     }
+}
+
+/*
+ * Ожидание событий в конце прохода главного цикла: Stop 2, если приложение,
+ * дисплей и кнопки в покое, иначе обычный Sleep (WFI, пробуждение от SysTick).
+ */
+static void purrgo_stm32_idle(uint32_t now_ms)
+{
+#if (PURRGO_STOP2 != 0)
+  if (purrgo_app_deep_sleep_allowed(now_ms) &&
+      display_stm32_can_stop() &&
+      purrgo_stm32_buttons_idle())
+  {
+    if (purrgo_stop2_enter(PURRGO_STOP2_MAX_MS))
+    {
+      return;
+    }
+  }
+#else
+  (void)now_ms;
+#endif
+  __WFI();
 }
 
 void purrgo_stm32_init(void)
@@ -156,6 +195,11 @@ void purrgo_stm32_init(void)
    */
   purrgo_stm32_buttons_init();
   PURRGO_LOG("Buttons OK\r\n");
+
+#if (PURRGO_STOP2 != 0)
+  /* LSI + LPTIM1 для сна в читалке; при сбое работает обычный Sleep. */
+  (void)purrgo_stop2_init();
+#endif
 
   /*
    * -------------------------------------------------------------------------
@@ -325,5 +369,5 @@ void purrgo_stm32_process(void)
   /*
    * Ждём событий
   */
-  __WFI();
+  purrgo_stm32_idle(purrgo_system_time_ms());
 }

@@ -65,6 +65,11 @@ bool display_stm32_ready_for_render(void)
     return !display_eink_data_busy();
 }
 
+bool display_stm32_can_stop(void)
+{
+    return display_eink_can_stop();
+}
+
 /*
  * Перевод дисплея в режим пониженного энергопотребления.
  */

@@ -52,6 +52,9 @@ void display_stm32_poll(void);
  */
 bool display_stm32_ready_for_render(void);
 
+/* true - дисплей в покое, МК можно перевести в Stop 2 (см. stop_mode.h). */
+bool display_stm32_can_stop(void);
+
 void display_clear(uint8_t color);
 
 /*

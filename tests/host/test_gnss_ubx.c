@@ -520,33 +520,68 @@ static void test_configure_frames(void)
 {
 #if PURRGO_GNSS_UBX
     uint32_t v = 99;
+    /* Кадры: 0 NMEA, 1 PVT, 2 ODO, 3 MON-RF, [SEC-SIG], затем одометр, модель, опрос версии. */
+    const int sig = PURRGO_GNSS_SEC_SIG;
+    const int odo_cfg = 4 + sig, dyn = 5 + sig, poll = 6 + sig;
 
     g_cfg_count = 0;
     purrgo_gnss_receiver_configure_ubx(cfg_tx);
-    CHECK(g_cfg_count == 5);
+    CHECK(g_cfg_count == 7 + sig);
 
-    for (int i = 0; i < 4; i++) {                        /* четыре VALSET, слой - PURRGO_GNSS_UBX_LAYERS */
+    for (int i = 0; i < poll; i++) {                     /* все VALSET: слой - PURRGO_GNSS_UBX_LAYERS */
         CHECK(g_cfg[i][2] == 0x06 && g_cfg[i][3] == 0x8A && g_cfg[i][7] == (uint8_t)PURRGO_GNSS_UBX_LAYERS);
     }
     /* 0: базовая настройка не изменилась. */
     CHECK(valset_value(0, 0x209100BBU, &v) && v == 1);   /* GGA */
     CHECK(valset_value(0, 0x209100B1U, &v) && v == 0);   /* VTG выключен */
     CHECK(!valset_value(0, 0x20910007U, &v));            /* PVT не в базовом кадре */
-    /* 1: бинарные сообщения раз в эпоху. */
+    /* 1..3: каждое бинарное сообщение отдельным кадром: отказ по одному ключу не отменяет остальные. */
     CHECK(valset_value(1, 0x20910007U, &v) && v == 1);   /* NAV-PVT */
-    CHECK(valset_value(1, 0x2091007FU, &v) && v == 1);   /* NAV-ODO */
-    CHECK(valset_value(1, 0x2091035AU, &v) && v == 1);   /* MON-RF */
-    CHECK(valset_value(1, 0x20910635U, &v) && v == 1);   /* SEC-SIG */
-    /* 2: одометр включён, профиль из конфигурации. */
-    CHECK(valset_value(2, 0x10220001U, &v) && v == 1);
-    CHECK(valset_value(2, 0x20220005U, &v) && v == (uint32_t)PURRGO_GNSS_ODO_PROFILE);
-    /* 3: модель динамики - отдельным кадром (отказ не отменяет остальное). */
-    CHECK(valset_value(3, 0x20110021U, &v) && v == (uint32_t)PURRGO_GNSS_DYNMODEL);
-    CHECK(!valset_value(3, 0x10220001U, &v));
-    CHECK(PURRGO_GNSS_DYNMODEL == PURRGO_GNSS_DYN_BICYCLE || PURRGO_GNSS_DYNMODEL >= 0);
-    /* 4: опрос версии. */
+    CHECK(!valset_value(1, 0x2091007FU, &v));
+    CHECK(valset_value(2, 0x2091007FU, &v) && v == 1);   /* NAV-ODO */
+    CHECK(valset_value(3, 0x2091035AU, &v) && v == 1);   /* MON-RF */
+#if PURRGO_GNSS_SEC_SIG
+    CHECK(valset_value(4, 0x20910635U, &v) && v == 1);   /* SEC-SIG (только SPG 5.30+) */
+#else
+    for (int i = 0; i < g_cfg_count; i++) {              /* в SPG 5.10 ключа нет: не отправляется вовсе */
+        CHECK(!valset_value(i, 0x20910635U, &v));
+    }
+#endif
+    /* Одометр включён, профиль из конфигурации. */
+    CHECK(valset_value(odo_cfg, 0x10220001U, &v) && v == 1);
+    CHECK(valset_value(odo_cfg, 0x20220005U, &v) && v == (uint32_t)PURRGO_GNSS_ODO_PROFILE);
+    /* Модель динамики - отдельным кадром (отказ не отменяет остальное). */
+    CHECK(valset_value(dyn, 0x20110021U, &v) && v == (uint32_t)PURRGO_GNSS_DYNMODEL);
+    CHECK(!valset_value(dyn, 0x10220001U, &v));
+    /* Опрос версии. */
     static const uint8_t poll_frame[8] = { 0xB5, 0x62, 0x0A, 0x04, 0x00, 0x00, 0x0E, 0x34 };
-    CHECK(g_cfg_len[4] == 8 && memcmp(g_cfg[4], poll_frame, 8) == 0);
+    CHECK(g_cfg_len[poll] == 8 && memcmp(g_cfg[poll], poll_frame, 8) == 0);
+
+    /*
+     * Ответы ACK/NAK на VALSET приходят по порядку отправки: NAK приписывается группе
+     * по номеру. Здесь отклонена вторая группа (NAV-ODO) и последняя (DYNMODEL).
+     */
+    const int groups = 6 + sig;
+    purrgo_gnss_solution_t sol;
+    memset(&sol, 0, sizeof sol);
+    CHECK(purrgo_gnss_ubx_cfg_replies() == 0 && purrgo_gnss_ubx_cfg_nak_mask() == 0);
+    for (int i = 0; i < groups; i++) {
+        const bool nak = (i == 2) || (i == groups - 1);
+        uint8_t ack[2] = { 0x06, 0x8A };
+        CHECK(!purrgo_gnss_ubx_process_frame(0x05, nak ? 0x00 : 0x01, ack, 2, &sol, 1000));
+    }
+    CHECK(purrgo_gnss_ubx_cfg_replies() == (uint8_t)groups);
+    CHECK(purrgo_gnss_ubx_cfg_nak_mask() == ((1UL << 2) | (1UL << (groups - 1))));
+    {   /* лишние ответы (не от этой серии) ничего не портят */
+        uint8_t nak[2] = { 0x06, 0x8A };
+        (void)purrgo_gnss_ubx_process_frame(0x05, 0x00, nak, 2, &sol, 1000);
+        CHECK(purrgo_gnss_ubx_cfg_replies() == (uint8_t)groups);
+        CHECK(purrgo_gnss_ubx_cfg_nak_mask() == ((1UL << 2) | (1UL << (groups - 1))));
+    }
+    /* Повторная настройка начинает отсчёт заново. */
+    g_cfg_count = 0;
+    purrgo_gnss_receiver_configure_ubx(cfg_tx);
+    CHECK(purrgo_gnss_ubx_cfg_replies() == 0 && purrgo_gnss_ubx_cfg_nak_mask() == 0);
 #else
     g_cfg_count = 0;
     purrgo_gnss_receiver_configure_ubx(cfg_tx);
