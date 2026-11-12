@@ -9,6 +9,7 @@
 #include "gnss_diag.h"
 #include "gnss_pps.h"
 #include "main.h"
+#include "purrgo/gnss_ubx.h"
 #include "purrgo/hardware_config.h"
 #include "purrgo/logger.h"
 
@@ -211,6 +212,25 @@ void purrgo_gnss_monitor_process(void)
                    s_diag.ubx_last_was_nak ? "NAK" : "ACK",
                    (unsigned)s_diag.ubx_last_cls, (unsigned)s_diag.ubx_last_id);
     }
+
+#if (PURRGO_GNSS_UBX != 0) && PURRGO_GNSS_PSM_ACTIVE
+    /* Состояние энергосбережения приёмника (NAV-PVT.psmState): сообщаем при смене. */
+    {
+        static const char *const psm_names[] = {
+            "off", "enabled", "acquisition", "tracking", "power-optimized tracking", "inactive",
+        };
+        static int16_t s_psm_reported = -1;
+        const purrgo_gnss_ubx_status_t *ubx = purrgo_gnss_ubx_status();
+
+        if (ubx->psm_valid && ((int16_t)ubx->psm_state != s_psm_reported))
+        {
+            s_psm_reported = (int16_t)ubx->psm_state;
+            PURRGO_LOG("GNSS: PSM state %u (%s)\r\n", (unsigned)ubx->psm_state,
+                       (ubx->psm_state < (sizeof psm_names / sizeof psm_names[0]))
+                           ? psm_names[ubx->psm_state] : "?");
+        }
+    }
+#endif
 
     /* Решение получено: сообщить один раз и дальше молчать, пока оно не пропадёт. */
     if (state == GNSS_DIAG_FIX)

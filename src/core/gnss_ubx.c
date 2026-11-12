@@ -251,6 +251,8 @@ bool purrgo_gnss_ubx_apply_pvt(const uint8_t *p, uint16_t length, purrgo_gnss_so
     const uint8_t fix_type = p[20];
     const uint8_t flags = p[21];
     const uint16_t flags3 = rd_u16(&p[78]);
+    s_st.psm_valid = true;
+    s_st.psm_state = (uint8_t)((flags >> 2) & 0x07U);
     const bool fix_ok = ((flags & 0x01U) != 0U) && (fix_type >= 2U) && (fix_type <= 4U) &&
                         ((flags3 & 0x01U) == 0U);
 

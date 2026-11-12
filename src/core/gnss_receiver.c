@@ -126,6 +126,18 @@ size_t purrgo_ubx_build_valset(uint8_t *out, size_t out_size, uint8_t layers,
 #define UBX_KEY_ODO_PROFILE          0x20220005U  /* E1: 0 RUN, 1 CYCL, 2 SWIM, 3 CAR */
 #define UBX_KEY_NAVSPG_DYNMODEL      0x20110021U  /* E1: модель динамики */
 
+/*
+ * Энергосбережение (PURRGO_GNSS_PSM, см. hardware_config.h): группа CFG-PM,
+ * UBX-M10 SPG 5.10 Interface Description, раздел 4.9.15.
+ */
+#define UBX_KEY_PM_OPERATEMODE       0x20D00001U  /* E1: 0 FULL, 1 PSMOO, 2 PSMCT */
+#define UBX_KEY_PM_DONOTENTEROFF     0x10D00008U  /* L: не уходить в Inactive при потере фикса */
+#define UBX_KEY_PM_UPDATEEPH         0x10D0000AU  /* L: регулярно обновлять эфемериды */
+
+/* Набор систем (PURRGO_GNSS_SIGNALS): групповые ключи CFG-SIGNAL. */
+#define UBX_KEY_SIGNAL_BDS_ENA       0x10310022U  /* L */
+#define UBX_KEY_SIGNAL_GLO_ENA       0x10310025U  /* L */
+
 static void send_valset(purrgo_gnss_tx_fn tx, const purrgo_ubx_cfg_item_t *items, size_t count)
 {
     uint8_t frame[96];
@@ -174,6 +186,33 @@ void purrgo_gnss_receiver_configure_ubx(purrgo_gnss_tx_fn tx)
 
     /* 1. Частота решений и набор NMEA (как и без UBX-расширений). */
     send_valset(tx, items, sizeof items / sizeof items[0]);
+
+#if PURRGO_GNSS_SIGNALS_ACTIVE
+    /*
+     * Набор систем: отдельной командой, до PSM. Приёмник перезапускает ГНСС
+     * после смены набора, поэтому делаем это в начале настройки.
+     */
+    static const purrgo_ubx_cfg_item_t signals[] = {
+        { UBX_KEY_SIGNAL_GLO_ENA, 0U },
+        { UBX_KEY_SIGNAL_BDS_ENA, 0U },
+    };
+    send_valset(tx, signals, sizeof signals / sizeof signals[0]);
+#endif
+
+#if PURRGO_GNSS_PSM_ACTIVE
+    /*
+     * Циклическое слежение (PSMCT). Отдельным VALSET: если модуль отклонит набор,
+     * он останется в полной мощности, а остальная настройка не пострадает.
+     * DONOTENTEROFF = 1: при потере фикса поиск продолжается, а поток NMEA не
+     * пропадает (ядро и gnss_link рассчитывают на данные каждую секунду).
+     */
+    static const purrgo_ubx_cfg_item_t psm[] = {
+        { UBX_KEY_PM_OPERATEMODE,   (uint32_t)PURRGO_GNSS_PSM },
+        { UBX_KEY_PM_DONOTENTEROFF, 1U },
+        { UBX_KEY_PM_UPDATEEPH,     1U },
+    };
+    send_valset(tx, psm, sizeof psm / sizeof psm[0]);
+#endif
 
 #if PURRGO_GNSS_UBX
     /*
