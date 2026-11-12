@@ -231,7 +231,10 @@ const purrgo_gnss_ubx_status_t *purrgo_gnss_ubx_status(void)
 
 bool purrgo_gnss_ubx_fresh(uint32_t msg_ms, uint32_t now_ms)
 {
-    return (uint32_t)(now_ms - msg_ms) <= PURRGO_UBX_STALE_MS;
+    /* Метка сообщения может быть новее now_ms (время такта взято до разбора байт): свежее. */
+    const int32_t age = (int32_t)(now_ms - msg_ms);
+
+    return age <= (int32_t)PURRGO_UBX_STALE_MS;
 }
 
 /* ------------------------------------------------------------------------- */

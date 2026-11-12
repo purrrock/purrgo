@@ -838,6 +838,46 @@ static void test_app_stream(void)
     CHECK(!s->valid && !s->acc_valid);
 }
 
+/*
+ * Главный цикл берёт время в начале прохода (purrgo_stm32_process), а метку времени кадра
+ * PVT/RMC - уже при разборе байт, на 1 мс и более позже (опрос дисплея, лог монитора).
+ * Метка "из будущего" относительно времени такта не должна давать таймаут фикса.
+ */
+static void test_app_fix_survives_time_skew(void)
+{
+    uint8_t f[128];
+    char line[160];
+    pvt_t v = good_pvt();
+    size_t n;
+
+    app_setup();
+    run_ticks(1000);
+
+    for (int i = 0; i < 20; i++) {
+        const uint32_t tick_ms = g_now + 5U;        /* время такта взято в начале прохода */
+
+        g_now = tick_ms + 3U;                       /* разбор кадра - позже на несколько мс */
+        v.sec = (uint8_t)(i % 60);
+        n = pvt_frame(&v, f, sizeof f);
+        feed_bytes(f, n);
+        nmea(line, sizeof line, "GPRMC,123456.00,A,4807.038,N,01131.000,E,0.50,90.00,191026,,,A");
+        feed_text(line);
+
+        purrgo_app_tick(tick_ms);
+        CHECK(purrgo_app_get_gnss_solution()->valid);
+        g_now = tick_ms + 3U;
+        run_ticks(900);
+    }
+
+    /* Свежесть сообщений UBX (одометр, MON-RF) устойчива к такой же разнице. */
+    CHECK(purrgo_gnss_ubx_fresh(g_now + 3U, g_now));
+    CHECK(!purrgo_gnss_ubx_fresh(g_now - PURRGO_UBX_STALE_MS - 1U, g_now));
+
+    /* Настоящее молчание приёмника по-прежнему сбрасывает фикс (и решение не переходит в след. тест). */
+    run_ticks(7000);
+    CHECK(!purrgo_app_get_gnss_solution()->valid);
+}
+
 static void test_app_new_track_resets_odo(void)
 {
     uint8_t f[128];
@@ -989,6 +1029,7 @@ int main(void)
     test_logger_hacc_and_gpx();
 #if PURRGO_GNSS_UBX
     test_app_stream();
+    test_app_fix_survives_time_skew();
     test_app_new_track_resets_odo();
     test_trip_info_changes();
     test_trip_snapshot_and_screen();
