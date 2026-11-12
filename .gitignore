@@ -8,6 +8,7 @@ CMakeFiles/
 cmake_install.cmake
 .ninja_log
 *.exe
+*.apk
 
 # IDE/editor
 .idea/
