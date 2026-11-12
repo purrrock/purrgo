@@ -487,6 +487,19 @@ void purrgo_app_feed_gnss_byte(uint8_t byte) {
     }
 }
 
+/*
+ * Возраст метки времени относительно now_ms. Метка может оказаться НОВЕЕ now_ms: главный
+ * цикл берёт время такта в начале прохода, а байты GNSS разбираются позже (опрос дисплея,
+ * вывод монитора), и кадр получает метку на 1 мс и более больше. Беззнаковая разность тогда
+ * даёт ~4,29e9 и ложный таймаут ("GNSS fix timeout"): фикс пропадал на секунду и возвращался
+ * со следующим кадром. Такая метка считается свежей (возраст 0).
+ */
+static uint32_t stamp_age_ms(uint32_t now_ms, uint32_t stamp_ms) {
+    const int32_t diff = (int32_t)(now_ms - stamp_ms);
+
+    return (diff > 0) ? (uint32_t)diff : 0U;
+}
+
 // Сбрасывает валидность позиции, если приёмник замолчал.
 static void gnss_check_fix_timeout(uint32_t now_ms) {
     /*
@@ -494,13 +507,13 @@ static void gnss_check_fix_timeout(uint32_t now_ms) {
      * молчание приёмника оценить нельзя: байты ждут в буфере DMA. Даём новый
      * срок, чтобы не мигать "нет фикса" после каждого полного обновления.
      */
-    if ((uint32_t)(now_ms - last_tick_ms) > (PURRGO_GNSS_FIX_TIMEOUT_MS / 2U)) {
+    if (stamp_age_ms(now_ms, last_tick_ms) > (PURRGO_GNSS_FIX_TIMEOUT_MS / 2U)) {
         last_rmc_ms = now_ms;
     }
     last_tick_ms = now_ms;
 
     if (internal_gnss_solution.valid &&
-        (uint32_t)(now_ms - last_rmc_ms) > PURRGO_GNSS_FIX_TIMEOUT_MS) {
+        stamp_age_ms(now_ms, last_rmc_ms) > PURRGO_GNSS_FIX_TIMEOUT_MS) {
         PURRGO_LOGW("GNSS fix timeout\r\n");
         gnss_solution_invalidate();
     }
