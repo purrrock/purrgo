@@ -4,6 +4,15 @@
 # хуки выключения - tests/host/fake_power.c,
 # дисплей и логгер - PC-реализации.
 
+# Host-тесты логгера считают точки в GPX и порядок тегов в <extensions>, поэтому ядру
+# для них нужна обычная (не диагностическая) запись трека. Значение по умолчанию в
+# src/core/track_logger.c может быть временно переключено на 1 для полевого теста, а
+# макрос не виден в TU тестов, поэтому задаём его явно. test_track_diag включает
+# track_logger.c в себя с PURRGO_TRACK_DIAG=1 и от этой настройки не зависит.
+if(NOT PURRGO_TRACK_DIAG)
+    target_compile_definitions(purrgo_core PRIVATE PURRGO_TRACK_DIAG=0)
+endif()
+
 file(GLOB PURRGO_HOST_TESTS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/test_*.c")
 
 foreach(test_src IN LISTS PURRGO_HOST_TESTS)
