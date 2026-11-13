@@ -206,6 +206,77 @@ static void test_ubx_ack(void)
     CHECK(d.ubx_ack == 2 && d.ubx_nak == 1);
 }
 
+/* Кадр UBX с контрольной суммой Fletcher-8 (класс, id, payload). */
+static size_t ubx_frame(uint8_t *out, uint8_t cls, uint8_t id, const uint8_t *pl, uint16_t len)
+{
+    uint8_t a = 0U, b = 0U;
+
+    out[0] = 0xB5U; out[1] = 0x62U; out[2] = cls; out[3] = id;
+    out[4] = (uint8_t)len; out[5] = (uint8_t)(len >> 8);
+    if (len != 0U) {
+        memcpy(&out[6], pl, len);
+    }
+    for (size_t i = 2; i < 6U + (size_t)len; i++) {
+        a = (uint8_t)(a + out[i]);
+        b = (uint8_t)(b + a);
+    }
+    out[6U + len] = a;
+    out[7U + len] = b;
+    return (size_t)len + 8U;
+}
+
+/*
+ * Тела бинарных кадров (PVT, ODO, ...) не должны разбираться как NMEA: байты '$', CR и LF
+ * внутри них не считаются оборванными предложениями (sentences_bad), а настоящие
+ * предложения до и после кадра не страдают.
+ */
+static void test_ubx_frames_not_nmea(void)
+{
+    gnss_diag_t d;
+    uint8_t pl[92], f[128];
+
+    gnss_diag_init(&d);
+    for (int i = 0; i < 50; i++) {
+        memset(pl, 0x11, sizeof pl);
+        pl[10] = (uint8_t)'$';                       /* как начало предложения */
+        pl[11] = (uint8_t)'G'; pl[12] = (uint8_t)'N';
+        pl[20] = (uint8_t)'\r'; pl[21] = (uint8_t)'\n';
+        pl[40] = (uint8_t)'$';                       /* второй '$' без конца предыдущего */
+        pl[41] = (uint8_t)i;
+        pl[60] = 0xB5U; pl[61] = 0x62U;              /* ложная синхронизация внутри тела */
+        size_t n = ubx_frame(f, 0x01, 0x07, pl, sizeof pl);
+
+        feed_sentence(&d, "GNRMC,123519.00,A,4807.038,N,01131.000,E,0.50,90.00,191026,,,A");
+        feed_bytes(&d, f, n);
+        feed_sentence(&d, "GNGGA,123519.00,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,");
+    }
+    CHECK(d.sentences_ok == 100);
+    CHECK(d.sentences_bad == 0);
+
+    /* Кадр с битой контрольной суммой: тело всё равно пропущено, следующее предложение цело. */
+    memset(pl, '$', sizeof pl);
+    size_t n = ubx_frame(f, 0x01, 0x09, pl, 20);
+    f[n - 1] ^= 0xFFU;
+    feed_bytes(&d, f, n);
+    feed_sentence(&d, "GNRMC,123520.00,A,4807.038,N,01131.000,E,0.50,90.00,191026,,,A");
+    CHECK(d.sentences_ok == 101 && d.sentences_bad == 0);
+
+    /* Мусор вместо длины (B5 62 .. FF FF): разбор не ждёт 65 КБ, а возвращается к NMEA. */
+    static const uint8_t huge[] = {0xB5, 0x62, 0x0A, 0x04, 0xFF, 0xFF};
+    feed_bytes(&d, huge, sizeof huge);
+    feed_sentence(&d, "GNRMC,123521.00,A,4807.038,N,01131.000,E,0.50,90.00,191026,,,A");
+    CHECK(d.sentences_ok == 102 && d.sentences_bad == 0);
+
+    /* ACK внутри потока по-прежнему считается, чужие кадры - нет. */
+    uint8_t ack[2] = {0x06, 0x8A};
+    n = ubx_frame(f, 0x05, 0x01, ack, 2);
+    feed_bytes(&d, f, n);
+    CHECK(d.ubx_ack == 1 && d.ubx_nak == 0);
+    n = ubx_frame(f, 0x05, 0x00, ack, 2);
+    feed_bytes(&d, f, n);
+    CHECK(d.ubx_ack == 1 && d.ubx_nak == 1 && d.ubx_last_was_nak);
+}
+
 /* seen_interval показывает только то, что пришло после gnss_diag_end_interval(). */
 static void test_seen_interval(void)
 {
@@ -227,6 +298,7 @@ static void test_seen_interval(void)
 int main(void)
 {
     test_ubx_ack();
+    test_ubx_frames_not_nmea();
     test_seen_interval();
     test_no_data();
     test_not_nmea();
