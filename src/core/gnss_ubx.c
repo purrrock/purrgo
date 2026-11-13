@@ -192,6 +192,11 @@ void purrgo_gnss_ubx_cfg_begin(const char *const *names, uint8_t count)
     s_cfg_nak_mask = 0U;
 }
 
+const char *purrgo_gnss_ubx_cfg_name(uint8_t index)
+{
+    return (s_cfg_names != NULL && index < s_cfg_count) ? s_cfg_names[index] : NULL;
+}
+
 uint32_t purrgo_gnss_ubx_cfg_nak_mask(void)
 {
     return s_cfg_nak_mask;

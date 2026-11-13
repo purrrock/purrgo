@@ -546,8 +546,12 @@ static void test_configure_frames(void)
     g_cfg_count = 0;
     purrgo_gnss_receiver_configure_ubx(cfg_tx);
 
-    /* Базовая + (набор систем) + (PSM) + PVT, ODO, MON-RF, (SEC-SIG), одометр, динамика + опрос версии. */
-    CHECK(g_cfg_count == 1 + PURRGO_GNSS_SIGNALS_ACTIVE + PURRGO_GNSS_PSM_ACTIVE + 6 + PURRGO_GNSS_SEC_SIG);
+    /*
+     * VALSET: базовая, (набор систем), PVT, ODO, MON-RF, (SEC-SIG), одометр, динамика,
+     * (PSM: no-off и mode); последним кадром - опрос версии.
+     */
+    const int valsets = 6 + PURRGO_GNSS_SIGNAL_FRAME + PURRGO_GNSS_SEC_SIG + PURRGO_GNSS_PSM_FRAMES;
+    CHECK(g_cfg_count == valsets + 1);
 
     /* Все кадры, кроме последнего (опрос версии), - VALSET, слой PURRGO_GNSS_UBX_LAYERS. */
     for (int i = 0; i < g_cfg_count - 1; i++) {
@@ -581,20 +585,59 @@ static void test_configure_frames(void)
     CHECK(dyn > 0 && dyn != od);
     CHECK(valset_value(dyn, 0x20110021U, &v) && v == (uint32_t)PURRGO_GNSS_DYNMODEL);
 
-    /* Энергосбережение: PSMCT отдельным кадром, не в базовом. */
-    const int pm = frame_with_key(0x20D00001U);
+    /* Набор систем: SBAS и BeiDou выключаются вместе с PSM, GLONASS - только при SIG_GPS_GAL. */
+    const int sbas = frame_with_key(0x10310020U);
+    const int bds  = frame_with_key(0x10310022U);
+    const int glo  = frame_with_key(0x10310025U);
+    CHECK((sbas > 0) == (PURRGO_GNSS_SIG_OFF_SBAS != 0));
+    CHECK((bds > 0) == (PURRGO_GNSS_SIG_OFF_BDS != 0));
+    CHECK((glo > 0) == (PURRGO_GNSS_SIG_OFF_GLO != 0));
+    CHECK(frame_with_key(0x1031001FU) == -1 && frame_with_key(0x10310021U) == -1);   /* GPS и Galileo остаются */
+#if PURRGO_GNSS_SIGNAL_FRAME
+    {
+        const int sig_frame = (bds > 0) ? bds : (sbas > 0) ? sbas : glo;
+        CHECK(sig_frame == 1);                           /* сразу за базовой */
+        if (sbas > 0) { CHECK(sbas == sig_frame && valset_value(sig_frame, 0x10310020U, &v) && v == 0); }
+        if (bds > 0)  { CHECK(bds == sig_frame && valset_value(sig_frame, 0x10310022U, &v) && v == 0); }
+        if (glo > 0)  { CHECK(glo == sig_frame && valset_value(sig_frame, 0x10310025U, &v) && v == 0); }
+    }
+#endif
+
+    /*
+     * Энергосбережение: после всей остальной настройки, двумя кадрами - DONOTENTEROFF,
+     * затем OPERATEMODE (последним). UPDATEEPH не отправляется (по умолчанию включён).
+     */
+    const int no_off = frame_with_key(0x10D00008U);
+    const int mode   = frame_with_key(0x20D00001U);
+    CHECK(frame_with_key(0x10D0000AU) == -1);
 #if PURRGO_GNSS_PSM_ACTIVE
-    CHECK(pm > 0);
-    CHECK(valset_value(pm, 0x20D00001U, &v) && v == (uint32_t)PURRGO_GNSS_PSM);
-    CHECK(valset_value(pm, 0x10D00008U, &v) && v == 1);   /* DONOTENTEROFF */
-    CHECK(valset_value(pm, 0x10D0000AU, &v) && v == 1);   /* UPDATEEPH */
+    CHECK(no_off > dyn && mode == no_off + 1 && mode == valsets - 1);
+    CHECK(valset_value(no_off, 0x10D00008U, &v) && v == 1);
+    CHECK(!valset_value(no_off, 0x20D00001U, &v));
+    CHECK(valset_value(mode, 0x20D00001U, &v) && v == (uint32_t)PURRGO_GNSS_PSM);
 #else
-    CHECK(pm == -1);
+    CHECK(no_off == -1 && mode == -1);
 #endif
 
     /* Последний кадр - опрос версии. */
     static const uint8_t poll_frame[8] = { 0xB5, 0x62, 0x0A, 0x04, 0x00, 0x00, 0x0E, 0x34 };
     CHECK(g_cfg_len[g_cfg_count - 1] == 8 && memcmp(g_cfg[g_cfg_count - 1], poll_frame, 8) == 0);
+
+    /* Имена групп для лога NAK совпадают с кадрами (число и порядок). */
+    CHECK(purrgo_gnss_ubx_cfg_name((uint8_t)valsets) == NULL);
+    CHECK(strcmp(purrgo_gnss_ubx_cfg_name(0), "NMEA/rate") == 0);
+    CHECK(strcmp(purrgo_gnss_ubx_cfg_name((uint8_t)pvt), "NAV-PVT") == 0);
+    CHECK(strcmp(purrgo_gnss_ubx_cfg_name((uint8_t)odo), "NAV-ODO") == 0);
+    CHECK(strcmp(purrgo_gnss_ubx_cfg_name((uint8_t)rf), "MON-RF") == 0);
+    CHECK(strcmp(purrgo_gnss_ubx_cfg_name((uint8_t)od), "ODO enable/profile") == 0);
+    CHECK(strcmp(purrgo_gnss_ubx_cfg_name((uint8_t)dyn), "DYNMODEL") == 0);
+#if PURRGO_GNSS_SIGNAL_FRAME
+    CHECK(strcmp(purrgo_gnss_ubx_cfg_name(1), "Signals") == 0);
+#endif
+#if PURRGO_GNSS_PSM_ACTIVE
+    CHECK(strcmp(purrgo_gnss_ubx_cfg_name((uint8_t)no_off), "PSM no-off") == 0);
+    CHECK(strcmp(purrgo_gnss_ubx_cfg_name((uint8_t)mode), "PSM mode") == 0);
+#endif
 
     /*
      * Ответы ACK/NAK на VALSET приходят по порядку отправки, и NAK приписывается группе по
@@ -626,7 +669,7 @@ static void test_configure_frames(void)
 #else
     g_cfg_count = 0;
     purrgo_gnss_receiver_configure_ubx(cfg_tx);
-    CHECK(g_cfg_count == 1 + PURRGO_GNSS_SIGNALS_ACTIVE + PURRGO_GNSS_PSM_ACTIVE);
+    CHECK(g_cfg_count == 1 + PURRGO_GNSS_SIGNAL_FRAME + PURRGO_GNSS_PSM_FRAMES);   /* NMEA-настройка, набор систем, PSM */
 #endif
 }
 

@@ -8,10 +8,10 @@
 #include "test_common.h"
 
 /*
- * Кадры настройки: базовая + (набор систем) + (PSM) + при PURRGO_GNSS_UBX по VALSET на PVT, ODO, MON-RF,
- * (SEC-SIG), одометр, модель динамики и опрос MON-VER.
+ * Кадры настройки: базовая + (набор систем) + (PSM: два кадра) + при PURRGO_GNSS_UBX по VALSET
+ * на PVT, ODO, MON-RF, (SEC-SIG), одометр, модель динамики и опрос MON-VER.
  */
-#define EXPECTED_FRAMES (1 + PURRGO_GNSS_SIGNALS_ACTIVE + PURRGO_GNSS_PSM_ACTIVE + \
+#define EXPECTED_FRAMES (1 + PURRGO_GNSS_SIGNAL_FRAME + PURRGO_GNSS_PSM_FRAMES + \
                          (PURRGO_GNSS_UBX ? (6 + PURRGO_GNSS_SEC_SIG) : 0))
 
 static char g_sent[16][128];
@@ -182,33 +182,44 @@ static int64_t find_key(uint32_t key, size_t *frame_index, size_t *pairs_in_fram
 
 static void test_power_save(void)
 {
-    size_t frame = 0, pairs = 0;
+    size_t frame = 0, pairs = 0, f2 = 0, p2 = 0;
 
     g_sent_count = 0;
     purrgo_gnss_receiver_configure_ubx(fake_tx);
 
-    /* PSM: ключи CFG-PM, отдельным кадром (отказ не затрагивает остальную настройку). */
+    /* PSM: двумя отдельными кадрами (NAK называет точный шаг), OPERATEMODE - последним. */
     const int64_t mode = find_key(0x20D00001U, &frame, &pairs);
+    const int64_t no_off = find_key(0x10D00008U, &f2, &p2);
 #if PURRGO_GNSS_PSM_ACTIVE
-    CHECK(mode == PURRGO_GNSS_PSM);
-    CHECK(pairs == 3);
-    CHECK(frame >= 1);                                   /* после базовой настройки */
-    size_t f2 = 0, p2 = 0;
-    CHECK(find_key(0x10D00008U, &f2, &p2) == 1 && f2 == frame);   /* DONOTENTEROFF */
-    CHECK(find_key(0x10D0000AU, &f2, &p2) == 1 && f2 == frame);   /* UPDATEEPH */
-    CHECK(find_key(0x30210001U, &f2, &p2) >= 0 && f2 != frame);   /* частота решений - в другом кадре */
+    CHECK(mode == PURRGO_GNSS_PSM && pairs == 1);
+    CHECK(no_off == 1 && p2 == 1 && f2 + 1 == frame);
+    CHECK(find_key(0x10D0000AU, &f2, &p2) == -1);                  /* UPDATEEPH по умолчанию уже включён */
+    CHECK(find_key(0x30210001U, &f2, &p2) >= 0 && f2 != frame);    /* частота решений - в другом кадре */
 #else
-    CHECK(mode == -1);
+    CHECK(mode == -1 && no_off == -1);
 #endif
 
-    /* Набор систем: GLONASS и BeiDou выключаются только при PURRGO_GNSS_SIG_GPS_GAL. */
-    const int64_t glo = find_key(0x10310025U, &frame, &pairs);
+    /*
+     * Набор систем одним кадром: при PSM выключаются SBAS и BeiDou (в PSM не работают),
+     * GLONASS - только при PURRGO_GNSS_SIG_GPS_GAL. GPS и Galileo не трогаются.
+     */
+    const int64_t sbas = find_key(0x10310020U, &frame, &pairs);
     const int64_t bds = find_key(0x10310022U, &frame, &pairs);
-#if PURRGO_GNSS_SIGNALS_ACTIVE
-    CHECK(glo == 0 && bds == 0);
-    CHECK(pairs == 2);
-#else
-    CHECK(glo == -1 && bds == -1);
+    const int64_t glo = find_key(0x10310025U, &frame, &pairs);
+    CHECK(sbas == (PURRGO_GNSS_SIG_OFF_SBAS ? 0 : -1));
+    CHECK(bds == (PURRGO_GNSS_SIG_OFF_BDS ? 0 : -1));
+    CHECK(glo == (PURRGO_GNSS_SIG_OFF_GLO ? 0 : -1));
+    CHECK(find_key(0x1031001FU, &f2, &p2) == -1);
+    CHECK(find_key(0x10310021U, &f2, &p2) == -1);
+#if PURRGO_GNSS_SIGNAL_FRAME
+    {
+        size_t sig_frame = 0, np = 0;
+        const int64_t any = PURRGO_GNSS_SIG_OFF_BDS ? find_key(0x10310022U, &sig_frame, &np)
+                                                    : find_key(0x10310025U, &sig_frame, &np);
+        CHECK(any == 0);
+        CHECK(np == PURRGO_GNSS_SIGNAL_COUNT);
+        CHECK(sig_frame == 1);                                      /* сразу за базовой настройкой */
+    }
 #endif
 }
 

@@ -132,9 +132,9 @@ size_t purrgo_ubx_build_valset(uint8_t *out, size_t out_size, uint8_t layers,
  */
 #define UBX_KEY_PM_OPERATEMODE       0x20D00001U  /* E1: 0 FULL, 1 PSMOO, 2 PSMCT */
 #define UBX_KEY_PM_DONOTENTEROFF     0x10D00008U  /* L: не уходить в Inactive при потере фикса */
-#define UBX_KEY_PM_UPDATEEPH         0x10D0000AU  /* L: регулярно обновлять эфемериды */
 
-/* Набор систем (PURRGO_GNSS_SIGNALS): групповые ключи CFG-SIGNAL. */
+/* Набор систем (PURRGO_GNSS_SIGNALS, PSM): групповые ключи CFG-SIGNAL. */
+#define UBX_KEY_SIGNAL_SBAS_ENA      0x10310020U  /* L */
 #define UBX_KEY_SIGNAL_BDS_ENA       0x10310022U  /* L */
 #define UBX_KEY_SIGNAL_GLO_ENA       0x10310025U  /* L */
 
@@ -177,17 +177,17 @@ void purrgo_gnss_receiver_configure_ubx(purrgo_gnss_tx_fn tx)
      */
     static const char *const group_names[] = {
         "NMEA/rate",
-#if PURRGO_GNSS_SIGNALS_ACTIVE
+#if PURRGO_GNSS_SIGNAL_FRAME
         "Signals",
-#endif
-#if PURRGO_GNSS_PSM_ACTIVE
-        "PSM",
 #endif
         "NAV-PVT", "NAV-ODO", "MON-RF",
 #if PURRGO_GNSS_SEC_SIG
         "SEC-SIG",
 #endif
-        "ODO enable/profile", "DYNMODEL"
+        "ODO enable/profile", "DYNMODEL",
+#if PURRGO_GNSS_PSM_ACTIVE
+        "PSM no-off", "PSM mode",
+#endif
     };
     purrgo_gnss_ubx_cfg_begin(group_names, (uint8_t)(sizeof group_names / sizeof group_names[0]));
 #endif
@@ -195,31 +195,25 @@ void purrgo_gnss_receiver_configure_ubx(purrgo_gnss_tx_fn tx)
     /* 1. Частота решений и набор NMEA (как и без UBX-расширений). */
     send_valset(tx, items, sizeof items / sizeof items[0]);
 
-#if PURRGO_GNSS_SIGNALS_ACTIVE
+#if PURRGO_GNSS_SIGNAL_FRAME
     /*
-     * Набор систем: отдельной командой, до PSM. Приёмник перезапускает ГНСС
-     * после смены набора, поэтому делаем это в начале настройки.
+     * Набор систем: отдельной командой, сразу за базовой. Приёмник перезапускает ГНСС
+     * после смены набора, поэтому делаем это в начале настройки. В режиме
+     * энергосбережения SBAS не принимается (manual рекомендует его выключить), а BeiDou
+     * B1C не поддержан: оба выключаются (см. hardware_config.h).
      */
     static const purrgo_ubx_cfg_item_t signals[] = {
+#if PURRGO_GNSS_SIG_OFF_SBAS
+        { UBX_KEY_SIGNAL_SBAS_ENA, 0U },
+#endif
+#if PURRGO_GNSS_SIG_OFF_GLO
         { UBX_KEY_SIGNAL_GLO_ENA, 0U },
+#endif
+#if PURRGO_GNSS_SIG_OFF_BDS
         { UBX_KEY_SIGNAL_BDS_ENA, 0U },
+#endif
     };
     send_valset(tx, signals, sizeof signals / sizeof signals[0]);
-#endif
-
-#if PURRGO_GNSS_PSM_ACTIVE
-    /*
-     * Циклическое слежение (PSMCT). Отдельным VALSET: если модуль отклонит набор,
-     * он останется в полной мощности, а остальная настройка не пострадает.
-     * DONOTENTEROFF = 1: при потере фикса поиск продолжается, а поток NMEA не
-     * пропадает (ядро и gnss_link рассчитывают на данные каждую секунду).
-     */
-    static const purrgo_ubx_cfg_item_t psm[] = {
-        { UBX_KEY_PM_OPERATEMODE,   (uint32_t)PURRGO_GNSS_PSM },
-        { UBX_KEY_PM_DONOTENTEROFF, 1U },
-        { UBX_KEY_PM_UPDATEEPH,     1U },
-    };
-    send_valset(tx, psm, sizeof psm / sizeof psm[0]);
 #endif
 
 #if PURRGO_GNSS_UBX
@@ -250,8 +244,27 @@ void purrgo_gnss_receiver_configure_ubx(purrgo_gnss_tx_fn tx)
 #endif
     send_valset(tx, odo, sizeof odo / sizeof odo[0]);
     send_valset(tx, dyn, sizeof dyn / sizeof dyn[0]);
+#endif
 
-    /* 5. Опрос версии прошивки: ответ UBX-MON-VER разбирает gnss_ubx.c и пишет в лог. */
+#if PURRGO_GNSS_PSM_ACTIVE
+    /*
+     * 5. Энергосбережение (PSMCT) - после всей остальной настройки, чтобы смена режима
+     * не мешала ей. Два кадра: DONOTENTEROFF и затем OPERATEMODE (последним ключом, как
+     * рекомендует manual). Если модуль отклонит набор, он останется в полной мощности, а
+     * остальная настройка не пострадает.
+     * DONOTENTEROFF = 1: при потере фикса поиск продолжается, а поток NMEA не пропадает
+     * (ядро и gnss_link рассчитывают на данные каждую секунду), настройка в слое RAM не
+     * стирается. Период решений PSMCT задаёт CFG-RATE-MEAS из базового кадра.
+     */
+    static const purrgo_ubx_cfg_item_t psm_no_off = { UBX_KEY_PM_DONOTENTEROFF, 1U };
+    static const purrgo_ubx_cfg_item_t psm_mode   = { UBX_KEY_PM_OPERATEMODE, (uint32_t)PURRGO_GNSS_PSM };
+
+    send_valset(tx, &psm_no_off, 1U);
+    send_valset(tx, &psm_mode, 1U);
+#endif
+
+#if PURRGO_GNSS_UBX
+    /* 6. Опрос версии прошивки: ответ UBX-MON-VER разбирает gnss_ubx.c и пишет в лог. */
     uint8_t ver[8];
     const size_t ver_len = purrgo_ubx_build_frame(ver, sizeof ver, UBX_CLASS_MON, UBX_ID_MON_VER,
                                                   NULL, 0U);
