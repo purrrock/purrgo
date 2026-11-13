@@ -190,6 +190,12 @@ static void ubx_ck_add(gnss_diag_t *d, uint8_t byte)
     d->ubx_ck_b = (uint8_t)(d->ubx_ck_b + d->ubx_ck_a);
 }
 
+/*
+ * Разбор кадров UBX. Границы отслеживаются у ЛЮБОГО кадра, а не только у UBX-ACK:
+ * тела бинарных кадров (PVT, ODO, ...) не должны попадать в разбор NMEA - случайный
+ * байт '$' внутри них иначе считался бы началом оборванного предложения (sentences_bad).
+ * Из кадров извлекаются только ответы UBX-ACK-ACK / UBX-ACK-NAK.
+ */
 static void ubx_feed(gnss_diag_t *d, uint8_t byte)
 {
     switch (d->ubx_state)
@@ -208,22 +214,12 @@ static void ubx_feed(gnss_diag_t *d, uint8_t byte)
         break;
 
     case UBX_CLASS:
-        if (byte != 0x05U)       /* не UBX-ACK */
-        {
-            d->ubx_state = (byte == 0xB5U) ? UBX_SYNC2 : UBX_IDLE;
-            break;
-        }
         d->ubx_cls = byte;
         ubx_ck_add(d, byte);
         d->ubx_state = UBX_ID;
         break;
 
     case UBX_ID:
-        if (byte > 0x01U)
-        {
-            d->ubx_state = (byte == 0xB5U) ? UBX_SYNC2 : UBX_IDLE;
-            break;
-        }
         d->ubx_id = byte;
         ubx_ck_add(d, byte);
         d->ubx_state = UBX_LEN_LO;
@@ -239,13 +235,24 @@ static void ubx_feed(gnss_diag_t *d, uint8_t byte)
         d->ubx_len = (uint16_t)(d->ubx_len | ((uint16_t)byte << 8));
         ubx_ck_add(d, byte);
         d->ubx_pos = 0U;
-        d->ubx_state = (d->ubx_len == 2U) ? UBX_PAYLOAD : UBX_IDLE;
+        if (d->ubx_len > GNSS_DIAG_UBX_MAX_LEN)
+        {
+            d->ubx_state = UBX_IDLE;     /* мусор вместо длины: не ждём конца "кадра" */
+        }
+        else
+        {
+            d->ubx_state = (d->ubx_len == 0U) ? UBX_CK_A : UBX_PAYLOAD;
+        }
         break;
 
     case UBX_PAYLOAD:
-        d->ubx_payload[d->ubx_pos++] = byte;
+        if (d->ubx_pos < (uint16_t)sizeof d->ubx_payload)
+        {
+            d->ubx_payload[d->ubx_pos] = byte;
+        }
+        d->ubx_pos++;
         ubx_ck_add(d, byte);
-        if (d->ubx_pos >= 2U)
+        if (d->ubx_pos >= d->ubx_len)
         {
             d->ubx_state = UBX_CK_A;
         }
@@ -257,7 +264,8 @@ static void ubx_feed(gnss_diag_t *d, uint8_t byte)
 
     case UBX_CK_B:
     default:
-        if (byte == d->ubx_ck_b)
+        if ((byte == d->ubx_ck_b) && (d->ubx_cls == 0x05U) && (d->ubx_id <= 0x01U) &&
+            (d->ubx_len == 2U))
         {
             d->ubx_last_cls = d->ubx_payload[0];
             d->ubx_last_id = d->ubx_payload[1];
@@ -292,10 +300,17 @@ void gnss_diag_feed(gnss_diag_t *d, uint8_t byte)
     }
 
     d->bytes++;
+    /* Байт внутри кадра UBX (после B5 62 до последнего байта контрольной суммы) - не NMEA. */
+    const bool in_ubx_frame = (d->ubx_state >= UBX_CLASS);
+
     ubx_feed(d, byte);
     if (((byte >= 0x20U) && (byte <= 0x7EU)) || (byte == (uint8_t)'\r') || (byte == (uint8_t)'\n'))
     {
         d->printable++;
+    }
+    if (in_ubx_frame)
+    {
+        return;
     }
 
     /* '$' всегда начинает новое предложение. */

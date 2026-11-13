@@ -41,6 +41,9 @@ typedef enum
     GNSS_DIAG_FIX            /* есть решение (GGA quality > 0 или RMC = A) */
 } gnss_diag_state_t;
 
+/** Кадры UBX с большей длиной считаются мусором (самый длинный из нужных - UBX-NAV-PVT, 92 байта). */
+#define GNSS_DIAG_UBX_MAX_LEN 512U
+
 typedef struct
 {
     /* Счётчики. */
@@ -70,7 +73,10 @@ typedef struct
     uint8_t ubx_last_id;
     bool ubx_last_was_nak;
 
-    /* Состояние разбора UBX (только кадры класса ACK). */
+    /*
+     * Состояние разбора UBX: границы любого кадра (его тело не попадает в разбор NMEA),
+     * ответы извлекаются только из UBX-ACK.
+     */
     uint8_t ubx_state;
     uint8_t ubx_cls;
     uint8_t ubx_id;

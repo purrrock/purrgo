@@ -171,11 +171,19 @@ void purrgo_gnss_receiver_configure_ubx(purrgo_gnss_tx_fn tx)
 #if PURRGO_GNSS_UBX
     /*
      * Имена групп в порядке отправки: ответы ACK/NAK на VALSET приходят по порядку, и
-     * gnss_ubx.c по ним пишет в лог, какая именно группа отклонена. Вызывать до первой
+     * gnss_ubx.c по ним пишет в лог, какая именно группа отклонена. Список ДОЛЖЕН совпадать
+     * с кадрами VALSET ниже по порядку и числу (при добавлении кадра добавить имя). Вызывать до первой
      * отправки: ответ на первый кадр может прийти сразу.
      */
     static const char *const group_names[] = {
-        "NMEA/rate", "NAV-PVT", "NAV-ODO", "MON-RF",
+        "NMEA/rate",
+#if PURRGO_GNSS_SIGNALS_ACTIVE
+        "Signals",
+#endif
+#if PURRGO_GNSS_PSM_ACTIVE
+        "PSM",
+#endif
+        "NAV-PVT", "NAV-ODO", "MON-RF",
 #if PURRGO_GNSS_SEC_SIG
         "SEC-SIG",
 #endif
