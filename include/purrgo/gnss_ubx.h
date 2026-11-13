@@ -178,6 +178,9 @@ bool purrgo_gnss_ubx_apply_pvt(const uint8_t *payload, uint16_t length,
  */
 void purrgo_gnss_ubx_cfg_begin(const char *const *names, uint8_t count);
 
+/* Имя группы по номеру отправки (как в cfg_begin); NULL, если номер вне серии. */
+const char *purrgo_gnss_ubx_cfg_name(uint8_t index);
+
 /* Битовая маска групп (по индексу в names), на которые приёмник ответил NAK. */
 uint32_t purrgo_gnss_ubx_cfg_nak_mask(void);
 

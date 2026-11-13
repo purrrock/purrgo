@@ -49,25 +49,45 @@
 #endif
 
 /*
- * Энергосбережение приёмника u-blox M10 (CFG-PM-OPERATEMODE, UBX-M10 SPG 5.10).
+ * Энергосбережение приёмника u-blox M10 (CFG-PM-OPERATEMODE; MAX-M10S Integration
+ * manual UBX-20053088, раздел 3.6, и UBX-M10 SPG 5.10 Interface Description).
  *
  *   PURRGO_GNSS_PSM_OFF (0) - полная мощность (заводской режим).
  *   PURRGO_GNSS_PSM_CT  (2) - PSMCT, циклическое слежение: приёмник продолжает
  *                             выдавать решения каждую эпоху (NMEA и UBX идут как
- *                             обычно), но периодически отключает часть тракта.
+ *                             обычно), между измерениями уходит в состояние POT
+ *                             (Power optimized tracking), без полного отключения.
  *                             По умолчанию.
  *
- * Режим PSMOO (ON/OFF, значение 1) не поддержан намеренно: между фиксами приёмник
- * молчит, а ядро (таймаут фикса, запись трека раз в секунду) и связь с модулем
- * (gnss_link: контроль молчания) рассчитаны на поток данных каждую секунду.
+ * Ожидаемый выигрыш по даташиту MAX-M10S (UBX-20035208, табл. 15, питание 3,0 В,
+ * 1 Гц, ток чипа VCC + V_IO): слежение в непрерывном режиме GPS+GAL+GLO+BDS B1C
+ * 10 + 2,3 = 12,3 мА, в PSMCT GPS+GAL (или +GLO) 5 + 2 = 7 мА, то есть около
+ * 5 мА. Ток модуля G10A-F30 целиком больше (светодиоды, стабилизатор и т. п.).
  *
- * Вместе с PSMCT отправляются CFG-PM-DONOTENTEROFF = 1 (при потере фикса
- * приёмник продолжает поиск, а не замолкает на CFG-PM-ACQPERIOD) и
- * CFG-PM-UPDATEEPH = 1 (эфемериды обновляются регулярно). Всё уходит отдельным
- * UBX-CFG-VALSET: отказ (NAK) оставит приёмник на полной мощности, остальная
- * настройка не пострадает. Результат виден в логе: UBX-NAV-PVT.psmState = 4
- * (Power optimized tracking), ответы ACK/NAK - в сообщении "GNSS: UBX replies".
- * Выключить: -DPURRGO_GNSS_PSM=0.
+ * Период решений в PSMCT задаётся CFG-RATE-MEAS (PURRGO_GNSS_UPDATE_PERIOD_MS):
+ * поддержаны 500 мс, 1 с, а также 2..10 с с шагом 1 с (4 Гц и выше PSMCT не поддерживает).
+ *
+ * Режим PSMOO (ON/OFF, значение 1, для периодов решений дольше 10 с) не поддержан
+ * намеренно: между фиксами приёмник молчит, а ядро (таймаут фикса, запись трека раз в
+ * секунду) и связь с модулем (gnss_link: контроль молчания) рассчитаны на поток данных
+ * каждую секунду. Для PSMOO к тому же нужен RTC в модуле, а настройку придётся хранить
+ * и в слое BBR (RAM очищается в состоянии "off").
+ *
+ * Порядок настройки (последними, после всей остальной конфигурации; OPERATEMODE - самым
+ * последним ключом, как рекомендует manual):
+ *  1. Набор систем (см. ниже): в PSM не поддержаны BeiDou B1C и SBAS. Без этого на
+ *     G10A-F30 с заводским набором (GPS, Galileo, GLONASS, BeiDou B1C, QZSS, SBAS)
+ *     кадр PSM был отклонён модулем (NAK, psmState оставался 0).
+ *  2. CFG-PM-DONOTENTEROFF = 1: при потере фикса приёмник остаётся в Acquisition, а не
+ *     уходит в "Inactive for search"; иначе поток NMEA замолкает, а настройка в слое RAM
+ *     стирается (так сказано в manual: RAM очищается при входе в это состояние).
+ *  3. CFG-PM-OPERATEMODE = 2 (PSMCT). CFG-PM-UPDATEEPH не отправляется: по умолчанию 1
+ *     (эфемериды обновляются раз в ~30 минут, приёмник на это время возвращается в
+ *     непрерывный режим).
+ * Каждый шаг - отдельный UBX-CFG-VALSET: NAK называет точный шаг в логе (группы
+ * "Signals", "PSM no-off", "PSM mode"), отказ оставляет приёмник на полной мощности, а
+ * остальная настройка не страдает. Результат: UBX-NAV-PVT.psmState = 4 (Power optimized
+ * tracking), в логе "GNSS: PSM state 4". Выключить: -DPURRGO_GNSS_PSM=0.
  */
 #define PURRGO_GNSS_PSM_OFF 0
 #define PURRGO_GNSS_PSM_CT  2
@@ -79,25 +99,45 @@
 #error "PURRGO_GNSS_PSM must be PURRGO_GNSS_PSM_OFF (0) or PURRGO_GNSS_PSM_CT (2)"
 #endif
 
-/* Кадр настройки PSM уходит только приёмнику UBX. */
+/* Кадры настройки PSM уходят только приёмнику UBX. */
 #if (PURRGO_HW_GNSS_RECEIVER == PURRGO_GNSS_RECEIVER_UBX) && (PURRGO_GNSS_PSM != PURRGO_GNSS_PSM_OFF)
 #define PURRGO_GNSS_PSM_ACTIVE 1
+#define PURRGO_GNSS_PSM_FRAMES 2   /* DONOTENTEROFF и OPERATEMODE */
 #else
 #define PURRGO_GNSS_PSM_ACTIVE 0
+#define PURRGO_GNSS_PSM_FRAMES 0
+#endif
+
+/* PSMCT работает с периодом решений 500 мс, 1 с или 2..10 с с шагом 1 с (CFG-RATE-MEAS). */
+#if PURRGO_GNSS_PSM_ACTIVE && (PURRGO_GNSS_UPDATE_PERIOD_MS != 500) && \
+    !((PURRGO_GNSS_UPDATE_PERIOD_MS >= 1000) && (PURRGO_GNSS_UPDATE_PERIOD_MS <= 10000) && \
+      ((PURRGO_GNSS_UPDATE_PERIOD_MS % 1000) == 0))
+#error "PSMCT supports PURRGO_GNSS_UPDATE_PERIOD_MS of 500 or 1000..10000 in 1000 ms steps"
 #endif
 
 /*
- * Набор спутниковых систем (CFG-SIGNAL-*), только для приёмника UBX. Меньше систем -
- * меньше каналов и ток (даташит G10A-F30), но и меньше видимых спутников в плотной
- * застройке и под листвой.
+ * Набор спутниковых систем (CFG-SIGNAL-*), только для приёмника UBX.
  *
- *   PURRGO_GNSS_SIG_FACTORY (0) - заводской набор модуля (GPS, Galileo, GLONASS,
- *                                 BeiDou B1C, QZSS, SBAS): ничего не отправляется.
- *   PURRGO_GNSS_SIG_GPS_GAL (1) - GPS и Galileo (SBAS и QZSS остаются, им нужен
- *                                 GPS); GLONASS и BeiDou выключаются.
+ * Заводской набор G10A-F30: GPS, Galileo, GLONASS, BeiDou B1C, QZSS, SBAS. В режиме
+ * энергосбережения (PSM) по integration manual MAX-M10S (UBX-20053088, раздел 3.6.2):
+ *   - BeiDou B1C в PSM не поддерживается (B1I поддерживается, но его нельзя включать
+ *     одновременно с B1C и GLONASS L1OF - даташит G10A-F30, сноска 1);
+ *   - SBAS в PSM не принимается, manual рекомендует его отключить.
+ * Поэтому при PURRGO_GNSS_PSM != OFF автоматически выключаются BeiDou и SBAS: в PSM они
+ * не работают. GPS, Galileo, GLONASS и QZSS остаются (по даташиту ток слежения в PSM
+ * одинаков для GPS+GAL и GPS+GAL+GLO).
+ *
+ * Дополнительно, сверх этого (меньше систем - меньше каналов и ток, но и меньше
+ * видимых спутников в плотной застройке и под листвой):
+ *
+ *   PURRGO_GNSS_SIG_FACTORY (0) - ничего сверх требований PSM. По умолчанию.
+ *   PURRGO_GNSS_SIG_GPS_GAL (1) - GPS и Galileo (и QZSS, ему нужен GPS): GLONASS и
+ *                                 BeiDou выключаются. Заметно только в непрерывном
+ *                                 режиме (даташит: на ~1 мА меньше); в PSMCT по
+ *                                 даташиту выигрыша от выключения GLONASS нет.
  *
  * Смена набора перезапускает ГНСС-подсистему приёмника, поэтому команда уходит
- * только при настройке после включения, до первого фикса. По умолчанию - заводской.
+ * только при настройке после включения, до первого фикса.
  */
 #define PURRGO_GNSS_SIG_FACTORY 0
 #define PURRGO_GNSS_SIG_GPS_GAL 1
@@ -112,6 +152,21 @@
 #define PURRGO_GNSS_SIGNALS_ACTIVE 1
 #else
 #define PURRGO_GNSS_SIGNALS_ACTIVE 0
+#endif
+
+/*
+ * Что выключает кадр CFG-SIGNAL (0/1): SBAS и BeiDou - вместе с PSM, GLONASS и BeiDou -
+ * при PURRGO_GNSS_SIG_GPS_GAL. Кадр отправляется, если выключается хоть одна система.
+ */
+#define PURRGO_GNSS_SIG_OFF_SBAS (PURRGO_GNSS_PSM_ACTIVE)
+#define PURRGO_GNSS_SIG_OFF_BDS  ((PURRGO_GNSS_PSM_ACTIVE) || (PURRGO_GNSS_SIGNALS_ACTIVE))
+#define PURRGO_GNSS_SIG_OFF_GLO  (PURRGO_GNSS_SIGNALS_ACTIVE)
+#define PURRGO_GNSS_SIGNAL_COUNT (PURRGO_GNSS_SIG_OFF_SBAS + PURRGO_GNSS_SIG_OFF_BDS + PURRGO_GNSS_SIG_OFF_GLO)
+
+#if PURRGO_GNSS_SIGNAL_COUNT != 0
+#define PURRGO_GNSS_SIGNAL_FRAME 1
+#else
+#define PURRGO_GNSS_SIGNAL_FRAME 0
 #endif
 
 /*
