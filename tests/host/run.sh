@@ -52,18 +52,18 @@ for t in tests/host/test_*.c; do
     extra=""
     case $name in
         test_sd_spi)
-            extra="apps/stm32/common/sd_spi/sd_spi.c -Iapps/stm32/common/sd_spi" ;;
+            extra="stm32/common/sd_spi/sd_spi.c -Istm32/common/sd_spi" ;;
         test_gnss_diag)
-            extra="apps/stm32/common/gnss_diag/gnss_diag.c -Iapps/stm32/common/gnss_diag" ;;
+            extra="stm32/common/gnss_diag/gnss_diag.c -Istm32/common/gnss_diag" ;;
         test_gnss_pps)
-            extra="apps/stm32/common/gnss_pps/gnss_pps.c -Iapps/stm32/common/gnss_pps" ;;
+            extra="stm32/common/gnss_pps/gnss_pps.c -Istm32/common/gnss_pps" ;;
         test_gnss_link)
-            extra="apps/stm32/common/gnss_link/gnss_link.c apps/stm32/common/gnss_diag/gnss_diag.c \
-                -Iapps/stm32/common/gnss_link -Iapps/stm32/common/gnss_diag" ;;
+            extra="stm32/common/gnss_link/gnss_link.c stm32/common/gnss_diag/gnss_diag.c \
+                -Istm32/common/gnss_link -Istm32/common/gnss_diag" ;;
         test_display_eink)
             if [ ! -f $EPD/src/epd4g.c ]; then echo "== $name"; echo "SKIP (нет сабмодуля eink_part_refresh)"; continue; fi
-            extra="apps/stm32/common/Src/display_eink.c $EPD/src/epd4g.c $EPD/src/epd4g_fb.c \
-                -Itests/host/stm32_shim -Iapps/stm32/common/Inc -I$EPD/include -DEPD4G_BW_THRESHOLD=3" ;;
+            extra="stm32/common/Src/display_eink.c $EPD/src/epd4g.c $EPD/src/epd4g_fb.c \
+                -Itests/host/stm32_shim -Istm32/common/Inc -I$EPD/include -DEPD4G_BW_THRESHOLD=3" ;;
     esac
     run_one "$name" $COMMON $extra "$t"
 done
@@ -73,10 +73,10 @@ if [ -f $EPD/src/epd4g.c ]; then
     for model in 1 2; do
         RUN_ARGS=$model
         run_one "eink_selftest_host_$model" src/platform/pc/purrgo_logger.c \
-            tests/host/eink_selftest_host.c apps/stm32/common/Src/eink_test.c \
-            apps/stm32/common/Src/display_stm32.c apps/stm32/common/Src/display_eink.c \
+            tests/host/eink_selftest_host.c stm32/common/Src/eink_test.c \
+            stm32/common/Src/display_stm32.c stm32/common/Src/display_eink.c \
             $EPD/src/epd4g.c $EPD/src/epd4g_fb.c \
-            -Itests/host/stm32_shim -Iapps/stm32/common/Inc -I$EPD/include \
+            -Itests/host/stm32_shim -Istm32/common/Inc -I$EPD/include \
             -DEPD4G_BW_THRESHOLD=3 -DPURRGO_EINK_TEST_SCENES=0xFFU -Wl,--wrap=display_set_mode
     done
 else

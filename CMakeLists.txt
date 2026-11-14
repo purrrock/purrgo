@@ -137,7 +137,7 @@ if(PURRGO_PLATFORM STREQUAL "pc")
     message(STATUS "--- Target: PC Applications ---")
     add_subdirectory(src/platform/pc)   # purrgo_platform_pc
     if(PURRGO_BUILD_EMULATOR)
-        add_subdirectory(apps/emulator) # purrgo_emulator
+        add_subdirectory(emulator) # purrgo_emulator
     endif()
     if(PURRGO_BUILD_TESTS)
         enable_testing()
@@ -145,5 +145,5 @@ if(PURRGO_PLATFORM STREQUAL "pc")
     endif()
 else()
     message(STATUS "--- Target: STM32U585 firmware ---")
-    add_subdirectory(apps/stm32/PurrGO_STM32U5)
+    add_subdirectory(stm32)
 endif()

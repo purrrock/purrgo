@@ -41,37 +41,37 @@ endforeach()
 # прошивки U585) на программной модели карты.
 if(TARGET test_sd_spi)
     target_sources(test_sd_spi PRIVATE
-        ${PROJECT_SOURCE_DIR}/apps/stm32/common/sd_spi/sd_spi.c)
+        ${PROJECT_SOURCE_DIR}/stm32/common/sd_spi/sd_spi.c)
     target_include_directories(test_sd_spi PRIVATE
-        ${PROJECT_SOURCE_DIR}/apps/stm32/common/sd_spi)
+        ${PROJECT_SOURCE_DIR}/stm32/common/sd_spi)
 endif()
 
 # test_gnss_diag проверяет разбор NMEA и определение состояния связи с GNSS
 # (HAL-независимый модуль прошивки STM32).
 if(TARGET test_gnss_diag)
     target_sources(test_gnss_diag PRIVATE
-        ${PROJECT_SOURCE_DIR}/apps/stm32/common/gnss_diag/gnss_diag.c)
+        ${PROJECT_SOURCE_DIR}/stm32/common/gnss_diag/gnss_diag.c)
     target_include_directories(test_gnss_diag PRIVATE
-        ${PROJECT_SOURCE_DIR}/apps/stm32/common/gnss_diag)
+        ${PROJECT_SOURCE_DIR}/stm32/common/gnss_diag)
 endif()
 
 # test_gnss_link проверяет поиск скорости UART и смену скорости GNSS-модуля
 # (HAL-независимый модуль прошивки STM32, использует gnss_diag).
 if(TARGET test_gnss_link)
     target_sources(test_gnss_link PRIVATE
-        ${PROJECT_SOURCE_DIR}/apps/stm32/common/gnss_link/gnss_link.c
-        ${PROJECT_SOURCE_DIR}/apps/stm32/common/gnss_diag/gnss_diag.c)
+        ${PROJECT_SOURCE_DIR}/stm32/common/gnss_link/gnss_link.c
+        ${PROJECT_SOURCE_DIR}/stm32/common/gnss_diag/gnss_diag.c)
     target_include_directories(test_gnss_link PRIVATE
-        ${PROJECT_SOURCE_DIR}/apps/stm32/common/gnss_link
-        ${PROJECT_SOURCE_DIR}/apps/stm32/common/gnss_diag)
+        ${PROJECT_SOURCE_DIR}/stm32/common/gnss_link
+        ${PROJECT_SOURCE_DIR}/stm32/common/gnss_diag)
 endif()
 
 # test_gnss_pps проверяет статистику импульсов 1PPS (HAL-независимый модуль прошивки STM32).
 if(TARGET test_gnss_pps)
     target_sources(test_gnss_pps PRIVATE
-        ${PROJECT_SOURCE_DIR}/apps/stm32/common/gnss_pps/gnss_pps.c)
+        ${PROJECT_SOURCE_DIR}/stm32/common/gnss_pps/gnss_pps.c)
     target_include_directories(test_gnss_pps PRIVATE
-        ${PROJECT_SOURCE_DIR}/apps/stm32/common/gnss_pps)
+        ${PROJECT_SOURCE_DIR}/stm32/common/gnss_pps)
 endif()
 
 # test_display_eink проверяет очередь обновлений E-Ink (display_eink.c) поверх
@@ -81,12 +81,12 @@ if(TARGET test_display_eink)
     set(EPD4G_DIR ${PROJECT_SOURCE_DIR}/third_party/eink_part_refresh/epd4g)
     if(EXISTS ${EPD4G_DIR}/src/epd4g.c)
         target_sources(test_display_eink PRIVATE
-            ${PROJECT_SOURCE_DIR}/apps/stm32/common/Src/display_eink.c
+            ${PROJECT_SOURCE_DIR}/stm32/common/Src/display_eink.c
             ${EPD4G_DIR}/src/epd4g.c
             ${EPD4G_DIR}/src/epd4g_fb.c)
         target_include_directories(test_display_eink PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/stm32_shim
-            ${PROJECT_SOURCE_DIR}/apps/stm32/common/Inc
+            ${PROJECT_SOURCE_DIR}/stm32/common/Inc
             ${EPD4G_DIR}/include)
         target_compile_definitions(test_display_eink PRIVATE EPD4G_BW_THRESHOLD=3)
     else()
@@ -97,21 +97,21 @@ if(TARGET test_display_eink)
 endif()
 
 # eink_selftest_host прогоняет встроенный самотест частичного обновления
-# (apps/stm32/common/Src/eink_test.c) на модели 1-bit контроллера панели и сверяет
+# (stm32/common/Src/eink_test.c) на модели 1-bit контроллера панели и сверяет
 # картинку на «стекле» с framebuffer'ом. Нужен сабмодуль third_party/eink_part_refresh.
 if(EXISTS ${EPD4G_DIR}/src/epd4g.c)
     add_executable(eink_selftest_host
         ${CMAKE_CURRENT_SOURCE_DIR}/eink_selftest_host.c
-        ${PROJECT_SOURCE_DIR}/apps/stm32/common/Src/eink_test.c
-        ${PROJECT_SOURCE_DIR}/apps/stm32/common/Src/display_stm32.c
-        ${PROJECT_SOURCE_DIR}/apps/stm32/common/Src/display_eink.c
+        ${PROJECT_SOURCE_DIR}/stm32/common/Src/eink_test.c
+        ${PROJECT_SOURCE_DIR}/stm32/common/Src/display_stm32.c
+        ${PROJECT_SOURCE_DIR}/stm32/common/Src/display_eink.c
         ${EPD4G_DIR}/src/epd4g.c
         ${EPD4G_DIR}/src/epd4g_fb.c
         ${PROJECT_SOURCE_DIR}/src/platform/pc/purrgo_logger.c)
     target_include_directories(eink_selftest_host PRIVATE
         ${PROJECT_SOURCE_DIR}/include
         ${CMAKE_CURRENT_SOURCE_DIR}/stm32_shim
-        ${PROJECT_SOURCE_DIR}/apps/stm32/common/Inc
+        ${PROJECT_SOURCE_DIR}/stm32/common/Inc
         ${EPD4G_DIR}/include)
     target_compile_definitions(eink_selftest_host PRIVATE EPD4G_BW_THRESHOLD=3 PURRGO_EINK_TEST_SCENES=0xFFU)
     target_link_options(eink_selftest_host PRIVATE -Wl,--wrap=display_set_mode)

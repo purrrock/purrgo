@@ -112,11 +112,10 @@ map.name
 
 ```text
 purrgo/
-├── apps/
-│   ├── emulator/           # PC-эмулятор (SDL2)
-│   └── stm32/              # Прошивка STM32U585
-│       ├── common/         # STM32-адаптеры: дисплей, кнопки, ФС, логгер, SD по SPI, FatFs
-│       └── PurrGO_STM32U5/ # CubeMX-проект; Core/Src: GNSS (UART+DMA), SD, питание
+├── emulator/               # PC-эмулятор (SDL2, WebAssembly)
+├── stm32/                  # Прошивка STM32U585: CubeMX-проект (.ioc, Core/, Drivers/)
+│   └── common/             # STM32-адаптеры: дисплей, кнопки, ФС, логгер, SD по SPI, FatFs
+│                           # (GNSS UART+DMA, SD, питание - в Core/Src)
 │
 ├── docs/                   # Документация: hardware, user-guide, architecture, форматы карты, design/, datasheets/
 ├── include/

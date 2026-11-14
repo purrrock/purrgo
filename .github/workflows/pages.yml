@@ -12,7 +12,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "apps/emulator/**"
+      - "emulator/**"
       - "src/**"
       - "include/**"
       - "third_party/**"
@@ -24,7 +24,7 @@ on:
       - ".github/workflows/pages.yml"
   pull_request:
     paths:
-      - "apps/emulator/**"
+      - "emulator/**"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
     inputs:
@@ -147,7 +147,7 @@ jobs:
       - name: Assemble site
         run: |
           mkdir -p site
-          cp out/build/web-release/apps/emulator/index.{html,js,wasm,data} site/
+          cp out/build/web-release/emulator/index.{html,js,wasm,data} site/
           touch site/.nojekyll
           ls -lh site
           {

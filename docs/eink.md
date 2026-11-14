@@ -7,7 +7,7 @@
 (сабмодуль `third_party/eink_part_refresh`, используется только каталог `epd4g/`). Устройство библиотеки,
 API, настройки и подключение к проекту описаны в её [README](https://github.com/purrrock/eink_part_refresh#readme); ниже только то, что относится к PurrGO.
 
-В `apps/stm32/PurrGO_STM32U5/CMakeLists.txt` подключены `add_subdirectory(.../epd4g)` и `epd4g` в
+В `stm32/CMakeLists.txt` подключены `add_subdirectory(.../epd4g)` и `epd4g` в
 `target_link_libraries` ([как подключать](https://github.com/purrrock/eink_part_refresh#подключение-к-своему-проекту)); метки CubeMX `EINK_CS/DC/RST/BUSY`
 и `hspi1` используются штатным портом ([настройка CubeMX](https://github.com/purrrock/eink_part_refresh#настройка-stm32cubemx-для-готового-порта)).
 Определение `EPD4G_BW_THRESHOLD=3` сохраняет семантику 1-bit режима: белый → белый, любой серый → чёрный

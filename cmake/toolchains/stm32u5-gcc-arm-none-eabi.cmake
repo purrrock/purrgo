@@ -1,7 +1,7 @@
 # Тулчейн прошивки STM32U585 для сборки из корня репозитория.
 #
 # Тонкая обёртка над файлом, который генерирует STM32CubeMX
-# (apps/stm32/PurrGO_STM32U5/cmake/gcc-arm-none-eabi.cmake): флаги MCU
+# (stm32/cmake/gcc-arm-none-eabi.cmake): флаги MCU
 # (Cortex-M33, FPU), оптимизации и т.д. по-прежнему берутся оттуда и
 # обновляются при перегенерации CubeMX.
 #
@@ -15,7 +15,7 @@
 # .sram4 (LPDMA1 видит только SRAM4). Подмена имени - ниже.
 
 get_filename_component(PURRGO_CUBEMX_DIR
-    "${CMAKE_CURRENT_LIST_DIR}/../../apps/stm32/PurrGO_STM32U5" ABSOLUTE)
+    "${CMAKE_CURRENT_LIST_DIR}/../../stm32" ABSOLUTE)
 
 include("${PURRGO_CUBEMX_DIR}/cmake/gcc-arm-none-eabi.cmake")
 

@@ -64,7 +64,7 @@ typedef struct {
 
 /*
  * Платформенный хук: напряжение на выводе АЦП (середина делителя), мВ;
- * 0 - не измерено. STM32: apps/stm32/PurrGO_STM32U5/Core/Src/battery_adc.c.
+ * 0 - не измерено. STM32: stm32/Core/Src/battery_adc.c.
  */
 uint16_t purrgo_platform_battery_pin_mv(void);
 

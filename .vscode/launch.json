@@ -18,7 +18,7 @@
             ],
             // SVD (просмотр регистров периферии): положите STM32U585.svd рядом с проектом и
             // раскомментируйте строку. Без неё отладка работает, нет только окна периферии.
-            // "svdFile": "${workspaceFolder}/apps/stm32/PurrGO_STM32U5/STM32U585.svd",
+            // "svdFile": "${workspaceFolder}/stm32/STM32U585.svd",
             "runToEntryPoint": "main"
         }
     ]

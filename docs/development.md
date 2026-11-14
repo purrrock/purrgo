@@ -54,17 +54,17 @@ cmake --build --preset stm32u5-debug
 | `-DPURRGO_WERROR=ON` | Предупреждения - ошибки (кроме `-Wconversion`) |
 
 Результат сборки: `out/build/<пресет>/`. Прошивка — `out/build/stm32u5-*/PurrGO_STM32U5.elf`,
-эмулятор — `out/build/<пресет>/apps/emulator/purrgo_emulator`.
+эмулятор — `out/build/<пресет>/emulator/purrgo_emulator`.
 
 Платформу выбирает переменная `PURRGO_PLATFORM` (`pc` | `stm32u5`), которую задаёт
 пресет. Без пресета `cmake -S . -B build` собирает PC-эмулятор.
 
 ### STM32CubeMX
 
-CubeMX-проект находится в `apps/stm32/PurrGO_STM32U5/` (`PurrGO_STM32U5.ioc`, `Core/`, `Drivers/`, ...).
+CubeMX-проект находится в `stm32/` (`PurrGO_STM32U5.ioc`, `Core/`, `Drivers/`, ...).
 Перегенерация кода обновляет `cmake/stm32cubemx/CMakeLists.txt` и
 `cmake/gcc-arm-none-eabi.cmake` в этой папке — они подхватываются автоматически.
-`apps/stm32/PurrGO_STM32U5/CMakeLists.txt` (пользовательский, CubeMX его не перезаписывает)
+`stm32/CMakeLists.txt` (пользовательский, CubeMX его не перезаписывает)
 подключается из корневого `CMakeLists.txt` и самостоятельно не конфигурируется.
 
 ---
@@ -111,7 +111,7 @@ PC-эмулятора, сборка прошивки STM32 (с выводом и
 
 ### Флаги сборки
 
-Код проекта (`src/core`, `src/platform`, `apps/emulator`, пользовательские файлы прошивки)
+Код проекта (`src/core`, `src/platform`, `emulator`, пользовательские файлы прошивки)
 собирается с `-Wall -Wextra -Wshadow -Wformat=2 -Wconversion -Wdouble-promotion`
 (`cmake/PurrgoWarnings.cmake`); сторонний и сгенерированный CubeMX код - без них. Опция
 `-DPURRGO_WERROR=ON` превращает предупреждения в ошибки (кроме `-Wconversion`). Для
@@ -133,7 +133,7 @@ cmake --build --preset stm32u5-release
 Пустое значение (`-DPURRGO_HW_TEST=`) возвращает обычную прошивку. Допустимо: `SD_SPEED`, `EINK_4GRAY`,
 `EINK_PARTIAL` (последние два включают прежние `PURRGO_EINK_SELFTEST_*`). Результаты идут в UART1 строками
 `HWTEST ...` независимо от `PURRGO_LOG_LEVEL`, поэтому тесты можно собирать и в Release. Реализация:
-`apps/stm32/common/Src/hw_test.c`, список имён: `PURRGO_HW_TEST_NAMES` в `PurrGO_STM32U5/CMakeLists.txt`.
+`stm32/common/Src/hw_test.c`, список имён: `PURRGO_HW_TEST_NAMES` в `stm32/CMakeLists.txt`.
 
 **`SD_SPEED`.** Карта только читается (ничего не записывается). Замеры по `DWT->CYCCNT`:
 
@@ -184,7 +184,7 @@ cmake --build --preset stm32u5-release
 
 ## Эмулятор на ПК: GNSS и время
 
-Эмулятор (`apps/emulator`) получает GNSS одним из двух способов:
+Эмулятор (`emulator`) получает GNSS одним из двух способов:
 
 - по умолчанию (`USE_MOCK_GNSS=ON`) - встроенный генератор NMEA;
 - с реального приёмника через последовательный порт: сконфигурируйте с `-DUSE_MOCK_GNSS=OFF`
@@ -215,7 +215,7 @@ cmake --preset linux-gcc-debug -DPURRGO_MOCK_LAT_1E7=315590000 \
 
 ## Web-эмулятор (WebAssembly + GitHub Pages)
 
-PC-эмулятор (`apps/emulator`) собирается в WebAssembly через Emscripten и запускается в браузере,
+PC-эмулятор (`emulator`) собирается в WebAssembly через Emscripten и запускается в браузере,
 в том числе на смартфоне. Ядро (`src/core`) и платформенный слой (`src/platform/pc`) те же, что
 в десктопной сборке; отличается только обвязка:
 
@@ -224,7 +224,7 @@ PC-эмулятор (`apps/emulator`) собирается в WebAssembly чер
 | Окно, рендер | SDL2 (системный) | SDL2 из портов Emscripten, `<canvas>` |
 | Основной цикл | `while` + `SDL_Delay` | `emscripten_set_main_loop` (requestAnimationFrame) |
 | Кнопки K1-K4 | нарисованы в окне SDL, клавиши 1-4 | HTML-кнопки страницы (`web/shell.html`), клавиши 1-4, 5 = K1+K4 |
-| Файлы | диск, пути `../../../../../tests/data/...` | MEMFS: `/maps`, `/books`, `/routes`, `/waypts`, `/tracks`, `/PURRGO.CFG` |
+| Файлы | диск, пути `../../../../tests/data/...` | MEMFS: `/maps`, `/books`, `/routes`, `/waypts`, `/tracks`, `/PURRGO.CFG` |
 | GNSS | mock или COM-порт | только mock (старт задаётся при сборке) |
 
 Настройки (`PURRGO.CFG`) и треки живут в памяти вкладки и теряются при перезагрузке страницы.
@@ -261,7 +261,7 @@ bbox лучше держать в пределах города.
 cmake --preset web-release -DPURRGO_WEB_PRELOAD_DIR=/путь/к/web-root \
       -DPURRGO_MOCK_LAT_1E7=539006000 -DPURRGO_MOCK_LON_1E7=275590000
 cmake --build out/build/web-release
-cd out/build/web-release/apps/emulator && python3 -m http.server 8000
+cd out/build/web-release/emulator && python3 -m http.server 8000
 # открыть http://localhost:8000/index.html
 ```
 
