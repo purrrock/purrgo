@@ -13,7 +13,7 @@ git submodule update --init --recursive
 
 Проект собирается из **корня репозитория**. Что именно собирать (PC-эмулятор или
 прошивку STM32, Debug или Release) выбирается **CMake-пресетом** из
-[`CMakePresets.json`](CMakePresets.json), а не выбором папки проекта.
+[`CMakePresets.json`](../CMakePresets.json), а не выбором папки проекта.
 
 | Пресет | Что собирается | Окружение |
 |---|---|---|
@@ -74,7 +74,7 @@ cmake --build --preset stm32u5-debug
 
 | Параметр | Назначение |
 |---|---|
-| `-DPURRGO_HW_TEST=SD_SPEED\|EINK_4GRAY\|EINK_PARTIAL` | Аппаратный тест вместо навигатора, см. [`docs/hardware.md`](docs/hardware.md) |
+| `-DPURRGO_HW_TEST=SD_SPEED\|EINK_4GRAY\|EINK_PARTIAL` | Аппаратный тест вместо навигатора, см. [`docs/hardware.md`](hardware.md) |
 | `-DPURRGO_TRACK_DIAG=ON` | Диагностическая запись трека (каждая эпоха GNSS), см. раздел [«Полевой тест фильтров трека»](#полевой-тест-фильтров-трека) |
 | `-DPURRGO_WERROR=ON` | Предупреждения - ошибки (кроме `-Wconversion`) |
 
@@ -198,7 +198,7 @@ cmake --build --preset stm32u5-release
    (частичное 4 gray); выключение из карты и из меню (экран выключения в 4 gray).
 5. Ток в простое после засыпания панели — пока не измерялся.
 
-Результаты прогонов: [`measurements/eink-selftest.md`](measurements/eink-selftest.md).
+Результаты прогонов: [`measurements/README.md`](measurements/README.md#итоги-самотестов-e-ink).
 
 Лимиты `PURRGO_EINK_MONO_PARTIALS_BEFORE_FULL` и `PURRGO_EINK_GRAY_PARTIALS_BEFORE_FULL` по умолчанию равны
 значениям библиотеки (`EPD4G_*PARTIALS_BEFORE_FULL` = 10): библиотека сама выполняет полное обновление

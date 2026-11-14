@@ -174,10 +174,10 @@ cmake --preset stm32u5-release && cmake --build --preset stm32u5-release        
 | [`docs/user-guide.md`](docs/user-guide.md) | Руководство пользователя: кнопки, меню, режимы, читалка, файлы на microSD |
 | [`docs/hardware.md`](docs/hardware.md) | Аппаратная часть: платформа, GNSS, дисплей, microSD (SPI), питание, правила ведения распиновки |
 | [`PurrGO_STM32U585_PINOUT.md`](PurrGO_STM32U585_PINOUT.md) | Краткая распиновка: что куда запаять |
-| [`docs/architecture.md`](docs/architecture.md) | Архитектура программного обеспечения |
+| [`docs/architecture.md`](docs/architecture.md) | Архитектура программного обеспечения, в том числе порядок отрисовки слоёв карты |
 | [`docs/development.md`](docs/development.md) | Сборка, тесты, CI, аппаратные тесты, эмуляторы, полевой тест трека |
 | [`docs/eink.md`](docs/eink.md) | Драйвер E-Ink (epd4g) |
-| [`docs/map-format-v3.md`](docs/map-format-v3.md), [`docs/map-conformance.md`](docs/map-conformance.md), [`docs/map-rendering.md`](docs/map-rendering.md) | Формат карт V3, проверка соответствия, порядок и стиль слоёв |
+| [`docs/map-format-v3.md`](docs/map-format-v3.md), [`docs/map-conformance.md`](docs/map-conformance.md) | Формат карт V3, проверка соответствия |
 | [`tools/map-compiler/README.md`](tools/map-compiler/README.md) | Создание карт |
 | [`tools/book-compiler/README.md`](tools/book-compiler/README.md), [`PGB-format.md`](tools/book-compiler/PGB-format.md) | Конвертер книг и формат PGB |
 | [`docs/font-encoding.md`](docs/font-encoding.md) | Кодировка PurrGO-256 |
