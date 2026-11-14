@@ -8,6 +8,13 @@
  * при полностью исправном mock-источнике. purrgo_system_time_ms() - единственный
  * источник времени ядра: эмулятор обязан передавать в purrgo_app_tick() именно его.
  */
+/*
+ * macOS: при заданном _POSIX_C_SOURCE заголовки Darwin скрывают clock_gettime() и
+ * CLOCK_MONOTONIC (они видны только при полном наборе, _DARWIN_C_SOURCE).
+ */
+#ifdef __APPLE__
+#define _DARWIN_C_SOURCE
+#endif
 #define _POSIX_C_SOURCE 199309L
 
 #include "purrgo/system_time.h"

@@ -143,7 +143,7 @@ purrgo/
 │
 ├── .github/workflows/      # CI (GitHub Actions)
 ├── CMakeLists.txt          # Единая точка входа сборки
-├── CMakePresets.json       # Пресеты: win-mingw-*, linux-gcc-*, stm32u5-*
+├── CMakePresets.json       # Пресеты: win-mingw-*, linux-gcc-*, macos-*, stm32u5-*
 ├── PurrGO_STM32U585_PINOUT.md
 ├── TODO.md
 └── README.md
