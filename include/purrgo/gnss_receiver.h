@@ -32,7 +32,8 @@ void purrgo_gnss_receiver_configure(purrgo_gnss_tx_fn tx);
  * Реализация для u-blox M10 (всегда доступна, в том числе для host-тестов).
  * Отправляет несколько кадров подряд: базовую настройку (частота, NMEA GGA/RMC/GSA),
  * а при PURRGO_GNSS_UBX = 1 ещё отдельными UBX-CFG-VALSET бинарные сообщения
- * (PVT, ODO, MON-RF, SEC-SIG), одометр, модель динамики и опрос UBX-MON-VER.
+ * (PVT, ODO, MON-RF, NAV-DOP, SEC-SIG), одометр, модель динамики, выключение NMEA
+ * (CFG-UART1OUTPROT-NMEA, PURRGO_GNSS_UBX_NMEA = 0) и опрос UBX-MON-VER.
  */
 void purrgo_gnss_receiver_configure_ubx(purrgo_gnss_tx_fn tx);
 

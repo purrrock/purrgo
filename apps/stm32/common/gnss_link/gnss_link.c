@@ -104,9 +104,18 @@ void gnss_link_feed(gnss_link_t *l, uint8_t byte)
     gnss_diag_feed(&l->diag, byte);
 }
 
+/*
+ * Модуль найден: корректное предложение NMEA или корректный кадр UBX. UBX нужен, когда NMEA у модуля
+ * выключен (после сброса одного МК модуль остаётся настроенным: CFG-UART1OUTPROT-NMEA = 0).
+ */
+static bool module_heard(const gnss_link_t *l)
+{
+    return (l->diag.sentences_ok != 0U) || (l->diag.ubx_frames_ok != 0U);
+}
+
 static void poll_probe(gnss_link_t *l, uint32_t now_ms)
 {
-    if (l->diag.sentences_ok != 0U)
+    if (module_heard(l))
     {
         if (l->baud == l->cfg.target_baud)
         {
@@ -184,7 +193,7 @@ void gnss_link_poll(gnss_link_t *l, uint32_t now_ms)
         break;
 
     case GNSS_LINK_VERIFY:
-        if (l->diag.sentences_ok != 0U)
+        if (module_heard(l))
         {
             finish(l, GNSS_LINK_READY);
         }

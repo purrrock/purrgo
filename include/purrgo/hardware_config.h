@@ -218,6 +218,40 @@
 #endif
 
 /*
+ * NMEA на UART приёмника u-blox: PURRGO_GNSS_UBX_NMEA (только при PURRGO_GNSS_UBX = 1).
+ *
+ *   0 (по умолчанию) - NMEA полностью выключен: после установления связи с модулем (скорость
+ *     UART определена по NMEA заводской настройки, gnss_link) последним кадром настройки
+ *     уходит CFG-UART1OUTPROT-NMEA = 0 (PURRGO_GNSS_NMEA_OFF = 1). Остаётся только UBX:
+ *     меньше нагрузка на UART (около 300-500 байт/с) и между бинарными кадрами нет текста.
+ *     HDOP/VDOP берутся из UBX-NAV-DOP, фикс и число спутников - из UBX-NAV-PVT.
+ *     Если модуль отклонит кадр (NAK), останется прежний сокращённый NMEA (GGA, RMC, GSA):
+ *     он по-прежнему разбирается как запасной путь, как и NMEA до настройки.
+ *   1 - NMEA остаётся включённым (GGA, RMC, GSA, 1 Гц) рядом с UBX, как раньше; полезно для
+ *     отладки (u-center, внешние программы).
+ *
+ * Модуль помнит настройку только в слое RAM (PURRGO_GNSS_UBX_LAYERS) и после выключения по EN
+ * возвращается к заводской (NMEA, 38400): поиск скорости и настройка проходят заново. После
+ * сброса одного МК (модуль не обесточен) NMEA у модуля уже выключен, поэтому gnss_link
+ * принимает за признак связи и корректный кадр UBX, а не только предложение NMEA.
+ */
+#ifndef PURRGO_GNSS_UBX_NMEA
+#define PURRGO_GNSS_UBX_NMEA 0
+#endif
+#if (PURRGO_GNSS_UBX_NMEA != 0) && (PURRGO_GNSS_UBX_NMEA != 1)
+#error "PURRGO_GNSS_UBX_NMEA must be 0 or 1"
+#endif
+#if PURRGO_GNSS_UBX && !PURRGO_GNSS_UBX_NMEA
+#define PURRGO_GNSS_NMEA_OFF 1
+#define PURRGO_GNSS_NMEA_OFF_FRAMES 1   /* кадр CFG-UART1OUTPROT-NMEA */
+#else
+#define PURRGO_GNSS_NMEA_OFF 0
+#define PURRGO_GNSS_NMEA_OFF_FRAMES 0
+#endif
+/* UBX-NAV-DOP (HDOP/VDOP) включается кадром настройки вместе с остальными сообщениями UBX. */
+#define PURRGO_GNSS_DOP_FRAMES (PURRGO_GNSS_UBX)
+
+/*
  * UBX-SEC-SIG (глушение и спуфинг) есть только в SPG 5.30 и новее. В SPG 5.10
  * (G10A-F30, "ROM SPG 5.10") ключа CFG-MSGOUT-UBX_SEC_SIG_UART1 нет, модуль отвечает NAK.
  * Включать (-DPURRGO_GNSS_SEC_SIG=1) только для модуля с прошивкой 5.30+; в UI строка

@@ -121,9 +121,11 @@ size_t purrgo_ubx_build_valset(uint8_t *out, size_t out_size, uint8_t layers,
 #define UBX_KEY_MSGOUT_PVT_UART1     0x20910007U  /* U1: UBX-NAV-PVT */
 #define UBX_KEY_MSGOUT_ODO_UART1     0x2091007FU  /* U1: UBX-NAV-ODO */
 #define UBX_KEY_MSGOUT_MON_RF_UART1  0x2091035AU  /* U1: UBX-MON-RF */
+#define UBX_KEY_MSGOUT_DOP_UART1     0x20910039U  /* U1: UBX-NAV-DOP (HDOP/VDOP/PDOP) */
 #define UBX_KEY_MSGOUT_SEC_SIG_UART1 0x20910635U  /* U1: UBX-SEC-SIG */
 #define UBX_KEY_ODO_USE_ODO          0x10220001U  /* L: одометр (по умолчанию выключен) */
 #define UBX_KEY_ODO_PROFILE          0x20220005U  /* E1: 0 RUN, 1 CYCL, 2 SWIM, 3 CAR */
+#define UBX_KEY_UART1OUTPROT_NMEA    0x10740002U  /* L: выдавать NMEA на UART1 (по умолчанию 1) */
 #define UBX_KEY_NAVSPG_DYNMODEL      0x20110021U  /* E1: модель динамики */
 
 /*
@@ -180,11 +182,14 @@ void purrgo_gnss_receiver_configure_ubx(purrgo_gnss_tx_fn tx)
 #if PURRGO_GNSS_SIGNAL_FRAME
         "Signals",
 #endif
-        "NAV-PVT", "NAV-ODO", "MON-RF",
+        "NAV-PVT", "NAV-ODO", "MON-RF", "NAV-DOP",
 #if PURRGO_GNSS_SEC_SIG
         "SEC-SIG",
 #endif
         "ODO enable/profile", "DYNMODEL",
+#if PURRGO_GNSS_NMEA_OFF
+        "NMEA off",
+#endif
 #if PURRGO_GNSS_PSM_ACTIVE
         "PSM no-off", "PSM mode",
 #endif
@@ -225,6 +230,8 @@ void purrgo_gnss_receiver_configure_ubx(purrgo_gnss_tx_fn tx)
     static const purrgo_ubx_cfg_item_t msg_pvt = { UBX_KEY_MSGOUT_PVT_UART1,    1U };
     static const purrgo_ubx_cfg_item_t msg_odo = { UBX_KEY_MSGOUT_ODO_UART1,    1U };
     static const purrgo_ubx_cfg_item_t msg_rf  = { UBX_KEY_MSGOUT_MON_RF_UART1, 1U };
+    /* HDOP/VDOP/PDOP: без NMEA (GGA/GSA) их источник - UBX-NAV-DOP. */
+    static const purrgo_ubx_cfg_item_t msg_dop = { UBX_KEY_MSGOUT_DOP_UART1,    1U };
     /* 3. Одометр: без USE_ODO UBX-NAV-ODO отдаёт нули. */
     static const purrgo_ubx_cfg_item_t odo[] = {
         { UBX_KEY_ODO_USE_ODO, 1U },
@@ -238,6 +245,7 @@ void purrgo_gnss_receiver_configure_ubx(purrgo_gnss_tx_fn tx)
     send_valset(tx, &msg_pvt, 1U);
     send_valset(tx, &msg_odo, 1U);
     send_valset(tx, &msg_rf, 1U);
+    send_valset(tx, &msg_dop, 1U);
 #if PURRGO_GNSS_SEC_SIG
     static const purrgo_ubx_cfg_item_t msg_sig = { UBX_KEY_MSGOUT_SEC_SIG_UART1, 1U };
     send_valset(tx, &msg_sig, 1U);
@@ -246,9 +254,22 @@ void purrgo_gnss_receiver_configure_ubx(purrgo_gnss_tx_fn tx)
     send_valset(tx, dyn, sizeof dyn / sizeof dyn[0]);
 #endif
 
+#if PURRGO_GNSS_NMEA_OFF
+    /*
+     * 5. NMEA выключается ПОСЛЕ определения скорости UART (gnss_link искал модуль по NMEA заводской
+     * настройки) и после остальной настройки, до PSM (его кадры идут самыми последними). Отдельным
+     * VALSET: ответ ACK/NAK приходит в UBX и при выключенном NMEA. При NAK останется сокращённый
+     * NMEA (GGA, RMC, GSA из базового кадра) - ядро продолжит работать по запасному пути.
+     * Повторная настройка (повтор через gnss_link) идемпотентна.
+     */
+    static const purrgo_ubx_cfg_item_t nmea_off = { UBX_KEY_UART1OUTPROT_NMEA, 0U };
+
+    send_valset(tx, &nmea_off, 1U);
+#endif
+
 #if PURRGO_GNSS_PSM_ACTIVE
     /*
-     * 5. Энергосбережение (PSMCT) - после всей остальной настройки, чтобы смена режима
+     * 6. Энергосбережение (PSMCT) - после всей остальной настройки, чтобы смена режима
      * не мешала ей. Два кадра: DONOTENTEROFF и затем OPERATEMODE (последним ключом, как
      * рекомендует manual). Если модуль отклонит набор, он останется в полной мощности, а
      * остальная настройка не пострадает.
@@ -264,7 +285,7 @@ void purrgo_gnss_receiver_configure_ubx(purrgo_gnss_tx_fn tx)
 #endif
 
 #if PURRGO_GNSS_UBX
-    /* 6. Опрос версии прошивки: ответ UBX-MON-VER разбирает gnss_ubx.c и пишет в лог. */
+    /* 7. Опрос версии прошивки: ответ UBX-MON-VER разбирает gnss_ubx.c и пишет в лог. */
     uint8_t ver[8];
     const size_t ver_len = purrgo_ubx_build_frame(ver, sizeof ver, UBX_CLASS_MON, UBX_ID_MON_VER,
                                                   NULL, 0U);

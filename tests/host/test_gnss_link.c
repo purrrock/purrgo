@@ -23,6 +23,7 @@ typedef struct
     uint32_t boot_ms;         /* с этого момента выдаёт NMEA раз в секунду */
     int ignore_cmds;          /* сколько первых команд смены скорости модуль не применит */
     bool bad_checksum;        /* предложения с неверной контрольной суммой */
+    bool ubx_only;            /* NMEA выключен настройкой: вместо предложений кадры UBX (PVT, DOP) */
     /* Модель платформы. */
     bool can_send;            /* send_baud_cmd возвращает true */
     bool fail_set_baud;       /* set_baud возвращает false */
@@ -104,6 +105,31 @@ static void feed_sentence(gnss_link_t *l, const char *body, bool bad_checksum)
     }
 }
 
+/* Кадр UBX с контрольной суммой Fletcher-8 (подмена контрольной суммы - bad_checksum). */
+static void feed_ubx(gnss_link_t *l, uint8_t cls, uint8_t id, uint16_t len, bool bad_checksum)
+{
+    uint8_t f[128];
+    uint8_t a = 0U, b = 0U;
+
+    f[0] = 0xB5U; f[1] = 0x62U; f[2] = cls; f[3] = id;
+    f[4] = (uint8_t)len; f[5] = (uint8_t)(len >> 8);
+    for (uint16_t i = 0U; i < len; i++)
+    {
+        f[6U + i] = (uint8_t)(0x20U + i);       /* произвольные данные, в том числе '$' */
+    }
+    for (size_t i = 2U; i < 6U + (size_t)len; i++)
+    {
+        a = (uint8_t)(a + f[i]);
+        b = (uint8_t)(b + a);
+    }
+    f[6U + len] = bad_checksum ? (uint8_t)(a ^ 0x55U) : a;
+    f[7U + len] = b;
+    for (size_t i = 0U; i < 8U + (size_t)len; i++)
+    {
+        gnss_link_feed(l, f[i]);
+    }
+}
+
 /* Выдача модуля за один шаг моделирования. */
 static void module_step(sim_t *s, gnss_link_t *l, uint32_t t)
 {
@@ -111,7 +137,12 @@ static void module_step(sim_t *s, gnss_link_t *l, uint32_t t)
     {
         return;
     }
-    if (s->uart_baud == s->module_baud)
+    if ((s->uart_baud == s->module_baud) && s->ubx_only)
+    {
+        feed_ubx(l, 0x01U, 0x07U, 92U, s->bad_checksum);     /* NAV-PVT */
+        feed_ubx(l, 0x01U, 0x04U, 18U, s->bad_checksum);     /* NAV-DOP */
+    }
+    else if (s->uart_baud == s->module_baud)
     {
         feed_sentence(l, "GNGGA,123519.00,5354.1234,N,02734.5678,E,1,08,0.9,200.0,M,25.0,M,,", s->bad_checksum);
         feed_sentence(l, "GNRMC,123519.00,A,5354.1234,N,02734.5678,E,0.0,0.0,090126,,,A", s->bad_checksum);
@@ -390,6 +421,64 @@ static void test_stop_and_restart(void)
     CHECK(s.uart_baud == TGT_BAUD);
 }
 
+/*
+ * NMEA выключен настройкой (PURRGO_GNSS_UBX_NMEA = 0), модуль на рабочей скорости после сброса
+ * одного МК: поток - только кадры UBX. Связь определяется по ним, команда смены скорости не нужна.
+ */
+static void test_ubx_only_module_at_target(void)
+{
+    sim_t s;
+    gnss_link_t l;
+
+    memset(&s, 0, sizeof s);
+    s.module_baud = TGT_BAUD;
+    s.ubx_only = true;
+    s.can_send = true;
+    make_link(&l, &s, DEF_BAUD, TGT_BAUD);
+
+    const uint32_t t = run(&s, &l, 0U, 20000U);
+
+    CHECK(gnss_link_state(&l) == GNSS_LINK_READY);
+    CHECK(gnss_link_baud(&l) == TGT_BAUD && s.uart_baud == TGT_BAUD);
+    CHECK(s.cmds == 0);
+    CHECK(t < 4000U);
+}
+
+/* Кадры UBX с неверной контрольной суммой модулем не считаются: связи нет. */
+static void test_ubx_bad_checksum_is_not_a_module(void)
+{
+    sim_t s;
+    gnss_link_t l;
+
+    memset(&s, 0, sizeof s);
+    s.module_baud = TGT_BAUD;
+    s.ubx_only = true;
+    s.bad_checksum = true;
+    s.can_send = true;
+    make_link(&l, &s, DEF_BAUD, TGT_BAUD);
+
+    (void)run(&s, &l, 0U, 60000U);
+    CHECK(gnss_link_state(&l) == GNSS_LINK_FAILED);
+    CHECK(s.cmds == 0);
+}
+
+/* Модуль на заводской скорости, но без NMEA: найден по UBX, затем обычная смена скорости. */
+static void test_ubx_only_module_at_default(void)
+{
+    sim_t s;
+    gnss_link_t l;
+
+    memset(&s, 0, sizeof s);
+    s.module_baud = DEF_BAUD;
+    s.ubx_only = true;
+    s.can_send = true;
+    make_link(&l, &s, DEF_BAUD, TGT_BAUD);
+
+    (void)run(&s, &l, 0U, 20000U);
+    CHECK(gnss_link_state(&l) == GNSS_LINK_READY);
+    CHECK(s.cmds == 1 && s.module_baud == TGT_BAUD && s.uart_baud == TGT_BAUD);
+}
+
 static void test_null_args(void)
 {
     gnss_link_init(NULL, NULL, NULL);
@@ -447,6 +536,9 @@ int main(void)
     test_same_baud();
     test_set_baud_failure();
     test_stop_and_restart();
+    test_ubx_only_module_at_target();
+    test_ubx_bad_checksum_is_not_a_module();
+    test_ubx_only_module_at_default();
     test_null_args();
     test_time_wrap();
     return test_finish("test_gnss_link");

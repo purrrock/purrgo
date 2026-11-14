@@ -277,6 +277,48 @@ static void test_ubx_frames_not_nmea(void)
     CHECK(d.ubx_ack == 1 && d.ubx_nak == 1 && d.ubx_last_was_nak);
 }
 
+/*
+ * NMEA выключен (PURRGO_GNSS_UBX_NMEA = 0): кадры UBX - признак связи и данных. Без них состояние
+ * по-прежнему "не NMEA/UBX", с корректными кадрами - данные идут, а наличие фикса определяет
+ * уже монитор по NAV-PVT.
+ */
+static void test_ubx_only_stream(void)
+{
+    gnss_diag_t d;
+    uint8_t pl[92], f[128];
+
+    gnss_diag_init(&d);
+    CHECK(gnss_diag_state(&d) == GNSS_DIAG_NO_DATA);
+
+    /* Мусор и кадры с неверной контрольной суммой: связи нет, кадры не засчитываются. */
+    for (int i = 0; i < 200; i++) {
+        gnss_diag_feed(&d, (uint8_t)(0x80U | (i * 37U)));
+    }
+    memset(pl, 0x22, sizeof pl);
+    size_t n = ubx_frame(f, 0x01, 0x07, pl, sizeof pl);
+    f[n - 1] ^= 0xFFU;
+    feed_bytes(&d, f, n);
+    CHECK(d.ubx_frames_ok == 0 && gnss_diag_state(&d) == GNSS_DIAG_NOT_NMEA);
+
+    /* Корректные кадры любого класса: связь есть. */
+    n = ubx_frame(f, 0x01, 0x07, pl, sizeof pl);
+    feed_bytes(&d, f, n);
+    CHECK(d.ubx_frames_ok == 1 && d.sentences_ok == 0);
+    CHECK(gnss_diag_state(&d) == GNSS_DIAG_NMEA_NO_FIX);
+    uint8_t dop[18] = {0};
+    n = ubx_frame(f, 0x01, 0x04, dop, sizeof dop);
+    feed_bytes(&d, f, n);
+    uint8_t ack[2] = {0x06, 0x8A};
+    n = ubx_frame(f, 0x05, 0x01, ack, 2);
+    feed_bytes(&d, f, n);
+    CHECK(d.ubx_frames_ok == 3 && d.ubx_ack == 1 && d.sentences_bad == 0);
+
+    /* Пустой кадр (опрос MON-VER) тоже кадр. */
+    n = ubx_frame(f, 0x0A, 0x04, NULL, 0);
+    feed_bytes(&d, f, n);
+    CHECK(d.ubx_frames_ok == 4);
+}
+
 /* seen_interval показывает только то, что пришло после gnss_diag_end_interval(). */
 static void test_seen_interval(void)
 {
@@ -299,6 +341,7 @@ int main(void)
 {
     test_ubx_ack();
     test_ubx_frames_not_nmea();
+    test_ubx_only_stream();
     test_seen_interval();
     test_no_data();
     test_not_nmea();

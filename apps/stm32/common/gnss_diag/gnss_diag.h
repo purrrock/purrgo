@@ -36,7 +36,7 @@
 typedef enum
 {
     GNSS_DIAG_NO_DATA = 0,   /* ни одного байта */
-    GNSS_DIAG_NOT_NMEA,      /* байты есть, но ни одного корректного предложения */
+    GNSS_DIAG_NOT_NMEA,      /* байты есть, но ни одного корректного предложения NMEA и кадра UBX */
     GNSS_DIAG_NMEA_NO_FIX,   /* NMEA идёт, решения нет (поиск спутников) */
     GNSS_DIAG_FIX            /* есть решение (GGA quality > 0 или RMC = A) */
 } gnss_diag_state_t;
@@ -62,6 +62,7 @@ typedef struct
     uint8_t gga_sats_used;     /* поле 7 GGA */
     bool rmc_seen;
     bool rmc_valid;            /* статус A */
+    uint32_t ubx_frames_ok;    /* кадры UBX с верной контрольной суммой (при выключенном NMEA - единственный признак связи) */
     uint32_t rmc_valid_count;  /* число RMC со статусом A с момента старта (сверка с 1PPS) */
     uint8_t gsv_in_view[GNSS_DIAG_TALKERS];
     bool gsv_seen;

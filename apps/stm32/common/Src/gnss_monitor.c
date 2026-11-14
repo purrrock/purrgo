@@ -12,6 +12,7 @@
 #include "purrgo/gnss_ubx.h"
 #include "purrgo/hardware_config.h"
 #include "purrgo/logger.h"
+#include "purrgo/system_time.h"
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -102,8 +103,33 @@ void purrgo_gnss_monitor_pps_edge(uint32_t now_ms)
     }
 }
 
+#if PURRGO_GNSS_NMEA_OFF
+#define FIX_COUNT_LABEL "PVT-OK"
+
+/* NMEA выключен: решение действительно, если свежий PVT сообщает fixOK (то же, что solution.valid). */
+static uint32_t monitor_fix_count(void)
+{
+    return purrgo_gnss_ubx_status()->pvt_fix_ok_count;
+}
+
+static bool monitor_pvt_fix(void)
+{
+    const purrgo_gnss_ubx_status_t *ubx = purrgo_gnss_ubx_status();
+
+    return ubx->pvt_valid && ubx->pvt_fix_ok &&
+           purrgo_gnss_ubx_fresh(ubx->pvt_ms, purrgo_system_time_ms());
+}
+#else
+#define FIX_COUNT_LABEL "RMC-A"
+
+static uint32_t monitor_fix_count(void)
+{
+    return s_diag.rmc_valid_count;
+}
+#endif
+
 /*
- * Раз в минуту: фронты 1PPS и RMC со статусом A за период и всего. При исправном
+ * Раз в минуту: фронты 1PPS и RMC со статусом A (при выключенном NMEA - PVT с fixOK) за период и всего. При исправном
  * 1PPS за минуту приходит около 60 фронтов и столько же RMC с A (импульсы идут
  * только при решении), интервалы между фронтами лежат около 1000 мс.
  */
@@ -119,23 +145,25 @@ static void pps_report(uint32_t now)
 
     gnss_pps_snapshot(&s_pps, &st);
 
+    /* Сколько раз приёмник сообщил действительное решение: RMC со статусом A или (NMEA выключен) PVT с fixOK. */
+    const uint32_t fix_count = monitor_fix_count();
     const uint32_t d_edges = st.edges - s_pps_edges_at_last;
-    const uint32_t d_rmc = s_diag.rmc_valid_count - s_rmc_a_at_last;
+    const uint32_t d_rmc = fix_count - s_rmc_a_at_last;
 
     s_pps_edges_at_last = st.edges;
-    s_rmc_a_at_last = s_diag.rmc_valid_count;
+    s_rmc_a_at_last = fix_count;
 
-    PURRGO_LOG("GNSS: PPS edges=%lu (+%lu) RMC-A=%lu (+%lu) ok=%lu short=%lu gaps=%lu missed=%lu "
+    PURRGO_LOG("GNSS: PPS edges=%lu (+%lu) " FIX_COUNT_LABEL "=%lu (+%lu) ok=%lu short=%lu gaps=%lu missed=%lu "
                "drift=%lu interval=%lu..%lu ms\r\n",
                (unsigned long)st.edges, (unsigned long)d_edges,
-               (unsigned long)s_diag.rmc_valid_count, (unsigned long)d_rmc,
+               (unsigned long)fix_count, (unsigned long)d_rmc,
                (unsigned long)st.ok, (unsigned long)st.too_short, (unsigned long)st.gaps,
                (unsigned long)st.missed, (unsigned long)st.drift,
                (unsigned long)st.min_ms, (unsigned long)st.max_ms);
 
     if ((d_edges != 0U) && (d_rmc == 0U))
     {
-        PURRGO_LOGW("GNSS: PPS edges without a valid RMC in the last period\r\n");
+        PURRGO_LOGW("GNSS: PPS edges without a valid " FIX_COUNT_LABEL " in the last period\r\n");
     }
 }
 
@@ -196,7 +224,14 @@ void purrgo_gnss_monitor_process(void)
     s_t_next = now + ((uptime_ms < MONITOR_FAST_PHASE_MS) ? MONITOR_PERIOD_FAST_MS
                                                           : MONITOR_PERIOD_SLOW_MS);
 
-    const gnss_diag_state_t state = gnss_diag_state(&s_diag);
+    gnss_diag_state_t state = gnss_diag_state(&s_diag);
+#if PURRGO_GNSS_NMEA_OFF
+    /* Связь есть (кадры UBX идут), а есть ли решение, говорит PVT: NMEA нет. */
+    if ((state == GNSS_DIAG_FIX) || (state == GNSS_DIAG_NMEA_NO_FIX))
+    {
+        state = monitor_pvt_fix() ? GNSS_DIAG_FIX : GNSS_DIAG_NMEA_NO_FIX;
+    }
+#endif
     const uint32_t delta = s_diag.bytes - s_bytes_at_last;
     const unsigned long up_s = (unsigned long)(uptime_ms / 1000U);
 
@@ -237,10 +272,16 @@ void purrgo_gnss_monitor_process(void)
     {
         if (!s_last_reported_fix || (s_last_state != GNSS_DIAG_FIX))
         {
+#if PURRGO_GNSS_NMEA_OFF
+            PURRGO_LOG("GNSS: FIX after %lu s, sats used=%u (bytes=%lu, ubx frames=%lu)\r\n",
+                       up_s, (unsigned)purrgo_gnss_ubx_status()->pvt_num_sv,
+                       (unsigned long)s_diag.bytes, (unsigned long)s_diag.ubx_frames_ok);
+#else
             PURRGO_LOG("GNSS: FIX after %lu s, sats used=%u in view=%u (bytes=%lu, nmea ok=%lu)\r\n",
                        up_s, (unsigned)s_diag.gga_sats_used,
                        (unsigned)gnss_diag_sats_in_view(&s_diag),
                        (unsigned long)s_diag.bytes, (unsigned long)s_diag.sentences_ok);
+#endif
             s_last_reported_fix = true;
         }
         s_last_state = state;
@@ -262,7 +303,7 @@ void purrgo_gnss_monitor_process(void)
         const unsigned long pct = (s_diag.bytes == 0U) ? 0UL
             : (unsigned long)(((uint64_t)s_diag.printable * 100U) / s_diag.bytes);
 
-        PURRGO_LOGW("GNSS: NOT NMEA after %lu s: bytes=%lu (+%lu) printable=%lu%% bad=%lu FE=%lu NE=%lu "
+        PURRGO_LOGW("GNSS: NO VALID NMEA/UBX after %lu s: bytes=%lu (+%lu) printable=%lu%% bad=%lu FE=%lu NE=%lu "
                    "ORE=%lu. Wrong baud (UART at %lu), noise or bad wiring\r\n",
                    up_s, (unsigned long)s_diag.bytes, (unsigned long)delta, pct,
                    (unsigned long)s_diag.sentences_bad, (unsigned long)s_diag.err_fe,
@@ -283,6 +324,20 @@ void purrgo_gnss_monitor_process(void)
             PURRGO_LOGW("GNSS: DATA STOPPED: no bytes in the last report period (total %lu bytes)\r\n",
                        (unsigned long)s_diag.bytes);
         }
+#if PURRGO_GNSS_NMEA_OFF
+        {
+            const purrgo_gnss_ubx_status_t *ubx = purrgo_gnss_ubx_status();
+
+            PURRGO_LOGW("GNSS: UBX OK, no fix yet (%lu s): bytes=%lu (+%lu) frames=%lu nmea ok=%lu "
+                       "PVT fixType=%u sv=%u validTime=%u FE=%lu NE=%lu ORE=%lu DMA=%lu\r\n",
+                       up_s, (unsigned long)s_diag.bytes, (unsigned long)delta,
+                       (unsigned long)s_diag.ubx_frames_ok, (unsigned long)s_diag.sentences_ok,
+                       (unsigned)(ubx->pvt_valid ? ubx->pvt_fix_type : 0U), (unsigned)ubx->pvt_num_sv,
+                       (unsigned)ubx->pvt_time_valid, (unsigned long)s_diag.err_fe,
+                       (unsigned long)s_diag.err_ne, (unsigned long)s_diag.err_ore,
+                       (unsigned long)s_diag.err_dma);
+        }
+#else
         PURRGO_LOGW("GNSS: NMEA OK, no fix yet (%lu s): bytes=%lu (+%lu) ok=%lu bad=%lu sentences (last period): %s"
                    "in view=%u used=%u fix quality=%u FE=%lu NE=%lu ORE=%lu DMA=%lu\r\n",
                    up_s, (unsigned long)s_diag.bytes, (unsigned long)delta,
@@ -291,6 +346,7 @@ void purrgo_gnss_monitor_process(void)
                    (unsigned)s_diag.gga_quality, (unsigned long)s_diag.err_fe,
                    (unsigned long)s_diag.err_ne, (unsigned long)s_diag.err_ore,
                    (unsigned long)s_diag.err_dma);
+#endif
         break;
     }
     }

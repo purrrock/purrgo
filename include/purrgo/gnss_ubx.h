@@ -5,6 +5,7 @@
  * UBX-расширения приёмника u-blox M10 (интерфейс SPG 5.30, протокол 34.30):
  * разбор кадров из потока вперемешку с NMEA и декодеры сообщений
  *   UBX-NAV-PVT   (0x01 0x07)  время, позиция, скорость, оценки точности;
+ *   UBX-NAV-DOP   (0x01 0x04)  HDOP/VDOP/PDOP (вместо NMEA GSA/GGA);
  *   UBX-NAV-ODO   (0x01 0x09)  дистанция с последнего сброса;
  *   UBX-SEC-SIG   (0x27 0x09)  глушение и спуфинг;
  *   UBX-MON-RF    (0x0A 0x38)  уровень помех, антенна;
@@ -31,6 +32,7 @@ extern "C" {
 #define PURRGO_UBX_CLASS_SEC  0x27U
 #define PURRGO_UBX_ID_ACK_NAK 0x00U
 #define PURRGO_UBX_ID_ACK_ACK 0x01U
+#define PURRGO_UBX_ID_NAV_DOP 0x04U
 #define PURRGO_UBX_ID_NAV_PVT 0x07U
 #define PURRGO_UBX_ID_NAV_ODO 0x09U
 #define PURRGO_UBX_ID_NAV_RESETODO 0x10U
@@ -119,6 +121,20 @@ typedef struct {
      * 4 слежение с оптимизацией мощности, 5 неактивен); psm_valid - PVT уже приходил. */
     bool psm_valid;
     uint8_t psm_state;
+
+    /*
+     * Сводка последнего UBX-NAV-PVT для монитора и диагностики (при выключенном NMEA других
+     * источников состояния фикса нет). pvt_fix_ok - решение действительно (то же, что
+     * solution.valid), pvt_fix_ok_count - число таких PVT с запуска (сверка с 1PPS).
+     */
+    bool pvt_valid;
+    uint8_t pvt_fix_type;        /* fixType: 0 нет, 2 2D, 3 3D, 4 GNSS+DR, 5 только время */
+    bool pvt_fix_ok;
+    bool pvt_time_valid;         /* validTime: время известно (PPS уже мигает, позиции ещё может не быть) */
+    uint8_t pvt_num_sv;
+    uint32_t pvt_ms;             /* время приёма (purrgo_system_time_ms) */
+    uint32_t pvt_count;
+    uint32_t pvt_fix_ok_count;
 
     /* UBX-NAV-ODO */
     bool odo_valid;

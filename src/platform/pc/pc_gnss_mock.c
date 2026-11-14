@@ -257,6 +257,9 @@ static void generate_nmea(void) {
              rmc, (int)rmc_cksum, gga, (int)gga_cksum);
     nmea_len = strlen(nmea_buffer);
     memcpy(stream_buffer, nmea_buffer, nmea_len);
+#if PURRGO_GNSS_NMEA_OFF
+    nmea_len = 0;                   /* NMEA выключен настройкой: в потоке только кадры UBX */
+#endif
     nmea_pos = 0;
 }
 
@@ -316,6 +319,18 @@ static void generate_ubx(void)
     put_u32(&pvt[72], 200000U);                      /* headAcc 2 градуса */
     put_u16(&pvt[76], 150U);                         /* pDOP 1.5 */
     append_ubx(0x01, 0x07, pvt, sizeof pvt);
+
+    {   /* UBX-NAV-DOP: HDOP 0,90 / VDOP 1,20 / PDOP 1,50 (GGA/GSA при выключенном NMEA не приходят) */
+        uint8_t dop[18];
+
+        memset(dop, 0, sizeof dop);
+        put_u16(&dop[4], 160U);     /* gDOP */
+        put_u16(&dop[6], 150U);     /* pDOP */
+        put_u16(&dop[8], 100U);     /* tDOP */
+        put_u16(&dop[10], 120U);    /* vDOP */
+        put_u16(&dop[12], 90U);     /* hDOP */
+        append_ubx(0x01, 0x04, dop, sizeof dop);
+    }
 
     memset(odo, 0, sizeof odo);
     put_u32(&odo[8], mock_odo_m);
