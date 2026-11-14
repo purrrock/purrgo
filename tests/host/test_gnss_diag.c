@@ -292,7 +292,7 @@ static void test_ubx_only_stream(void)
 
     /* Мусор и кадры с неверной контрольной суммой: связи нет, кадры не засчитываются. */
     for (int i = 0; i < 200; i++) {
-        gnss_diag_feed(&d, (uint8_t)(0x80U | (i * 37U)));
+        gnss_diag_feed(&d, (uint8_t)(0x80U | ((unsigned int)i * 37U)));
     }
     memset(pl, 0x22, sizeof pl);
     size_t n = ubx_frame(f, 0x01, 0x07, pl, sizeof pl);

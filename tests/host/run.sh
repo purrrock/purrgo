@@ -21,10 +21,14 @@ COMMON="src/platform/pc/display_hal.c src/platform/pc/purrgo_logger.c \
 
 # Ядро собирается в статическую библиотеку, как purrgo_core в CMake: из неё берутся
 # только нужные тесту объектные файлы (тесты сами задают purrgo_system_time_ms и т.п.).
+# PURRGO_TRACK_DIAG=0 - как в tests/host/CMakeLists.txt: тесты логгера считают обычную
+# (не диагностическую) запись трека, а значение по умолчанию в track_logger.c может быть
+# временно переключено на 1 для полевого теста. test_track_diag включает track_logger.c
+# в себя с PURRGO_TRACK_DIAG=1 и от этого флага не зависит.
 rm -rf "$OUT/core" && mkdir -p "$OUT/core"
 for f in $(ls src/core/*.c src/core/*/*.c third_party/minmea/minmea.c); do
     o="$OUT/core/$(echo "$f" | tr / _).o"
-    if ! $CC $CFLAGS -c "$f" -o "$o"; then echo "BUILD-FAIL core: $f"; exit 1; fi
+    if ! $CC $CFLAGS -DPURRGO_TRACK_DIAG=0 -c "$f" -o "$o"; then echo "BUILD-FAIL core: $f"; exit 1; fi
 done
 ar rcs "$OUT/libpurrgo_core.a" "$OUT"/core/*.o
 CORE="$OUT/libpurrgo_core.a"
