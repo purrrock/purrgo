@@ -252,6 +252,21 @@
 #define PURRGO_GNSS_DOP_FRAMES (PURRGO_GNSS_UBX)
 
 /*
+ * Выключение сигнала 1PPS (TIMEPULSE) модуля: CFG-TP-TP1_ENA = 0, отдельным кадром VALSET, только
+ * при PURRGO_GNSS_UBX = 1. Прошивка 1PPS не использует (вывод 1PPS модуля к МК не подключается).
+ * По умолчанию таймпульс включён и идёт при валидном времени GNSS; светодиод PPS на плате модуля
+ * при этом мигает и потребляет ток. Настройка хранится в слое PURRGO_GNSS_UBX_LAYERS (по умолчанию
+ * RAM), поэтому отправляется после каждого включения модуля. 0 - оставить заводское поведение.
+ */
+#ifndef PURRGO_GNSS_TIMEPULSE_OFF
+#define PURRGO_GNSS_TIMEPULSE_OFF 1
+#endif
+#if (PURRGO_GNSS_TIMEPULSE_OFF != 0) && (PURRGO_GNSS_TIMEPULSE_OFF != 1)
+#error "PURRGO_GNSS_TIMEPULSE_OFF must be 0 or 1"
+#endif
+#define PURRGO_GNSS_TIMEPULSE_OFF_FRAMES (PURRGO_GNSS_UBX && PURRGO_GNSS_TIMEPULSE_OFF)
+
+/*
  * UBX-SEC-SIG (глушение и спуфинг) есть только в SPG 5.30 и новее. В SPG 5.10
  * (G10A-F30, "ROM SPG 5.10") ключа CFG-MSGOUT-UBX_SEC_SIG_UART1 нет, модуль отвечает NAK.
  * Включать (-DPURRGO_GNSS_SEC_SIG=1) только для модуля с прошивкой 5.30+; без него строка

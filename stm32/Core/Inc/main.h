@@ -77,9 +77,6 @@ void Error_Handler(void);
 #define Detect_SD_GPIO_Port GPIOB
 #define SD_CS_Pin GPIO_PIN_12
 #define SD_CS_GPIO_Port GPIOB
-#define GNSS_PPS_Pin GPIO_PIN_8
-#define GNSS_PPS_GPIO_Port GPIOA
-#define GNSS_PPS_EXTI_IRQn EXTI8_IRQn
 #define EINK_CS_Pin GPIO_PIN_7
 #define EINK_CS_GPIO_Port GPIOB
 #define EINK_DC_Pin GPIO_PIN_8

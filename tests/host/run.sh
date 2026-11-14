@@ -55,8 +55,6 @@ for t in tests/host/test_*.c; do
             extra="stm32/port/storage/sd_spi.c -Istm32/port/storage" ;;
         test_gnss_diag)
             extra="stm32/port/gnss/gnss_diag.c -Istm32/port/gnss" ;;
-        test_gnss_pps)
-            extra="stm32/port/gnss/gnss_pps.c -Istm32/port/gnss" ;;
         test_gnss_link)
             extra="stm32/port/gnss/gnss_link.c stm32/port/gnss/gnss_diag.c \
                 -Istm32/port/gnss" ;;

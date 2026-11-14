@@ -594,10 +594,11 @@ static void test_configure_frames(void)
     /*
      * VALSET: базовая, (набор систем), PVT, ODO, MON-RF, NAV-DOP, (SEC-SIG), (NAV-STATUS, NAV-SAT,
      * ITFM), одометр, динамика,
-     * (выключение NMEA), (PSM: no-off и mode); последним кадром - опрос версии.
+     * (выключение таймпульса), (выключение NMEA), (PSM: no-off и mode); последним кадром - опрос версии.
      */
     const int valsets = 7 + PURRGO_GNSS_SIGNAL_FRAME + PURRGO_GNSS_SEC_SIG + PURRGO_GNSS_DIAG_FRAMES +
-                        PURRGO_GNSS_PSM_FRAMES + PURRGO_GNSS_NMEA_OFF_FRAMES;
+                        PURRGO_GNSS_PSM_FRAMES + PURRGO_GNSS_NMEA_OFF_FRAMES +
+                        PURRGO_GNSS_TIMEPULSE_OFF_FRAMES;
     CHECK(g_cfg_count == valsets + 1);
 
     /* Все кадры, кроме последнего (опрос версии), - VALSET, слой PURRGO_GNSS_UBX_LAYERS. */
@@ -630,6 +631,14 @@ static void test_configure_frames(void)
 
     /* Модель динамики - отдельным кадром. */
     const int dyn = frame_with_key(0x20110021U);
+
+    /* Таймпульс (1PPS) выключен отдельным кадром из одного ключа сразу за моделью динамики. */
+    const int tp = frame_with_key(0x10050007U);
+#if PURRGO_GNSS_TIMEPULSE_OFF
+    CHECK(tp == dyn + 1 && valset_value(tp, 0x10050007U, &v) && v == 0 && g_cfg_len[tp] == 17);
+#else
+    CHECK(tp == -1);
+#endif
     CHECK(dop > rf && valset_value(dop, 0x20910039U, &v) && v == 1);
 
     /*
@@ -639,7 +648,7 @@ static void test_configure_frames(void)
      */
     const int noff = frame_with_key(0x10740002U);
 #if PURRGO_GNSS_NMEA_OFF
-    CHECK(noff == dyn + 1);
+    CHECK(noff == dyn + 1 + PURRGO_GNSS_TIMEPULSE_OFF_FRAMES);
     CHECK(valset_value(noff, 0x10740002U, &v) && v == 0);
     CHECK(g_cfg_len[noff] == 17);                       /* один ключ: никаких других изменений протоколов */
     CHECK(valset_value(0, 0x209100BBU, &v) && v == 1);  /* GGA в базовом кадре остаётся (запасной NMEA) */
@@ -689,7 +698,8 @@ static void test_configure_frames(void)
     const int mode   = frame_with_key(0x20D00001U);
     CHECK(frame_with_key(0x10D0000AU) == -1);
 #if PURRGO_GNSS_PSM_ACTIVE
-    CHECK(no_off == dyn + 1 + PURRGO_GNSS_NMEA_OFF_FRAMES && mode == no_off + 1 && mode == valsets - 1);
+    CHECK(no_off == dyn + 1 + PURRGO_GNSS_TIMEPULSE_OFF_FRAMES + PURRGO_GNSS_NMEA_OFF_FRAMES &&
+          mode == no_off + 1 && mode == valsets - 1);
     CHECK(valset_value(no_off, 0x10D00008U, &v) && v == 1);
     CHECK(!valset_value(no_off, 0x20D00001U, &v));
     CHECK(valset_value(mode, 0x20D00001U, &v) && v == (uint32_t)PURRGO_GNSS_PSM);
@@ -1306,16 +1316,16 @@ static void test_dop_and_pvt_summary(void)
     n = pvt_frame(&v, f, sizeof f);
     process(f, n, &s, 3000);
     CHECK(st->pvt_valid && st->pvt_fix_type == 3 && st->pvt_fix_ok && st->pvt_time_valid);
-    CHECK(st->pvt_num_sv == 11 && st->pvt_ms == 3000 && st->pvt_count == 1 && st->pvt_fix_ok_count == 1);
+    CHECK(st->pvt_num_sv == 11 && st->pvt_ms == 3000 && st->pvt_count == 1);
     v.fix_type = 0; v.flags = 0; v.valid = 0; v.num_sv = 0;
     n = pvt_frame(&v, f, sizeof f);
     process(f, n, &s, 4000);
     CHECK(st->pvt_fix_type == 0 && !st->pvt_fix_ok && !st->pvt_time_valid && st->pvt_num_sv == 0);
-    CHECK(st->pvt_count == 2 && st->pvt_fix_ok_count == 1);
+    CHECK(st->pvt_count == 2);
     v = good_pvt(); v.valid = 0x01; v.fix_type = 5; v.flags = 0;    /* время есть, позиции нет */
     n = pvt_frame(&v, f, sizeof f);
     process(f, n, &s, 5000);
-    CHECK(!st->pvt_fix_ok && st->pvt_fix_type == 5 && st->pvt_count == 3 && st->pvt_fix_ok_count == 1);
+    CHECK(!st->pvt_fix_ok && st->pvt_fix_type == 5 && st->pvt_count == 3);
 }
 
 #if PURRGO_GNSS_UBX
@@ -1341,7 +1351,7 @@ static void test_app_ubx_only(void)
     CHECK(s->hdop_100 == 95 && s->vdop_100 == 140 && s->pdop_100 == 170);
     CHECK(s->acc_valid && s->hacc_mm == 3500);
     CHECK(s->year == 26 && s->month == 10 && s->day == 19);
-    CHECK(purrgo_gnss_ubx_status()->pvt_fix_ok_count == 12);
+    CHECK(purrgo_gnss_ubx_status()->pvt_count >= 12);
 
     /* Решение пропало с потоком: таймаут по PVT (RMC нет вообще). */
     run_ticks(7000);

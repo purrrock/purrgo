@@ -134,16 +134,15 @@ typedef struct {
     /*
      * Сводка последнего UBX-NAV-PVT для монитора и диагностики (при выключенном NMEA других
      * источников состояния фикса нет). pvt_fix_ok - решение действительно (то же, что
-     * solution.valid), pvt_fix_ok_count - число таких PVT с запуска (сверка с 1PPS).
+     * solution.valid).
      */
     bool pvt_valid;
     uint8_t pvt_fix_type;        /* fixType: 0 нет, 2 2D, 3 3D, 4 GNSS+DR, 5 только время */
     bool pvt_fix_ok;
-    bool pvt_time_valid;         /* validTime: время известно (PPS уже мигает, позиции ещё может не быть) */
+    bool pvt_time_valid;         /* validTime: время известно (позиции ещё может не быть) */
     uint8_t pvt_num_sv;
     uint32_t pvt_ms;             /* время приёма (purrgo_system_time_ms) */
     uint32_t pvt_count;
-    uint32_t pvt_fix_ok_count;
 
     /* UBX-NAV-ODO */
     bool odo_valid;

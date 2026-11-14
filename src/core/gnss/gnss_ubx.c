@@ -574,7 +574,7 @@ bool purrgo_gnss_ubx_process_frame(uint8_t msg_class, uint8_t msg_id, const uint
             if (!purrgo_gnss_ubx_apply_pvt(payload, length, solution)) {
                 return false;
             }
-            /* Раз в несколько секунд: видно, есть ли время без позиции (PPS мигает уже по времени). */
+            /* Раз в несколько секунд: видно, есть ли время без позиции. */
             if (!s_pvt_logged || (uint32_t)(now_ms - s_pvt_logged_ms) >= PVT_LOG_INTERVAL_MS) {
                 s_pvt_logged = true;
                 s_pvt_logged_ms = now_ms;
@@ -590,9 +590,6 @@ bool purrgo_gnss_ubx_process_frame(uint8_t msg_class, uint8_t msg_id, const uint
             s_st.pvt_num_sv = payload[23];
             s_st.pvt_ms = now_ms;
             s_st.pvt_count++;
-            if (solution->valid) {
-                s_st.pvt_fix_ok_count++;
-            }
             purrgo_gnss_adapter_pvt_applied();
             return true;
         }

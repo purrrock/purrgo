@@ -70,7 +70,7 @@ purrgo/
 │       ├── app/            #   main-loop wrapper, system time, logger, hardware tests
 │       ├── input/          #   buttons
 │       ├── display/        #   display, E-Ink update queue, self-test
-│       ├── gnss/           #   UART+DMA input, link setup, diagnostics, 1PPS
+│       ├── gnss/           #   UART+DMA input, link setup, diagnostics
 │       ├── storage/        #   SD over SPI, FatFs (storage/fatfs), filesystem glue
 │       └── power/          #   supply, battery, PVD, Stop 2
 │
@@ -184,7 +184,7 @@ grouped by function (`app`, `input`, `display`, `gnss`, `storage`, `power`);
 * system time and logger (`system_time.c`, `purrgo_logger.c`);
 * power control (`power_stm32.c`);
 * GNSS link and diagnostics (HAL-free, host-tested, in `gnss/`): `gnss_link` (UART speed search and
-  switch 38400 -> 115200 with fallback), `gnss_pps` (1PPS statistics), `gnss_diag` (link state),
+  switch 38400 -> 115200 with fallback), `gnss_diag` (link state),
   `gnss_monitor.c` (periodic log report);
 * battery and supply monitoring: `battery_adc.c` (ADC1, VREFINT) and `supply_pvd.c` (PVD) in `power/`,
   the policy is in the portable `src/core/power/battery.c` and `supply.c`.

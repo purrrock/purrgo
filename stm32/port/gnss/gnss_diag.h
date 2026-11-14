@@ -63,7 +63,6 @@ typedef struct
     bool rmc_seen;
     bool rmc_valid;            /* статус A */
     uint32_t ubx_frames_ok;    /* кадры UBX с верной контрольной суммой (при выключенном NMEA - единственный признак связи) */
-    uint32_t rmc_valid_count;  /* число RMC со статусом A с момента старта (сверка с 1PPS) */
     uint8_t gsv_in_view[GNSS_DIAG_TALKERS];
     bool gsv_seen;
 

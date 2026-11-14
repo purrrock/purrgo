@@ -19,6 +19,7 @@
 | UBX-NAV-STATUS | `0x2091001B` | `spoofDetState` (флаги 2, биты 4..3) - спуфинг вместо SEC-SIG (`PURRGO_GNSS_NAV_STATUS`) |
 | UBX-NAV-SAT | `0x20910016` | C/N0 спутников решения (`svUsed`): средний и максимум (`PURRGO_GNSS_NAV_SAT`) |
 | CFG-ITFM-ENABLE | `0x1041000D` | не сообщение, а ключ: включает монитор помех, без него `jammingState` всегда 0 (`PURRGO_GNSS_ITFM`) |
+| CFG-TP-TP1_ENA | `0x10050007` | выключает таймпульс (1PPS и светодиод PPS модуля): прошивка его не использует (`PURRGO_GNSS_TIMEPULSE_OFF`) |
 | UBX-MON-VER | опрос | версия прошивки в лог |
 
 ## SIG и RF без SEC-SIG (SPG 5.10)
@@ -74,8 +75,7 @@ PVT. Число спутников "в поле зрения" (GSV) в мони�
   После выключения питания по EN модуль возвращается к заводской настройке (NMEA, 38400), и всё
   проходит заново (настройка хранится только в слое RAM, `PURRGO_GNSS_UBX_LAYERS`).
 - **Монитор** (`gnss_monitor`): связь определяется по кадрам UBX, состояние фикса - по PVT
-  (`UBX OK, no fix yet ...`, `FIX after ... s, sats used=..`); сверка с 1PPS идёт по числу PVT с
-  `fixOK` (`PVT-OK`) вместо RMC со статусом A.
+  (`UBX OK, no fix yet ...`, `FIX after ... s, sats used=..`).
 - **Разбор NMEA** в ядре остаётся: он нужен сборкам `PURRGO_GNSS_UBX=0`, модулю до настройки и запасному
   пути при NAK. В режиме без NMEA через него не проходит ни один байт после настройки.
 
@@ -88,16 +88,16 @@ HDOP/VDOP и запасной путь, после `PURRGO_GNSS_PVT_HOLD_EPOCHS`
 VALSET целиком или отклоняет целиком, поэтому NAK по одному кадру не отменяет остальные.
 Ответы ACK/NAK приходят в порядке отправки, поэтому отказ пишется в лог с именем группы:
 `GNSS: config "NAV-ODO" rejected by module (NAK)` (имена: `NMEA/rate`, `NAV-PVT`, `NAV-ODO`,
-`MON-RF`, `NAV-DOP`, `SEC-SIG`, `NAV-STATUS`, `NAV-SAT`, `ITFM`, `ODO enable/profile`, `DYNMODEL`, `NMEA off`). Сопоставление считается от последнего вызова
+`MON-RF`, `NAV-DOP`, `SEC-SIG`, `NAV-STATUS`, `NAV-SAT`, `ITFM`, `ODO enable/profile`, `DYNMODEL`, `TIMEPULSE off`, `NMEA off`). Сопоставление считается от последнего вызова
 настройки; поздний ответ на команду смены скорости UART (gnss_link) может сдвинуть счёт на один.
 
 ## Диагностика в логе
 
 - `GNSS: u-blox SW ... HW ...`, `FWVER`, `PROTVER` - ответ на опрос MON-VER.
 - `GNSS: PVT fixType=.. fixOK=.. sv=.. validTime=.. hAcc=.. mm pDOP=..` - раз в 5 с (уровень INFO):
-  видно, есть ли уже время без позиции. Мигание PPS-светодиода не означает 3D-фикс: по умолчанию
-  (`CFG-TP-LEN_TP1`=0, `CFG-TP-LEN_LOCK_TP1`=100 мс, `CFG-TP-USE_LOCKED_TP1`=1) импульс выдаётся, как
-  только приёмник синхронизировался по времени GNSS, и позиция для этого не нужна.
+  видно, есть ли уже время без позиции. Таймпульс (1PPS) выключен (`CFG-TP-TP1_ENA`=0); по заводской
+  настройке он выдаётся, как только приёмник синхронизировался по времени GNSS, позиция для этого не нужна,
+  поэтому мигание светодиода PPS не означало 3D-фикс.
 - Только в сборке Debug (`PURRGO_LOGD`, уровень 4), раз в 5 с и сразу при смене `jammingState`/`spoofDetState`:
   `GNSS: RF jam=.. ant=../.. noise=.. agc=.. cw=..`, `GNSS: STATUS gpsFix=.. flags=0x.. psm=.. spoof=..`,
   `GNSS: SAT listed=.. used=.. cno avg=.. max=.. dBHz`. По ним на железе видно, какие значения выдаёт
@@ -113,6 +113,7 @@ VALSET целиком или отклоняет целиком, поэтому N
 | `PURRGO_GNSS_ITFM` | 1 | 1 - включить монитор помех (`CFG-ITFM-ENABLE`), JAM из `MON-RF.jammingState` |
 | `PURRGO_GNSS_NAV_STATUS` | 1 | 1 - включить UBX-NAV-STATUS, SPF из `spoofDetState` |
 | `PURRGO_GNSS_NAV_SAT` | 1 | 1 - включить UBX-NAV-SAT, C/N0 в строке RF |
+| `PURRGO_GNSS_TIMEPULSE_OFF` | 1 | 1 - выключить таймпульс 1PPS (`CFG-TP-TP1_ENA` = 0, слой `PURRGO_GNSS_UBX_LAYERS`, после каждого включения модуля) |
 | `PURRGO_GNSS_DYNMODEL` | `PURRGO_GNSS_DYN_BICYCLE` (= Portable, 0) | `CFG-NAVSPG-DYNMODEL`; значения `PURRGO_GNSS_DYN_*` |
 | `PURRGO_GNSS_ODO_PROFILE` | `PURRGO_GNSS_ODO_CYCL` (1) | `CFG-ODO-PROFILE` |
 | `PURRGO_GNSS_TRACK_MAX_HACC_M` | 20 | точка с hAcc выше в трек не пишется |
