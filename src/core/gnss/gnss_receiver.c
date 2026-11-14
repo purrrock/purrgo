@@ -130,6 +130,7 @@ size_t purrgo_ubx_build_valset(uint8_t *out, size_t out_size, uint8_t layers,
 #define UBX_KEY_ODO_PROFILE          0x20220005U  /* E1: 0 RUN, 1 CYCL, 2 SWIM, 3 CAR */
 #define UBX_KEY_UART1OUTPROT_NMEA    0x10740002U  /* L: выдавать NMEA на UART1 (по умолчанию 1) */
 #define UBX_KEY_NAVSPG_DYNMODEL      0x20110021U  /* E1: модель динамики */
+#define UBX_KEY_TP_TP1_ENA           0x10050007U  /* L: таймпульс TP1 (1PPS); по умолчанию 1 */
 
 /*
  * Энергосбережение (PURRGO_GNSS_PSM, см. hardware_config.h): группа CFG-PM,
@@ -199,6 +200,9 @@ void purrgo_gnss_receiver_configure_ubx(purrgo_gnss_tx_fn tx)
         "ITFM",
 #endif
         "ODO enable/profile", "DYNMODEL",
+#if PURRGO_GNSS_TIMEPULSE_OFF
+        "TIMEPULSE off",
+#endif
 #if PURRGO_GNSS_NMEA_OFF
         "NMEA off",
 #endif
@@ -283,6 +287,15 @@ void purrgo_gnss_receiver_configure_ubx(purrgo_gnss_tx_fn tx)
 #endif
     send_valset(tx, odo, sizeof odo / sizeof odo[0]);
     send_valset(tx, dyn, sizeof dyn / sizeof dyn[0]);
+#if PURRGO_GNSS_TIMEPULSE_OFF
+    /*
+     * 4a. Таймпульс (1PPS) выключается: прошивка его не использует, а светодиод PPS модуля
+     * тратит ток. Отдельный кадр: при NAK остальная настройка не страдает.
+     */
+    static const purrgo_ubx_cfg_item_t tp_off = { UBX_KEY_TP_TP1_ENA, 0U };
+
+    send_valset(tx, &tp_off, 1U);
+#endif
 #endif
 
 #if PURRGO_GNSS_NMEA_OFF

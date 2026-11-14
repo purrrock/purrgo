@@ -10,19 +10,20 @@
 /*
  * Кадры настройки: базовая + (набор систем) + (PSM: два кадра) + при PURRGO_GNSS_UBX по VALSET
  * на PVT, ODO, MON-RF, NAV-DOP, (SEC-SIG), (NAV-STATUS, NAV-SAT, ITFM), одометр, модель динамики,
- * (выключение NMEA) и опрос MON-VER.
+ * (выключение таймпульса, NMEA) и опрос MON-VER.
  */
 #define EXPECTED_FRAMES (1 + PURRGO_GNSS_SIGNAL_FRAME + PURRGO_GNSS_PSM_FRAMES + \
                          (PURRGO_GNSS_UBX ? (7 + PURRGO_GNSS_SEC_SIG + PURRGO_GNSS_DIAG_FRAMES + \
-                                             PURRGO_GNSS_NMEA_OFF_FRAMES) : 0))
+                                             PURRGO_GNSS_NMEA_OFF_FRAMES + \
+                                             PURRGO_GNSS_TIMEPULSE_OFF_FRAMES) : 0))
 
-static char g_sent[16][128];
-static size_t g_sent_len[16];
+static char g_sent[24][128];
+static size_t g_sent_len[24];
 static int g_sent_count;
 
 static void fake_tx(const uint8_t *data, size_t len)
 {
-    if (g_sent_count < 16 && len < sizeof g_sent[0]) {
+    if (g_sent_count < 24 && len < sizeof g_sent[0]) {
         memcpy(g_sent[g_sent_count], data, len);
         g_sent[g_sent_count][len] = '\0';
         g_sent_len[g_sent_count] = len;

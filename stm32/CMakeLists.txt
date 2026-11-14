@@ -27,7 +27,7 @@ set(CMAKE_PROJECT_NAME PurrGO_STM32U5)
 #   app/      главный цикл-обёртка, системное время, логгер, аппаратные тесты
 #   input/    кнопки
 #   display/  дисплей, очередь обновлений E-Ink, самотест
-#   gnss/     UART+DMA, связь с модулем, диагностика, 1PPS
+#   gnss/     UART+DMA, связь с модулем, диагностика
 #   storage/  SD по SPI, FatFs, привязка ФС (storage/fatfs - сторонний код)
 #   power/    питание, батарея, PVD, Stop 2
 # CubeMX-файлы (Core/, Drivers/, startup) в port/ не входят.
