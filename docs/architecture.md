@@ -64,12 +64,10 @@ The main architectural boundaries are:
 
 ```text
 purrgo/
-├── apps/
-│   ├── emulator/           # PC emulator (SDL2)
-│   └── stm32/              # STM32U585 firmware
-│       ├── common/         # Platform adapters (Src, Inc, sd_spi, fatfs)
-│       └── PurrGO_STM32U5/ # CubeMX project (microSD over SPI2)
-│           └── Core/Src/   # MCU-specific glue (sd_card.c, gnss_io.c, power_stm32.c)
+├── emulator/               # PC emulator (SDL2, WebAssembly)
+├── stm32/                  # STM32U585 firmware: CubeMX project (microSD over SPI2)
+│   ├── common/             # Platform adapters (Src, Inc, sd_spi, fatfs)
+│   └── Core/Src/           # MCU-specific glue (sd_card.c, gnss_io.c, power_stm32.c)
 │
 ├── include/
 │   └── purrgo/             # Public interfaces
@@ -151,8 +149,8 @@ The PC environment is a development and validation platform, not a separate navi
 
 The STM32 platform adapters implement the interfaces declared in
 `include/purrgo/`. Code that does not depend on the CubeMX-generated peripheral
-setup lives in `apps/stm32/common/`; code tied to the MCU peripherals lives next
-to the CubeMX project (`apps/stm32/PurrGO_STM32U5/Core/Src/`):
+setup lives in `stm32/common/`; code tied to the MCU peripherals lives next
+to the CubeMX project (`stm32/Core/Src/`):
 
 * UART + DMA GNSS input (`gnss_io.c`: LPUART1_RX with an LPDMA1 linked-list circular
   channel; the ring-buffer logic is in the portable header
@@ -193,7 +191,7 @@ core (`src/core/gnss.c`, `gnss_adapter.c`).
 
 ## Emulator
 
-`apps/emulator/` is the PC application: it runs the portable core with an SDL2 window instead of
+`emulator/` is the PC application: it runs the portable core with an SDL2 window instead of
 the e-ink display and takes GNSS data from a mock generator or from a real receiver on a serial
 port. A typical data flow is:
 
@@ -217,7 +215,7 @@ portable core
 
 ## STM32
 
-`apps/stm32/` is the composition point for the final firmware.
+`stm32/` is the composition point for the final firmware.
 
 It connects:
 

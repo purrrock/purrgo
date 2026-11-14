@@ -4,7 +4,7 @@
 /*
  * Режимы аппаратного тестирования (замеры из TODO.md на реальном железе).
  *
- * Выбираются при сборке одним параметром CMake (см. PurrGO_STM32U5/CMakeLists.txt):
+ * Выбираются при сборке одним параметром CMake (см. stm32/CMakeLists.txt):
  *
  *     cmake --preset stm32u5-release -DPURRGO_HW_TEST=SD_SPEED
  *

@@ -23,8 +23,8 @@ endif()
 # в области видимости этой папки (и дочерних) имя переопределяется.
 set(CMAKE_PROJECT_NAME PurrGO_STM32U5)
 
-# Платформенные адаптеры STM32: apps/stm32/common/{Src,Inc}.
-get_filename_component(PURRGO_STM32_COMMON "${CMAKE_CURRENT_SOURCE_DIR}/../common" ABSOLUTE)
+# Платформенные адаптеры STM32: stm32/common/{Src,Inc}.
+get_filename_component(PURRGO_STM32_COMMON "${CMAKE_CURRENT_SOURCE_DIR}/common" ABSOLUTE)
 
 message(STATUS "Firmware target: ${CMAKE_PROJECT_NAME}")
 
