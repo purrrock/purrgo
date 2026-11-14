@@ -5,6 +5,7 @@
  */
 #include "purrgo/power.h"
 #include "purrgo/logger.h"
+#include "stop_mode.h"
 #include "main.h"
 #include "ff.h"
 
@@ -15,8 +16,35 @@ void purrgo_platform_storage_unmount(void)
     PURRGO_LOG("FatFs dismount\r\n");
 }
 
+/*
+ * 1 - POWER OFF через Stop 2 (пробуждение K1 -> сброс). 0 - Standby.
+ * Замеры (Release): Standby 5,17 мА, Stop 2 в читалке 2,75 мА на той же плате
+ * (GNSS отпаян). Причина лишних ~2,4 мА в Standby не найдена, поэтому пока Stop 2.
+ */
+#ifndef PURRGO_POWEROFF_STOP2
+#define PURRGO_POWEROFF_STOP2 1
+#endif
+
+/* Ждать отпускания K1 (таймаут 3 с) и дребезга: вход в сон с нажатой кнопкой не будит. */
+static void wait_k1_release(void)
+{
+    const uint32_t t0 = HAL_GetTick();
+    while ((HAL_GPIO_ReadPin(K1_GPIO_Port, K1_Pin) == GPIO_PIN_RESET) &&
+           ((HAL_GetTick() - t0) < 3000U))
+    {
+    }
+    HAL_Delay(30U);   /* дребезг отпускания */
+}
+
 void purrgo_platform_enter_standby(void)
 {
+#if (PURRGO_POWEROFF_STOP2 != 0)
+    wait_k1_release();
+    /* Не возвращается. false - Stop 2 недоступен, ниже обычный Standby. */
+    (void)purrgo_stop2_power_off();
+    PURRGO_LOG("POWEROFF: Stop 2 unavailable, falling back to Standby\r\n");
+#endif
+
     /*
      * Пробуждение кнопкой K1 (PA0 = WKUP1): кнопка замыкает вывод на GND,
      * поэтому активный уровень - низкий. Подтяжки к питанию на плате нет,

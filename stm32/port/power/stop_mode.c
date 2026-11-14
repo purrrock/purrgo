@@ -301,3 +301,58 @@ bool purrgo_stop2_enter(uint32_t max_ms)
 
     return true;
 }
+
+bool purrgo_stop2_power_off(void)
+{
+    if (!s_ready)
+    {
+        return false;
+    }
+
+    PURRGO_LOG("Stop2: power off, wake by K1 only (then reset)\r\n");
+
+    GPIO_InitTypeDef gpio = {0};
+    gpio.Pin = K1_Pin;
+    gpio.Mode = GPIO_MODE_IT_FALLING;
+    gpio.Pull = GPIO_PULLUP;
+    gpio.Speed = GPIO_SPEED_FREQ_LOW;
+
+    __disable_irq();
+    HAL_SuspendTick();
+    SCB->ICSR = SCB_ICSR_PENDSTCLR_Msk | SCB_ICSR_PENDSVCLR_Msk;
+
+    /* Будить должна только K1: снять все линии NVIC (таймер LPTIM1 тоже). */
+    for (uint32_t i = 0U; i < (sizeof(NVIC->ICER) / sizeof(NVIC->ICER[0])); i++)
+    {
+        NVIC->ICER[i] = 0xFFFFFFFFU;
+        NVIC->ICPR[i] = 0xFFFFFFFFU;
+    }
+
+    for (;;)
+    {
+        HAL_GPIO_Init(K1_GPIO_Port, &gpio);
+        __HAL_GPIO_EXTI_CLEAR_FALLING_IT(K1_Pin);
+        NVIC_ClearPendingIRQ(exti_irqn(K1_Pin));
+        NVIC_EnableIRQ(exti_irqn(K1_Pin));
+
+        /* Спад до настройки EXTI не разбудит: если K1 удерживается, ждём отпускания. */
+        if (HAL_GPIO_ReadPin(K1_GPIO_Port, K1_Pin) == GPIO_PIN_RESET)
+        {
+            for (volatile uint32_t d = 0U; d < 200000U; d++)
+            {
+            }
+            continue;
+        }
+
+        __DSB();
+        HAL_PWREx_EnterSTOP2Mode(PWR_STOPENTRY_WFI);
+        __ISB();
+
+        /* Разбудил именно спад на K1 - перезапуск (как выход из Standby). */
+        if (__HAL_GPIO_EXTI_GET_FALLING_IT(K1_Pin) != 0U)
+        {
+            NVIC_SystemReset();
+        }
+        /* Иначе пробуждение ложное: снова спать. */
+    }
+}
