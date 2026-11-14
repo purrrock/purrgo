@@ -254,12 +254,53 @@
 /*
  * UBX-SEC-SIG (глушение и спуфинг) есть только в SPG 5.30 и новее. В SPG 5.10
  * (G10A-F30, "ROM SPG 5.10") ключа CFG-MSGOUT-UBX_SEC_SIG_UART1 нет, модуль отвечает NAK.
- * Включать (-DPURRGO_GNSS_SEC_SIG=1) только для модуля с прошивкой 5.30+; в UI строка
- * SIG при выключенном сообщении показывает "---".
+ * Включать (-DPURRGO_GNSS_SEC_SIG=1) только для модуля с прошивкой 5.30+; без него строка
+ * SIG строится из MON-RF и NAV-STATUS (см. PURRGO_GNSS_ITFM ниже).
  */
 #ifndef PURRGO_GNSS_SEC_SIG
 #define PURRGO_GNSS_SEC_SIG 0
 #endif
+
+/*
+ * Замена SEC-SIG и контроля антенны для SPG 5.10 (G10A-F30), только при PURRGO_GNSS_UBX = 1.
+ * Каждый флаг: 1 - включить, 0 - выключить (для замеров тока и отладки).
+ *
+ *   PURRGO_GNSS_ITFM       CFG-ITFM-ENABLE = 1: монитор помех модуля (по умолчанию выключен).
+ *                          Состояние берётся из UBX-MON-RF.flags.jammingState (в строке SIG: JAM).
+ *                          Опорный спектр монитор снимает после первого хорошего фикса, до этого
+ *                          состояние "--" (неизвестно).
+ *   PURRGO_GNSS_NAV_STATUS UBX-NAV-STATUS (16 байт/с): flags2.spoofDetState (в строке SIG: SPF).
+ *                          Детектор спуфинга в модуле включён всегда.
+ *   PURRGO_GNSS_NAV_SAT    UBX-NAV-SAT (8 + 12 * N байт/с): средний C/N0 спутников решения
+ *                          (в строке RF: CN). Модуль выдаёт все известные спутники, в том числе
+ *                          не используемые в решении.
+ *
+ * При PURRGO_GNSS_SEC_SIG = 1 (SPG 5.30+) в строке SIG остаётся SEC-SIG, а эти источники
+ * используются только пока SEC-SIG не приходит.
+ * Контроль антенны (antStatus в MON-RF) у G10A-F30 недоступен: нужны внешняя схема и свободные
+ * выводы PIO, а у модуля 6 выводов и встроенная антенна. Поле всегда "DONTKNOW", поэтому в строке
+ * RF вместо него C/N0; SHORT/OPEN выводятся только если модуль их сообщит.
+ */
+#ifndef PURRGO_GNSS_ITFM
+#define PURRGO_GNSS_ITFM 1
+#endif
+#ifndef PURRGO_GNSS_NAV_STATUS
+#define PURRGO_GNSS_NAV_STATUS 1
+#endif
+#ifndef PURRGO_GNSS_NAV_SAT
+#define PURRGO_GNSS_NAV_SAT 1
+#endif
+#if (PURRGO_GNSS_ITFM != 0 && PURRGO_GNSS_ITFM != 1) || \
+    (PURRGO_GNSS_NAV_STATUS != 0 && PURRGO_GNSS_NAV_STATUS != 1) || \
+    (PURRGO_GNSS_NAV_SAT != 0 && PURRGO_GNSS_NAV_SAT != 1)
+#error "PURRGO_GNSS_ITFM, PURRGO_GNSS_NAV_STATUS and PURRGO_GNSS_NAV_SAT must be 0 or 1"
+#endif
+/* Кадры настройки VALSET (по одному на ключ), только для приёмника с UBX-расширениями. */
+#define PURRGO_GNSS_ITFM_FRAMES       (PURRGO_GNSS_UBX && PURRGO_GNSS_ITFM)
+#define PURRGO_GNSS_NAV_STATUS_FRAMES (PURRGO_GNSS_UBX && PURRGO_GNSS_NAV_STATUS)
+#define PURRGO_GNSS_NAV_SAT_FRAMES    (PURRGO_GNSS_UBX && PURRGO_GNSS_NAV_SAT)
+#define PURRGO_GNSS_DIAG_FRAMES \
+    (PURRGO_GNSS_ITFM_FRAMES + PURRGO_GNSS_NAV_STATUS_FRAMES + PURRGO_GNSS_NAV_SAT_FRAMES)
 
 /*
  * Модель динамики приёмника (CFG-NAVSPG-DYNMODEL), только при PURRGO_GNSS_UBX = 1.

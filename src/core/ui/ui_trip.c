@@ -217,7 +217,7 @@ void ui_trip_render_grid(gfx_context_t* gfx) {
  */
 static void ui_trip_render_ubx(gfx_context_t* gfx, int16_t val_x)
 {
-    static const char* const k_jam[] = { "--", "OK", "WARN!" };
+    static const char* const k_jam[] = { "--", "OK", "WARN!", "CRIT!" };
     static const char* const k_spoof[] = { "--", "OK", "IND!", "AFF!!" };
     const purrgo_trip_info_t* t = purrgo_trip_computer_info();
     char buf[48];
@@ -243,7 +243,7 @@ static void ui_trip_render_ubx(gfx_context_t* gfx, int16_t val_x)
     pad_to(buf, sizeof(buf), TRIP_VALUE_CHARS);
     gfx_draw_string(gfx, val_x, TRIP_ROW_Y(TRIP_ROW_ACC), buf);
 
-    /* SIG: глушение и спуфинг (UBX-SEC-SIG). */
+    /* SIG: глушение и спуфинг (SEC-SIG, в SPG 5.10 - MON-RF и NAV-STATUS). */
     if (t->sig_valid) {
         const char* jam = (t->jam_state < (sizeof k_jam / sizeof k_jam[0])) ? k_jam[t->jam_state] : "--";
         const char* spf = (t->spoof_state < (sizeof k_spoof / sizeof k_spoof[0])) ? k_spoof[t->spoof_state] : "--";
@@ -255,23 +255,37 @@ static void ui_trip_render_ubx(gfx_context_t* gfx, int16_t val_x)
     pad_to(buf, sizeof(buf), TRIP_VALUE_CHARS);
     gfx_draw_string(gfx, val_x, TRIP_ROW_Y(TRIP_ROW_SIG), buf);
 
-    /* RF: CW-помеха и AGC в процентах, состояние антенны (UBX-MON-RF). */
-    if (t->rf_valid) {
-        const char* ant = "--";
+    /*
+     * RF: CW-помеха и AGC в процентах (UBX-MON-RF), средний C/N0 спутников решения, дБ-Гц
+     * (UBX-NAV-SAT). У G10A-F30 состояние антенны недоступно (нет схемы контроля), поэтому
+     * оно выводится только как тревога SHORT!/OPEN!, если модуль всё же его сообщит.
+     */
+    if (t->rf_valid || t->cn0_valid) {
+        char rf[16];
+        char cn[8];
+        const char* ant = "";
 
-        if (t->ant_status == PURRGO_UBX_ANT_OK) {
-            ant = "OK";
-        } else if (t->ant_status == PURRGO_UBX_ANT_SHORT) {
-            ant = "SHORT!";
-        } else if (t->ant_status == PURRGO_UBX_ANT_OPEN) {
-            ant = "OPEN!";
+        if (t->rf_valid) {
+            purrgo_snprintf(rf, sizeof(rf), "CW%u AGC%u", (unsigned int)t->cw_percent,
+                            (unsigned int)t->agc_percent);
+            if (t->ant_status == PURRGO_UBX_ANT_SHORT) {
+                ant = " SHORT!";
+            } else if (t->ant_status == PURRGO_UBX_ANT_OPEN) {
+                ant = " OPEN!";
+            }
+        } else {
+            purrgo_snprintf(rf, sizeof(rf), "CW-- AGC--");
         }
-        purrgo_snprintf(buf, sizeof(buf), "CW%u AGC%u A:%s", (unsigned int)t->cw_percent,
-                        (unsigned int)t->agc_percent, ant);
+        if (t->cn0_valid) {
+            purrgo_snprintf(cn, sizeof(cn), "CN%u", (unsigned int)t->cn0_dbhz);
+        } else {
+            purrgo_snprintf(cn, sizeof(cn), "CN--");
+        }
+        purrgo_snprintf(buf, sizeof(buf), "%s %s%s", rf, cn, ant);
     } else {
         purrgo_snprintf(buf, sizeof(buf), "---");
     }
-    pad_to(buf, sizeof(buf), TRIP_VALUE_CHARS);
+    pad_to(buf, sizeof(buf), TRIP_VALUE_CHARS + 2U);    /* "CW100 AGC100 CN99 SHORT!" - 24 знака */
     gfx_draw_string(gfx, val_x, TRIP_ROW_Y(TRIP_ROW_RF), buf);
 }
 #endif

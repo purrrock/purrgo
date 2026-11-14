@@ -122,6 +122,9 @@ size_t purrgo_ubx_build_valset(uint8_t *out, size_t out_size, uint8_t layers,
 #define UBX_KEY_MSGOUT_ODO_UART1     0x2091007FU  /* U1: UBX-NAV-ODO */
 #define UBX_KEY_MSGOUT_MON_RF_UART1  0x2091035AU  /* U1: UBX-MON-RF */
 #define UBX_KEY_MSGOUT_DOP_UART1     0x20910039U  /* U1: UBX-NAV-DOP (HDOP/VDOP/PDOP) */
+#define UBX_KEY_MSGOUT_STATUS_UART1  0x2091001BU  /* U1: UBX-NAV-STATUS (spoofDetState) */
+#define UBX_KEY_MSGOUT_SAT_UART1     0x20910016U  /* U1: UBX-NAV-SAT (C/N0 спутников) */
+#define UBX_KEY_ITFM_ENABLE          0x1041000DU  /* L: монитор помех (jammingState в MON-RF); по умолчанию выключен */
 #define UBX_KEY_MSGOUT_SEC_SIG_UART1 0x20910635U  /* U1: UBX-SEC-SIG */
 #define UBX_KEY_ODO_USE_ODO          0x10220001U  /* L: одометр (по умолчанию выключен) */
 #define UBX_KEY_ODO_PROFILE          0x20220005U  /* E1: 0 RUN, 1 CYCL, 2 SWIM, 3 CAR */
@@ -186,6 +189,15 @@ void purrgo_gnss_receiver_configure_ubx(purrgo_gnss_tx_fn tx)
 #if PURRGO_GNSS_SEC_SIG
         "SEC-SIG",
 #endif
+#if PURRGO_GNSS_NAV_STATUS
+        "NAV-STATUS",
+#endif
+#if PURRGO_GNSS_NAV_SAT
+        "NAV-SAT",
+#endif
+#if PURRGO_GNSS_ITFM
+        "ITFM",
+#endif
         "ODO enable/profile", "DYNMODEL",
 #if PURRGO_GNSS_NMEA_OFF
         "NMEA off",
@@ -232,6 +244,15 @@ void purrgo_gnss_receiver_configure_ubx(purrgo_gnss_tx_fn tx)
     static const purrgo_ubx_cfg_item_t msg_rf  = { UBX_KEY_MSGOUT_MON_RF_UART1, 1U };
     /* HDOP/VDOP/PDOP: без NMEA (GGA/GSA) их источник - UBX-NAV-DOP. */
     static const purrgo_ubx_cfg_item_t msg_dop = { UBX_KEY_MSGOUT_DOP_UART1,    1U };
+#if PURRGO_GNSS_NAV_STATUS
+    static const purrgo_ubx_cfg_item_t msg_status = { UBX_KEY_MSGOUT_STATUS_UART1, 1U };
+#endif
+#if PURRGO_GNSS_NAV_SAT
+    static const purrgo_ubx_cfg_item_t msg_sat = { UBX_KEY_MSGOUT_SAT_UART1, 1U };
+#endif
+#if PURRGO_GNSS_ITFM
+    static const purrgo_ubx_cfg_item_t itfm = { UBX_KEY_ITFM_ENABLE, 1U };
+#endif
     /* 3. Одометр: без USE_ODO UBX-NAV-ODO отдаёт нули. */
     static const purrgo_ubx_cfg_item_t odo[] = {
         { UBX_KEY_ODO_USE_ODO, 1U },
@@ -249,6 +270,16 @@ void purrgo_gnss_receiver_configure_ubx(purrgo_gnss_tx_fn tx)
 #if PURRGO_GNSS_SEC_SIG
     static const purrgo_ubx_cfg_item_t msg_sig = { UBX_KEY_MSGOUT_SEC_SIG_UART1, 1U };
     send_valset(tx, &msg_sig, 1U);
+#endif
+    /* Замена SEC-SIG и контроля антенны в SPG 5.10 (см. hardware_config.h). */
+#if PURRGO_GNSS_NAV_STATUS
+    send_valset(tx, &msg_status, 1U);
+#endif
+#if PURRGO_GNSS_NAV_SAT
+    send_valset(tx, &msg_sat, 1U);
+#endif
+#if PURRGO_GNSS_ITFM
+    send_valset(tx, &itfm, 1U);
 #endif
     send_valset(tx, odo, sizeof odo / sizeof odo[0]);
     send_valset(tx, dyn, sizeof dyn / sizeof dyn[0]);

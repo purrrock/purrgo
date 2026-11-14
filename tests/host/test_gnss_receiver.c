@@ -9,11 +9,12 @@
 
 /*
  * Кадры настройки: базовая + (набор систем) + (PSM: два кадра) + при PURRGO_GNSS_UBX по VALSET
- * на PVT, ODO, MON-RF, NAV-DOP, (SEC-SIG), одометр, модель динамики, (выключение NMEA) и опрос
- * MON-VER.
+ * на PVT, ODO, MON-RF, NAV-DOP, (SEC-SIG), (NAV-STATUS, NAV-SAT, ITFM), одометр, модель динамики,
+ * (выключение NMEA) и опрос MON-VER.
  */
 #define EXPECTED_FRAMES (1 + PURRGO_GNSS_SIGNAL_FRAME + PURRGO_GNSS_PSM_FRAMES + \
-                         (PURRGO_GNSS_UBX ? (7 + PURRGO_GNSS_SEC_SIG + PURRGO_GNSS_NMEA_OFF_FRAMES) : 0))
+                         (PURRGO_GNSS_UBX ? (7 + PURRGO_GNSS_SEC_SIG + PURRGO_GNSS_DIAG_FRAMES + \
+                                             PURRGO_GNSS_NMEA_OFF_FRAMES) : 0))
 
 static char g_sent[16][128];
 static size_t g_sent_len[16];
