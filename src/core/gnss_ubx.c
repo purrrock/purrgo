@@ -134,6 +134,9 @@ static int32_t rd_i32(const uint8_t *p)
 #define PVT_LENGTH             92U
 #define ODO_LENGTH             20U
 #define RF_BLOCK_LENGTH        24U
+#define STATUS_LENGTH          16U
+#define SAT_HEADER_LENGTH      8U
+#define SAT_BLOCK_LENGTH       12U
 #define VER_LOG_INTERVAL_MS    10000U   /* повторные ответы на опрос в лог не дублируются */
 #define ODO_RESET_HOLD_MS      1500U    /* столько кадров ODO после RESETODO считаются устаревшими */
 
@@ -165,6 +168,28 @@ static uint32_t s_cfg_nak_mask;
 static bool s_pvt_logged;
 static uint32_t s_pvt_logged_ms;
 
+/*
+ * Диагностика MON-RF, NAV-STATUS и NAV-SAT (только PURRGO_LOGD, то есть в сборке Debug):
+ * строка раз в PVT_LOG_INTERVAL_MS и сразу при смене состояния глушения/спуфинга - так на
+ * железе видно, какие значения выдаёт именно эта прошивка модуля.
+ */
+static bool s_rf_logged;
+static uint32_t s_rf_logged_ms;
+static bool s_status_logged;
+static uint32_t s_status_logged_ms;
+static bool s_sat_logged;
+static uint32_t s_sat_logged_ms;
+
+static bool log_due(bool *logged, uint32_t *logged_ms, uint32_t now_ms)
+{
+    if (*logged && (uint32_t)(now_ms - *logged_ms) < PVT_LOG_INTERVAL_MS) {
+        return false;
+    }
+    *logged = true;
+    *logged_ms = now_ms;
+    return true;
+}
+
 void purrgo_gnss_ubx_init(void)
 {
     memset(&s_st, 0, sizeof s_st);
@@ -182,6 +207,12 @@ void purrgo_gnss_ubx_init(void)
     s_cfg_nak_mask = 0U;
     s_pvt_logged = false;
     s_pvt_logged_ms = 0U;
+    s_rf_logged = false;
+    s_rf_logged_ms = 0U;
+    s_status_logged = false;
+    s_status_logged_ms = 0U;
+    s_sat_logged = false;
+    s_sat_logged_ms = 0U;
 }
 
 void purrgo_gnss_ubx_cfg_begin(const char *const *names, uint8_t count)
@@ -392,7 +423,10 @@ static void process_mon_rf(const uint8_t *p, uint16_t length, uint32_t now_ms)
         return;
     }
     const uint8_t *b = &p[4];
+    const uint8_t jam = (uint8_t)(b[1] & 0x03U);
+    const bool jam_changed = s_st.rf_valid && jam != s_st.rf_jam_state;
 
+    s_st.rf_jam_state = jam;
     s_st.ant_status = b[2];
     s_st.ant_power = b[3];
     s_st.noise_per_ms = rd_u16(&b[12]);
@@ -400,6 +434,81 @@ static void process_mon_rf(const uint8_t *p, uint16_t length, uint32_t now_ms)
     s_st.cw_suppression = b[16];
     s_st.rf_valid = true;
     s_st.rf_ms = now_ms;
+
+    if (log_due(&s_rf_logged, &s_rf_logged_ms, now_ms) || jam_changed) {
+        PURRGO_LOGD("GNSS: RF jam=%u ant=%u/%u noise=%u agc=%u cw=%u\r\n", (unsigned)jam,
+                    (unsigned)b[2], (unsigned)b[3], (unsigned)s_st.noise_per_ms,
+                    (unsigned)s_st.agc_cnt, (unsigned)s_st.cw_suppression);
+    }
+}
+
+/*
+ * UBX-NAV-STATUS (16 байт). flags2 (байт 7): биты 1..0 psmState, биты 4..3 spoofDetState
+ * (0 неизвестно или выключено, 1 нет, 2 признаки, 3 несколько признаков).
+ */
+static void process_nav_status(const uint8_t *p, uint16_t length, uint32_t now_ms)
+{
+    if (length != STATUS_LENGTH) {
+        return;
+    }
+    const uint8_t spoof = (uint8_t)((p[7] >> 3) & 0x03U);
+    const bool spoof_changed = s_st.status_valid && spoof != s_st.status_spoof_state;
+
+    s_st.status_spoof_state = spoof;
+    s_st.status_valid = true;
+    s_st.status_ms = now_ms;
+
+    if (log_due(&s_status_logged, &s_status_logged_ms, now_ms) || spoof_changed) {
+        PURRGO_LOGD("GNSS: STATUS gpsFix=%u flags=0x%02X psm=%u spoof=%u\r\n", (unsigned)p[4],
+                    (unsigned)p[5], (unsigned)(p[7] & 0x03U), (unsigned)spoof);
+    }
+}
+
+/*
+ * UBX-NAV-SAT: 8 байт заголовка (iTOW, version = 1, numSvs) и по 12 байт на спутник
+ * (gnssId, svId, cno, elev, azim, prRes, flags). Считаются спутники с svUsed (бит 3 flags)
+ * и ненулевым cno: средний и максимальный C/N0, дБ-Гц.
+ */
+static void process_nav_sat(const uint8_t *p, uint16_t length, uint32_t now_ms)
+{
+    if (length < SAT_HEADER_LENGTH || p[4] != 1U) {
+        return;
+    }
+    const uint8_t listed = p[5];
+
+    if (length != (uint16_t)(SAT_HEADER_LENGTH + (uint16_t)listed * SAT_BLOCK_LENGTH)) {
+        return;
+    }
+
+    uint32_t sum = 0U;
+    uint8_t used = 0U;
+    uint8_t cno_max = 0U;
+
+    for (uint8_t i = 0U; i < listed; i++) {
+        const uint8_t *sv = &p[SAT_HEADER_LENGTH + (uint16_t)i * SAT_BLOCK_LENGTH];
+        const uint8_t cno = sv[2];
+
+        if ((sv[8] & 0x08U) == 0U || cno == 0U) {      /* flags (X4, младший байт): svUsed */
+            continue;
+        }
+        sum += cno;
+        used++;
+        if (cno > cno_max) {
+            cno_max = cno;
+        }
+    }
+
+    s_st.sat_listed = listed;
+    s_st.sat_used = used;
+    s_st.sat_cno_avg = (used != 0U) ? (uint8_t)((sum + used / 2U) / used) : 0U;
+    s_st.sat_cno_max = cno_max;
+    s_st.sat_valid = true;
+    s_st.sat_ms = now_ms;
+
+    if (log_due(&s_sat_logged, &s_sat_logged_ms, now_ms)) {
+        PURRGO_LOGD("GNSS: SAT listed=%u used=%u cno avg=%u max=%u dBHz\r\n", (unsigned)listed,
+                    (unsigned)used, (unsigned)s_st.sat_cno_avg, (unsigned)cno_max);
+    }
 }
 
 /* Поле фиксированной длины -> C-строка (в кадре строки заканчиваются нулём, но не обязаны). */
@@ -487,6 +596,10 @@ bool purrgo_gnss_ubx_process_frame(uint8_t msg_class, uint8_t msg_id, const uint
             process_odo(payload, length, now_ms);
         } else if (msg_id == PURRGO_UBX_ID_NAV_DOP) {
             apply_dop(payload, length, solution);
+        } else if (msg_id == PURRGO_UBX_ID_NAV_STATUS) {
+            process_nav_status(payload, length, now_ms);
+        } else if (msg_id == PURRGO_UBX_ID_NAV_SAT) {
+            process_nav_sat(payload, length, now_ms);
         }
     } else if (msg_class == PURRGO_UBX_CLASS_SEC && msg_id == PURRGO_UBX_ID_SEC_SIG) {
         process_sec_sig(payload, length, now_ms);

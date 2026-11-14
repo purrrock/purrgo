@@ -105,6 +105,51 @@ static size_t rf_frame(uint8_t ant, uint16_t agc, uint8_t cw, uint8_t *out, size
     return make_frame(out, size, 0x0A, 0x38, p, 28);
 }
 
+/* MON-RF с jammingState (flags, биты 1..0): так у SPG 5.10, где SEC-SIG нет. */
+static size_t rf_frame_jam(uint8_t jam, uint8_t ant, uint16_t agc, uint8_t cw, uint8_t *out, size_t size)
+{
+    uint8_t p[28];
+    memset(p, 0, sizeof p);
+    p[1] = 1;
+    p[4 + 1] = (uint8_t)(jam & 0x03U);
+    p[4 + 2] = ant; p[4 + 3] = 1;
+    w16(&p[4 + 12], 90); w16(&p[4 + 14], agc); p[4 + 16] = cw;
+    return make_frame(out, size, 0x0A, 0x38, p, 28);
+}
+
+/* NAV-STATUS: gpsFix = 3, flags2 - psmState (биты 1..0) и spoofDetState (биты 4..3). */
+static size_t status_frame(uint8_t spoof, uint8_t psm, uint8_t *out, size_t size)
+{
+    uint8_t p[16];
+    memset(p, 0, sizeof p);
+    p[4] = 3; p[5] = 0x0D;
+    p[7] = (uint8_t)((psm & 0x03U) | ((spoof & 0x03U) << 3));
+    return make_frame(out, size, 0x01, 0x03, p, 16);
+}
+
+typedef struct { uint8_t cno; bool used; } sat_t;
+
+/* NAV-SAT: n спутников; version и длина задаются отдельно, чтобы проверить отбраковку. */
+static size_t sat_frame_raw(const sat_t *sv, uint8_t n, uint8_t version, uint16_t length,
+                            uint8_t *out, size_t size)
+{
+    uint8_t p[8 + 12 * 64];
+    memset(p, 0, sizeof p);
+    p[4] = version; p[5] = n;
+    for (uint8_t i = 0; i < n && i < 64U; i++) {
+        uint8_t *b = &p[8 + 12 * i];
+        b[0] = (uint8_t)((i & 1U) ? 2U : 0U); b[1] = (uint8_t)(i + 1U);
+        b[2] = sv[i].cno; b[3] = 45; w16(&b[4], 90);
+        b[8] = sv[i].used ? 0x0FU : 0x01U;           /* qualityInd + svUsed, либо только поиск */
+    }
+    return make_frame(out, size, 0x01, 0x35, p, length);
+}
+
+static size_t sat_frame(const sat_t *sv, uint8_t n, uint8_t *out, size_t size)
+{
+    return sat_frame_raw(sv, n, 1, (uint16_t)(8U + 12U * n), out, size);
+}
+
 static void nmea(char *out, size_t size, const char *body)
 {
     unsigned cs = 0;
@@ -547,11 +592,12 @@ static void test_configure_frames(void)
     purrgo_gnss_receiver_configure_ubx(cfg_tx);
 
     /*
-     * VALSET: базовая, (набор систем), PVT, ODO, MON-RF, NAV-DOP, (SEC-SIG), одометр, динамика,
+     * VALSET: базовая, (набор систем), PVT, ODO, MON-RF, NAV-DOP, (SEC-SIG), (NAV-STATUS, NAV-SAT,
+     * ITFM), одометр, динамика,
      * (выключение NMEA), (PSM: no-off и mode); последним кадром - опрос версии.
      */
-    const int valsets = 7 + PURRGO_GNSS_SIGNAL_FRAME + PURRGO_GNSS_SEC_SIG + PURRGO_GNSS_PSM_FRAMES +
-                        PURRGO_GNSS_NMEA_OFF_FRAMES;
+    const int valsets = 7 + PURRGO_GNSS_SIGNAL_FRAME + PURRGO_GNSS_SEC_SIG + PURRGO_GNSS_DIAG_FRAMES +
+                        PURRGO_GNSS_PSM_FRAMES + PURRGO_GNSS_NMEA_OFF_FRAMES;
     CHECK(g_cfg_count == valsets + 1);
 
     /* Все кадры, кроме последнего (опрос версии), - VALSET, слой PURRGO_GNSS_UBX_LAYERS. */
@@ -603,6 +649,20 @@ static void test_configure_frames(void)
     CHECK(dyn > 0 && dyn != od);
     CHECK(valset_value(dyn, 0x20110021U, &v) && v == (uint32_t)PURRGO_GNSS_DYNMODEL);
 
+    /*
+     * Замена SEC-SIG для SPG 5.10: NAV-STATUS (spoofDetState), NAV-SAT (C/N0) и монитор помех ITFM
+     * (jammingState в MON-RF). Каждый - своим кадром из одного ключа, после NAV-DOP и до одометра.
+     */
+    const int stat = frame_with_key(0x2091001BU);
+    const int sat  = frame_with_key(0x20910016U);
+    const int itfm = frame_with_key(0x1041000DU);
+    CHECK((stat > 0) == (PURRGO_GNSS_NAV_STATUS != 0));
+    CHECK((sat > 0) == (PURRGO_GNSS_NAV_SAT != 0));
+    CHECK((itfm > 0) == (PURRGO_GNSS_ITFM != 0));
+    if (stat > 0) { CHECK(stat > dop && stat < od && g_cfg_len[stat] == 17 && valset_value(stat, 0x2091001BU, &v) && v == 1); }
+    if (sat > 0)  { CHECK(sat > dop && sat < od && g_cfg_len[sat] == 17 && valset_value(sat, 0x20910016U, &v) && v == 1); }
+    if (itfm > 0) { CHECK(itfm > dop && itfm < od && g_cfg_len[itfm] == 17 && valset_value(itfm, 0x1041000DU, &v) && v == 1); }
+
     /* Набор систем: SBAS и BeiDou выключаются вместе с PSM, GLONASS - только при SIG_GPS_GAL. */
     const int sbas = frame_with_key(0x10310020U);
     const int bds  = frame_with_key(0x10310022U);
@@ -648,6 +708,9 @@ static void test_configure_frames(void)
     CHECK(strcmp(purrgo_gnss_ubx_cfg_name((uint8_t)odo), "NAV-ODO") == 0);
     CHECK(strcmp(purrgo_gnss_ubx_cfg_name((uint8_t)rf), "MON-RF") == 0);
     CHECK(strcmp(purrgo_gnss_ubx_cfg_name((uint8_t)dop), "NAV-DOP") == 0);
+    if (stat > 0) { CHECK(strcmp(purrgo_gnss_ubx_cfg_name((uint8_t)stat), "NAV-STATUS") == 0); }
+    if (sat > 0)  { CHECK(strcmp(purrgo_gnss_ubx_cfg_name((uint8_t)sat), "NAV-SAT") == 0); }
+    if (itfm > 0) { CHECK(strcmp(purrgo_gnss_ubx_cfg_name((uint8_t)itfm), "ITFM") == 0); }
 #if PURRGO_GNSS_NMEA_OFF
     CHECK(strcmp(purrgo_gnss_ubx_cfg_name((uint8_t)noff), "NMEA off") == 0);
 #endif
@@ -1101,12 +1164,17 @@ static void test_trip_snapshot_and_screen(void)
     n = odo_frame(12340, f, sizeof f); feed_bytes(f, n);
     n = sec_frame(PURRGO_UBX_JAM_NONE, PURRGO_UBX_SPOOF_NONE, f, sizeof f); feed_bytes(f, n);
     n = rf_frame(PURRGO_UBX_ANT_OK, 3000, 30, f, sizeof f); feed_bytes(f, n);
+    {
+        const sat_t sv[] = { { 36, true }, { 34, true }, { 20, false } };
+        n = sat_frame(sv, 3, f, sizeof f); feed_bytes(f, n);
+    }
 
     /* Снимок обновляется на тике приложения (раз в секунду), а не по приходу байтов. */
     CHECK(!t->dist_valid);
     run_ticks(1000);
     CHECK(t->dist_valid && t->dist_m == 12340);
     CHECK(t->acc_valid && t->hacc_dm == 35 && t->sig_valid && t->rf_valid);
+    CHECK(t->cn0_valid && t->cn0_dbhz == 35);              /* (36 + 34) / 2 */
 
     /* Экран Trip computer: строки UBX рисуются со значениями и без них (проверка под ASan). */
     purrgo_gnss_solution_t sol = *purrgo_app_get_gnss_solution();
@@ -1121,6 +1189,75 @@ static void test_trip_snapshot_and_screen(void)
     run_ticks(6000);                                      /* кадры перестали приходить: данные протухли */
     CHECK(!t->dist_valid && !t->sig_valid && !t->rf_valid);
     ui_trip_render_values(&g, &sol, NULL);
+}
+
+/*
+ * SPG 5.10: SEC-SIG нет, строка SIG строится из MON-RF.jammingState и NAV-STATUS.spoofDetState;
+ * средний C/N0 из NAV-SAT показывается с гистерезисом 1 дБ, чтобы E-Ink не обновлялся из-за шума.
+ */
+static void test_trip_sig_fallback_and_cn0(void)
+{
+    purrgo_gnss_solution_t s;
+    uint8_t f[256];
+    size_t n;
+
+    memset(&s, 0, sizeof s);
+    purrgo_gnss_ubx_init();
+    purrgo_trip_computer_init();
+    const purrgo_trip_info_t *t = purrgo_trip_computer_info();
+
+    g_now = 10000;
+    n = rf_frame_jam(PURRGO_UBX_JAM_WARNING, PURRGO_UBX_ANT_DONTKNOW, 3000, 30, f, sizeof f);
+    process(f, n, &s, g_now);
+    purrgo_trip_computer_update(&s);
+    CHECK(t->sig_valid && t->jam_state == PURRGO_UBX_JAM_WARNING && t->spoof_state == PURRGO_UBX_SPOOF_UNKNOWN);
+    CHECK(t->rf_valid && t->ant_status == PURRGO_UBX_ANT_DONTKNOW && !t->cn0_valid);
+    CHECK(purrgo_trip_computer_take_changed());
+
+    n = status_frame(PURRGO_UBX_SPOOF_NONE, 0, f, sizeof f);
+    process(f, n, &s, g_now);
+    purrgo_trip_computer_update(&s);
+    CHECK(t->sig_valid && t->jam_state == PURRGO_UBX_JAM_WARNING && t->spoof_state == PURRGO_UBX_SPOOF_NONE);
+    CHECK(purrgo_trip_computer_take_changed());
+
+    /* Пришёл SEC-SIG (SPG 5.30+): он главнее. */
+    n = sec_frame(PURRGO_UBX_JAM_NONE, PURRGO_UBX_SPOOF_AFFIRMED, f, sizeof f);
+    process(f, n, &s, g_now);
+    purrgo_trip_computer_update(&s);
+    CHECK(t->jam_state == PURRGO_UBX_JAM_NONE && t->spoof_state == PURRGO_UBX_SPOOF_AFFIRMED);
+    CHECK(purrgo_trip_computer_take_changed());
+
+    /* C/N0: 36 показывается; 37 и 35 в пределах 1 дБ - без изменений снимка; 38 - новое значение. */
+    {
+        sat_t sv[2];
+        const uint8_t steps[] = { 36, 37, 35, 38 };
+        const bool changes[]  = { true, false, false, true };
+        const uint8_t shown[] = { 36, 36, 36, 38 };
+
+        for (size_t i = 0; i < sizeof steps; i++) {
+            g_now += 100;
+            sv[0].cno = sv[1].cno = steps[i];
+            sv[0].used = sv[1].used = true;
+            n = sat_frame(sv, 2, f, sizeof f); process(f, n, &s, g_now);
+            n = sec_frame(PURRGO_UBX_JAM_NONE, PURRGO_UBX_SPOOF_AFFIRMED, f, sizeof f); process(f, n, &s, g_now);
+            n = rf_frame_jam(PURRGO_UBX_JAM_WARNING, PURRGO_UBX_ANT_DONTKNOW, 3000, 30, f, sizeof f); process(f, n, &s, g_now);
+            purrgo_trip_computer_update(&s);
+            CHECK(t->cn0_valid && t->cn0_dbhz == shown[i]);
+            CHECK(purrgo_trip_computer_take_changed() == changes[i]);
+        }
+
+        /* Нет спутников в решении: C/N0 не показывается. */
+        g_now += 100;
+        sv[0].cno = 30; sv[0].used = false;
+        n = sat_frame(sv, 1, f, sizeof f); process(f, n, &s, g_now);
+        purrgo_trip_computer_update(&s);
+        CHECK(!t->cn0_valid && purrgo_trip_computer_take_changed());
+    }
+
+    /* Сообщения перестали приходить: всё устаревает. */
+    g_now += PURRGO_UBX_STALE_MS + 1U;
+    purrgo_trip_computer_update(&s);
+    CHECK(!t->sig_valid && !t->rf_valid && !t->cn0_valid);
 }
 #endif
 
@@ -1223,12 +1360,99 @@ static void test_app_ubx_only(void)
 }
 #endif
 
+/* ------------------------------------------------------------------------- */
+/* SPG 5.10: jammingState из MON-RF, NAV-STATUS, NAV-SAT                      */
+/* ------------------------------------------------------------------------- */
+
+static void test_diag_messages(void)
+{
+    purrgo_gnss_solution_t s;
+    uint8_t f[900];
+    size_t n;
+
+    memset(&s, 0, sizeof s);
+    purrgo_gnss_ubx_init();
+    const purrgo_gnss_ubx_status_t *st = purrgo_gnss_ubx_status();
+    CHECK(!st->status_valid && !st->sat_valid && st->rf_jam_state == 0);
+
+    /* MON-RF.flags.jammingState: 0 - монитор выключен или не готов, 1 ok, 2 предупреждение, 3 критично. */
+    n = rf_frame_jam(PURRGO_UBX_JAM_CRITICAL, PURRGO_UBX_ANT_DONTKNOW, 3000, 30, f, sizeof f);
+    process(f, n, &s, 1000);
+    CHECK(st->rf_valid && st->rf_jam_state == PURRGO_UBX_JAM_CRITICAL && st->ant_status == PURRGO_UBX_ANT_DONTKNOW);
+    n = rf_frame_jam(PURRGO_UBX_JAM_NONE, PURRGO_UBX_ANT_DONTKNOW, 3000, 30, f, sizeof f);
+    process(f, n, &s, 1100);
+    CHECK(st->rf_jam_state == PURRGO_UBX_JAM_NONE);
+    n = rf_frame(PURRGO_UBX_ANT_OK, 3000, 30, f, sizeof f);          /* flags = 0 */
+    process(f, n, &s, 1200);
+    CHECK(st->rf_jam_state == PURRGO_UBX_JAM_UNKNOWN && st->agc_cnt == 3000);
+
+    /* NAV-STATUS: spoofDetState - биты 4..3 flags2 (байт 7), psmState - биты 1..0. */
+    n = status_frame(PURRGO_UBX_SPOOF_INDICATED, 2, f, sizeof f);
+    process(f, n, &s, 1000);
+    CHECK(st->status_valid && st->status_spoof_state == PURRGO_UBX_SPOOF_INDICATED && st->status_ms == 1000);
+    n = status_frame(PURRGO_UBX_SPOOF_NONE, 0, f, sizeof f);
+    process(f, n, &s, 1500);
+    CHECK(st->status_spoof_state == PURRGO_UBX_SPOOF_NONE && st->status_ms == 1500);
+    {   /* неверная длина игнорируется */
+        uint8_t pl[15] = { 0 };
+        n = make_frame(f, sizeof f, 0x01, 0x03, pl, sizeof pl);
+        process(f, n, &s, 2000);
+        CHECK(st->status_ms == 1500);
+    }
+
+    /* NAV-SAT: среднее и максимум по спутникам с svUsed и ненулевым cno (30, 36, 40). */
+    {
+        const sat_t sv[] = { { 30, true }, { 36, true }, { 40, true }, { 20, false }, { 0, true }, { 44, false } };
+        n = sat_frame(sv, 6, f, sizeof f);
+        process(f, n, &s, 1000);
+        CHECK(st->sat_valid && st->sat_listed == 6 && st->sat_used == 3);
+        CHECK(st->sat_cno_avg == 35 && st->sat_cno_max == 40 && st->sat_ms == 1000);   /* 106 / 3 = 35,3 */
+
+        n = sat_frame_raw(sv, 6, 0, 8U + 12U * 6U, f, sizeof f);                       /* версия не 1 */
+        process(f, n, &s, 2000);
+        CHECK(st->sat_ms == 1000);
+        n = sat_frame_raw(sv, 6, 1, 8U + 12U * 5U, f, sizeof f);                       /* длина не сходится */
+        process(f, n, &s, 2000);
+        CHECK(st->sat_ms == 1000);
+    }
+    {
+        const sat_t none[] = { { 20, false }, { 25, false } };                         /* нет спутников решения */
+        n = sat_frame(none, 2, f, sizeof f);
+        process(f, n, &s, 3000);
+        CHECK(st->sat_valid && st->sat_listed == 2 && st->sat_used == 0 && st->sat_cno_avg == 0 && st->sat_cno_max == 0);
+        n = sat_frame(none, 0, f, sizeof f);                                           /* пустой список */
+        process(f, n, &s, 3100);
+        CHECK(st->sat_listed == 0 && st->sat_used == 0);
+    }
+
+    /* Крупный кадр (64 спутника, 776 байт payload) проходит разборщик целиком и обрабатывается. */
+    {
+        sat_t many[64];
+        purrgo_ubx_parser_t p;
+
+        for (int i = 0; i < 64; i++) {
+            many[i].cno = (uint8_t)(30 + (i % 10));                                    /* 30..39, сумма 2196 */
+            many[i].used = true;
+        }
+        CHECK(8U + 12U * 64U <= PURRGO_UBX_MAX_PAYLOAD);
+        n = sat_frame(many, 64, f, sizeof f);
+        CHECK(n == 8U + 8U + 12U * 64U);
+        purrgo_ubx_parser_init(&p);
+        CHECK(feed_all(&p, f, n) == PURRGO_UBX_FEED_FRAME);
+        CHECK(p.msg_class == 0x01 && p.msg_id == 0x35 && p.length == 8U + 12U * 64U);
+        (void)purrgo_gnss_ubx_process_frame(p.msg_class, p.msg_id, p.payload, p.length, &s, 4000);
+        CHECK(st->sat_listed == 64 && st->sat_used == 64 && st->sat_cno_max == 39);
+        CHECK(st->sat_cno_avg == 34);                                                  /* 2196 / 64 = 34,3 */
+    }
+}
+
 int main(void)
 {
     test_parser();
     test_pvt_mapping();
     test_pvt_over_nmea();
     test_status_messages();
+    test_diag_messages();
     test_dop_and_pvt_summary();
     test_trip_distance();
     test_configure_frames();
@@ -1240,6 +1464,7 @@ int main(void)
     test_app_new_track_resets_odo();
     test_trip_info_changes();
     test_trip_snapshot_and_screen();
+    test_trip_sig_fallback_and_cn0();
 #endif
     return test_finish("test_gnss_ubx");
 }

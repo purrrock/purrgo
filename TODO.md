@@ -325,7 +325,11 @@
 - [ ] Нет `NAK` в логе (`GNSS: module rejected UBX class 0x06 id 0x8A`): иначе какой-то из четырёх кадров VALSET модуль отклонил.
 - [ ] `TRP:` растёт при движении и обнуляется при начале записи нового трека; сравнить с длиной трека по GPX.
 - [ ] `ACC:` (hAcc) и порог `PURRGO_GNSS_TRACK_MAX_HACC_M` (20 м, подобран без данных): сверить по `pg:hacc` в записанных треках (`tools/track-analyze/analyze_diag.py`).
-- [ ] `SIG:`/`RF:` не дают ложных тревог (JAM/SPF) на обычном приёме; уточнить, нужно ли включать детекторы (`CFG-SEC-*`), если `JAM --`/`SPF --`.
+- [ ] `SIG:`/`RF:` не дают ложных тревог (JAM/SPF) на обычном приёме. В SPG 5.10 SEC-SIG нет: JAM из `MON-RF.jammingState` (нужен `CFG-ITFM-ENABLE`, кадр `ITFM`), SPF из `NAV-STATUS.spoofDetState`, вместо антенны C/N0 из `NAV-SAT` (см. `docs/gnss-ubx.md`). В Debug-логе строки `GNSS: RF/STATUS/SAT`.
+  - [ ] **[HW]** После первого фикса `JAM` становится `OK` (не `--`); если `jam=0` постоянно при включённом ITFM, проверить NAK группы `ITFM` и `CFG-ITFM-ANTSETTING`.
+  - [ ] **[HW]** `SPF`: `spoof=0` постоянно - поле не заполняется в ROM 5.10, тогда убрать SPF из строки или оставить `--`.
+  - [ ] **[HW]** Нет ли NAK групп `NAV-STATUS`, `NAV-SAT`, `ITFM`; нет ли пропусков кадров NAV-SAT (число спутников в логе `listed`, лимит буфера 64).
+  - [ ] **[HW]** Ток: сравнить средний ток GNSS и всей платы с `-DPURRGO_GNSS_ITFM=0 -DPURRGO_GNSS_NAV_STATUS=0 -DPURRGO_GNSS_NAV_SAT=0` и с включёнными, в PSMCT (`docs/measurements/Current`). Если разница заметна, оставить выключенным то, что её даёт (скорее всего ITFM).
 - [ ] Модель динамики: Portable (по умолчанию) против Pedestrian на реальной езде; велосипедной модели у приёмника нет (`BIKE` = мотоцикл, в даташите G10A-F30 его нет).
 - [x] Gpx в Garmin BaseCamp/Connect: скорость и курс читаются из `gpxtpx:TrackPointExtension` v2.
 

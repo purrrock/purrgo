@@ -8,7 +8,9 @@
  *   UBX-NAV-DOP   (0x01 0x04)  HDOP/VDOP/PDOP (вместо NMEA GSA/GGA);
  *   UBX-NAV-ODO   (0x01 0x09)  дистанция с последнего сброса;
  *   UBX-SEC-SIG   (0x27 0x09)  глушение и спуфинг;
- *   UBX-MON-RF    (0x0A 0x38)  уровень помех, антенна;
+ *   UBX-MON-RF    (0x0A 0x38)  уровень помех, jammingState, антенна;
+ *   UBX-NAV-STATUS (0x01 0x03) spoofDetState (замена SEC-SIG в SPG 5.10);
+ *   UBX-NAV-SAT   (0x01 0x35)  C/N0 спутников решения;
  *   UBX-MON-VER   (0x0A 0x04)  версия прошивки (ответ на опрос);
  *   UBX-ACK-NAK   (0x05 0x00)  отказ приёмника (в лог).
  * Модуль не зависит от платформы: отправка команд идёт через purrgo_gnss_write()
@@ -32,7 +34,9 @@ extern "C" {
 #define PURRGO_UBX_CLASS_SEC  0x27U
 #define PURRGO_UBX_ID_ACK_NAK 0x00U
 #define PURRGO_UBX_ID_ACK_ACK 0x01U
+#define PURRGO_UBX_ID_NAV_STATUS 0x03U
 #define PURRGO_UBX_ID_NAV_DOP 0x04U
+#define PURRGO_UBX_ID_NAV_SAT 0x35U
 #define PURRGO_UBX_ID_NAV_PVT 0x07U
 #define PURRGO_UBX_ID_NAV_ODO 0x09U
 #define PURRGO_UBX_ID_NAV_RESETODO 0x10U
@@ -40,13 +44,18 @@ extern "C" {
 #define PURRGO_UBX_ID_MON_RF  0x38U
 #define PURRGO_UBX_ID_SEC_SIG 0x09U
 
-/* Длиннее - кадр пропускается (MON-VER с десятком extension ~ 340 байт). */
-#define PURRGO_UBX_MAX_PAYLOAD 384U
+/*
+ * Длиннее - кадр пропускается. UBX-NAV-SAT: 8 + 12 * N байт, N - число известных приёмнику
+ * спутников (GPS + Galileo + QZSS + ... может быть за 40); запас до N = 64 (776 байт).
+ * MON-VER с десятком extension ~ 340 байт.
+ */
+#define PURRGO_UBX_MAX_PAYLOAD 800U
 
 /* Состояния SEC-SIG (значения полей протокола). */
 #define PURRGO_UBX_JAM_UNKNOWN   0U
 #define PURRGO_UBX_JAM_NONE      1U   /* глушения нет */
 #define PURRGO_UBX_JAM_WARNING   2U   /* глушение обнаружено */
+#define PURRGO_UBX_JAM_CRITICAL  3U   /* MON-RF: помеха и нет фикса */
 #define PURRGO_UBX_SPOOF_UNKNOWN  0U
 #define PURRGO_UBX_SPOOF_NONE     1U
 #define PURRGO_UBX_SPOOF_INDICATED 2U /* признаки спуфинга */
@@ -158,7 +167,22 @@ typedef struct {
     uint16_t noise_per_ms;
     uint16_t agc_cnt;            /* 0..8191 (100 %) */
     uint8_t cw_suppression;      /* 0 - нет CW-помехи, 255 - сильная */
+    uint8_t rf_jam_state;        /* flags.jammingState, PURRGO_UBX_JAM_*; 0 - монитор выключен или
+                                  * ещё не готов; в версиях с SEC-SIG всегда 0 (SPG 5.10: работает) */
     uint32_t rf_ms;
+
+    /* UBX-NAV-STATUS */
+    bool status_valid;
+    uint8_t status_spoof_state;  /* flags2.spoofDetState, PURRGO_UBX_SPOOF_*; 0 - неизвестно */
+    uint32_t status_ms;
+
+    /* UBX-NAV-SAT: сводка по спутникам, которые используются в решении (svUsed). */
+    bool sat_valid;
+    uint8_t sat_listed;          /* спутников в сообщении (известные приёмнику) */
+    uint8_t sat_used;            /* из них в решении */
+    uint8_t sat_cno_avg;         /* средний C/N0 используемых, дБ-Гц; 0 - нет используемых */
+    uint8_t sat_cno_max;
+    uint32_t sat_ms;
 
     /* UBX-MON-VER */
     bool ver_valid;
