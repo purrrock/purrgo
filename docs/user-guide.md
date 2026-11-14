@@ -21,7 +21,7 @@ PC14, PC15 (см. [`PurrGO_STM32U585_PINOUT.md`](../PurrGO_STM32U585_PINOUT.md))
 CENTER (долгое K3) возвращает автоследование и ставит маркёр GNSS в центр карты. Пока автоследование выключено (карта сдвинута
 кнопками), в центре карты рисуется перекрестие: это точка для WAYPOINT > MAP CENTER.
 
-Слои карты включаются в меню MAP LAYERS (порядок отрисовки и стиль - [`map-rendering.md`](map-rendering.md)): LANDUSE, WATER (вместе
+Слои карты включаются в меню MAP LAYERS (порядок отрисовки и стиль - [`architecture.md`](architecture.md#layer-drawing-order)): LANDUSE, WATER (вместе
 с линейными водными объектами), LANDUSE LABELS, WATER LABELS, ROADS, POI, POI LABELS, ROUTE, WAYPOINT, TRACK. Цель навигации рисуется
 иконкой цели вместо прицела.
 
