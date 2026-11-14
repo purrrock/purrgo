@@ -20,10 +20,35 @@ git submodule update --init --recursive
 | `win-mingw-debug`, `win-mingw-release` | PC-эмулятор (SDL2) | Windows, MSYS2 ucrt64 (`C:/msys64/ucrt64`) |
 | `linux-gcc-debug`, `linux-gcc-release` | PC-эмулятор (SDL2) | Linux, GCC, Ninja, `libsdl2-dev` |
 | `linux-gcc-test` | Только ядро + host-тесты, ASan/UBSan (без SDL2) | Linux, GCC, Ninja |
+| `macos-debug`, `macos-release` | PC-эмулятор (SDL2) | macOS (Intel и Apple Silicon), Apple clang, Ninja, Homebrew `sdl2` |
 | `stm32u5-debug`, `stm32u5-release` | Прошивка STM32U585 | `arm-none-eabi-gcc` в `PATH`, Ninja |
 | `web-release` | Эмулятор в браузере (WebAssembly) | Emscripten, см. раздел «Web-эмулятор» ниже |
 
 Пресеты, неподходящие для текущей ОС, в списке не показываются.
+
+### Эмулятор на macOS
+
+Нужны Xcode Command Line Tools и Homebrew-пакеты:
+
+```sh
+xcode-select --install
+brew install cmake ninja sdl2
+git submodule update --init --recursive
+cmake --preset macos-release
+cmake --build --preset macos-release
+```
+
+Эмулятор ищет карты, книги и маршруты по относительным путям `../../../../tests/data/...`, поэтому
+запускать его нужно из каталога сборки (`tests/data` в git не хранится, см. `.gitignore`):
+
+```sh
+mkdir -p tests/data/maps tests/data/books tests/data/routes tests/data/waypts
+# карта: содержимое PURRGO/MAPS/<имя>/ из zip действия Build map -> tests/data/maps/<имя>/
+cp tests/host/data/sample.pgb tests/data/books/
+cd out/build/macos-release/emulator && ./purrgo_emulator
+```
+
+Кнопки K1-K4 - клавиши 1-4 (или мышь по кнопкам в окне).
 
 ### Visual Studio Code
 

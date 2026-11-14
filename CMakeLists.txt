@@ -8,6 +8,7 @@ cmake_minimum_required(VERSION 3.22)
 #
 #   win-mingw-debug / win-mingw-release  — PC-эмулятор, Windows (MSYS2 ucrt64)
 #   linux-gcc-debug / linux-gcc-release  — PC-эмулятор, Linux
+#   macos-debug     / macos-release      — PC-эмулятор, macOS (Intel и Apple Silicon)
 #   stm32u5-debug   / stm32u5-release    — прошивка STM32U585 (arm-none-eabi-gcc)
 #
 # Платформу задаёт кэш-переменная PURRGO_PLATFORM (pc | stm32u5), которую
