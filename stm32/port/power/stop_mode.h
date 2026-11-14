@@ -32,4 +32,13 @@ bool purrgo_stop2_init(void);
  */
 bool purrgo_stop2_enter(uint32_t max_ms);
 
+/*
+ * POWER OFF через Stop 2 вместо Standby (замеры: Standby 5,17 мА против 2,75 мА
+ * в Stop 2 при той же плате). Будит только K1 (спад), после пробуждения -
+ * NVIC_SystemReset(): запуск как после Standby. При успехе не возвращается.
+ * false - Stop 2 недоступен (purrgo_stop2_init() не вызывался или завершился
+ * ошибкой): вызывающий должен перейти в Standby.
+ */
+bool purrgo_stop2_power_off(void);
+
 #endif /* PURRGO_STOP_MODE_H */
