@@ -1,17 +1,9 @@
 {
     "cmake.useCMakePresets": "always",
-    "cmake.cmakePath": "cube-cmake",
-    "cmake.configureArgs": [
-        "-DCMAKE_COMMAND=cube-cmake"
-    ],
+    "cmake.cmakePath": "/opt/local/bin/cmake",
     "cmake.preferredGenerators": [
         "Ninja"
     ],
     "cmake.copyCompileCommands": "${workspaceFolder}/compile_commands.json",
-    "stm32cube-ide-clangd.path": "cube",
-    "stm32cube-ide-clangd.arguments": [
-        "starm-clangd",
-        "--query-driver=${env:CUBE_BUNDLE_PATH}/gnu-tools-for-stm32/14.3.1+st.2/bin/arm-none-eabi-gcc*",
-        "--query-driver=${env:CUBE_BUNDLE_PATH}/gnu-tools-for-stm32/14.3.1+st.2/bin/arm-none-eabi-g++*"
-    ]
+    "C_Cpp.default.compilerPath": "/opt/local/bin/arm-none-eabi-gcc"
 }
