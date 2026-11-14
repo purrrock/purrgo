@@ -106,7 +106,7 @@ PGB хранит текст (а не растровые изображения �
 Таблица PurrGO-256 описана в `docs/font-encoding.md`; её единый
 источник для компьютерных инструментов --- `_PGO_CHAR_MAP` в
 `tools/map-compiler/purrgo_models.py`, прошивка использует копию в
-`src/core/pgo_text.c` (сверка: `tests/check_pgo_text_table.py`).
+`src/core/book/pgo_text.c` (сверка: `tests/check_pgo_text_table.py`).
 Конвертер книг таблицу не дублирует, а импортирует.
 
 ### Представление строк
@@ -510,8 +510,8 @@ name="cover">` или `properties="cover-image"` и теги `<img src>` и SVG
 -   `include/purrgo/font5x7.h` --- объявление встроенного шрифта
     `font5x7[256][5]`.
 -   `docs/font-encoding.md` --- таблица кодировки PurrGO-256.
--   `src/core/pgo_text.c` --- преобразование Unicode/UTF-8 в PurrGO-256.
--   `include/purrgo/pgb.h`, `src/core/pgb.c` --- чтение PGB, проверка
+-   `src/core/book/pgo_text.c` --- преобразование Unicode/UTF-8 в PurrGO-256.
+-   `include/purrgo/pgb.h`, `src/core/book/pgb.c` --- чтение PGB, проверка
     заголовка, индекса, страниц (текст и картинки) и декодер LZ4
     `pgb_lz4_decode`; там же константы геометрии `PGB_SCREEN_*`,
     `PGB_LINE_PITCH_PX`, `PGB_TEXT_TOP_PX`, `PGB_IMG_WINDOW_*`.

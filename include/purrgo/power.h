@@ -3,7 +3,7 @@
 
 /**
  * Initiates the system power-off sequence (implemented in the portable core,
- * src/core/power.c). Order:
+ * src/core/power/power.c). Order:
  *   1. render the final "POWER OFF" screen into the framebuffer;
  *   2. stop the track logger (flush and close the track file);
  *   3. switch the GNSS receiver off (purrgo_gnss_power_off(), EN low);

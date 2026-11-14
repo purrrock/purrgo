@@ -36,7 +36,7 @@
 #define PURRGO_WPT_LIST_MAX 64
 #endif
 
-/* Номер иконки цели навигации в purrgo_poi_icons (src/core/purrgo_poi_icons.c). */
+/* Номер иконки цели навигации в purrgo_poi_icons (src/core/map/purrgo_poi_icons.c). */
 #ifndef PURRGO_WPT_TARGET_ICON
 #define PURRGO_WPT_TARGET_ICON PURRGO_UI_ICON_WPT_TARGET
 #endif

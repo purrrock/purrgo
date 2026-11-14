@@ -1,5 +1,5 @@
 /*
- * Host-тесты поиска по книге (src/core/book_search.c, поиск в book_reader.c,
+ * Host-тесты поиска по книге (src/core/book/book_search.c, поиск в book_reader.c,
  * ввод запроса на экранной клавиатуре, экран ui_book.c):
  *   - сопоставление: регистр, Е/Ё, фраза через строки и отступы, перенос "-", граница
  *     страницы, границы поиска, устойчивость к произвольным данным (ASan);
@@ -26,7 +26,7 @@
 #include "purrgo/ui/ui_dirty.h"
 #include "purrgo/pgo_text.h"
 #include "purrgo/track_logger.h"
-#include "ui_book.h"
+#include "ui/ui_book.h"
 #include "fake_fs.h"
 #include "fake_power.h"
 #include "test_common.h"

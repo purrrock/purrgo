@@ -1,5 +1,5 @@
 # Статический анализ ядра (src/core, src/platform/pc). Запуск:
-#   clang-tidy -p out/build/linux-gcc-test src/core/*.c
+#   clang-tidy -p out/build/linux-gcc-test src/core/*/*.c
 # Набор осознанно узкий: только проверки, находящие реальные дефекты (UB, выход за
 # границы, неинициализированные данные). Стилевые проверки не включены.
 Checks: >

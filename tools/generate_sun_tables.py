@@ -3,7 +3,7 @@ import math
 import os
 
 # Пути для сохранения сгенерированных файлов
-OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "..", "src", "core")
+OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "..", "src", "core", "nav")
 H_FILE = os.path.join(OUTPUT_DIR, "sun_tables.h")
 C_FILE = os.path.join(OUTPUT_DIR, "sun_tables.c")
 

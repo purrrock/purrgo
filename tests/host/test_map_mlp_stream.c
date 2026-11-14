@@ -8,7 +8,7 @@
  */
 #include <stdlib.h>
 #include <string.h>
-#include "map_mlp.h"
+#include "map/map_mlp.h"
 #include "purrgo/fs_hal.h"
 #include "fake_fs.h"
 #include "test_common.h"

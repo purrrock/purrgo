@@ -16,7 +16,7 @@
 #include "purrgo/sun.h"
 #include "purrgo/track_logger.h"
 #include "purrgo/ui/ui_dirty.h"
-#include "ui_trip.h"
+#include "ui/ui_trip.h"
 #include "fake_fs.h"
 #include "test_common.h"
 

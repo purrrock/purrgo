@@ -268,7 +268,7 @@ U+00C7  Ç ─┴──> E4
 
 FatFs отдаёт имена в UTF-8 (`FF_LFN_UNICODE 2`; CP866 не содержит І, і, Ґ, ґ).
 Перед выводом на дисплей имя перекодируется функцией `purrgo_utf8_to_pgo()`
-(`src/core/pgo_text.c`) по той же таблице, что `_PGO_CHAR_MAP` в
+(`src/core/book/pgo_text.c`) по той же таблице, что `_PGO_CHAR_MAP` в
 `tools/map-compiler/purrgo_models.py` (сверка: `tests/check_pgo_text_table.py`).
 Символы вне таблицы выводятся как `?`. Само имя (для открытия файла и записи в
 `PURRGO.CFG`) остаётся в UTF-8.

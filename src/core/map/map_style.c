@@ -1,4 +1,4 @@
-// file: src/core/map_style.c
+// file: src/core/map/map_style.c
 
 #include "purrgo/map_style.h"
 

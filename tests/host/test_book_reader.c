@@ -1,5 +1,5 @@
 /*
- * Host-тесты режима чтения электронных книг (src/core/book_reader.c, ui_book.c,
+ * Host-тесты режима чтения электронных книг (src/core/book/book_reader.c, ui_book.c,
  * интеграция в app_fsm.c).
  *
  * Проверяется:
@@ -31,7 +31,7 @@
 #include "purrgo/pc_display_stats.h"
 #include "purrgo/pgb.h"
 #include "purrgo/track_logger.h"
-#include "ui_book.h"
+#include "ui/ui_book.h"
 #include "purrgo/ui/ui_dirty.h"
 #include "fake_fs.h"
 #include "fake_power.h"

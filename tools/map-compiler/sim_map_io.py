@@ -3,7 +3,7 @@
 """
 sim_map_io.py - оценка нагрузки на SD-карту при отрисовке одного экрана карты.
 
-Повторяет обход src/core/map.c + map_idx.c + map_mlp.c на готовых файлах
+Повторяет обход src/core/map/map.c + map_idx.c + map_mlp.c на готовых файлах
 карты (roads/landuse/pois .idx/.mlp/.db) и считает:
   - сколько секторов (512 Б) прошивка читает с SD (кэш-промахи LRU на 32 сектора);
   - сколько из них подряд идущие, а сколько случайные;
@@ -35,7 +35,7 @@ LRU_ENTRIES = 32                      # fs_hal_stm32.c
 PER_METER_1E7 = 90                    # PURRGO_1E7_PER_METER (≈ 89.93)
 MAX_PARTS, MAX_POINTS = 32, 2000
 MAX_DEPTH = 32
-# Feature codes, у которых в прошивке есть стиль линии/полигона (src/core/map_style.c).
+# Feature codes, у которых в прошивке есть стиль линии/полигона (src/core/map/map_style.c).
 # Диапазоны: 0..31 roads, 32..63 waterways, 64..95 water, 96..127 landuse, 128..191 POI.
 STYLED_CODES = frozenset(
     list(range(1, 8)) +      # ROAD_*, RAILWAY

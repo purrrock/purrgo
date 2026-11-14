@@ -15,7 +15,7 @@ rc=0
 
 CFLAGS="-std=c11 -D_DEFAULT_SOURCE -g -fsanitize=address,undefined -fno-sanitize-recover=undefined \
     -Wall -Wextra -Wno-unused-parameter -DTEST_DATA_DIR=\"tests/host/data\" \
-    -Iinclude -Isrc/core -Isrc/core/ui -Ithird_party/minmea -Itests/host"
+    -Iinclude -Isrc/core -Ithird_party/minmea -Itests/host"
 COMMON="src/platform/pc/display_hal.c src/platform/pc/purrgo_logger.c \
     tests/host/fake_fs.c tests/host/fake_power.c"
 
@@ -26,7 +26,7 @@ COMMON="src/platform/pc/display_hal.c src/platform/pc/purrgo_logger.c \
 # временно переключено на 1 для полевого теста. test_track_diag включает track_logger.c
 # в себя с PURRGO_TRACK_DIAG=1 и от этого флага не зависит.
 rm -rf "$OUT/core" && mkdir -p "$OUT/core"
-for f in $(ls src/core/*.c src/core/*/*.c third_party/minmea/minmea.c); do
+for f in $(ls src/core/*/*.c third_party/minmea/minmea.c); do
     o="$OUT/core/$(echo "$f" | tr / _).o"
     if ! $CC $CFLAGS -DPURRGO_TRACK_DIAG=0 -c "$f" -o "$o"; then echo "BUILD-FAIL core: $f"; exit 1; fi
 done

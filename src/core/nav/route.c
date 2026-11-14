@@ -4,7 +4,7 @@
 #include "purrgo/gfx_line.h"
 #include "purrgo/logger.h"
 #include "purrgo/purrgo_format.h"
-#include "map_projection.h"
+#include "map/map_projection.h"
 #include <string.h>
 
 /* Толщина чёрной линии маршрута и белой линии по её центру, px. */

@@ -1,5 +1,5 @@
 /*
- * Host-тесты читателя электронных книг PGB (src/core/pgb.c).
+ * Host-тесты читателя электронных книг PGB (src/core/book/pgb.c).
  *
  * Эталонные файлы tests/host/data/sample*.pgb собраны tools/book-compiler
  * (tests/host/data/make_sample_pgb.py), CRC считает zlib, а не проверяемый код:

@@ -21,7 +21,7 @@
 #include "purrgo/gfx_icon.h"
 #include "purrgo/purrgo_poi_icons.h"
 
-/* Номер иконки перекрестия центра карты в purrgo_poi_icons (src/core/purrgo_poi_icons.c). */
+/* Номер иконки перекрестия центра карты в purrgo_poi_icons (src/core/map/purrgo_poi_icons.c). */
 #ifndef PURRGO_MAP_CROSSHAIR_ICON
 #define PURRGO_MAP_CROSSHAIR_ICON PURRGO_UI_ICON_MAP_CROSSHAIR
 #endif
@@ -98,7 +98,7 @@ static struct {
 
 #include "purrgo/gfx_polygon.h"
 #include "purrgo/trig.h"
-#include "../map_projection.h"
+#include "map/map_projection.h"
 #include "purrgo/purrgo_format.h"
 #include <string.h>
 

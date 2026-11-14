@@ -12,7 +12,7 @@
 #include "purrgo/gfx_renderer.h"
 #include "purrgo/gfx_polygon.h"
 #include "purrgo/gfx_rect.h"
-#include "map_projection.h"
+#include "map/map_projection.h"
 #include "test_common.h"
 
 uint32_t purrgo_system_time_ms(void) { return 0; }

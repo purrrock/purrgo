@@ -638,7 +638,7 @@ attraction
 
 Bitmap/icon assets are not embedded in the map format.
 
-The firmware draws a POI with the 11x11 icon `purrgo_poi_icons[Type]` (`src/core/purrgo_poi_icons.c`): the icon number is the feature code, so POI icons occupy numbers `128..191`. UI icons (navigation target `192`, waypoint `193`, map centre crosshair `194`) use the range `192..223`. A new POI class gets the next free code in `128..191` and its icon is drawn under the same number.
+The firmware draws a POI with the 11x11 icon `purrgo_poi_icons[Type]` (`src/core/map/purrgo_poi_icons.c`): the icon number is the feature code, so POI icons occupy numbers `128..191`. UI icons (navigation target `192`, waypoint `193`, map centre crosshair `194`) use the range `192..223`. A new POI class gets the next free code in `128..191` and its icon is drawn under the same number.
 
 In the circle mode the firmware draws `POI_BIG` as a large circle and every other POI code as a small one.
 

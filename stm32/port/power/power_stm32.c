@@ -1,7 +1,7 @@
 /*
  * Платформенные хуки выключения STM32U585. Последовательность шагов (экран,
  * логгер, конфиг, карта, дисплей) живёт в ядре: purrgo_system_power_off()
- * в src/core/power.c.
+ * в src/core/power/power.c.
  */
 #include "purrgo/power.h"
 #include "purrgo/logger.h"

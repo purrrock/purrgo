@@ -17,7 +17,7 @@ API, настройки и подключение к проекту описан
 | Файл | Роль |
 |---|---|
 | `include/purrgo/display_hal.h` | `display_set_mode(DISPLAY_MODE_GRAY4 / DISPLAY_MODE_MONO)`; `display_refresh()` и `display_flush()` неблокирующие, `display_sleep()` блокирующая |
-| `src/core/app_ui.c` | режим выбирается по экрану: карта и экран выключения — 4 gray, остальное — 1 bit |
+| `src/core/ui/app_ui.c` | режим выбирается по экрану: карта и экран выключения — 4 gray, остальное — 1 bit |
 | `stm32/port/display/display_eink.c` | очередь обновлений поверх epd4g |
 | `stm32/port/display/display_stm32.c` | framebuffer, накопление области, `display_stm32_poll()`, `display_stm32_ready_for_render()` |
 | `stm32/port/app/stm32_app.c` | `display_stm32_poll()` на каждом проходе цикла; рендер только при `display_stm32_ready_for_render()` |
@@ -72,7 +72,7 @@ Framebuffer PurrGO (176×264, 2 бита на пиксель, 0 = чёрный �
   обновление, повтор через 2 с.
 * `display_sleep()` (выключение питания): ждёт все поставленные обновления, в том числе экран
   выключения, затем `epd4g_wait()` (доводит до конца автоматическое выключение питания) и `epd4g_sleep()`; ограничение 30 с. Последовательность в ядре:
-  `display_refresh()` → `display_sleep()` (`src/core/power.c`), `power_stm32.c` менять не нужно.
+  `display_refresh()` → `display_sleep()` (`src/core/power/power.c`), `power_stm32.c` менять не нужно.
   Экран выключения — карта, рисуется без смены экрана, поэтому `purrgo_app_ui_render_power_off()`
   сам вызывает `display_set_mode(DISPLAY_MODE_GRAY4)`.
 * Маршрутный компьютер после отрисовки значений регистрирует область всего экрана

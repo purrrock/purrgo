@@ -26,7 +26,7 @@
 #include "purrgo/ui/ui_dirty.h"
 #include "purrgo/waypoint.h"
 #include "purrgo/wpt_layer.h"
-#include "map_projection.h"
+#include "map/map_projection.h"
 #include "fake_fs.h"
 #include "fake_power.h"
 #include "test_common.h"
