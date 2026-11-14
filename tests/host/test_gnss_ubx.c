@@ -598,7 +598,7 @@ static void test_configure_frames(void)
      */
     const int valsets = 7 + PURRGO_GNSS_SIGNAL_FRAME + PURRGO_GNSS_SEC_SIG + PURRGO_GNSS_DIAG_FRAMES +
                         PURRGO_GNSS_PSM_FRAMES + PURRGO_GNSS_NMEA_OFF_FRAMES +
-                        PURRGO_GNSS_TIMEPULSE_OFF_FRAMES;
+                        PURRGO_GNSS_TIMEPULSE_FRAMES;
     CHECK(g_cfg_count == valsets + 1);
 
     /* Все кадры, кроме последнего (опрос версии), - VALSET, слой PURRGO_GNSS_UBX_LAYERS. */
@@ -632,10 +632,17 @@ static void test_configure_frames(void)
     /* Модель динамики - отдельным кадром. */
     const int dyn = frame_with_key(0x20110021U);
 
-    /* Таймпульс (1PPS) выключен отдельным кадром из одного ключа сразу за моделью динамики. */
+    /* Таймпульс (1PPS): отдельный кадр сразу за моделью динамики; режим выбирает PURRGO_GNSS_TIMEPULSE. */
     const int tp = frame_with_key(0x10050007U);
-#if PURRGO_GNSS_TIMEPULSE_OFF
+#if PURRGO_GNSS_TIMEPULSE == PURRGO_GNSS_TIMEPULSE_QUIET
+    /* Включён, но без импульсов: длина 0 до и после захвата времени. */
+    CHECK(tp == dyn + 1 && valset_value(tp, 0x10050007U, &v) && v == 1);
+    CHECK(valset_value(tp, 0x40050004U, &v) && v == 0);
+    CHECK(valset_value(tp, 0x40050005U, &v) && v == 0);
+    CHECK(g_cfg_len[tp] == 33);
+#elif PURRGO_GNSS_TIMEPULSE == PURRGO_GNSS_TIMEPULSE_DISABLED
     CHECK(tp == dyn + 1 && valset_value(tp, 0x10050007U, &v) && v == 0 && g_cfg_len[tp] == 17);
+    CHECK(frame_with_key(0x40050004U) == -1 && frame_with_key(0x40050005U) == -1);
 #else
     CHECK(tp == -1);
 #endif
@@ -648,7 +655,7 @@ static void test_configure_frames(void)
      */
     const int noff = frame_with_key(0x10740002U);
 #if PURRGO_GNSS_NMEA_OFF
-    CHECK(noff == dyn + 1 + PURRGO_GNSS_TIMEPULSE_OFF_FRAMES);
+    CHECK(noff == dyn + 1 + PURRGO_GNSS_TIMEPULSE_FRAMES);
     CHECK(valset_value(noff, 0x10740002U, &v) && v == 0);
     CHECK(g_cfg_len[noff] == 17);                       /* один ключ: никаких других изменений протоколов */
     CHECK(valset_value(0, 0x209100BBU, &v) && v == 1);  /* GGA в базовом кадре остаётся (запасной NMEA) */
@@ -698,7 +705,7 @@ static void test_configure_frames(void)
     const int mode   = frame_with_key(0x20D00001U);
     CHECK(frame_with_key(0x10D0000AU) == -1);
 #if PURRGO_GNSS_PSM_ACTIVE
-    CHECK(no_off == dyn + 1 + PURRGO_GNSS_TIMEPULSE_OFF_FRAMES + PURRGO_GNSS_NMEA_OFF_FRAMES &&
+    CHECK(no_off == dyn + 1 + PURRGO_GNSS_TIMEPULSE_FRAMES + PURRGO_GNSS_NMEA_OFF_FRAMES &&
           mode == no_off + 1 && mode == valsets - 1);
     CHECK(valset_value(no_off, 0x10D00008U, &v) && v == 1);
     CHECK(!valset_value(no_off, 0x20D00001U, &v));

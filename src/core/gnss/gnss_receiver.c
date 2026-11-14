@@ -131,6 +131,8 @@ size_t purrgo_ubx_build_valset(uint8_t *out, size_t out_size, uint8_t layers,
 #define UBX_KEY_UART1OUTPROT_NMEA    0x10740002U  /* L: выдавать NMEA на UART1 (по умолчанию 1) */
 #define UBX_KEY_NAVSPG_DYNMODEL      0x20110021U  /* E1: модель динамики */
 #define UBX_KEY_TP_TP1_ENA           0x10050007U  /* L: таймпульс TP1 (1PPS); по умолчанию 1 */
+#define UBX_KEY_TP_LEN_TP1           0x40050004U  /* U4, мкс: длина импульса до захвата времени (по умолчанию 0) */
+#define UBX_KEY_TP_LEN_LOCK_TP1      0x40050005U  /* U4, мкс: длина импульса после захвата времени (по умолчанию 100000) */
 
 /*
  * Энергосбережение (PURRGO_GNSS_PSM, см. hardware_config.h): группа CFG-PM,
@@ -200,7 +202,9 @@ void purrgo_gnss_receiver_configure_ubx(purrgo_gnss_tx_fn tx)
         "ITFM",
 #endif
         "ODO enable/profile", "DYNMODEL",
-#if PURRGO_GNSS_TIMEPULSE_OFF
+#if PURRGO_GNSS_TIMEPULSE == PURRGO_GNSS_TIMEPULSE_QUIET
+        "TIMEPULSE quiet",
+#elif PURRGO_GNSS_TIMEPULSE == PURRGO_GNSS_TIMEPULSE_DISABLED
         "TIMEPULSE off",
 #endif
 #if PURRGO_GNSS_NMEA_OFF
@@ -287,11 +291,22 @@ void purrgo_gnss_receiver_configure_ubx(purrgo_gnss_tx_fn tx)
 #endif
     send_valset(tx, odo, sizeof odo / sizeof odo[0]);
     send_valset(tx, dyn, sizeof dyn / sizeof dyn[0]);
-#if PURRGO_GNSS_TIMEPULSE_OFF
+#if PURRGO_GNSS_TIMEPULSE == PURRGO_GNSS_TIMEPULSE_QUIET
     /*
-     * 4a. Таймпульс (1PPS) выключается: прошивка его не использует, а светодиод PPS модуля
-     * тратит ток. Отдельный кадр: при NAK остальная настройка не страдает.
+     * 4a. Таймпульс (1PPS) остаётся включённым, но без импульсов (длина 0 и до, и после захвата
+     * времени): прошивка 1PPS не использует, а светодиод PPS модуля тратит ток. Выключение через
+     * TP1_ENA = 0 светодиод не гасит (вывод отпускается). Отдельный кадр: при NAK остальная
+     * настройка не страдает.
      */
+    static const purrgo_ubx_cfg_item_t tp_quiet[] = {
+        { UBX_KEY_TP_TP1_ENA,      1U },
+        { UBX_KEY_TP_LEN_TP1,      0U },
+        { UBX_KEY_TP_LEN_LOCK_TP1, 0U },
+    };
+
+    send_valset(tx, tp_quiet, sizeof tp_quiet / sizeof tp_quiet[0]);
+#elif PURRGO_GNSS_TIMEPULSE == PURRGO_GNSS_TIMEPULSE_DISABLED
+    /* 4a. Таймпульс выключен (CFG-TP-TP1_ENA = 0). */
     static const purrgo_ubx_cfg_item_t tp_off = { UBX_KEY_TP_TP1_ENA, 0U };
 
     send_valset(tx, &tp_off, 1U);
