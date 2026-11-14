@@ -5,6 +5,7 @@
  * Геометрия задаётся в метрах от опорной точки, чтобы тесты не зависели от
  * внутренних единиц (1e-7 градуса).
  */
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 #include "purrgo/geo.h"
@@ -359,8 +360,132 @@ static void test_gpx_quality_tags(void)
     }
 }
 
+/* Порог стоянки при известной sAcc (UBX): не ниже 1,5 * sAcc, но не выше 4 уз. */
+static void test_stationary_follows_sacc(void)
+{
+    purrgo_gnss_solution_t f;
+
+    /* Без оценок точности: порог 0,5 уз, скорость 1,5 уз - движение (направление неизвестно -> пишется). */
+    begin(LOGGER_MODE_STANDARD);
+    f = mk(1, 10, 0); f.speed_knots = 150;
+    CHECK(purrgo_logger_add_point(&f));
+    purrgo_logger_stop();
+
+    /* sAcc 1 м/с (= 194 сотых узла): порог 1,5 * 194 = 291, скорость 150 не отличима от нуля. */
+    begin(LOGGER_MODE_STANDARD);
+    f = mk(1, 10, 0); f.speed_knots = 150; f.acc_valid = true; f.hacc_mm = 3000; f.sacc_mm_s = 1000;
+    CHECK(!purrgo_logger_add_point(&f));
+    f = mk(2, 10, 0); f.speed_knots = 300; f.acc_valid = true; f.hacc_mm = 3000; f.sacc_mm_s = 1000;
+    CHECK(purrgo_logger_add_point(&f));                   /* 3 уз > 2,91 уз: движение */
+    purrgo_logger_stop();
+
+    /* Малая sAcc порог не снижает: ниже 0,5 уз всегда стоим. */
+    begin(LOGGER_MODE_STANDARD);
+    f = mk(1, 10, 0); f.speed_knots = 40; f.acc_valid = true; f.hacc_mm = 1000; f.sacc_mm_s = 10;
+    CHECK(!purrgo_logger_add_point(&f));
+    purrgo_logger_stop();
+
+    /* Недостоверная огромная sAcc: порог не выше 4 уз - велосипед (>4 уз) не "останавливается". */
+    begin(LOGGER_MODE_STANDARD);
+    f = mk(1, 10, 0); f.speed_knots = 390; f.acc_valid = true; f.hacc_mm = 3000; f.sacc_mm_s = 5000;
+    CHECK(!purrgo_logger_add_point(&f));
+    f = mk(2, 10, 0); f.speed_knots = 410; f.acc_valid = true; f.hacc_mm = 3000; f.sacc_mm_s = 5000;
+    CHECK(purrgo_logger_add_point(&f));
+    purrgo_logger_stop();
+
+    /* Точка по таймауту пишется и на стоянке. */
+    begin(LOGGER_MODE_STANDARD);
+    f = mk(301, 0, 0); f.speed_knots = 0; f.acc_valid = true; f.hacc_mm = 3000; f.sacc_mm_s = 1000;
+    CHECK(purrgo_logger_add_point(&f));
+    purrgo_logger_stop();
+}
+
+/* Направление отрезка по курсу приёмника (скорость от 2 м/с) вместо хорды. */
+static purrgo_gnss_solution_t with_course(purrgo_gnss_solution_t f, uint32_t c100, int32_t knots_100)
+{
+    f.course_valid = true; f.course_deg_100 = (int32_t)c100; f.speed_knots = knots_100;
+    return f;
+}
+
+static void begin_course(uint32_t c100, int32_t knots_100)
+{
+    purrgo_logger_reset();
+    fake_fs_reset();
+    app_config.tz_offset_minutes = 0;
+    purrgo_logger_set_mode(LOGGER_MODE_STANDARD);
+    purrgo_gnss_solution_t f = with_course(mk(0, 0, 0), c100, knots_100);
+    CHECK(purrgo_logger_start(&f));
+    CHECK(purrgo_logger_add_point(&f));
+}
+
+static void test_course_direction(void)
+{
+    purrgo_gnss_solution_t f;
+
+    /* Курс на север известен сразу: вторая точка по прямой не пишется (по хорде писалась бы). */
+    begin_course(0, 500);
+    f = with_course(mk(1, 10, 0), 0, 500);
+    CHECK(!purrgo_logger_add_point(&f));
+    f = with_course(mk(2, 20, 8), 0, 500);                      /* 8 м вбок: заметно */
+    CHECK(purrgo_logger_add_point(&f));
+    purrgo_logger_stop();
+
+    /* Курс на восток, а точка ушла на север: отклонение. */
+    begin_course(9000, 500);
+    f = with_course(mk(1, 10, 0), 9000, 500);
+    CHECK(purrgo_logger_add_point(&f));
+    purrgo_logger_stop();
+
+    /* Разворот: курс на север, точка позади последней - пишется. */
+    begin_course(0, 500);
+    f = with_course(mk(1, -10, 0), 0, 500);
+    CHECK(purrgo_logger_add_point(&f));
+    purrgo_logger_stop();
+
+    /* Медленно (< 2 м/с) курс шумит и не используется: направление неизвестно, вторая точка пишется. */
+    begin_course(0, 300);
+    f = with_course(mk(1, 10, 0), 0, 300);
+    CHECK(purrgo_logger_add_point(&f));
+    purrgo_logger_stop();
+
+    /* Курс без признака валидности не используется. */
+    purrgo_logger_reset();
+    fake_fs_reset();
+    app_config.tz_offset_minutes = 0;
+    f = mk(0, 0, 0); f.course_valid = false; f.course_deg_100 = 0; f.speed_knots = 500;
+    CHECK(purrgo_logger_start(&f) && purrgo_logger_add_point(&f));
+    f = mk(1, 10, 0); f.speed_knots = 500;
+    CHECK(purrgo_logger_add_point(&f));
+    purrgo_logger_stop();
+}
+
+static void test_course_all_quadrants(void)
+{
+    /*
+     * Таблица синуса и квадранты: для каждого курса точка в 20 м ВДОЛЬ курса не пишется,
+     * в 20 м ПОПЕРЁК - пишется. Курсы - во всех квадрантах, с дробной частью градуса.
+     */
+    static const uint32_t courses[] = { 0, 4500, 9000, 13500, 18000, 22500, 27000, 31500, 35999, 1234, 20001 };
+    for (size_t i = 0; i < sizeof courses / sizeof courses[0]; i++) {
+        uint32_t c = courses[i];
+        double rad = (double)c / 100.0 * 3.14159265358979323846 / 180.0;
+        int dn = (int)(20.0 * cos(rad) + (cos(rad) >= 0 ? 0.5 : -0.5));
+        int de = (int)(20.0 * sin(rad) + (sin(rad) >= 0 ? 0.5 : -0.5));
+
+        begin_course(c, 500);
+        purrgo_gnss_solution_t f = with_course(mk(1, dn, de), c, 500);
+        CHECK(!purrgo_logger_add_point(&f));                    /* вдоль курса */
+        f = with_course(mk(2, -de, dn), c, 500);                /* поперёк: (north, east) = (-de, dn) */
+        CHECK(purrgo_logger_add_point(&f));
+        purrgo_logger_stop();
+    }
+}
+
 int main(void)
 {
+    test_stationary_follows_sacc();
+    test_course_direction();
+    test_course_all_quadrants();
     test_gpx_quality_tags();
     test_straight_line_is_thinned();
     test_speed_change_is_not_a_change();

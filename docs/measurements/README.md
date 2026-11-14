@@ -10,6 +10,7 @@
 | [`Batt-discharge/`](Batt-discharge/) | Кривые разряда батарей: `LIION.txt`, `ZINK-CARBON.txt` (время и напряжение на элемент) |
 | [`Current/`](Current/) | Потребляемый ток, мА (`timestamp;value mA`): `Debug, 10.11.2026` и `Release, 12.11.2026`, по файлу на сценарий (книга, карта, выключение и т. д.) |
 | [`tracks/`](tracks/) | Записанные треки: `bicycle.gpx`, `indoor.gpx`, `pedestian.gpx` и архивы `LIION.zip`, `ZINK-CARBON.zip` |
+| [`tracks/filter-tuning.md`](tracks/filter-tuning.md) | Подбор фильтра трека по `bicycle/indoor/pedestian.gpx`: что показали данные, варианты и выбранные пороги |
 
 Правило: новый замер - новый файл с датой и сборкой (`PURRGO_HW_TEST`, ключевые `-D`, плата, источник питания) в начале.
 
