@@ -7,7 +7,7 @@
  *   PB10 Detect_SD (GPIO-вход с подтяжкой)
  *
  * Слои:
- *   sd_spi (stm32/common/sd_spi) - протокол карты, без HAL;
+ *   sd_spi (stm32/port/storage) - протокол карты, без HAL;
  *   этот файл - привязка к HAL SPI2/GPIO, диск FatFs (disk_*, интерфейс diskio.h),
  *     монтирование, горячая замена, защита от зависаний.
  */

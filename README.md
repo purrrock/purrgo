@@ -114,8 +114,13 @@ map.name
 purrgo/
 ├── emulator/               # PC-эмулятор (SDL2, WebAssembly)
 ├── stm32/                  # Прошивка STM32U585: CubeMX-проект (.ioc, Core/, Drivers/)
-│   └── common/             # STM32-адаптеры: дисплей, кнопки, ФС, логгер, SD по SPI, FatFs
-│                           # (GNSS UART+DMA, SD, питание - в Core/Src)
+│   └── port/               # весь наш код прошивки (CMake подхватывает port/<группа>/*.c сам):
+│       ├── app/            #   главный цикл, системное время, логгер, аппаратные тесты
+│       ├── input/          #   кнопки
+│       ├── display/        #   дисплей, очередь обновлений E-Ink, самотест
+│       ├── gnss/           #   UART+DMA, связь с модулем, диагностика, 1PPS
+│       ├── storage/        #   SD по SPI, FatFs (storage/fatfs), привязка ФС
+│       └── power/          #   питание, батарея, PVD, Stop 2
 │
 ├── docs/                   # Документация: hardware, user-guide, architecture, форматы карты, design/, datasheets/
 ├── include/

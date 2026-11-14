@@ -5,9 +5,9 @@
  * microSD-карта PurrGO + FatFs (STM32U585, stm32).
  *
  * Карта подключена по SPI2 и работает в SPI-режиме (в корпусе UFQFPN48 у
- * STM32U585CI нет SDMMC). Протокол карты - в stm32/common/sd_spi (без HAL,
+ * STM32U585CI нет SDMMC). Протокол карты - в stm32/port/storage (без HAL,
  * проверяется host-тестом), диск FatFs (disk_*) и привязка к HAL -
- * Core/Src/sd_card.c проекта.
+ * stm32/port/storage/sd_card.c проекта.
  * Detect: вывод Detect_SD (PB10), CS: SD_CS (PB12).
  *
  * Модуль sd_card.c (пользовательский, CubeMX его не перезаписывает) отвечает за:

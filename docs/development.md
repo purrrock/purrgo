@@ -67,6 +67,10 @@ CubeMX-проект находится в `stm32/` (`PurrGO_STM32U5.ioc`, `Core/
 `stm32/CMakeLists.txt` (пользовательский, CubeMX его не перезаписывает)
 подключается из корневого `CMakeLists.txt` и самостоятельно не конфигурируется.
 
+Весь наш код прошивки лежит в `stm32/port/<группа>/` (`app`, `input`, `display`, `gnss`, `storage`, `power`); в
+`stm32/Core/` только файлы CubeMX. Новый `.c` в `port/<группа>/` подхватывается сборкой сам (список файлов в CMake
+не нужен), новая группа-папка - тоже. Сторонний FatFs - `port/storage/fatfs/`, предупреждений проекта он не получает.
+
 ---
 
 ## Тестирование
@@ -133,7 +137,7 @@ cmake --build --preset stm32u5-release
 Пустое значение (`-DPURRGO_HW_TEST=`) возвращает обычную прошивку. Допустимо: `SD_SPEED`, `EINK_4GRAY`,
 `EINK_PARTIAL` (последние два включают прежние `PURRGO_EINK_SELFTEST_*`). Результаты идут в UART1 строками
 `HWTEST ...` независимо от `PURRGO_LOG_LEVEL`, поэтому тесты можно собирать и в Release. Реализация:
-`stm32/common/Src/hw_test.c`, список имён: `PURRGO_HW_TEST_NAMES` в `stm32/CMakeLists.txt`.
+`stm32/port/app/hw_test.c`, список имён: `PURRGO_HW_TEST_NAMES` в `stm32/CMakeLists.txt`.
 
 **`SD_SPEED`.** Карта только читается (ничего не записывается). Замеры по `DWT->CYCCNT`:
 

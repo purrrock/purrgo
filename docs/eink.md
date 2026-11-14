@@ -18,11 +18,11 @@ API, настройки и подключение к проекту описан
 |---|---|
 | `include/purrgo/display_hal.h` | `display_set_mode(DISPLAY_MODE_GRAY4 / DISPLAY_MODE_MONO)`; `display_refresh()` и `display_flush()` неблокирующие, `display_sleep()` блокирующая |
 | `src/core/app_ui.c` | режим выбирается по экрану: карта и экран выключения — 4 gray, остальное — 1 bit |
-| `common/Src/display_eink.c` | очередь обновлений поверх epd4g |
-| `common/Src/display_stm32.c` | framebuffer, накопление области, `display_stm32_poll()`, `display_stm32_ready_for_render()` |
-| `common/Src/stm32_app.c` | `display_stm32_poll()` на каждом проходе цикла; рендер только при `display_stm32_ready_for_render()` |
-| `common/Src/eink_test.c` | самотесты на железе (`PURRGO_EINK_SELFTEST_4GRAY`, `PURRGO_EINK_SELFTEST_PARTIAL`) |
-| `common/Src/hw_test.c` | аппаратные замеры вместо навигатора (`-DPURRGO_HW_TEST=SD_SPEED`), см. `docs/hardware.md` |
+| `stm32/port/display/display_eink.c` | очередь обновлений поверх epd4g |
+| `stm32/port/display/display_stm32.c` | framebuffer, накопление области, `display_stm32_poll()`, `display_stm32_ready_for_render()` |
+| `stm32/port/app/stm32_app.c` | `display_stm32_poll()` на каждом проходе цикла; рендер только при `display_stm32_ready_for_render()` |
+| `stm32/port/display/eink_test.c` | самотесты на железе (`PURRGO_EINK_SELFTEST_4GRAY`, `PURRGO_EINK_SELFTEST_PARTIAL`) |
+| `stm32/port/app/hw_test.c` | аппаратные замеры вместо навигатора (`-DPURRGO_HW_TEST=SD_SPEED`), см. `docs/hardware.md` |
 | `tests/host/test_display_eink.c` | host-тест очереди на модели панели (нужен сабмодуль) |
 
 Framebuffer PurrGO (176×264, 2 бита на пиксель, 0 = чёрный … 3 = белый) совпадает с буфером epd4g

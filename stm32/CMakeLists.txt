@@ -23,8 +23,40 @@ endif()
 # в области видимости этой папки (и дочерних) имя переопределяется.
 set(CMAKE_PROJECT_NAME PurrGO_STM32U5)
 
-# Платформенные адаптеры STM32: stm32/common/{Src,Inc}.
-get_filename_component(PURRGO_STM32_COMMON "${CMAKE_CURRENT_SOURCE_DIR}/common" ABSOLUTE)
+# Платформенные адаптеры STM32 (весь наш код прошивки) - stm32/port/<группа>/:
+#   app/      главный цикл-обёртка, системное время, логгер, аппаратные тесты
+#   input/    кнопки
+#   display/  дисплей, очередь обновлений E-Ink, самотест
+#   gnss/     UART+DMA, связь с модулем, диагностика, 1PPS
+#   storage/  SD по SPI, FatFs, привязка ФС (storage/fatfs - сторонний код)
+#   power/    питание, батарея, PVD, Stop 2
+# CubeMX-файлы (Core/, Drivers/, startup) в port/ не входят.
+set(PURRGO_STM32_PORT "${CMAKE_CURRENT_SOURCE_DIR}/port")
+
+# Все .c на один уровень вглубь port/ (port/<группа>/*.c) подхватываются сами,
+# новый файл в CMakeLists добавлять не нужно. FatFs лежит глубже (port/storage/fatfs)
+# и сюда не попадает: сторонний код, предупреждений проекта не получает.
+file(GLOB PURRGO_STM32_PORT_SOURCES CONFIGURE_DEPENDS "${PURRGO_STM32_PORT}/*/*.c")
+
+# FatFs R0.16 (в CubeMX для STM32U5 middleware FATFS нет, D11).
+# Интерфейс диска FatFs (disk_*) реализует port/storage/sd_card.c.
+set(PURRGO_STM32_FATFS_SOURCES
+    ${PURRGO_STM32_PORT}/storage/fatfs/ff.c
+    ${PURRGO_STM32_PORT}/storage/fatfs/ffunicode.c
+    ${PURRGO_STM32_PORT}/storage/fatfs/ffsystem.c
+)
+
+# Заголовки подключаются как раньше, без префикса группы (#include "sd_card.h"):
+# в пути поиска попадает каждая папка port/<группа>. CubeMX-овский Core/Src/main.c
+# тоже включает наши заголовки (stm32_app.h, hw_test.h, eink_test.h).
+file(GLOB PURRGO_STM32_PORT_DIRS LIST_DIRECTORIES true "${PURRGO_STM32_PORT}/*")
+set(PURRGO_STM32_PORT_INCLUDES "")
+foreach(_dir IN LISTS PURRGO_STM32_PORT_DIRS)
+    if(IS_DIRECTORY "${_dir}")
+        list(APPEND PURRGO_STM32_PORT_INCLUDES "${_dir}")
+    endif()
+endforeach()
+list(APPEND PURRGO_STM32_PORT_INCLUDES "${PURRGO_STM32_PORT}/storage/fatfs")
 
 message(STATUS "Firmware target: ${CMAKE_PROJECT_NAME}")
 
@@ -41,106 +73,19 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 
 # Add sources to executable
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
-    # Platform-dependent PurrGO logger.
-    ${PURRGO_STM32_COMMON}/Src/purrgo_logger.c
-
-    # SD-карта: SPI2 (протокол карты sd_spi, диск FatFs, монтирование, Detect).
-    Core/Src/sd_card.c
-    ${PURRGO_STM32_COMMON}/sd_spi/sd_spi.c
-    Core/Src/fattime.c
-
-    # FatFs R0.16 (в CubeMX для STM32U5 middleware FATFS нет, D11).
-    # Интерфейс диска FatFs (disk_*) реализует Core/Src/sd_card.c.
-    ${PURRGO_STM32_COMMON}/fatfs/ff.c
-    ${PURRGO_STM32_COMMON}/fatfs/ffunicode.c
-    ${PURRGO_STM32_COMMON}/fatfs/ffsystem.c
-
-    # STM32 implementation of the common GNSS byte-stream interface
-    # (LPUART1_RX + LPDMA1 linked-list circular).
-    Core/Src/gnss_io.c
-
-    # STM32 system time implementation.
-    # Монитор связи с GNSS (отладочный лог): разбор NMEA + отчёт; gnss_link - поиск скорости UART
-    # и смена скорости модуля.
-    ${PURRGO_STM32_COMMON}/gnss_diag/gnss_diag.c
-    ${PURRGO_STM32_COMMON}/gnss_pps/gnss_pps.c
-    ${PURRGO_STM32_COMMON}/gnss_link/gnss_link.c
-    ${PURRGO_STM32_COMMON}/Src/gnss_monitor.c
-
-    ${PURRGO_STM32_COMMON}/Src/system_time.c
-
-    # STM32 button driver (кнопки E-Ink HAT: K1 PA0, K2 PA1, K3 PC14, K4 PC15).
-    ${PURRGO_STM32_COMMON}/Src/buttons.c
-
-    # STM32 implementation of the filesystem HAL.
-    ${PURRGO_STM32_COMMON}/Src/fs_hal_stm32.c
-
-    # STM32 display implementation.
-    ${PURRGO_STM32_COMMON}/Src/display_stm32.c
-
-    # Debug button emulator via UART
-    ${PURRGO_STM32_COMMON}/Src/debug_buttons.c
-
-    # STM32 Power logic
-    Core/Src/power_stm32.c
-    # Измерение напряжения батареи (ADC1_IN16, PB1)
-    Core/Src/battery_adc.c
-    # Контроль напряжения VDD (PVD): остановка записи на SD при просадке питания
-    Core/Src/supply_pvd.c
-    # Stop 2 в режиме чтения (LPTIM1 на LSI восстанавливает время HAL)
-    Core/Src/stop_mode.c
-
-    # Application wrapper
-    ${PURRGO_STM32_COMMON}/Src/stm32_app.c
-
-    # E-Ink 2.7" V2: слой очереди обновлений над библиотекой epd4g
-    # (сама библиотека подключается ниже через add_subdirectory + target_link_libraries).
-    ${PURRGO_STM32_COMMON}/Src/display_eink.c
-
-    # Display test
-    ${PURRGO_STM32_COMMON}/Src/eink_test.c
-
-    # Аппаратные тесты (замеры на железе), включаются -DPURRGO_HW_TEST=<имя>
-    ${PURRGO_STM32_COMMON}/Src/hw_test.c
+    ${PURRGO_STM32_PORT_SOURCES}
+    ${PURRGO_STM32_FATFS_SOURCES}
 )
 
 # Предупреждения только для пользовательских файлов (не для CubeMX/HAL/FatFs/библиотеки epd4g).
 # -ffunction-sections -fdata-sections -fstack-usage, --gc-sections и
 # --print-memory-usage уже заданы CubeMX-тулчейном (cmake/gcc-arm-none-eabi.cmake).
-purrgo_sources_warnings(
-    ${PURRGO_STM32_COMMON}/Src/purrgo_logger.c
-    Core/Src/gnss_io.c
-    ${PURRGO_STM32_COMMON}/gnss_diag/gnss_diag.c
-    ${PURRGO_STM32_COMMON}/gnss_pps/gnss_pps.c
-    ${PURRGO_STM32_COMMON}/gnss_link/gnss_link.c
-    ${PURRGO_STM32_COMMON}/Src/gnss_monitor.c
-    ${PURRGO_STM32_COMMON}/Src/system_time.c
-    ${PURRGO_STM32_COMMON}/Src/buttons.c
-    Core/Src/sd_card.c
-    ${PURRGO_STM32_COMMON}/sd_spi/sd_spi.c
-    Core/Src/fattime.c
-    ${PURRGO_STM32_COMMON}/Src/fs_hal_stm32.c
-    ${PURRGO_STM32_COMMON}/Src/display_stm32.c
-    ${PURRGO_STM32_COMMON}/Src/debug_buttons.c
-    Core/Src/power_stm32.c
-    Core/Src/battery_adc.c
-    Core/Src/supply_pvd.c
-    Core/Src/stop_mode.c
-    ${PURRGO_STM32_COMMON}/Src/stm32_app.c
-    ${PURRGO_STM32_COMMON}/Src/display_eink.c
-    ${PURRGO_STM32_COMMON}/Src/eink_test.c
-    ${PURRGO_STM32_COMMON}/Src/hw_test.c
-)
+purrgo_sources_warnings(${PURRGO_STM32_PORT_SOURCES})
 
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${PROJECT_SOURCE_DIR}/include
-    ${PURRGO_STM32_COMMON}/Inc
-    ${PURRGO_STM32_COMMON}/gnss_diag
-    ${PURRGO_STM32_COMMON}/gnss_pps
-    ${PURRGO_STM32_COMMON}/gnss_link
-    ${PURRGO_STM32_COMMON}/sd_spi
-    ${PURRGO_STM32_COMMON}/fatfs
+    ${PURRGO_STM32_PORT_INCLUDES}
 )
 
 # E-Ink: библиотека epd4g (сабмодуль third_party/eink_part_refresh). INTERFACE-
@@ -161,7 +106,7 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
 )
 
 # Режим аппаратного тестирования: вместо главного цикла навигатора после
-# инициализации периферии выполняется один тест (см. common/Inc/hw_test.h).
+# инициализации периферии выполняется один тест (см. port/app/hw_test.h).
 #   cmake --preset stm32u5-release -DPURRGO_HW_TEST=SD_SPEED
 # Пустое значение - обычная прошивка. Смена значения пересобирает проект.
 set(PURRGO_HW_TEST_NAMES SD_SPEED EINK_4GRAY EINK_PARTIAL)
