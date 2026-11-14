@@ -1,5 +1,5 @@
 /*
- * Host-тест диагностики связи с GNSS (stm32/common/gnss_diag):
+ * Host-тест диагностики связи с GNSS (stm32/port/gnss):
  * разбор NMEA, контрольная сумма, ошибки UART, определение состояния.
  */
 #include <stdint.h>

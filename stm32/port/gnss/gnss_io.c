@@ -32,7 +32,7 @@
  *   - остаток блока читается из CBR1.BNDT (__HAL_DMA_GET_COUNTER); его
  *     семантика для кольцевого буфера соответствует
  *     purrgo_gnss_ring_head_from_ndtr() из gnss_ring.h;
- *   - скорость UART определяет и меняет gnss_link (stm32/common/gnss_link):
+ *   - скорость UART определяет и меняет gnss_link (stm32/port/gnss):
  *     после включения LPUART1 работает на заводской скорости модуля
  *     (PURRGO_GNSS_BAUD_DEFAULT, CubeMX: 38400), затем модулю отправляется команда
  *     смены скорости и LPUART1 переключается на PURRGO_GNSS_BAUD_TARGET.

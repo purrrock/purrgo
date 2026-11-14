@@ -369,7 +369,7 @@
 #endif
 
 /*
- * Скорость UART связи с GNSS-модулем (только STM32, stm32/common/gnss_link).
+ * Скорость UART связи с GNSS-модулем (только STM32, stm32/port/gnss).
  *
  * PURRGO_GNSS_BAUD_DEFAULT - скорость модуля после включения (G10A F30: 38400,
  * настройка слоя RAM пропадает при выключении по EN).

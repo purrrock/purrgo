@@ -500,7 +500,11 @@ static void process_nav_sat(const uint8_t *p, uint16_t length, uint32_t now_ms)
 
     s_st.sat_listed = listed;
     s_st.sat_used = used;
-    s_st.sat_cno_avg = (used != 0U) ? (uint8_t)((sum + used / 2U) / used) : 0U;
+    uint8_t cno_avg = 0U;
+    if (used != 0U) {
+        cno_avg = (uint8_t)((sum + used / 2U) / used);
+    }
+    s_st.sat_cno_avg = cno_avg;
     s_st.sat_cno_max = cno_max;
     s_st.sat_valid = true;
     s_st.sat_ms = now_ms;

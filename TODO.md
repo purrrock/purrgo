@@ -32,7 +32,7 @@
 - [ ] Тест переполнения: заморозить главный цикл на время, большее заполнения буфера (2048 байт: ~0,53 с при полной загрузке линии 38400, несколько секунд при реальном потоке), убедиться, что восстановление работает (`gnss_rx_error_flag`).
 - [x] Настроить G10A F30 на минимально необходимый набор предложений и выдачу не чаще одного раза в секунду (UBX-CFG-VALSET: GGA, RMC, GSA, 1 Гц, слой RAM; на плате модуль подтверждает настройку ACK, GLL/GSV/VTG пропали).
 - [x] Настроить LPUART1 до 115200 бод или выше (G10A F30 стартует на 38400; потребует смены скорости и в модуле, и в LPUART1).
-  - [x] Код: `stm32/common/gnss_link` (поиск скорости, команда UBX-CFG-VALSET CFG-UART1-BAUDRATE, переключение LPUART1,
+  - [x] Код: `stm32/port/gnss` (поиск скорости, команда UBX-CFG-VALSET CFG-UART1-BAUDRATE, переключение LPUART1,
     откат на 38400), `PURRGO_GNSS_BAUD_DEFAULT/TARGET` в `hardware_config.h` (115200), host-тест `test_gnss_link.c`. CubeMX менять не нужно
     (в `.ioc` остаётся 38400: так LPUART1 стартует после EN High).
   - [X] **[HW]** Проверить на G10A F30: в логе `GNSS: link OK at 115200 baud`, затем `config sent`, `UBX replies: ACK`; поток NMEA без ошибок FE/ORE;
@@ -42,7 +42,7 @@
     (успех смены определяется по NMEA на новой скорости).
 - [ ] Проверить 1PPS.
   - [x] Обработчик `HAL_GPIO_EXTI_Rising_Callback(GNSS_PPS_Pin)` (`gnss_io.c`): считает фронты через
-    `purrgo_gnss_monitor_pps_edge()`, при выключенном GNSS игнорирует. Статистика в `stm32/common/gnss_pps`
+    `purrgo_gnss_monitor_pps_edge()`, при выключенном GNSS игнорирует. Статистика в `stm32/port/gnss`
     (host-тест `test_gnss_pps.c`): число фронтов, интервалы (ok / короткие / пропуски / дрожание), min и max.
     Счётчик RMC со статусом A добавлен в `gnss_diag` (`rmc_valid_count`).
   - [ ] **[HW]** Частота 1 Гц, импульсы только при фиксе, число фронтов за 10 минут совпадает с числом RMC со статусом A;

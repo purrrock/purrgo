@@ -3,7 +3,7 @@
 
 /*
  * Контроль напряжения питания VDD на STM32U585 (PVD). Реализация хука ядра
- * purrgo_platform_supply_low() (purrgo/supply.h) - Core/Src/supply_pvd.c проекта.
+ * purrgo_platform_supply_low() (purrgo/supply.h) - stm32/port/power/supply_pvd.c проекта.
  *
  * Порог задаётся макросом PURRGO_SUPPLY_PVD_LEVEL (PWR_PVDLEVEL_0..6, примерно
  * 2,0 / 2,2 / 2,4 / 2,5 / 2,6 / 2,8 / 2,9 В). По умолчанию PWR_PVDLEVEL_6 (около 2,9 В):
