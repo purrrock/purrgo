@@ -15,7 +15,7 @@
 #define EXPECTED_FRAMES (1 + PURRGO_GNSS_SIGNAL_FRAME + PURRGO_GNSS_PSM_FRAMES + \
                          (PURRGO_GNSS_UBX ? (7 + PURRGO_GNSS_SEC_SIG + PURRGO_GNSS_DIAG_FRAMES + \
                                              PURRGO_GNSS_NMEA_OFF_FRAMES + \
-                                             PURRGO_GNSS_TIMEPULSE_OFF_FRAMES) : 0))
+                                             PURRGO_GNSS_TIMEPULSE_FRAMES) : 0))
 
 static char g_sent[24][128];
 static size_t g_sent_len[24];

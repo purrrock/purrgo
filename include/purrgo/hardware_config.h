@@ -252,19 +252,27 @@
 #define PURRGO_GNSS_DOP_FRAMES (PURRGO_GNSS_UBX)
 
 /*
- * Выключение сигнала 1PPS (TIMEPULSE) модуля: CFG-TP-TP1_ENA = 0, отдельным кадром VALSET, только
- * при PURRGO_GNSS_UBX = 1. Прошивка 1PPS не использует (вывод 1PPS модуля к МК не подключается).
- * По умолчанию таймпульс включён и идёт при валидном времени GNSS; светодиод PPS на плате модуля
- * при этом мигает и потребляет ток. Настройка хранится в слое PURRGO_GNSS_UBX_LAYERS (по умолчанию
- * RAM), поэтому отправляется после каждого включения модуля. 0 - оставить заводское поведение.
+ * Сигнал 1PPS (TIMEPULSE) модуля, только при PURRGO_GNSS_UBX = 1. Прошивка 1PPS не использует (вывод
+ * 1PPS модуля к МК не подключается), а светодиод PPS на плате модуля мигает и тратит ток.
+ * Отдельным кадром VALSET (слой PURRGO_GNSS_UBX_LAYERS, по умолчанию RAM, поэтому после каждого
+ * включения модуля):
+ *   PURRGO_GNSS_TIMEPULSE_FACTORY (0)  заводское поведение: импульс 100 мс раз в секунду при валидном времени.
+ *   PURRGO_GNSS_TIMEPULSE_QUIET   (1)  CFG-TP-TP1_ENA = 1, CFG-TP-LEN_TP1 = 0, CFG-TP-LEN_LOCK_TP1 = 0:
+ *                                      вывод включён, но импульсов нет (длина 0, как у модуля до захвата
+ *                                      времени), на выводе остаётся пассивный уровень, светодиод не горит.
+ *   PURRGO_GNSS_TIMEPULSE_DISABLED (2) CFG-TP-TP1_ENA = 0: вывод отпускается. На плате G10A F30 в этом
+ *                                      режиме светодиод PPS горит постоянно (замер), поэтому не по умолчанию.
  */
-#ifndef PURRGO_GNSS_TIMEPULSE_OFF
-#define PURRGO_GNSS_TIMEPULSE_OFF 1
+#define PURRGO_GNSS_TIMEPULSE_FACTORY  0
+#define PURRGO_GNSS_TIMEPULSE_QUIET    1
+#define PURRGO_GNSS_TIMEPULSE_DISABLED 2
+#ifndef PURRGO_GNSS_TIMEPULSE
+#define PURRGO_GNSS_TIMEPULSE PURRGO_GNSS_TIMEPULSE_QUIET
 #endif
-#if (PURRGO_GNSS_TIMEPULSE_OFF != 0) && (PURRGO_GNSS_TIMEPULSE_OFF != 1)
-#error "PURRGO_GNSS_TIMEPULSE_OFF must be 0 or 1"
+#if (PURRGO_GNSS_TIMEPULSE < 0) || (PURRGO_GNSS_TIMEPULSE > 2)
+#error "PURRGO_GNSS_TIMEPULSE must be 0 (factory), 1 (quiet) or 2 (disabled)"
 #endif
-#define PURRGO_GNSS_TIMEPULSE_OFF_FRAMES (PURRGO_GNSS_UBX && PURRGO_GNSS_TIMEPULSE_OFF)
+#define PURRGO_GNSS_TIMEPULSE_FRAMES (PURRGO_GNSS_UBX && (PURRGO_GNSS_TIMEPULSE != PURRGO_GNSS_TIMEPULSE_FACTORY))
 
 /*
  * UBX-SEC-SIG (глушение и спуфинг) есть только в SPG 5.30 и новее. В SPG 5.10
