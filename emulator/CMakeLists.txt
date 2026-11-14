@@ -48,6 +48,17 @@ else()
     # Поиск установленной в MSYS2/MinGW библиотеки SDL2
     find_package(SDL2 REQUIRED)
 
+    # Код включает <SDL2/SDL.h>. Конфиг SDL2 (MacPorts, Homebrew) отдаёт каталог
+    # <префикс>/include/SDL2, а префикс (/opt/local/include) компилятор по умолчанию
+    # не просматривает - добавляем родительский каталог сами.
+    get_target_property(_sdl2_inc SDL2::SDL2 INTERFACE_INCLUDE_DIRECTORIES)
+    foreach(_dir IN LISTS _sdl2_inc)
+        if(_dir MATCHES "/SDL2$")
+            get_filename_component(_dir_parent "${_dir}" DIRECTORY)
+            target_include_directories(purrgo_emulator SYSTEM PRIVATE "${_dir_parent}")
+        endif()
+    endforeach()
+
     # Выбрасывать неиспользуемые секции (флаги -ffunction-sections уже заданы выше).
     if(NOT APPLE)
         target_link_options(purrgo_emulator PRIVATE -Wl,--gc-sections)

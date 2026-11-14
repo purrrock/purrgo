@@ -99,6 +99,9 @@
             "hidden": true,
             "inherits": "pc-base",
             "generator": "Ninja",
+            "cacheVariables": {
+                "CMAKE_PREFIX_PATH": "/opt/local;/opt/homebrew;/usr/local"
+            },
             "condition": {
                 "type": "equals",
                 "lhs": "${hostSystemName}",
