@@ -264,6 +264,10 @@ static void ubx_feed(gnss_diag_t *d, uint8_t byte)
 
     case UBX_CK_B:
     default:
+        if (byte == d->ubx_ck_b)
+        {
+            d->ubx_frames_ok++;      /* любой кадр с верной контрольной суммой: модуль на связи */
+        }
         if ((byte == d->ubx_ck_b) && (d->ubx_cls == 0x05U) && (d->ubx_id <= 0x01U) &&
             (d->ubx_len == 2U))
         {
@@ -444,9 +448,9 @@ gnss_diag_state_t gnss_diag_state(const gnss_diag_t *d)
     {
         return GNSS_DIAG_NO_DATA;
     }
-    if (d->sentences_ok == 0U)
+    if ((d->sentences_ok == 0U) && (d->ubx_frames_ok == 0U))
     {
-        return GNSS_DIAG_NOT_NMEA;
+        return GNSS_DIAG_NOT_NMEA;     /* нет ни корректного NMEA, ни корректного UBX */
     }
     if ((d->gga_seen && (d->gga_quality > 0U)) || (d->rmc_seen && d->rmc_valid))
     {

@@ -323,6 +323,23 @@ bool purrgo_gnss_ubx_apply_pvt(const uint8_t *p, uint16_t length, purrgo_gnss_so
 /* Остальные сообщения                                                       */
 /* ------------------------------------------------------------------------- */
 
+#define DOP_LENGTH 18U
+
+/*
+ * UBX-NAV-DOP: HDOP/VDOP/PDOP (масштаб 0,01 - как в решении). Единственный источник DOP, когда
+ * NMEA выключен (PURRGO_GNSS_UBX_NMEA = 0); при включённом NMEA те же значения приходят из GGA/GSA.
+ * Без решения приёмник отдаёт 99,99 - значение попадает в решение как есть.
+ */
+static void apply_dop(const uint8_t *p, uint16_t length, purrgo_gnss_solution_t *sol)
+{
+    if (sol == NULL || length != DOP_LENGTH) {
+        return;
+    }
+    sol->pdop_100 = (int32_t)rd_u16(&p[6]);
+    sol->vdop_100 = (int32_t)rd_u16(&p[10]);
+    sol->hdop_100 = (int32_t)rd_u16(&p[12]);
+}
+
 static void process_odo(const uint8_t *p, uint16_t length, uint32_t now_ms)
 {
     if (length != ODO_LENGTH || p[0] != 0U) {
@@ -453,11 +470,23 @@ bool purrgo_gnss_ubx_process_frame(uint8_t msg_class, uint8_t msg_id, const uint
                             (unsigned)((payload[11] >> 1) & 1U), (unsigned long)rd_u32(&payload[40]),
                             (unsigned)rd_u16(&payload[76]));
             }
+            s_st.pvt_valid = true;
+            s_st.pvt_fix_type = payload[20];
+            s_st.pvt_fix_ok = solution->valid;
+            s_st.pvt_time_valid = ((payload[11] >> 1) & 1U) != 0U;
+            s_st.pvt_num_sv = payload[23];
+            s_st.pvt_ms = now_ms;
+            s_st.pvt_count++;
+            if (solution->valid) {
+                s_st.pvt_fix_ok_count++;
+            }
             purrgo_gnss_adapter_pvt_applied();
             return true;
         }
         if (msg_id == PURRGO_UBX_ID_NAV_ODO) {
             process_odo(payload, length, now_ms);
+        } else if (msg_id == PURRGO_UBX_ID_NAV_DOP) {
+            apply_dop(payload, length, solution);
         }
     } else if (msg_class == PURRGO_UBX_CLASS_SEC && msg_id == PURRGO_UBX_ID_SEC_SIG) {
         process_sec_sig(payload, length, now_ms);

@@ -547,10 +547,11 @@ static void test_configure_frames(void)
     purrgo_gnss_receiver_configure_ubx(cfg_tx);
 
     /*
-     * VALSET: базовая, (набор систем), PVT, ODO, MON-RF, (SEC-SIG), одометр, динамика,
-     * (PSM: no-off и mode); последним кадром - опрос версии.
+     * VALSET: базовая, (набор систем), PVT, ODO, MON-RF, NAV-DOP, (SEC-SIG), одометр, динамика,
+     * (выключение NMEA), (PSM: no-off и mode); последним кадром - опрос версии.
      */
-    const int valsets = 6 + PURRGO_GNSS_SIGNAL_FRAME + PURRGO_GNSS_SEC_SIG + PURRGO_GNSS_PSM_FRAMES;
+    const int valsets = 7 + PURRGO_GNSS_SIGNAL_FRAME + PURRGO_GNSS_SEC_SIG + PURRGO_GNSS_PSM_FRAMES +
+                        PURRGO_GNSS_NMEA_OFF_FRAMES;
     CHECK(g_cfg_count == valsets + 1);
 
     /* Все кадры, кроме последнего (опрос версии), - VALSET, слой PURRGO_GNSS_UBX_LAYERS. */
@@ -567,6 +568,7 @@ static void test_configure_frames(void)
     const int pvt = frame_with_key(0x20910007U);
     const int odo = frame_with_key(0x2091007FU);
     const int rf  = frame_with_key(0x2091035AU);
+    const int dop = frame_with_key(0x20910039U);          /* UBX-NAV-DOP: HDOP/VDOP без NMEA */
     CHECK(pvt > 0 && odo > 0 && rf > 0);
     CHECK(pvt != odo && odo != rf && pvt != rf);
     CHECK(valset_value(pvt, 0x20910007U, &v) && v == 1);
@@ -582,6 +584,22 @@ static void test_configure_frames(void)
 
     /* Модель динамики - отдельным кадром. */
     const int dyn = frame_with_key(0x20110021U);
+    CHECK(dop > rf && valset_value(dop, 0x20910039U, &v) && v == 1);
+
+    /*
+     * NMEA на UART1 выключается отдельным кадром после остальной настройки (скорость UART уже
+     * определена по NMEA заводской настройки) и до PSM; при NAK остаётся сокращённый NMEA.
+     * Базовый кадр включает GGA/RMC/GSA в любом случае - это запасной путь.
+     */
+    const int noff = frame_with_key(0x10740002U);
+#if PURRGO_GNSS_NMEA_OFF
+    CHECK(noff == dyn + 1);
+    CHECK(valset_value(noff, 0x10740002U, &v) && v == 0);
+    CHECK(g_cfg_len[noff] == 17);                       /* один ключ: никаких других изменений протоколов */
+    CHECK(valset_value(0, 0x209100BBU, &v) && v == 1);  /* GGA в базовом кадре остаётся (запасной NMEA) */
+#else
+    CHECK(noff == -1);                                  /* NMEA не трогаем */
+#endif
     CHECK(dyn > 0 && dyn != od);
     CHECK(valset_value(dyn, 0x20110021U, &v) && v == (uint32_t)PURRGO_GNSS_DYNMODEL);
 
@@ -611,7 +629,7 @@ static void test_configure_frames(void)
     const int mode   = frame_with_key(0x20D00001U);
     CHECK(frame_with_key(0x10D0000AU) == -1);
 #if PURRGO_GNSS_PSM_ACTIVE
-    CHECK(no_off > dyn && mode == no_off + 1 && mode == valsets - 1);
+    CHECK(no_off == dyn + 1 + PURRGO_GNSS_NMEA_OFF_FRAMES && mode == no_off + 1 && mode == valsets - 1);
     CHECK(valset_value(no_off, 0x10D00008U, &v) && v == 1);
     CHECK(!valset_value(no_off, 0x20D00001U, &v));
     CHECK(valset_value(mode, 0x20D00001U, &v) && v == (uint32_t)PURRGO_GNSS_PSM);
@@ -629,6 +647,10 @@ static void test_configure_frames(void)
     CHECK(strcmp(purrgo_gnss_ubx_cfg_name((uint8_t)pvt), "NAV-PVT") == 0);
     CHECK(strcmp(purrgo_gnss_ubx_cfg_name((uint8_t)odo), "NAV-ODO") == 0);
     CHECK(strcmp(purrgo_gnss_ubx_cfg_name((uint8_t)rf), "MON-RF") == 0);
+    CHECK(strcmp(purrgo_gnss_ubx_cfg_name((uint8_t)dop), "NAV-DOP") == 0);
+#if PURRGO_GNSS_NMEA_OFF
+    CHECK(strcmp(purrgo_gnss_ubx_cfg_name((uint8_t)noff), "NMEA off") == 0);
+#endif
     CHECK(strcmp(purrgo_gnss_ubx_cfg_name((uint8_t)od), "ODO enable/profile") == 0);
     CHECK(strcmp(purrgo_gnss_ubx_cfg_name((uint8_t)dyn), "DYNMODEL") == 0);
 #if PURRGO_GNSS_SIGNAL_FRAME
@@ -1102,17 +1124,118 @@ static void test_trip_snapshot_and_screen(void)
 }
 #endif
 
+/* ------------------------------------------------------------------------- */
+/* UBX-NAV-DOP и работа без NMEA                                             */
+/* ------------------------------------------------------------------------- */
+
+static size_t dop_frame(uint16_t h, uint16_t v, uint16_t p_, uint8_t *out, size_t size)
+{
+    uint8_t pl[18];
+    memset(pl, 0, sizeof pl);
+    w16(&pl[4], 160); w16(&pl[6], p_); w16(&pl[8], 100); w16(&pl[10], v); w16(&pl[12], h);
+    w16(&pl[14], 70); w16(&pl[16], 80);
+    return make_frame(out, size, 0x01, 0x04, pl, 18);
+}
+
+static void test_dop_and_pvt_summary(void)
+{
+    purrgo_gnss_solution_t s;
+    uint8_t f[128];
+    pvt_t v = good_pvt();
+    size_t n;
+
+    memset(&s, 0, sizeof s);
+    purrgo_gnss_adapter_reset();
+    purrgo_gnss_ubx_init();
+    const purrgo_gnss_ubx_status_t *st = purrgo_gnss_ubx_status();
+    CHECK(!st->pvt_valid && st->pvt_count == 0);
+
+    /* UBX-NAV-DOP: единственный источник HDOP/VDOP без NMEA (масштаб 0,01, как в решении). */
+    n = dop_frame(92, 135, 161, f, sizeof f);
+    process(f, n, &s, 1000);
+    CHECK(s.hdop_100 == 92 && s.vdop_100 == 135 && s.pdop_100 == 161);
+    {   /* неверная длина игнорируется */
+        uint8_t shortp[17] = { 0 };
+        s.hdop_100 = 5;
+        CHECK(!purrgo_gnss_ubx_process_frame(0x01, 0x04, shortp, 17, &s, 1000));
+        CHECK(s.hdop_100 == 5);
+        CHECK(!purrgo_gnss_ubx_process_frame(0x01, 0x04, shortp, 18, NULL, 1000));   /* без решения - без падения */
+    }
+    n = dop_frame(9999, 9999, 9999, f, sizeof f);        /* нет решения: 99,99 */
+    process(f, n, &s, 2000);
+    CHECK(s.hdop_100 == 9999);
+
+    /* Сводка PVT для монитора: тип фикса, спутники, время, счётчики. */
+    n = pvt_frame(&v, f, sizeof f);
+    process(f, n, &s, 3000);
+    CHECK(st->pvt_valid && st->pvt_fix_type == 3 && st->pvt_fix_ok && st->pvt_time_valid);
+    CHECK(st->pvt_num_sv == 11 && st->pvt_ms == 3000 && st->pvt_count == 1 && st->pvt_fix_ok_count == 1);
+    v.fix_type = 0; v.flags = 0; v.valid = 0; v.num_sv = 0;
+    n = pvt_frame(&v, f, sizeof f);
+    process(f, n, &s, 4000);
+    CHECK(st->pvt_fix_type == 0 && !st->pvt_fix_ok && !st->pvt_time_valid && st->pvt_num_sv == 0);
+    CHECK(st->pvt_count == 2 && st->pvt_fix_ok_count == 1);
+    v = good_pvt(); v.valid = 0x01; v.fix_type = 5; v.flags = 0;    /* время есть, позиции нет */
+    n = pvt_frame(&v, f, sizeof f);
+    process(f, n, &s, 5000);
+    CHECK(!st->pvt_fix_ok && st->pvt_fix_type == 5 && st->pvt_count == 3 && st->pvt_fix_ok_count == 1);
+}
+
+#if PURRGO_GNSS_UBX
+/* Поток целиком без NMEA (после CFG-UART1OUTPROT-NMEA = 0): решение, время, DOP и таймаут - из UBX. */
+static void test_app_ubx_only(void)
+{
+    uint8_t f[128];
+    pvt_t v = good_pvt();
+    size_t n;
+
+    app_setup();
+    run_ticks(1000);
+    for (int i = 0; i < 12; i++) {
+        v.sec = (uint8_t)(i % 60);
+        n = pvt_frame(&v, f, sizeof f); feed_bytes(f, n);
+        n = dop_frame(95, 140, 170, f, sizeof f); feed_bytes(f, n);
+        n = odo_frame((uint32_t)(100 + i * 3), f, sizeof f); feed_bytes(f, n);
+        run_ticks(1000);
+    }
+    const purrgo_gnss_solution_t *s = purrgo_app_get_gnss_solution();
+    CHECK(s->valid && s->fix_type == 3 && s->satellites_tracked == 11);
+    CHECK(s->lat_1e7 == 507654321 && s->lon_1e7 == 98765432 && s->alt_m == 123);
+    CHECK(s->hdop_100 == 95 && s->vdop_100 == 140 && s->pdop_100 == 170);
+    CHECK(s->acc_valid && s->hacc_mm == 3500);
+    CHECK(s->year == 26 && s->month == 10 && s->day == 19);
+    CHECK(purrgo_gnss_ubx_status()->pvt_fix_ok_count == 12);
+
+    /* Решение пропало с потоком: таймаут по PVT (RMC нет вообще). */
+    run_ticks(7000);
+    CHECK(!s->valid && !s->acc_valid);
+
+    /* NMEA, пока не настроен модуль (заводская настройка) или после NAK на его выключение, по-прежнему
+     * разбирается: запасной путь без PVT. */
+    char line[160];
+    app_setup();
+    run_ticks(1000);
+    nmea(line, sizeof line, "GPRMC,123456.00,A,4807.038,N,01131.000,E,0.50,90.00,191026,,,A");
+    feed_text(line);
+    s = purrgo_app_get_gnss_solution();
+    CHECK(s->valid && s->lat_1e7 / 100000 == 4811);
+    CHECK(!s->acc_valid);                                  /* hAcc без PVT неизвестна */
+}
+#endif
+
 int main(void)
 {
     test_parser();
     test_pvt_mapping();
     test_pvt_over_nmea();
     test_status_messages();
+    test_dop_and_pvt_summary();
     test_trip_distance();
     test_configure_frames();
     test_logger_hacc_and_gpx();
 #if PURRGO_GNSS_UBX
     test_app_stream();
+    test_app_ubx_only();
     test_app_fix_survives_time_skew();
     test_app_new_track_resets_odo();
     test_trip_info_changes();
