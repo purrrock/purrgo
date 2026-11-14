@@ -1,4 +1,5 @@
-# Автоматический поиск всех .c файлов в текущей папке и подпапках
+# Исходники ядра лежат по подсистемам: gnss/ map/ nav/ book/ power/ ui/ gfx/ sys/.
+# Все .c в подпапках подхватываются автоматически.
 file(GLOB_RECURSE CORE_SOURCES CONFIGURE_DEPENDS "*.c")
 
 add_library(purrgo_core STATIC ${CORE_SOURCES})
@@ -7,6 +8,10 @@ add_library(purrgo_core STATIC ${CORE_SOURCES})
 target_include_directories(purrgo_core PUBLIC 
     ${CMAKE_CURRENT_SOURCE_DIR}/../../include
 )
+
+# Приватные заголовки между подсистемами подключаются от корня ядра: #include "map/map_projection.h".
+# Внутри одной подсистемы - по короткому имени (#include "map_idx.h").
+target_include_directories(purrgo_core PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 # Линкуем библиотеку парсинга NMEA
 target_link_libraries(purrgo_core PRIVATE minmea)

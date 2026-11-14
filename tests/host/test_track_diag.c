@@ -5,7 +5,7 @@
  * не пересобирать ядро: символы логгера берутся отсюда, а не из библиотеки.
  */
 #define PURRGO_TRACK_DIAG 1
-#include "track_logger.c"
+#include "nav/track_logger.c"
 
 #include <stdlib.h>
 #include "fake_fs.h"

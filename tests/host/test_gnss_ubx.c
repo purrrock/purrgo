@@ -20,7 +20,7 @@
 #include "purrgo/hardware_config.h"
 #include "purrgo/track_logger.h"
 #include "purrgo/trip_computer.h"
-#include "ui_trip.h"
+#include "ui/ui_trip.h"
 #include "fake_fs.h"
 #include "fake_power.h"
 #include "test_common.h"

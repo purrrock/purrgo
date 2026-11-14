@@ -8,7 +8,7 @@
 #include "purrgo/supply.h"
 #include "purrgo/trig.h"
 #include "purrgo/purrgo_poi_icons.h"
-#include "map_projection.h"
+#include "map/map_projection.h"
 #include <string.h>
 
 _Static_assert(PURRGO_WPT_TARGET_ICON < PURRGO_POI_ICON_COUNT, "wpt target icon out of range");

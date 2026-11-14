@@ -13,8 +13,8 @@
 #include "purrgo/fs_hal.h"
 #include "purrgo/map_style.h"
 #include "purrgo/purrgo_poi_icons.h"
-#include "map_internal.h"
-#include "map_culling.h"
+#include "map/map_internal.h"
+#include "map/map_culling.h"
 #include "fake_fs.h"
 #include "test_common.h"
 

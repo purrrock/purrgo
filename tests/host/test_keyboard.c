@@ -1,5 +1,5 @@
 /*
- * Host-тесты экранной клавиатуры En/Ru (src/core/keyboard.c, ui/ui_keyboard.c):
+ * Host-тесты экранной клавиатуры En/Ru (src/core/ui/keyboard.c, ui/ui_keyboard.c):
  *   - раскладки: коды букв, геометрия, отсутствие перекрытий и выхода за экран;
  *   - ввод: регистр, Shift (один раз / Caps), цифры, знаки, пробел, Backspace, лимит длины;
  *   - переключение EN/RU/SYM, перемещение курсора с замыканием и запоминанием столбца;
@@ -13,7 +13,7 @@
 #include "purrgo/hardware_config.h"
 #include "purrgo/keyboard.h"
 #include "purrgo/pc_display_stats.h"
-#include "ui_keyboard.h"
+#include "ui/ui_keyboard.h"
 #include "test_common.h"
 
 #define W PURRGO_HW_DISPLAY_WIDTH_PX

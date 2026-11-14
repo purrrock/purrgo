@@ -4,7 +4,7 @@
 /*
  * Единственная таблица синуса/косинуса проекта: sin_lut[91] / cos_lut[91]
  * (угол 0..90 градусов с шагом 1 градус, масштаб 10000), сгенерирована
- * tools/generate_sun_tables.py и лежит в src/core/sun_tables.c.
+ * tools/generate_sun_tables.py и лежит в src/core/nav/sun_tables.c.
  * Здесь только приведение угла по квадрантам; широта в 1e-7 градуса
  * интерполируется в purrgo_geo_cos_10k() (geo.c).
  */

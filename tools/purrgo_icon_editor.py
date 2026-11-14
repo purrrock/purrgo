@@ -491,7 +491,7 @@ class IconEditor:
             messagebox.showerror("Load error", str(exc))
 
     def _generate_c(self):
-        """C source with the icon data (src/core/purrgo_poi_icons.c).
+        """C source with the icon data (src/core/map/purrgo_poi_icons.c).
 
         The declaration (extern), the constants and the pixel format description
         are in the hand-written include/purrgo/purrgo_poi_icons.h.

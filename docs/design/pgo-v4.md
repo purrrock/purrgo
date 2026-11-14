@@ -27,7 +27,7 @@
   magic `SQT\x02`. По разделу 20 спецификации это смена формата, документ `docs/map-format-v3.md`
   и `docs/map-conformance.md` перевести в V4.
 - [ ] Компилятор: `purrgo_bin_writer.py` (`compile_idx`: раскладка блоков), `purrgo_models.py` (fan-out).
-- [ ] Прошивка: `src/core/map_idx.c` (читать блок в стековый буфер 512 Б, итерироваться по детям без
+- [ ] Прошивка: `src/core/map/map_idx.c` (читать блок в стековый буфер 512 Б, итерироваться по детям без
   `purrgo_fs_seek`); на переходный период читать V3 и V4 по magic.
 - [ ] Тесты: `tests/host/test_map.c` (корректный и повреждённый V4, фаззинг, глубина дерева, границы
   смещений), `tests/audit_maps.py`.

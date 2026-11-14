@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Сверяет таблицу src/core/pgo_text.c с _PGO_CHAR_MAP из purrgo_models.py.
+"""Сверяет таблицу src/core/book/pgo_text.c с _PGO_CHAR_MAP из purrgo_models.py.
 
 Запуск из корня репозитория:  python3 tests/check_pgo_text_table.py
 Код возврата 0 - таблицы совпадают.
@@ -15,7 +15,7 @@ ns = {}
 exec(models[start:end], ns)
 py = {ord(k): v for k, v in ns["_PGO_CHAR_MAP"].items() if ord(k) >= 0x80}
 
-c = (root / "src/core/pgo_text.c").read_text(encoding="utf-8")
+c = (root / "src/core/book/pgo_text.c").read_text(encoding="utf-8")
 body = c[c.index("k_pgo_map[] = {"):]
 body = body[:body.index("};")]
 cc = {int(a, 16): int(b, 16) for a, b in re.findall(r"\{\s*0x([0-9A-Fa-f]{4}),\s*0x([0-9A-Fa-f]{2})\s*\}", body)}

@@ -6,7 +6,7 @@
 
 # Host-тесты логгера считают точки в GPX и порядок тегов в <extensions>, поэтому ядру
 # для них нужна обычная (не диагностическая) запись трека. Значение по умолчанию в
-# src/core/track_logger.c может быть временно переключено на 1 для полевого теста, а
+# src/core/nav/track_logger.c может быть временно переключено на 1 для полевого теста, а
 # макрос не виден в TU тестов, поэтому задаём его явно. test_track_diag включает
 # track_logger.c в себя с PURRGO_TRACK_DIAG=1 и от этой настройки не зависит.
 if(NOT PURRGO_TRACK_DIAG)
@@ -26,7 +26,6 @@ foreach(test_src IN LISTS PURRGO_HOST_TESTS)
     target_include_directories(${test_name} PRIVATE
         ${PROJECT_SOURCE_DIR}/include
         ${PROJECT_SOURCE_DIR}/src/core
-        ${PROJECT_SOURCE_DIR}/src/core/ui
         ${CMAKE_CURRENT_SOURCE_DIR})
     target_compile_definitions(${test_name} PRIVATE
         TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
