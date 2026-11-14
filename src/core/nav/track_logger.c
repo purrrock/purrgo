@@ -63,6 +63,14 @@ static int32_t  prev_lat = 0;
 static int32_t  prev_lon = 0;
 /* Наибольшее продвижение вдоль последнего отрезка с момента его записи (плоские единицы 1e-7 градуса). */
 static int64_t  max_along = 0;
+/*
+ * Направление последней записанной точки по курсу приёмника (единичный вектор, 1024 = 1.0:
+ * восток, север). Точнее хорды prev -> last на дуге: хорда отстаёт от направления в конце
+ * отрезка, и поворот замечается поздно. last_dir_valid == false - курса не было (стоим, медленно).
+ */
+static bool     last_dir_valid = false;
+static int32_t  last_dir_e = 0;
+static int32_t  last_dir_n = 0;
 
 /*
  * Цепочка подряд отброшенных выбросов (скачок быстрее LOGGER_MAX_SPEED_MPS от
@@ -240,6 +248,18 @@ static bool finalize_active_file(void) {
 #define LOGGER_MAX_HACC_MM         ((uint32_t)PURRGO_GNSS_TRACK_MAX_HACC_M * 1000U)  /* hAcc выше - не пишем */
 #define LOGGER_MIN_SATELLITES      4U      /* меньше 4 спутников в решении - не пишем */
 #define LOGGER_STATIONARY_KNOTS_100 50     /* < 0.5 уз - стоим, дрейф координат - шум */
+/*
+ * При известной sAcc (UBX-NAV-PVT) порог стоянки - не ниже LOGGER_STATIONARY_SACC_X10/10 * sAcc:
+ * скорость, не отличимая от нуля по оценке самого приёмника, движением не считается. По
+ * 8-часовому треку на месте при плохом приёме скорость доходит до 1-2 м/с (sAcc ~0,7 м/с),
+ * и порог 0,5 уз не отбрасывал почти ничего. 1,5 - запас до обрыва: при 2,5 ходьба в плохом
+ * участке уже принимается за стоянку (см. docs/measurements/tracks/). Порог не выше
+ * LOGGER_STATIONARY_MAX_KNOTS_100, чтобы недостоверная sAcc не "останавливала" велосипед.
+ */
+#define LOGGER_STATIONARY_SACC_X10  15
+#define LOGGER_STATIONARY_MAX_KNOTS_100 400
+/* Курс приёмника как направление отрезка - от 2 м/с (на меньшей скорости он шумит). */
+#define LOGGER_COURSE_MIN_KNOTS_100 389
 #define LOGGER_MAX_SPEED_MPS       500U    /* быстрее - выброс (скачок координат) */
 #define LOGGER_OUTLIER_RESET_COUNT 5U      /* столько согласованных выбросов подряд - сброс опорной точки */
 
@@ -274,7 +294,7 @@ static const logger_filter_params_t* filter_params(void) {
 #define LOGGER_REJ_FIX_TYPE   0x01U   /* fix_type < 3 */
 #define LOGGER_REJ_HDOP       0x02U   /* HDOP > 5.0 */
 #define LOGGER_REJ_SATS       0x04U   /* меньше 4 спутников в решении */
-#define LOGGER_REJ_STATIONARY 0x08U   /* стоим: скорость < 0.5 уз */
+#define LOGGER_REJ_STATIONARY 0x08U   /* стоим: скорость < max(0.5 уз, 1.5 sAcc), см. stationary_threshold_100 */
 #define LOGGER_REJ_OUTLIER    0x10U   /* скачок быстрее LOGGER_MAX_SPEED_MPS */
 #define LOGGER_REJ_DECIMATED  0x20U   /* трек не изменился заметно (прореживание) */
 #define LOGGER_REJ_HACC       0x40U   /* hAcc (UBX-NAV-PVT) выше PURRGO_GNSS_TRACK_MAX_HACC_M */
@@ -296,6 +316,61 @@ static uint8_t quality_reject_mask(const purrgo_gnss_solution_t* fix) {
         mask |= LOGGER_REJ_SATS;
     }
     return mask;
+}
+
+/* Порог стоянки, сотые доли узла: см. LOGGER_STATIONARY_SACC_X10. */
+static int32_t stationary_threshold_100(const purrgo_gnss_solution_t* fix) {
+    int32_t thr = LOGGER_STATIONARY_KNOTS_100;
+    if (fix->acc_valid) {
+        /* sAcc, мм/с -> сотые доли узла: x * 360 / 1852. */
+        int64_t k = ((int64_t)fix->sacc_mm_s * 360 / 1852) * LOGGER_STATIONARY_SACC_X10 / 10;
+        if (k > LOGGER_STATIONARY_MAX_KNOTS_100) {
+            k = LOGGER_STATIONARY_MAX_KNOTS_100;
+        }
+        if (k > thr) {
+            thr = (int32_t)k;
+        }
+    }
+    return thr;
+}
+
+/* round(1024 * sin(a)), a = 0..90 градусов. */
+static const int16_t SIN1024[91] = {
+    0, 18, 36, 54, 71, 89, 107, 125, 143, 160, 178, 195, 213, 230, 248,
+    265, 282, 299, 316, 333, 350, 367, 384, 400, 416, 433, 449, 465, 481, 496,
+    512, 527, 543, 558, 573, 587, 602, 616, 630, 644, 658, 672, 685, 698, 711,
+    724, 737, 749, 761, 773, 784, 796, 807, 818, 828, 839, 849, 859, 868, 878,
+    887, 896, 904, 912, 920, 928, 935, 943, 949, 956, 962, 968, 974, 979, 984,
+    989, 994, 998, 1002, 1005, 1008, 1011, 1014, 1016, 1018, 1020, 1022, 1023, 1023, 1024,
+    1024
+};
+
+/* 1024 * sin(a), a - сотые доли градуса (любое неотрицательное значение). */
+static int32_t sin1024_c100(uint32_t c100) {
+    uint32_t a = (c100 / 100U) % 360U;
+    int32_t f = (int32_t)(c100 % 100U);
+    int32_t s0, s1;
+    for (int i = 0; i < 2; i++) {
+        uint32_t d = (a + (uint32_t)i) % 360U;
+        int32_t v;
+        if (d <= 90U)       v = SIN1024[d];
+        else if (d <= 180U) v = SIN1024[180U - d];
+        else if (d <= 270U) v = -SIN1024[d - 180U];
+        else                v = -SIN1024[360U - d];
+        if (i == 0) s0 = v; else s1 = v;
+    }
+    return s0 + (s1 - s0) * f / 100;
+}
+
+/* Направление по курсу GNSS (восток, север); false - курса нет или скорость мала. */
+static bool course_direction(const purrgo_gnss_solution_t* fix, int32_t* e, int32_t* n) {
+    if (!fix->course_valid || fix->course_deg_100 < 0 || fix->speed_knots < LOGGER_COURSE_MIN_KNOTS_100) {
+        return false;
+    }
+    uint32_t c = (uint32_t)fix->course_deg_100 % 36000U;
+    *e = sin1024_c100(c);
+    *n = sin1024_c100((c + 9000U) % 36000U);   /* cos(c) = sin(c + 90) */
+    return true;
 }
 
 static uint64_t isqrt_u64(uint64_t n) {
@@ -326,7 +401,7 @@ static void local_offset(int32_t from_lat, int32_t from_lon, int32_t cos_10k,
 
 /*
  * true - точка (lat, lon) заметно отличается от продолжения последнего отрезка
- * prev -> last: она дальше deviation_m от его прямой (поворот) либо вернулась назад
+ * (направление: курс приёмника в last, если он был надёжен, иначе хорда prev -> last): она дальше deviation_m от его прямой (поворот) либо вернулась назад
  * вдоль отрезка больше чем на deviation_m от наибольшего продвижения (разворот:
  * без этого прогулка "туда и обратно" по одной линии осталась бы без точки
  * разворота). Целочисленно: |cross| >= deviation * |u|, где u - вектор отрезка,
@@ -340,7 +415,12 @@ static bool deviates_from_last_segment(int32_t lat, int32_t lon, uint32_t deviat
     int32_t cos_10k = purrgo_geo_cos_10k(last_recorded_lat);
     int64_t ux, uy, vx, vy;
 
-    local_offset(prev_lat, prev_lon, cos_10k, last_recorded_lat, last_recorded_lon, &ux, &uy);
+    if (last_dir_valid) {
+        ux = last_dir_e;
+        uy = last_dir_n;
+    } else {
+        local_offset(prev_lat, prev_lon, cos_10k, last_recorded_lat, last_recorded_lon, &ux, &uy);
+    }
     local_offset(last_recorded_lat, last_recorded_lon, cos_10k, lat, lon, &vx, &vy);
 
     if (ux > limit || ux < -limit || uy > limit || uy < -limit ||
@@ -491,6 +571,7 @@ static bool logger_start_impl(const purrgo_gnss_solution_t* first_fix, bool keep
     points_since_sync = 0;
     prev_valid = false;
     max_along = 0;
+    last_dir_valid = false;
     outlier_count = 0;
 
     // Clear the RAM buffer for the new session
@@ -732,7 +813,7 @@ bool purrgo_logger_add_point(const purrgo_gnss_solution_t* fix) {
             outlier_count = 0;
 
             // Стоим на месте: смещение в пределах шума GNSS не пишем, остаётся точка по таймауту.
-            if (!timeout && fix->speed_knots < LOGGER_STATIONARY_KNOTS_100) {
+            if (!timeout && fix->speed_knots < stationary_threshold_100(fix)) {
                 return reject_point(fix, LOGGER_REJ_STATIONARY);
             }
 
@@ -741,7 +822,7 @@ bool purrgo_logger_add_point(const purrgo_gnss_solution_t* fix) {
             } else if (dist_m >= fp->min_step_m) {
                 // Направления ещё нет - берём первую точку за пределами шума; дальше только
                 // заметное изменение: поворот/разворот, предельная хорда.
-                should_record = !prev_valid ||
+                should_record = !(prev_valid || last_dir_valid) ||
                                 dist_m >= fp->max_chord_m ||
                                 deviates_from_last_segment(fix->lat_1e7, fix->lon_1e7, fp->deviation_m);
             }
@@ -769,6 +850,7 @@ bool purrgo_logger_add_point(const purrgo_gnss_solution_t* fix) {
     last_recorded_time = utc_epoch; // Фильтр хранит историю в UTC
     is_first_point = false;
     max_along = 0;
+    last_dir_valid = course_direction(fix, &last_dir_e, &last_dir_n);
     // Also add to the RAM circular buffer
     ram_track_buffer[ram_track_head].lat_1e7 = fix->lat_1e7;
     ram_track_buffer[ram_track_head].lon_1e7 = fix->lon_1e7;
@@ -907,6 +989,9 @@ void purrgo_logger_reset(void) {
     prev_lat = 0;
     prev_lon = 0;
     max_along = 0;
+    last_dir_valid = false;
+    last_dir_e = 0;
+    last_dir_n = 0;
     outlier_count = 0;
     outlier_lat = 0;
     outlier_lon = 0;
