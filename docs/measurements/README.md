@@ -5,7 +5,7 @@
 
 | Файл или папка | Что внутри |
 |---|---|
-| [`SD-speed-test-result.txt`](SD-speed-test-result.txt) | Лог `PURRGO_HW_TEST=SD_SPEED`: чтение microSD при SPI 10 и 20 МГц (до внедрения быстрого обмена `xfer_fast`, см. [`../hardware.md`](../hardware.md)) |
+| [`SD-speed-test-result.txt`](SD-speed-test-result.txt) | Лог `PURRGO_HW_TEST=SD_SPEED`: чтение microSD при SPI 10 и 20 МГц и повторный прогон после внедрения быстрого обмена `xfer_fast` (SPI 20 МГц, raw 2,17 МБ/с), см. [`../hardware.md`](../hardware.md) |
 | [`purrgo-stack-ram-monitor.txt`](purrgo-stack-ram-monitor.txt) | Журнал монитора стека и RAM (строки `STKMON`): статическая память, пик стека |
 | [`Batt-discharge/`](Batt-discharge/) | Кривые разряда батарей: `LIION.txt`, `ZINK-CARBON.txt` (время и напряжение на элемент) |
 | [`Current/`](Current/) | Потребляемый ток, мА (`timestamp;value mA`): `Debug, 10.11.2026` и `Release, 12.11.2026`, по файлу на сценарий (книга, карта, выключение и т. д.) |
