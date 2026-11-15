@@ -88,6 +88,10 @@ static uint32_t last_button_poll_ms;
  * Драйвер самостоятельно определяет SHORT/LONG.
  * Здесь физические кнопки уже не перебираются:
  * приложение получает готовые события.
+ *
+ * Вызывается раз в BUTTON_POLL_PERIOD_MS, но только пока это нужно драйверу
+ * (purrgo_stm32_buttons_poll_needed()): был фронт EXTI либо идёт debounce/
+ * удержание/отпускание.
  */
 static void process_buttons(void)
 {
@@ -302,11 +306,15 @@ void purrgo_stm32_process(void)
 
   /*
    * -----------------------------------------------------------------------
-   * 3. Опрос кнопок.
+   * 3. Кнопки.
    * -----------------------------------------------------------------------
+   * Фронт на K1..K4 приходит по EXTI и лишь взводит флаг в драйвере. Пока все
+   * кнопки отпущены и фронтов нет, опрашивать нечего; нажатая кнопка
+   * (debounce, LONG, отпускание) доопрашивается каждые BUTTON_POLL_PERIOD_MS.
    * FSM получает события через единый API purrgo_app_handle_button().
    */
   if (
+      purrgo_stm32_buttons_poll_needed() &&
       (uint32_t)(current_time_ms - last_button_poll_ms)
       >= BUTTON_POLL_PERIOD_MS
   )
