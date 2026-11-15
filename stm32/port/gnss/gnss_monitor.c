@@ -32,6 +32,7 @@ static gnss_diag_state_t s_last_state = GNSS_DIAG_NO_DATA;
 static uint32_t s_ubx_ack_reported = 0U;
 static uint32_t s_ubx_nak_reported = 0U;
 static bool s_last_reported_fix;
+static bool s_expect_gaps;   /* приёмник в PSMOO: между фиксами тишина - штатно */
 
 /* Связь с модулем (gnss_link): скорость UART и признак "поиск скорости закончен". */
 static uint32_t s_baud = PURRGO_GNSS_BAUD_DEFAULT;
@@ -77,6 +78,7 @@ void purrgo_gnss_monitor_link(uint32_t baud, bool ready)
 void purrgo_gnss_monitor_stop(void)
 {
     s_started = false;
+    s_expect_gaps = false;
 }
 
 void purrgo_gnss_monitor_feed(uint8_t byte)
@@ -124,6 +126,11 @@ static void seen_text(uint8_t mask, char *out, size_t size)
         }
     }
     out[n] = '\0';
+}
+
+void purrgo_gnss_monitor_expect_gaps(bool expect)
+{
+    s_expect_gaps = expect;
 }
 
 void purrgo_gnss_monitor_process(void)
@@ -174,7 +181,7 @@ void purrgo_gnss_monitor_process(void)
                    (unsigned)s_diag.ubx_last_cls, (unsigned)s_diag.ubx_last_id);
     }
 
-#if (PURRGO_GNSS_UBX != 0) && PURRGO_GNSS_PSM_ACTIVE
+#if (PURRGO_GNSS_UBX != 0) && PURRGO_GNSS_PSM_ANY
     /* Состояние энергосбережения приёмника (NAV-PVT.psmState): сообщаем при смене. */
     {
         static const char *const psm_names[] = {
@@ -192,6 +199,16 @@ void purrgo_gnss_monitor_process(void)
         }
     }
 #endif
+
+    /*
+     * PSMOO (трекер): приёмник молчит между фиксами, "нет данных", "нет фикса" и "связь есть, решения
+     * нет" здесь штатны. Состояние PSM и ответы приёмника выше сообщаются, остальное - нет.
+     */
+    if (s_expect_gaps)
+    {
+        s_last_state = state;
+        return;
+    }
 
     /* Решение получено: сообщить один раз и дальше молчать, пока оно не пропадёт. */
     if (state == GNSS_DIAG_FIX)

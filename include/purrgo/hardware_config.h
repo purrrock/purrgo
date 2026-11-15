@@ -116,6 +116,88 @@
 #endif
 
 /*
+ * PSMOO (ON/OFF) в режиме "трекер с отключённым дисплеем" (TRACKER (SCREEN OFF)).
+ *
+ * В этом режиме экран не обновляется, а запись трека не требует фикса каждую секунду.
+ * Приёмник переводится в PSMOO: раз в PURRGO_GNSS_TRACKER_PERIOD_S секунд просыпается,
+ * ищет фикс (горячий старт - порядка секунд), выдаёт решения PURRGO_GNSS_TRACKER_ONTIME_S
+ * секунд и засыпает; в остальное время чип приёмника почти не потребляет (между фиксами в
+ * потоке тишина, это штатно). При выходе из режима (K1+K4) приёмник будится по активности на
+ * RX (любой фронт на линии), получает обычную настройку и возвращается к PSMCT (или к полной
+ * мощности при PURRGO_GNSS_PSM = 0).
+ *
+ *   PURRGO_GNSS_TRACKER_PSMOO     1 - использовать PSMOO в трекере (по умолчанию), 0 - не менять
+ *                                 режим приёмника при входе в трекер (как раньше).
+ *   PURRGO_GNSS_TRACKER_PERIOD_S  период фиксов, с (по умолчанию 15). Допустимо >= 5 с (предел
+ *                                 CFG-PM-POSUPDATEPERIOD), по manual PSMOO предназначен для периодов
+ *                                 дольше 10 с (до 10 с - PSMCT). Все периоды привязаны к сетке
+ *                                 времени GPS (GRIDOFFSET = 0).
+ *   PURRGO_GNSS_TRACKER_ONTIME_S  сколько секунд приёмник остаётся в слежении после фикса и выдаёт
+ *                                 решения (по умолчанию 2). 0 - слежение лишь на миг: решение может
+ *                                 не успеть уйти по UART. Первая эпоха после горячего старта хуже
+ *                                 по точности, чем следующие: ONTIME побольше - точнее точка трека,
+ *                                 но больше ток.
+ *
+ * Что нужно PSMOO по manual (MAX-M10S, 3.6.2.4): в состоянии "off" RAM приёмника очищается вместе с
+ * настройкой, поэтому всё, что должно сохраниться (скорость UART, набор сообщений, параметры PSM),
+ * отправляется в слои RAM и BBR (PURRGO_GNSS_UBX_LAYERS_PERSIST); RTC работает на питании V_IO (у
+ * G10A-F30 вывода V_BCKP нет), пока EN = High. Если приёмник не может получить фикс, он не выходит из
+ * цикла: DONOTENTEROFF = 0 и ACQPERIOD = период, повторная попытка через период.
+ * Время ядра в трекере: фикс считается устаревшим по PURRGO_GNSS_TRACKER_FIX_TIMEOUT_MS.
+ */
+#ifndef PURRGO_GNSS_TRACKER_PSMOO
+#define PURRGO_GNSS_TRACKER_PSMOO 1
+#endif
+#if (PURRGO_GNSS_TRACKER_PSMOO != 0) && (PURRGO_GNSS_TRACKER_PSMOO != 1)
+#error "PURRGO_GNSS_TRACKER_PSMOO must be 0 or 1"
+#endif
+
+#ifndef PURRGO_GNSS_TRACKER_PERIOD_S
+#define PURRGO_GNSS_TRACKER_PERIOD_S 15
+#endif
+#ifndef PURRGO_GNSS_TRACKER_ONTIME_S
+#define PURRGO_GNSS_TRACKER_ONTIME_S 2
+#endif
+
+#if (PURRGO_HW_GNSS_RECEIVER == PURRGO_GNSS_RECEIVER_UBX) && PURRGO_GNSS_TRACKER_PSMOO
+#define PURRGO_GNSS_TRACKER_PSMOO_ACTIVE 1
+#if (PURRGO_GNSS_TRACKER_PERIOD_S < 5) || (PURRGO_GNSS_TRACKER_PERIOD_S > 3600)
+#error "PURRGO_GNSS_TRACKER_PERIOD_S must be 5..3600 (CFG-PM-POSUPDATEPERIOD >= 5 s)"
+#endif
+#if (PURRGO_GNSS_TRACKER_ONTIME_S < 0) || (PURRGO_GNSS_TRACKER_ONTIME_S >= PURRGO_GNSS_TRACKER_PERIOD_S)
+#error "PURRGO_GNSS_TRACKER_ONTIME_S must be 0..PURRGO_GNSS_TRACKER_PERIOD_S-1"
+#endif
+#define PURRGO_GNSS_TRACKER_PM_FRAMES 2   /* параметры PSMOO и OPERATEMODE */
+#define PURRGO_GNSS_TRACKER_BAUD_FRAME 1  /* скорость UART в слой BBR (после пробуждения RAM пуста) */
+/*
+ * Фикс в трекере моложе этого срока считается действующим: два периода (пропущенный цикл) и запас
+ * на поиск спутников после пробуждения (холодный поиск после потери сигнала) - 30 с.
+ */
+#define PURRGO_GNSS_TRACKER_FIX_TIMEOUT_MS \
+    ((2U * (unsigned)PURRGO_GNSS_TRACKER_PERIOD_S + 30U) * 1000U)
+#else
+#define PURRGO_GNSS_TRACKER_PSMOO_ACTIVE 0
+#define PURRGO_GNSS_TRACKER_PM_FRAMES 0
+#define PURRGO_GNSS_TRACKER_BAUD_FRAME 0
+#endif
+
+/* Приёмнику могут включить любой режим PSM (PSMCT в навигации или PSMOO в трекере). */
+#define PURRGO_GNSS_PSM_ANY ((PURRGO_GNSS_PSM_ACTIVE) || (PURRGO_GNSS_TRACKER_PSMOO_ACTIVE))
+
+/*
+ * Кадры PM в профиле навигации: при PSMCT - два (DONOTENTEROFF и OPERATEMODE); если PSMCT выключен, но
+ * возможен PSMOO в трекере - один (OPERATEMODE = FULL), чтобы возврат из трекера однозначно
+ * выключал PSMOO в слоях RAM и BBR.
+ */
+#if PURRGO_GNSS_PSM_ACTIVE
+#define PURRGO_GNSS_NAV_PM_FRAMES 2
+#elif PURRGO_GNSS_TRACKER_PSMOO_ACTIVE
+#define PURRGO_GNSS_NAV_PM_FRAMES 1
+#else
+#define PURRGO_GNSS_NAV_PM_FRAMES 0
+#endif
+
+/*
  * Набор спутниковых систем (CFG-SIGNAL-*), только для приёмника UBX.
  *
  * Заводской набор G10A-F30: GPS, Galileo, GLONASS, BeiDou B1C, QZSS, SBAS. В режиме
@@ -123,7 +205,7 @@
  *   - BeiDou B1C в PSM не поддерживается (B1I поддерживается, но его нельзя включать
  *     одновременно с B1C и GLONASS L1OF - даташит G10A-F30, сноска 1);
  *   - SBAS в PSM не принимается, manual рекомендует его отключить.
- * Поэтому при PURRGO_GNSS_PSM != OFF автоматически выключаются BeiDou и SBAS: в PSM они
+ * Поэтому при PURRGO_GNSS_PSM != OFF (и при PSMOO в трекере) автоматически выключаются BeiDou и SBAS: в PSM они
  * не работают. GPS, Galileo, GLONASS и QZSS остаются (по даташиту ток слежения в PSM
  * одинаков для GPS+GAL и GPS+GAL+GLO).
  *
@@ -158,8 +240,8 @@
  * Что выключает кадр CFG-SIGNAL (0/1): SBAS и BeiDou - вместе с PSM, GLONASS и BeiDou -
  * при PURRGO_GNSS_SIG_GPS_GAL. Кадр отправляется, если выключается хоть одна система.
  */
-#define PURRGO_GNSS_SIG_OFF_SBAS (PURRGO_GNSS_PSM_ACTIVE)
-#define PURRGO_GNSS_SIG_OFF_BDS  ((PURRGO_GNSS_PSM_ACTIVE) || (PURRGO_GNSS_SIGNALS_ACTIVE))
+#define PURRGO_GNSS_SIG_OFF_SBAS (PURRGO_GNSS_PSM_ANY)
+#define PURRGO_GNSS_SIG_OFF_BDS  ((PURRGO_GNSS_PSM_ANY) || (PURRGO_GNSS_SIGNALS_ACTIVE))
 #define PURRGO_GNSS_SIG_OFF_GLO  (PURRGO_GNSS_SIGNALS_ACTIVE)
 #define PURRGO_GNSS_SIGNAL_COUNT (PURRGO_GNSS_SIG_OFF_SBAS + PURRGO_GNSS_SIG_OFF_BDS + PURRGO_GNSS_SIG_OFF_GLO)
 
@@ -178,6 +260,13 @@
 #ifndef PURRGO_GNSS_UBX_LAYERS
 #define PURRGO_GNSS_UBX_LAYERS 0x01
 #endif
+
+/*
+ * Слои для настройки, которая должна пережить состояние "off" PSMOO (RAM приёмника в нём очищается):
+ * основные слои плюс BBR. Работает, пока приёмник питается (EN = High): backup-домен у G10A-F30
+ * получает питание от V_IO.
+ */
+#define PURRGO_GNSS_UBX_LAYERS_PERSIST ((PURRGO_GNSS_UBX_LAYERS) | 0x02)
 
 /*
  * ============================================================================

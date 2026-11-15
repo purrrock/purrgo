@@ -4,6 +4,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "purrgo/gnss_receiver.h"
+
 /**
  * @brief Initialize GNSS input.
  */
@@ -62,5 +64,20 @@ void purrgo_gnss_power_off(void);
  * @return true, если данные переданы.
  */
 bool purrgo_gnss_write(const uint8_t *data, uint16_t length);
+
+/**
+ * @brief Переключить профиль настройки приёмника (см. purrgo_gnss_profile_t в gnss_receiver.h).
+ *
+ * Навигация (PURRGO_GNSS_PROFILE_NAV) - данные каждую секунду, PSMCT; трекер
+ * (PURRGO_GNSS_PROFILE_TRACKER) - PSMOO: приёмник просыпается раз в PURRGO_GNSS_TRACKER_PERIOD_S и
+ * между фиксами молчит. Вызывается ядром при входе в режим TRACKER (SCREEN OFF) и выходе из него.
+ *
+ * STM32: не блокирует. Вход в трекер - сразу отправка настройки (повторно через
+ * PURRGO_GNSS_CONFIG_RETRY_MS); выход - приёмник будится активностью на RX, настройка навигации
+ * уходит после паузы. Пока GNSS выключен или идёт поиск скорости UART, профиль запоминается и
+ * применяется после установления связи. Повторный вызов с тем же профилем ничего не делает.
+ * PC: заглушка.
+ */
+void purrgo_gnss_set_profile(purrgo_gnss_profile_t profile);
 
 #endif /* PURRGO_GNSS_IO_H */

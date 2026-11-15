@@ -69,7 +69,7 @@ extern "C" {
 #define PURRGO_UBX_ANT_OPEN      4U
 
 /* Ответы приёмника на UBX-CFG-VALSET (ACK/NAK) приходят в порядке отправки. */
-#define PURRGO_UBX_CFG_MAX_TRACKED 16U
+#define PURRGO_UBX_CFG_MAX_TRACKED 24U
 
 /* Данные считаются устаревшими, если сообщение не приходило дольше (мс). */
 #define PURRGO_UBX_STALE_MS 3500U

@@ -22,11 +22,32 @@ extern "C" {
 typedef void (*purrgo_gnss_tx_fn)(const uint8_t *data, size_t len);
 
 /*
+ * Профиль настройки приёмника:
+ *   PURRGO_GNSS_PROFILE_NAV     - навигация (карта, путевой компьютер): данные каждую секунду,
+ *                                 при PURRGO_GNSS_PSM = PSMCT;
+ *   PURRGO_GNSS_PROFILE_TRACKER - режим "трекер с отключённым дисплеем": PSMOO, фиксы раз в
+ *                                 PURRGO_GNSS_TRACKER_PERIOD_S (если PURRGO_GNSS_TRACKER_PSMOO = 0,
+ *                                 совпадает с PURRGO_GNSS_PROFILE_NAV).
+ */
+typedef enum {
+    PURRGO_GNSS_PROFILE_NAV = 0,
+    PURRGO_GNSS_PROFILE_TRACKER
+} purrgo_gnss_profile_t;
+
+/*
  * Отправляет приёмнику стартовую конфигурацию выбранной модели
- * (PURRGO_HW_GNSS_RECEIVER). Вызывать после запуска приёма, чтобы не пропустить
- * ответы приёмника. Конфигурация идемпотентна: можно отправлять повторно.
+ * (PURRGO_HW_GNSS_RECEIVER) для профиля навигации. Вызывать после запуска приёма, чтобы не
+ * пропустить ответы приёмника. Конфигурация идемпотентна: можно отправлять повторно.
  */
 void purrgo_gnss_receiver_configure(purrgo_gnss_tx_fn tx);
+
+/*
+ * То же для заданного профиля. uart_baud - текущая скорость UART приёмника (0 - не задана): в профиле
+ * трекера она записывается в слой BBR, потому что RAM приёмника в состоянии "off" PSMOO очищается и
+ * без этого модуль после пробуждения оказался бы на заводской скорости.
+ */
+void purrgo_gnss_receiver_configure_profile(purrgo_gnss_tx_fn tx, purrgo_gnss_profile_t profile,
+                                            uint32_t uart_baud);
 
 /*
  * Реализация для u-blox M10 (всегда доступна, в том числе для host-тестов).
@@ -36,6 +57,8 @@ void purrgo_gnss_receiver_configure(purrgo_gnss_tx_fn tx);
  * (CFG-UART1OUTPROT-NMEA, PURRGO_GNSS_UBX_NMEA = 0) и опрос UBX-MON-VER.
  */
 void purrgo_gnss_receiver_configure_ubx(purrgo_gnss_tx_fn tx);
+void purrgo_gnss_receiver_configure_ubx_profile(purrgo_gnss_tx_fn tx, purrgo_gnss_profile_t profile,
+                                                uint32_t uart_baud);
 
 /*
  * Собирает команду смены скорости UART приёмника на baud бит/с (u-blox M10:

@@ -12,7 +12,7 @@
  * на PVT, ODO, MON-RF, NAV-DOP, (SEC-SIG), (NAV-STATUS, NAV-SAT, ITFM), одометр, модель динамики,
  * (выключение таймпульса, NMEA) и опрос MON-VER.
  */
-#define EXPECTED_FRAMES (1 + PURRGO_GNSS_SIGNAL_FRAME + PURRGO_GNSS_PSM_FRAMES + \
+#define EXPECTED_FRAMES (1 + PURRGO_GNSS_SIGNAL_FRAME + PURRGO_GNSS_NAV_PM_FRAMES + \
                          (PURRGO_GNSS_UBX ? (7 + PURRGO_GNSS_SEC_SIG + PURRGO_GNSS_DIAG_FRAMES + \
                                              PURRGO_GNSS_NMEA_OFF_FRAMES + \
                                              PURRGO_GNSS_TIMEPULSE_FRAMES) : 0))
@@ -198,6 +198,8 @@ static void test_power_save(void)
     CHECK(no_off == 1 && p2 == 1 && f2 + 1 == frame);
     CHECK(find_key(0x10D0000AU, &f2, &p2) == -1);                  /* UPDATEEPH по умолчанию уже включён */
     CHECK(find_key(0x30210001U, &f2, &p2) >= 0 && f2 != frame);    /* частота решений - в другом кадре */
+#elif PURRGO_GNSS_TRACKER_PSMOO_ACTIVE
+    CHECK(mode == 0 && pairs == 1 && no_off == -1);                /* только возврат к полной мощности */
 #else
     CHECK(mode == -1 && no_off == -1);
 #endif

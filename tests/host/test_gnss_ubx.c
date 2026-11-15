@@ -541,13 +541,13 @@ static void test_trip_distance(void)
 /* Стартовая настройка приёмника                                             */
 /* ------------------------------------------------------------------------- */
 
-static uint8_t g_cfg[16][128];
-static size_t g_cfg_len[16];
+static uint8_t g_cfg[32][128];
+static size_t g_cfg_len[32];
 static int g_cfg_count;
 
 static void cfg_tx(const uint8_t *data, size_t len)
 {
-    if (g_cfg_count < 16 && len <= sizeof g_cfg[0]) {
+    if (g_cfg_count < 32 && len <= sizeof g_cfg[0]) {
         memcpy(g_cfg[g_cfg_count], data, len);
         g_cfg_len[g_cfg_count++] = len;
     }
@@ -597,13 +597,18 @@ static void test_configure_frames(void)
      * (выключение таймпульса), (выключение NMEA), (PSM: no-off и mode); последним кадром - опрос версии.
      */
     const int valsets = 7 + PURRGO_GNSS_SIGNAL_FRAME + PURRGO_GNSS_SEC_SIG + PURRGO_GNSS_DIAG_FRAMES +
-                        PURRGO_GNSS_PSM_FRAMES + PURRGO_GNSS_NMEA_OFF_FRAMES +
+                        PURRGO_GNSS_NAV_PM_FRAMES + PURRGO_GNSS_NMEA_OFF_FRAMES +
                         PURRGO_GNSS_TIMEPULSE_FRAMES;
     CHECK(g_cfg_count == valsets + 1);
 
-    /* Все кадры, кроме последнего (опрос версии), - VALSET, слой PURRGO_GNSS_UBX_LAYERS. */
+    /*
+     * Все кадры, кроме последнего (опрос версии), - VALSET. Слой - PURRGO_GNSS_UBX_LAYERS, кроме ключей
+     * CFG-PM (режим энергосбережения): их записываем ещё и в BBR, чтобы возврат из трекера перезаписал PSMOO.
+     */
     for (int i = 0; i < g_cfg_count - 1; i++) {
-        CHECK(g_cfg[i][2] == 0x06 && g_cfg[i][3] == 0x8A && g_cfg[i][7] == (uint8_t)PURRGO_GNSS_UBX_LAYERS);
+        const bool pm = valset_value(i, 0x20D00001U, &v) || valset_value(i, 0x10D00008U, &v);
+        const uint8_t want = pm ? (uint8_t)PURRGO_GNSS_UBX_LAYERS_PERSIST : (uint8_t)PURRGO_GNSS_UBX_LAYERS;
+        CHECK(g_cfg[i][2] == 0x06 && g_cfg[i][3] == 0x8A && g_cfg[i][7] == want);
     }
 
     /* Базовая настройка не изменилась и идёт первым кадром. */
@@ -710,6 +715,10 @@ static void test_configure_frames(void)
     CHECK(valset_value(no_off, 0x10D00008U, &v) && v == 1);
     CHECK(!valset_value(no_off, 0x20D00001U, &v));
     CHECK(valset_value(mode, 0x20D00001U, &v) && v == (uint32_t)PURRGO_GNSS_PSM);
+#elif PURRGO_GNSS_TRACKER_PSMOO_ACTIVE
+    /* PSMCT выключен, но возможен PSMOO: возврат из трекера однозначно выключает его (OPERATEMODE = FULL). */
+    CHECK(no_off == -1);
+    CHECK(mode == valsets - 1 && valset_value(mode, 0x20D00001U, &v) && v == 0);
 #else
     CHECK(no_off == -1 && mode == -1);
 #endif
@@ -738,6 +747,8 @@ static void test_configure_frames(void)
 #endif
 #if PURRGO_GNSS_PSM_ACTIVE
     CHECK(strcmp(purrgo_gnss_ubx_cfg_name((uint8_t)no_off), "PSM no-off") == 0);
+#endif
+#if PURRGO_GNSS_PSM_ANY
     CHECK(strcmp(purrgo_gnss_ubx_cfg_name((uint8_t)mode), "PSM mode") == 0);
 #endif
 
@@ -771,9 +782,101 @@ static void test_configure_frames(void)
 #else
     g_cfg_count = 0;
     purrgo_gnss_receiver_configure_ubx(cfg_tx);
-    CHECK(g_cfg_count == 1 + PURRGO_GNSS_SIGNAL_FRAME + PURRGO_GNSS_PSM_FRAMES);   /* NMEA-настройка, набор систем, PSM */
+    CHECK(g_cfg_count == 1 + PURRGO_GNSS_SIGNAL_FRAME + PURRGO_GNSS_NAV_PM_FRAMES);   /* NMEA-настройка, набор систем, PSM */
 #endif
 }
+
+/* Профиль трекера: PSMOO, вся настройка в слоях RAM и BBR (после "off" RAM приёмника пуста). */
+#if PURRGO_GNSS_UBX && PURRGO_GNSS_TRACKER_PSMOO_ACTIVE
+/* Значение ключа любого размера (1, 2 или 4 байта, little-endian) в кадре VALSET. */
+static bool valset_value_n(int frame_idx, uint32_t key, uint32_t *value)
+{
+    const uint8_t *f = g_cfg[frame_idx];
+    const size_t len = g_cfg_len[frame_idx];
+    size_t pos = 10;
+
+    while (pos + 5 <= len - 2) {
+        uint32_t k = (uint32_t)f[pos] | ((uint32_t)f[pos + 1] << 8) | ((uint32_t)f[pos + 2] << 16) |
+                     ((uint32_t)f[pos + 3] << 24);
+        const size_t vs = (((k >> 28) & 7U) == 3U) ? 2U : (((k >> 28) & 7U) == 4U ? 4U : 1U);
+        if (k == key) {
+            uint32_t x = 0;
+            for (size_t b = 0; b < vs; b++) { x |= (uint32_t)f[pos + 4 + b] << (8U * b); }
+            *value = x;
+            return true;
+        }
+        pos += 4 + vs;
+    }
+    return false;
+}
+
+static void test_tracker_profile(void)
+{
+    uint32_t v = 99;
+    const int common = 7 + PURRGO_GNSS_SIGNAL_FRAME + PURRGO_GNSS_SEC_SIG + PURRGO_GNSS_DIAG_FRAMES +
+                       PURRGO_GNSS_NMEA_OFF_FRAMES + PURRGO_GNSS_TIMEPULSE_FRAMES;
+
+    /* Скорость UART известна: отдельный кадр в BBR. */
+    g_cfg_count = 0;
+    purrgo_gnss_receiver_configure_profile(cfg_tx, PURRGO_GNSS_PROFILE_TRACKER, 115200U);
+    const int valsets = common + PURRGO_GNSS_TRACKER_PM_FRAMES + PURRGO_GNSS_TRACKER_BAUD_FRAME;
+    CHECK(g_cfg_count == valsets + 1);
+
+    /* Все VALSET - в слои RAM и BBR. */
+    for (int i = 0; i < valsets; i++) {
+        CHECK(g_cfg[i][2] == 0x06 && g_cfg[i][3] == 0x8A);
+        CHECK(g_cfg[i][7] == (uint8_t)PURRGO_GNSS_UBX_LAYERS_PERSIST);
+        CHECK((g_cfg[i][7] & 0x02U) != 0U);
+    }
+
+    /* Скорость UART: ключ CFG-UART1-BAUDRATE, значение 115200, до режима энергосбережения. */
+    const int baud = frame_with_key(0x40520001U);
+    CHECK(baud > 0 && valset_value_n(baud, 0x40520001U, &v) && v == 115200U);
+
+    /* Параметры PSMOO одним кадром, OPERATEMODE = PSMOO - последним VALSET. */
+    const int params = frame_with_key(0x40D00002U);
+    const int mode = frame_with_key(0x20D00001U);
+    CHECK(params > baud && mode == params + 1 && mode == valsets - 1);
+    CHECK(valset_value_n(params, 0x40D00002U, &v) && v == (uint32_t)PURRGO_GNSS_TRACKER_PERIOD_S);
+    CHECK(valset_value_n(params, 0x40D00003U, &v) && v == (uint32_t)PURRGO_GNSS_TRACKER_PERIOD_S);
+    CHECK(valset_value_n(params, 0x30D00005U, &v) && v == (uint32_t)PURRGO_GNSS_TRACKER_ONTIME_S);
+    CHECK(valset_value_n(params, 0x10D00008U, &v) && v == 0);           /* DONOTENTEROFF выключен */
+    CHECK(valset_value_n(mode, 0x20D00001U, &v) && v == 1);             /* PSMOO */
+    CHECK(!valset_value_n(mode, 0x40D00002U, &v));
+    CHECK(frame_with_key(0x10D0000AU) == -1);                           /* UPDATEEPH по умолчанию включён */
+
+    /* PSMOO не работает с BeiDou B1C и SBAS: выключены и в профиле трекера. */
+    CHECK(frame_with_key(0x10310022U) == 1 && frame_with_key(0x10310020U) == 1);
+
+    /* Имена групп для лога NAK совпадают с кадрами. */
+    CHECK(strcmp(purrgo_gnss_ubx_cfg_name((uint8_t)baud), "UART baud") == 0);
+    CHECK(strcmp(purrgo_gnss_ubx_cfg_name((uint8_t)params), "PSMOO params") == 0);
+    CHECK(strcmp(purrgo_gnss_ubx_cfg_name((uint8_t)mode), "PSMOO mode") == 0);
+    CHECK(purrgo_gnss_ubx_cfg_name((uint8_t)valsets) == NULL);
+
+    /* Скорость неизвестна (0): кадра скорости нет. */
+    g_cfg_count = 0;
+    purrgo_gnss_receiver_configure_profile(cfg_tx, PURRGO_GNSS_PROFILE_TRACKER, 0U);
+    CHECK(g_cfg_count == common + PURRGO_GNSS_TRACKER_PM_FRAMES + 1);
+    CHECK(frame_with_key(0x40520001U) == -1);
+
+    /*
+     * Возврат в навигацию: PM-ключи перезаписываются в BBR и RAM режимом навигации (не PSMOO), остальная
+     * настройка идёт в обычный слой, параметров PSMOO нет.
+     */
+    g_cfg_count = 0;
+    purrgo_gnss_receiver_configure_profile(cfg_tx, PURRGO_GNSS_PROFILE_NAV, 115200U);
+    CHECK(g_cfg_count == common + PURRGO_GNSS_NAV_PM_FRAMES + 1);
+    const int nav_mode = frame_with_key(0x20D00001U);
+    CHECK(nav_mode == g_cfg_count - 2);
+    CHECK(valset_value_n(nav_mode, 0x20D00001U, &v) && v != 1);
+    CHECK(g_cfg[nav_mode][7] == (uint8_t)PURRGO_GNSS_UBX_LAYERS_PERSIST);
+    CHECK(frame_with_key(0x40D00002U) == -1 && frame_with_key(0x40520001U) == -1);
+    CHECK(g_cfg[0][7] == (uint8_t)PURRGO_GNSS_UBX_LAYERS);
+}
+#else
+static void test_tracker_profile(void) {}
+#endif
 
 /* ------------------------------------------------------------------------- */
 /* Логгер: колбэк нового трека, фильтр hAcc, теги GPX                        */
@@ -1473,6 +1576,7 @@ int main(void)
     test_dop_and_pvt_summary();
     test_trip_distance();
     test_configure_frames();
+    test_tracker_profile();
     test_logger_hacc_and_gpx();
 #if PURRGO_GNSS_UBX
     test_app_stream();

@@ -14,11 +14,13 @@
 #include "purrgo/app_fsm.h"
 #include "purrgo/app_ui.h"
 #include "purrgo/config.h"
+#include "purrgo/gnss_receiver.h"
 #include "purrgo/menu_controller.h"
 #include "purrgo/track_logger.h"
 #include "purrgo/hardware_config.h"
 #include "purrgo/ui/ui_dirty.h"
 #include "fake_fs.h"
+#include "fake_power.h"
 #include "test_common.h"
 
 static uint32_t g_now;
@@ -85,6 +87,7 @@ static void test_tracker_mode(void)
     char text[64];
 
     fake_fs_reset();
+    fake_power_reset();
     memset(&app_config, 0, sizeof app_config);
     g_now = 200000;
     purrgo_logger_reset();
@@ -124,6 +127,10 @@ static void test_tracker_mode(void)
     CHECK(purrgo_app_get_state() == APP_STATE_TRACKER_SCREEN_OFF);
     CHECK(purrgo_app_tracker_mode_active());
 
+    /* Приёмник - в профиль трекера (PSMOO). */
+    CHECK(fake_gnss_profile_calls() == 1);
+    CHECK(fake_gnss_profile_last() == (int)PURRGO_GNSS_PROFILE_TRACKER);
+
     /* Запись как в EXPEDITION; настройка пользователя не тронута. */
     CHECK(purrgo_logger_get_mode() == LOGGER_MODE_EXPEDITION);
     CHECK(app_config.log_mode == LOGGER_MODE_STANDARD);
@@ -162,6 +169,8 @@ static void test_tracker_mode(void)
     purrgo_app_handle_button(PURRGO_BTN_COMBO_K1_K4);
     CHECK(purrgo_app_get_state() == APP_STATE_MAP);
     CHECK(!purrgo_app_tracker_mode_active());
+    CHECK(fake_gnss_profile_calls() == 2);                                  /* вход и выход */
+    CHECK(fake_gnss_profile_last() == (int)PURRGO_GNSS_PROFILE_NAV);        /* приёмник снова отдаёт данные каждую секунду */
     CHECK(purrgo_logger_get_mode() == LOGGER_MODE_STANDARD);
     CHECK(purrgo_app_ui_needs_render(g_now));
     CHECK(purrgo_logger_get_track_point_count() >= points_before);
@@ -211,8 +220,62 @@ static void test_tracker_exit_restores_off(void)
     CHECK(purrgo_logger_get_state() == LOGGER_STATE_IDLE);
 }
 
+/*
+ * PSMOO: приёмник выдаёт решение раз в период и молчит между ними. Фикс остаётся действующим до
+ * длинного таймаута трекера (а не 5 с); без решений дольше таймаута фикс сбрасывается.
+ *
+ * Что здесь НЕ проверяется: логгер получает каждое решение один раз, а не копию устаревшего фикса
+ * каждую секунду (app_fsm.c, gnss_fix_seq). Копии видны только в диагностической сборке трека
+ * (PURRGO_TRACK_DIAG=1 пишет в GPX отброшенные эпохи), а host-тесты собираются с PURRGO_TRACK_DIAG=0.
+ */
+static void test_tracker_sparse_fixes(void)
+{
+#if PURRGO_GNSS_TRACKER_PSMOO_ACTIVE
+    gfx_context_t g;
+
+    fake_fs_reset();
+    fake_power_reset();
+    memset(&app_config, 0, sizeof app_config);
+    g_now = 800000;
+    purrgo_logger_reset();
+    purrgo_app_ui_reset();
+    purrgo_app_init();
+    app_config.log_mode = LOGGER_MODE_STANDARD;
+    purrgo_logger_set_mode(app_config.log_mode);
+    CHECK(gfx_init(&g, W, H, g_fb, cb_draw, cb_read));
+
+    run_ticks(1000);
+    feed_epoch(10, 0);
+    run_ticks(1000);
+    purrgo_app_ui_render(&g, purrgo_app_get_gnss_solution(), NULL);
+    purrgo_app_handle_button(PURRGO_BTN_KEY4_LONG);
+    purrgo_app_handle_button(PURRGO_BTN_KEY4_SHORT);
+    for (int i = 0; i < 3; i++) { purrgo_app_handle_button(PURRGO_BTN_KEY2_SHORT); }
+    purrgo_app_handle_button(PURRGO_BTN_KEY3_SHORT);
+    CHECK(purrgo_app_tracker_mode_active());
+    CHECK(fake_gnss_profile_last() == (int)PURRGO_GNSS_PROFILE_TRACKER);
+
+    /* Решение раз в период: между ними фикс действует (дольше обычных 5 с). */
+    feed_epoch(11, 1);
+    run_ticks(3000);
+    CHECK(purrgo_logger_get_state() == LOGGER_STATE_RECORDING);
+
+    run_ticks(((uint32_t)PURRGO_GNSS_TRACKER_PERIOD_S * 1000U) - 3000U);
+    CHECK(purrgo_app_get_gnss_solution()->valid);          /* ровно один период без решения */
+    CHECK(PURRGO_GNSS_TRACKER_FIX_TIMEOUT_MS > 5000U);
+
+    /* Решений нет дольше таймаута трекера: фикс сброшен. */
+    run_ticks(PURRGO_GNSS_TRACKER_FIX_TIMEOUT_MS);
+    CHECK(!purrgo_app_get_gnss_solution()->valid);
+
+    purrgo_app_handle_button(PURRGO_BTN_COMBO_K1_K4);
+    CHECK(fake_gnss_profile_last() == (int)PURRGO_GNSS_PROFILE_NAV);
+#endif
+}
+
 int main(void)
 {
+    test_tracker_sparse_fixes();
     test_tracker_mode();
     test_tracker_exit_restores_off();
     return test_finish("test_tracker_mode");
