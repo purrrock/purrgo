@@ -96,9 +96,8 @@
 - [ ] Остальные источники пробуждения: UART приёма GNSS, RTC (периодические задачи, таймаут экрана), EXTI по BUSY E-Ink (вместо опроса из цикла).
 - [x] EXTI кнопок включается перед входом в Stop 2 и снимается после пробуждения (`arm_buttons()`/`disarm_buttons()`).
 - [x] Кнопки на постоянном EXTI (K1..K4, оба фронта, Pull-up; CubeMX: EXTI0, EXTI1, EXTI14, EXTI15): прерывание только взводит флаг, debounce и SHORT/LONG остаются по таймеру,
-  опрос `BUTTON_POLL_PERIOD_MS` идёт, пока `purrgo_stm32_buttons_poll_needed()` (нажата кнопка / был фронт). Если EXTI в CubeMX не настроен, драйвер при старте
-  это находит (`BUTTONS INIT: EXTI not configured...`) и опрашивает кнопки постоянно.
-- [ ] **[HW]** Проверить кнопки после перехода на EXTI: SHORT/LONG, комбинация K1+K4 в режиме трекера, пробуждение K1..K4 из Stop 2 в читалке, в логе `BUTTONS INIT (EXTI)`.
+  опрос `BUTTON_POLL_PERIOD_MS` идёт, пока `purrgo_stm32_buttons_poll_needed()` (нажата кнопка / был фронт).
+- [ ] **[HW]** Проверить кнопки после перехода на EXTI: SHORT/LONG, комбинация K1+K4 в режиме трекера, пробуждение K1..K4 из Stop 2 в читалке.
 - [ ] **[проверить]** Приём GNSS из Stop 2 — LPUART1; LPDMA1 (домен SRD) работает в Stop.
   - Вариант B: GNSS на LPUART1 + LPDMA1 для Stop 2 (LPUART1 на PA2/PA3 и приём через LPDMA1 Channel 0 — уже сделаны, в Run). Буфер приёма и узел очереди уже в SRAM4 (LPDMA1 видит только её). Остаётся Stop 2: пробуждение по заполнению буфера/IDLE.
 - [ ] **[решение]** Standby или Shutdown для выключения (Shutdown — минимальный ток, но сбрасывает SRAM и backup).

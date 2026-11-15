@@ -31,8 +31,8 @@
  *     computed in purrgo_stm32_buttons_update(), which the main loop calls
  *     every 10 ms while purrgo_stm32_buttons_poll_needed() is true.
  *
- * If the EXTI lines are not configured (CubeMX not regenerated yet), the driver
- * detects it at start and falls back to unconditional polling.
+ * The EXTI lines of K1..K4 (both edges, pull-up) and their NVIC vectors must be
+ * enabled in CubeMX: without them a button press is never noticed.
  */
 
 #ifndef PURRGO_STM32_BUTTONS_H
@@ -46,8 +46,7 @@
  *
  * GPIO and EXTI configuration is performed by CubeMX-generated
  * MX_GPIO_Init(). This function initializes the driver's
- * internal state from the current GPIO levels and checks that the
- * EXTI lines of K1..K4 are configured.
+ * internal state from the current GPIO levels.
  */
 void purrgo_stm32_buttons_init(void);
 
@@ -65,8 +64,7 @@ void purrgo_stm32_buttons_update(void);
  * @brief Whether purrgo_stm32_buttons_update() has to be called now.
  *
  * true  - an EXTI edge is pending, or a button is pressed / still being
- *         debounced / an event is queued (time based work is in progress), or
- *         EXTI is not configured and the driver polls all the time;
+ *         debounced / an event is queued (time based work is in progress);
  * false - all buttons are released and stable and no edge was seen: there is
  *         nothing to compute until the next EXTI edge.
  */
@@ -80,13 +78,6 @@ bool purrgo_stm32_buttons_poll_needed(void);
  * look at the pin level). Safe to call from any context.
  */
 void purrgo_stm32_buttons_request_poll(void);
-
-/**
- * @brief true if the K1..K4 EXTI lines were found configured at init.
- *
- * Used by stop_mode.c to decide how to restore the pins after Stop 2.
- */
-bool purrgo_stm32_buttons_exti_mode(void);
 
 /* true - все кнопки отпущены, debounce закончен, событий нет (можно в Stop 2). */
 bool purrgo_stm32_buttons_idle(void);

@@ -151,9 +151,9 @@ bool purrgo_stop2_init(void)
 
 /*
  * Кнопки -> EXTI только по спаду (будит нажатие, а не отпускание). false -
- * какая-то кнопка уже нажата. Линии EXTI и вектора NVIC кнопок в обычной работе
- * уже настроены CubeMX (оба фронта, см. buttons.c); здесь режим на время сна
- * сужается до спада.
+ * какая-то кнопка уже нажата. Линии EXTI и векторы NVIC кнопок включены всегда
+ * (CubeMX, оба фронта, см. buttons.c); здесь режим на время сна сужается до
+ * спада.
  */
 static bool arm_buttons(void)
 {
@@ -170,7 +170,6 @@ static bool arm_buttons(void)
         __HAL_GPIO_EXTI_CLEAR_RISING_IT(k_wake_pins[i].pin);
         __HAL_GPIO_EXTI_CLEAR_FALLING_IT(k_wake_pins[i].pin);
         NVIC_ClearPendingIRQ(exti_irqn(k_wake_pins[i].pin));
-        NVIC_EnableIRQ(exti_irqn(k_wake_pins[i].pin));
     }
 
     /*
@@ -188,30 +187,20 @@ static bool arm_buttons(void)
 }
 
 /*
- * Вернуть кнопки в обычный режим. Фронт, разбудивший МК, здесь сбрасывается
- * вместе с ожидающим прерыванием (PRIMASK ещё взведён), поэтому драйверу
- * кнопок явно заказывается опрос: он увидит уровень нажатой кнопки и пройдёт
- * debounce.
- *
- * - EXTI настроен в CubeMX (purrgo_stm32_buttons_exti_mode()): оба фронта,
- *   векторы NVIC остаются включёнными - их обслуживает buttons.c;
- * - иначе (CubeMX не перегенерирован): обычный вход с подтяжкой, векторы
- *   выключены, кнопки опрашиваются постоянно, как раньше.
+ * Вернуть кнопкам обычный режим EXTI (оба фронта, векторы NVIC остаются
+ * включёнными: их обслуживает buttons.c). Фронт, разбудивший МК, здесь
+ * сбрасывается вместе с ожидающим прерыванием (PRIMASK ещё взведён), поэтому
+ * драйверу кнопок явно заказывается опрос: он увидит уровень нажатой кнопки и
+ * пройдёт debounce.
  */
 static void disarm_buttons(void)
 {
     GPIO_InitTypeDef gpio = {0};
-    const bool exti_mode = purrgo_stm32_buttons_exti_mode();
 
     for (unsigned i = 0U; i < WAKE_PIN_COUNT; i++)
     {
-        if (!exti_mode)
-        {
-            NVIC_DisableIRQ(exti_irqn(k_wake_pins[i].pin));
-        }
-
         gpio.Pin = k_wake_pins[i].pin;
-        gpio.Mode = exti_mode ? GPIO_MODE_IT_RISING_FALLING : GPIO_MODE_INPUT;
+        gpio.Mode = GPIO_MODE_IT_RISING_FALLING;
         gpio.Pull = GPIO_PULLUP;
         gpio.Speed = GPIO_SPEED_FREQ_LOW;
         HAL_GPIO_Init(k_wake_pins[i].port, &gpio);   /* перенастраивает и линию EXTI */
