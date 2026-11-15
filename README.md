@@ -120,7 +120,7 @@ purrgo/
 │       ├── display/        #   дисплей, очередь обновлений E-Ink, самотест
 │       ├── gnss/           #   UART+DMA, связь с модулем, диагностика
 │       ├── storage/        #   SD по SPI, FatFs (storage/fatfs), привязка ФС
-│       └── power/          #   питание, батарея, PVD, Stop 2
+│       └── power/          #   питание, батарея, PVD, таймбейз HAL (LPTIM1), Stop 2
 │
 ├── docs/                   # Документация: hardware, user-guide, architecture, форматы карты, design/, datasheets/
 ├── include/
