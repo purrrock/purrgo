@@ -16,12 +16,15 @@ static int s_gnss_off_calls, s_gnss_off_seq, s_gnss_on_calls, s_gnss_on_seq;
 static void (*s_probe)(void);
 static uint16_t s_battery_pin_mv;
 static bool s_supply_low;
+static int s_gnss_profile_calls, s_gnss_profile_last;
 
 void fake_power_reset(void)
 {
     s_seq = s_unmount_calls = s_standby_calls = s_unmount_seq = s_standby_seq = 0;
     s_gnss_off_calls = s_gnss_off_seq = 0;
     s_gnss_on_calls = s_gnss_on_seq = 0;
+    s_gnss_profile_calls = 0;
+    s_gnss_profile_last = (int)PURRGO_GNSS_PROFILE_NAV;
     s_probe = NULL;
     s_battery_pin_mv = 0;
     s_supply_low = false;
@@ -36,6 +39,16 @@ int fake_power_gnss_off_calls(void) { return s_gnss_off_calls; }
 int fake_power_gnss_off_seq(void) { return s_gnss_off_seq; }
 int fake_power_gnss_on_calls(void) { return s_gnss_on_calls; }
 int fake_power_gnss_on_seq(void) { return s_gnss_on_seq; }
+
+int fake_gnss_profile_calls(void) { return s_gnss_profile_calls; }
+int fake_gnss_profile_last(void) { return s_gnss_profile_last; }
+
+/* Замена purrgo_gnss_set_profile() платформенного gnss_io.c: запоминает вызовы. */
+void purrgo_gnss_set_profile(purrgo_gnss_profile_t profile)
+{
+    s_gnss_profile_calls++;
+    s_gnss_profile_last = (int)profile;
+}
 
 /* Замена purrgo_gnss_power_on/off() из платформенного gnss_io.c (в host-тесты он не входит). */
 void purrgo_gnss_power_on(void)

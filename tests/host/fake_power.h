@@ -33,6 +33,10 @@ uint16_t fake_power_pin_for_pack_mv(uint32_t pack_mv);
 /* Низкое напряжение питания, которое вернёт purrgo_platform_supply_low() (по умолчанию false). */
 void fake_power_set_supply_low(bool low);
 
+/* Вызовы purrgo_gnss_set_profile(): число вызовов и последний профиль (purrgo_gnss_profile_t). */
+int fake_gnss_profile_calls(void);
+int fake_gnss_profile_last(void);
+
 /*
  * Команды, отправленные ядром приёмнику через purrgo_gnss_write() (сброс одометра,
  * опрос версии). fake_power_reset() их тоже очищает.

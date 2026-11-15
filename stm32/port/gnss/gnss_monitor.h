@@ -45,6 +45,13 @@ void purrgo_gnss_monitor_uart_error(uint32_t error_code);
 /** @brief Периодический вывод состояния; вызывать из основного цикла. */
 void purrgo_gnss_monitor_process(void);
 
+/**
+ * @brief Ожидаются паузы в потоке (приёмник в PSMOO между фиксами): "нет данных" и "нет фикса" не
+ *        считаются сбоем и не пишутся в лог. Сообщения о смене режима энергосбережения (PSM state)
+ *        и ответах приёмника (ACK/NAK) остаются.
+ */
+void purrgo_gnss_monitor_expect_gaps(bool expect);
+
 #else
 
 static inline void purrgo_gnss_monitor_init(void) {}
@@ -53,6 +60,7 @@ static inline void purrgo_gnss_monitor_link(uint32_t baud, bool ready) { (void)b
 static inline void purrgo_gnss_monitor_feed(uint8_t byte) { (void)byte; }
 static inline void purrgo_gnss_monitor_uart_error(uint32_t error_code) { (void)error_code; }
 static inline void purrgo_gnss_monitor_process(void) {}
+static inline void purrgo_gnss_monitor_expect_gaps(bool expect) { (void)expect; }
 
 #endif
 

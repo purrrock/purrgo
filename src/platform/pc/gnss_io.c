@@ -66,3 +66,9 @@ void purrgo_gnss_power_on(void)
 void purrgo_gnss_power_off(void)
 {
 }
+
+/* Профиль приёмника на PC не меняется: приёмник эмулируется (serial_hal или mock). */
+void purrgo_gnss_set_profile(purrgo_gnss_profile_t profile)
+{
+    (void)profile;
+}
