@@ -62,7 +62,7 @@ EN
 Какой вывод куда запаян - в [`PINOUT`](../PurrGO_STM32U585_PINOUT.md).
 
 - UART: LPUART1 (PA2 - TX в сторону модуля, PA3 - RX с внутренней подтяжкой к питанию), 8N1, тактирование HSI16. Приём - LPDMA1
-  Channel 0, запрос `LPDMA1_REQUEST_LPUART1_RX`, linked-list circular (`gnss_io.c`). Режим Stop 2 пока не используется. LPDMA1 видит только SRAM4, поэтому буфер приёма и узел лежат в секции `.sram4` (линкер-скрипт `STM32U585xx_PURRGO.ld`, копия сгенерированного CubeMX файла `STM32U585xx_FLASH.ld`, который CubeMX перезаписывает).
+  Channel 0, запрос `LPDMA1_REQUEST_LPUART1_RX`, linked-list circular (`gnss_io.c`). Приём продолжается и в Stop 2 (автономный режим LPUART1, LPDMA1 и SRAM4 в `RCC_SRDAMR`, ядро LPUART1 - HSI16), пробуждение по RXNE: см. «Stop 2 вне читалки» ниже. LPDMA1 видит только SRAM4, поэтому буфер приёма и узел лежат в секции `.sram4` (линкер-скрипт `STM32U585xx_PURRGO.ld`, копия сгенерированного CubeMX файла `STM32U585xx_FLASH.ld`, который CubeMX перезаписывает).
 - Скорость: после включения модуль работает на 38400 (`PURRGO_GNSS_BAUD_DEFAULT`), прошивка переводит его и LPUART1 на 115200
   (`PURRGO_GNSS_BAUD_TARGET`, `hardware_config.h`; в CubeMX остаётся 38400).
 - `GNSS_EN` (PB0): GPIO_Output, Push-Pull, без подтяжки, начальный уровень High. High или неподключённый EN - модуль работает, Low -
@@ -270,3 +270,18 @@ ARR = 0xFFFF. Прерываний у таймбейза нет, поэтому 
 ```
 
 Распиновка платы: [`PurrGO_STM32U585_PINOUT.md`](../PurrGO_STM32U585_PINOUT.md).
+
+## Stop 2 вне читалки
+
+Stop 2 используется в простое в любом режиме (читалка, карта, путевой компьютер, меню, трекер), `purrgo_stm32_idle()` в `stm32_app.c`. Условия входа (все сразу):
+
+- `purrgo_app_deep_sleep_allowed()`: нет ожидающей перерисовки, паузы после неудачного рендера и поиска по книге;
+- `display_stm32_can_stop()`: E-Ink не занят, панель в deep sleep, библиотека `epd4g` не доделывает автоотключение;
+- `purrgo_stm32_buttons_idle()`: все кнопки отпущены, фронтов и событий нет (иначе Sleep с опросом раз в 10 мс);
+- `purrgo_gnss_stop_ready()` (`gnss_stop.h`): GNSS выключен либо связь установлена, нет ошибок приёма и ожидающих таймеров настройки, а на входе тишина не меньше `PURRGO_GNSS_STOP_QUIET_MS` (15 мс).
+
+Приём GNSS в Stop 2 идёт без ядра: LPUART1 (ядро HSI16) -> LPDMA1 -> кольцо в SRAM4. Включение в автономный режим - `RCC_SRDAMR` (`LPUART1AMEN`, `LPDMA1AMEN`, `SRAM4AMEN`) в `purrgo_stop2_init()`, бит `UESM` LPUART1 выставляет `gnss_uart_stop_cfg()` после каждой инициализации UART (у UART STM32U5 флага WUF нет).
+
+Источники пробуждения: кнопки K1..K4 (EXTI, спад), прерывание RXNE LPUART1 (разрешается только на время сна, `purrgo_gnss_stop_arm()`), ошибки приёма, половина и конец буфера LPDMA1 (запасной случай), будильник LPTIM1 (`PURRGO_STOP2_NAV_MAX_MS` = 2 с при включённом GNSS, `PURRGO_STOP2_MAX_MS` = 5 с в читалке и трекере с PSMOO). После пробуждения по первому байту МК остаётся в Sleep, пока пачка эпохи приёмника не закончится, и только после тишины снова уходит в Stop 2 (иначе на каждый байт поднимался бы PLL). Пока E-Ink занят обновлением, МК тоже в Sleep (будильник 1 мс); EXTI по BUSY - отдельный шаг (`TODO.md`).
+
+Если на железе теряются первые байты пачки (в логе «GNSS RX error» сразу после пробуждения), `-DPURRGO_STOP_HSI_KERNEL_ON=1` держит HSI16 включённым в Stop (`RCC_CR.HSIKERON`).

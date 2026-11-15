@@ -1,5 +1,5 @@
 /*
- * Stop 2 для режима чтения. См. stop_mode.h.
+ * Stop 2 (читалка, карта, путевой компьютер, трекер). См. stop_mode.h.
  *
  * Будильник и время HAL даёт LPTIM1 (timebase.c): он тактируется от LSI, идёт и в
  * Stop 2, поэтому после сна HAL_GetTick() уже верный, добирать время не нужно.
@@ -9,6 +9,7 @@
 #include "main.h"
 #include "buttons.h"
 #include "timebase.h"
+#include "gnss_stop.h"
 #include "purrgo/logger.h"
 
 #include <stdbool.h>
@@ -23,6 +24,15 @@ extern void SystemClock_Config(void);
  */
 #ifndef PURRGO_STOP_KEEP_DEBUG
 #define PURRGO_STOP_KEEP_DEBUG 0
+#endif
+
+/*
+ * 1 - держать HSI16 включённым и в Stop (RCC_CR.HSIKERON). По умолчанию 0: ядро LPUART1 запрашивает
+ * HSI16 само по старт-биту (автономный режим). Включать только если на железе в Stop 2 терялись байты
+ * (в логе «GNSS RX error» сразу после пробуждения от приёма).
+ */
+#ifndef PURRGO_STOP_HSI_KERNEL_ON
+#define PURRGO_STOP_HSI_KERNEL_ON 0
 #endif
 
 typedef struct
@@ -63,6 +73,18 @@ bool purrgo_stop2_init(void)
 
     /* После Stop 2 системная частота - HSI16 (ниже поднимается PLL). */
     __HAL_RCC_WAKEUPSTOP_CLK_CONFIG(RCC_STOP_WAKEUPCLOCK_HSI);
+
+    /*
+     * Приём GNSS в Stop 2 идёт без ядра: LPUART1 (ядро HSI16), LPDMA1 и SRAM4 (буфер приёма) должны
+     * оставаться тактированными в Stop 0/1/2 (автономный режим домена SRD, RM0456, RCC_SRDAMR).
+     * Если GNSS выключен (читалка), LPUART1 остановлен и на ток эти биты не влияют.
+     */
+    SET_BIT(RCC->SRDAMR, RCC_SRDAMR_LPUART1AMEN | RCC_SRDAMR_LPDMA1AMEN | RCC_SRDAMR_SRAM4AMEN);
+
+#if (PURRGO_STOP_HSI_KERNEL_ON != 0)
+    /* HSI16 не гаснет в Stop (ток больше): запасной вариант, если LPUART1 теряет первый байт пачки. */
+    SET_BIT(RCC->CR, RCC_CR_HSIKERON);
+#endif
 
 #if (PURRGO_STOP_KEEP_DEBUG != 0)
     HAL_DBGMCU_EnableDBGStopMode();
@@ -152,8 +174,13 @@ bool purrgo_stop2_enter(uint32_t max_ms)
 
     __disable_irq();
 
-    if (!arm_buttons() || !purrgo_timebase_wake_arm(max_ms))
+    /*
+     * Источники пробуждения: кнопки (спад), приём GNSS (первый байт, если GNSS включён) и будильник
+     * LPTIM1. Любой отказ - в Stop не входим, вызывающий уходит в обычный Sleep.
+     */
+    if (!arm_buttons() || !purrgo_gnss_stop_arm() || !purrgo_timebase_wake_arm(max_ms))
     {
+        purrgo_gnss_stop_disarm();
         purrgo_timebase_wake_disarm();
         disarm_buttons();
         __enable_irq();
@@ -165,6 +192,7 @@ bool purrgo_stop2_enter(uint32_t max_ms)
     /* ---- проснулись; PRIMASK всё ещё взведён ---- */
 
     /* Снять NVIC-линии, пока прерывания выключены: настоящих обработчиков у них нет. */
+    purrgo_gnss_stop_disarm();
     purrgo_timebase_wake_disarm();
     disarm_buttons();
     __enable_irq();
