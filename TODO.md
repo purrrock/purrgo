@@ -3,8 +3,7 @@
 > **Следующий патч: tickless + Stop 2 вне читалки** (раздел «2. Tickless и Stop-режимы» ниже). Кнопки на постоянном EXTI уже сделаны,
 > поэтому в этом патче:
 >
-> - **[CubeMX]** Timebase Source: SysTick → LPTIM (или TIM на RTC), чтобы HAL-тик не будил МК 1 кГц; проверить `HAL_Delay()`/`HAL_GetTick()`
->   и добор времени по LPTIM1 после сна (`stop_mode.c`).
+> - ~~Timebase Source: SysTick → LPTIM~~ сделано (HAL-время на LPTIM1, раздел 2 ниже); осталось проверить на железе.
 > - Stop 2 в простое в режимах карты, трекера и путевого компьютера (сейчас `purrgo_app_deep_sleep_allowed()` пускает в Stop 2 только читалку).
 > - Источники пробуждения: приём GNSS (LPUART1 + LPDMA1), RTC/LPTIM (периодические задачи, таймаут экрана), EXTI по BUSY E-Ink.
 > - Кнопки без SysTick: пока `purrgo_stm32_buttons_poll_needed()` истинно (кнопка нажата, идёт debounce или отпускание), МК должен
@@ -71,8 +70,8 @@
 | Типичный режим | ≥ 36 ч |
 | Экспедиционный режим | ≥ 48 ч |
 
-Текущее состояние: SYSCLK 80 МГц (HSI → PLL, Range 2), в простое `__WFI()` (Sleep), но SysTick 1 кГц
-будит МК 1000 раз в секунду; Stop 2 используется только в читалке (GNSS выключен по EN) и при POWER OFF
+Текущее состояние: SYSCLK 80 МГц (HSI → PLL, Range 2), в простое `__WFI()` (Sleep) с будильником
+LPTIM1 (раз в 20 мс, 10 мс при опросе кнопок, 1 мс пока E-Ink занят; SysTick не используется); Stop 2 используется только в читалке (GNSS выключен по EN) и при POWER OFF
 (Standby оставлен как запасной вариант, `-DPURRGO_POWEROFF_STOP2=0`); SD остаётся запитанной. Основной
 потребитель — GNSS, затем обновления E-Ink и MCU в Run.
 
@@ -89,8 +88,10 @@
 
 ## 2. Tickless и Stop-режимы (основной рычаг)
 
-- [ ] **[CubeMX]** Timebase Source: SysTick → LPTIM (или TIM на RTC), чтобы HAL-тик не будил МК 1 кГц. После правки проверить `HAL_Delay()`/`HAL_GetTick()` и их использование (в т. ч. `display_eink.c`).
-- [x] Stop 2 в простое в читалке: вход `purrgo_stop2_enter()`, после пробуждения `SystemClock_Config()` поднимает PLL, `HAL_GetTick()` добирается по LPTIM1 на LSI (`stop_mode.c`).
+- [x] Таймбейз HAL: `HAL_GetTick()`/`HAL_Delay()` на LPTIM1 (LSI 32 кГц /32 = 1 кГц) вместо SysTick, прерывания 1 кГц нет (`port/power/timebase.c`, `docs/hardware.md`, «Время HAL»). В CubeMX менять ничего не нужно: Timebase Source остаётся SysTick (`HAL_InitTick()` переопределена в коде, TIMx/LPTIM там выбирать нельзя - конфликт с ней). Добор времени после Stop 2 (`uwTick += ...`) убран: счётчик идёт во сне. В обычном Sleep МК будит будильник LPTIM1 (`PURRGO_SLEEP_MAX_MS` 20 мс, до 10 мс при опросе кнопок, 1 мс пока E-Ink занят: `purrgo_stm32_sleep()` в `stm32_app.c`).
+- [ ] **[HW]** Проверить таймбейз на железе: (1) ход `HAL_GetTick()` против часов (уход LSI, единицы процентов допустимы для таймаутов); (2) кнопки: debounce, SHORT/LONG, K1+K4; (3) читалка: вход в Stop 2 и пробуждение по K1..K4 и по таймеру; (4) приём GNSS без потерь (в логе нет «GNSS RX error»), обновление E-Ink; (5) ток в режиме карты (GNSS отпаян): было 6,52 мА при SysTick 1 кГц (`Curr-map3.csv`).
+- [ ] **[проверить]** Если уход LSI окажется неприемлемым: калибровка по HSI16 (TIM17 CH1 от LSI) или другой источник. LSE недоступен: выводы PC14/PC15 заняты кнопками K3/K4.
+- [x] Stop 2 в простое в читалке: вход `purrgo_stop2_enter()`, после пробуждения `SystemClock_Config()` поднимает PLL, `HAL_GetTick()` идёт по LPTIM1 на LSI и во сне (`stop_mode.c`, `timebase.c`).
 - [ ] Перейти из Sleep (`WFI`) в Stop 2 в простое между GNSS-обновлениями (режимы карты, путевого компьютера, трекера); сейчас `purrgo_app_deep_sleep_allowed()` разрешает Stop 2 только в состояниях читалки.
 - [x] Источники пробуждения из Stop 2 в читалке: EXTI кнопок K1..K4 (спад) и таймаут LPTIM1 (`PURRGO_STOP2_MAX_MS`, 5 с).
 - [ ] Остальные источники пробуждения: UART приёма GNSS, RTC (периодические задачи, таймаут экрана), EXTI по BUSY E-Ink (вместо опроса из цикла).

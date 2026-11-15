@@ -24,6 +24,7 @@
 #include "supply_stm32.h"
 #include "gnss_monitor.h"
 #include "stop_mode.h"
+#include "timebase.h"
 
 /*
  * Интервал обновления логики GNSS/FSM.
@@ -51,6 +52,30 @@ static purrgo_sd_state_t s_prev_sd_state = PURRGO_SD_NO_CARD;
 #ifndef PURRGO_STOP2_MAX_MS
 #define PURRGO_STOP2_MAX_MS 5000U
 #endif
+
+/*
+ * Обычный Sleep (WFI между проходами главного цикла). SysTick нет: МК будят
+ * прерывания (EXTI кнопок, приём GNSS по LPDMA1) и будильник LPTIM1, который
+ * ставится на ближайший срок цикла (purrgo_stm32_sleep()).
+ *
+ * PURRGO_SLEEP_MAX_MS - самый долгий сон, если ничего срочного нет. Цикл
+ * разбирает входной буфер GNSS, ведёт таймеры FSM/SD/батареи и перерисовку, поэтому
+ * не должен молчать долго (кольцо GNSS 2048 Б при 115200 бод заполняется за ~180 мс).
+ * PURRGO_SLEEP_DISPLAY_WAKE_MS - период, пока E-Ink доделывает операцию
+ * (epd4g_poll() ждёт BUSY и таймеры); EXTI по BUSY вместо опроса - в TODO.md.
+ */
+#ifndef PURRGO_SLEEP_MAX_MS
+#define PURRGO_SLEEP_MAX_MS 20U
+#endif
+#ifndef PURRGO_SLEEP_DISPLAY_WAKE_MS
+#define PURRGO_SLEEP_DISPLAY_WAKE_MS 1U
+#endif
+
+/* Счётчик LPTIM1 16-битный: HAL_GetTick() должен вызываться чаще, чем он переполняется. */
+_Static_assert(PURRGO_SLEEP_MAX_MS < PURRGO_TIMEBASE_MAX_GAP_MS,
+               "PURRGO_SLEEP_MAX_MS is too long for the 16-bit LPTIM1 timebase");
+_Static_assert(PURRGO_STOP2_MAX_MS < PURRGO_TIMEBASE_MAX_GAP_MS,
+               "PURRGO_STOP2_MAX_MS is too long for the 16-bit LPTIM1 timebase");
 
 /*
  * Период опроса кнопок.
@@ -82,6 +107,12 @@ static gfx_context_t global_gfx_ctx;
  */
 static uint32_t last_button_poll_ms;
 
+/*
+ * true - на последнем проходе цикла входной буфер GNSS разобран не до конца
+ * (достигнут GNSS_MAX_BYTES_PER_LOOP): спать нельзя, нужен ещё проход.
+ */
+static bool s_gnss_backlog;
+
 /**
  * @brief Обновление драйвера кнопок и передача событий в FSM.
  *
@@ -112,8 +143,54 @@ static void process_buttons(void)
 }
 
 /*
+ * Обычный Sleep: WFI с будильником LPTIM1. Решение принимается при взведённом
+ * PRIMASK: прерывание, пришедшее после проверок, не теряется (ожидающее IRQ
+ * обрывает WFI, а выполнится сразу после __enable_irq()).
+ */
+static void purrgo_stm32_sleep(uint32_t now_ms)
+{
+  /* Есть что делать сразу: входной буфер GNSS разобран не до конца. */
+  if (s_gnss_backlog)
+  {
+    return;
+  }
+
+  __disable_irq();
+
+  uint32_t wake_ms = PURRGO_SLEEP_MAX_MS;
+
+  if (purrgo_stm32_buttons_poll_needed())
+  {
+    /* До следующего опроса кнопок (debounce, LONG, отпускание): не позже BUTTON_POLL_PERIOD_MS. */
+    const uint32_t since_ms = now_ms - last_button_poll_ms;
+    const uint32_t left_ms = (since_ms >= BUTTON_POLL_PERIOD_MS) ? 1U
+                                                                  : (BUTTON_POLL_PERIOD_MS - since_ms);
+    if (left_ms < wake_ms)
+    {
+      wake_ms = left_ms;
+    }
+  }
+
+  if (!display_stm32_can_stop() && (PURRGO_SLEEP_DISPLAY_WAKE_MS < wake_ms))
+  {
+    wake_ms = PURRGO_SLEEP_DISPLAY_WAKE_MS;
+  }
+
+  /* false - будильник не поставлен или срок уже прошёл: следующий проход цикла сразу. */
+  if (purrgo_timebase_wake_arm(wake_ms))
+  {
+    __DSB();
+    __WFI();
+    purrgo_timebase_wake_disarm();
+  }
+
+  __enable_irq();
+}
+
+/*
  * Ожидание событий в конце прохода главного цикла: Stop 2, если приложение,
- * дисплей и кнопки в покое, иначе обычный Sleep (WFI, пробуждение от SysTick).
+ * дисплей и кнопки в покое, иначе обычный Sleep (WFI, пробуждение по
+ * прерыванию или будильнику LPTIM1).
  */
 static void purrgo_stm32_idle(uint32_t now_ms)
 {
@@ -127,10 +204,8 @@ static void purrgo_stm32_idle(uint32_t now_ms)
       return;
     }
   }
-#else
-  (void)now_ms;
 #endif
-  __WFI();
+  purrgo_stm32_sleep(now_ms);
 }
 
 void purrgo_stm32_init(void)
@@ -201,7 +276,7 @@ void purrgo_stm32_init(void)
   PURRGO_LOG("Buttons OK\r\n");
 
 #if (PURRGO_STOP2 != 0)
-  /* LSI + LPTIM1 для сна в читалке; при сбое работает обычный Sleep. */
+  /* Stop 2 в читалке (таймбейз LPTIM1 уже идёт); при сбое работает обычный Sleep. */
   (void)purrgo_stop2_init();
 #endif
 
@@ -293,6 +368,7 @@ void purrgo_stm32_process(void)
       purrgo_app_feed_gnss_byte(rx_byte);
       bytes_processed++;
   }
+  s_gnss_backlog = (bytes_processed >= GNSS_MAX_BYTES_PER_LOOP);
 
   /*
    * -----------------------------------------------------------------------

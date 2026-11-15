@@ -72,7 +72,7 @@ purrgo/
 │       ├── display/        #   display, E-Ink update queue, self-test
 │       ├── gnss/           #   UART+DMA input, link setup, diagnostics
 │       ├── storage/        #   SD over SPI, FatFs (storage/fatfs), filesystem glue
-│       └── power/          #   supply, battery, PVD, Stop 2
+│       └── power/          #   supply, battery, PVD, HAL timebase (LPTIM1), Stop 2
 │
 ├── include/
 │   └── purrgo/             # Public interfaces
