@@ -1,5 +1,17 @@
 # PurrGO — TODO
 
+> **Следующий патч: tickless + Stop 2 вне читалки** (раздел «2. Tickless и Stop-режимы» ниже). Кнопки на постоянном EXTI уже сделаны,
+> поэтому в этом патче:
+>
+> - **[CubeMX]** Timebase Source: SysTick → LPTIM (или TIM на RTC), чтобы HAL-тик не будил МК 1 кГц; проверить `HAL_Delay()`/`HAL_GetTick()`
+>   и добор времени по LPTIM1 после сна (`stop_mode.c`).
+> - Stop 2 в простое в режимах карты, трекера и путевого компьютера (сейчас `purrgo_app_deep_sleep_allowed()` пускает в Stop 2 только читалку).
+> - Источники пробуждения: приём GNSS (LPUART1 + LPDMA1), RTC/LPTIM (периодические задачи, таймаут экрана), EXTI по BUSY E-Ink.
+> - Кнопки без SysTick: пока `purrgo_stm32_buttons_poll_needed()` истинно (кнопка нажата, идёт debounce или отпускание), МК должен
+>   просыпаться по таймеру раз в 10 мс (`BUTTON_POLL_PERIOD_MS`), иначе не отработают debounce и LONG; при `false` можно спать до EXTI.
+> - После Stop 2 `disarm_buttons()` в `stop_mode.c` сбрасывает фронт, разбудивший МК, и вызывает `purrgo_stm32_buttons_request_poll()` -
+>   сохранить при переделке пробуждения.
+
 Список открытых работ. Выполненные пункты удалены, их история — в `git log`; отмеченные `[x]` оставлены там, где рядом нужны результаты замеров или то, что ещё предстоит проверить на железе.
 
 Целевой MCU: **STM32U585CIU6** (плата WeAct, питание ядра от LDO, SMPS нет). Дисплей:
@@ -83,7 +95,10 @@
 - [x] Источники пробуждения из Stop 2 в читалке: EXTI кнопок K1..K4 (спад) и таймаут LPTIM1 (`PURRGO_STOP2_MAX_MS`, 5 с).
 - [ ] Остальные источники пробуждения: UART приёма GNSS, RTC (периодические задачи, таймаут экрана), EXTI по BUSY E-Ink (вместо опроса из цикла).
 - [x] EXTI кнопок включается перед входом в Stop 2 и снимается после пробуждения (`arm_buttons()`/`disarm_buttons()`).
-- [ ] Интегрировать button interrupts постоянно (вне Stop 2 по-прежнему опрос `BUTTON_POLL_PERIOD_MS`).
+- [x] Кнопки на постоянном EXTI (K1..K4, оба фронта, Pull-up; CubeMX: EXTI0, EXTI1, EXTI14, EXTI15): прерывание только взводит флаг, debounce и SHORT/LONG остаются по таймеру,
+  опрос `BUTTON_POLL_PERIOD_MS` идёт, пока `purrgo_stm32_buttons_poll_needed()` (нажата кнопка / был фронт). Если EXTI в CubeMX не настроен, драйвер при старте
+  это находит (`BUTTONS INIT: EXTI not configured...`) и опрашивает кнопки постоянно.
+- [ ] **[HW]** Проверить кнопки после перехода на EXTI: SHORT/LONG, комбинация K1+K4 в режиме трекера, пробуждение K1..K4 из Stop 2 в читалке, в логе `BUTTONS INIT (EXTI)`.
 - [ ] **[проверить]** Приём GNSS из Stop 2 — LPUART1; LPDMA1 (домен SRD) работает в Stop.
   - Вариант B: GNSS на LPUART1 + LPDMA1 для Stop 2 (LPUART1 на PA2/PA3 и приём через LPDMA1 Channel 0 — уже сделаны, в Run). Буфер приёма и узел очереди уже в SRAM4 (LPDMA1 видит только её). Остаётся Stop 2: пробуждение по заполнению буфера/IDLE.
 - [ ] **[решение]** Standby или Shutdown для выключения (Shutdown — минимальный ток, но сбрасывает SRAM и backup).

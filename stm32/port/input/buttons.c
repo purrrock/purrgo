@@ -14,6 +14,12 @@
  *   released = GPIO_PIN_SET
  *   pressed  = GPIO_PIN_RESET
  *
+ * The pins are EXTI inputs (both edges, CubeMX): the interrupt handler only
+ * raises a flag. All the timing is done by purrgo_stm32_buttons_update(),
+ * which is called every 10 ms while purrgo_stm32_buttons_poll_needed() is
+ * true (see buttons.h). If the EXTI lines are not configured, the driver
+ * notices it at init and polls all the time.
+ *
  * The driver implements:
  *
  *   - time-based debounce;
@@ -190,12 +196,86 @@ static size_t event_queue_count = 0U;
 
 
 /*
- * true - можно останавливать SysTick: все кнопки отпущены и стабильны, событий
- * в очереди нет. Нажатую кнопку надо доопрашивать по таймеру (debounce, LONG).
+ * EXTI.
+ *
+ * s_edge_pending - с последнего опроса был фронт (любой) на одной из K1..K4.
+ *   Ставится в прерывании, снимается в purrgo_stm32_buttons_update() ДО чтения
+ *   пинов: фронт, пришедший после снятия флага, оставит его взведённым и
+ *   вызовет ещё один опрос, фронт до снятия учтётся прочитанным уровнем.
+ *
+ * s_exti_mode - линии EXTI кнопок настроены (проверка в init). Если нет
+ *   (CubeMX ещё не перегенерирован), флаг фронтов не работает и кнопки
+ *   опрашиваются постоянно, как раньше.
+ */
+#define BUTTONS_EXTI_PINS (K1_Pin | K2_Pin | K3_Pin | K4_Pin)
+
+static volatile bool s_edge_pending = false;
+static bool s_exti_mode = false;
+
+/*
+ * Колбэки HAL_GPIO_EXTI_IRQHandler() (вызывается из EXTIx_IRQHandler,
+ * stm32u5xx_it.c). Если EXTI появится у других выводов, диспетчеризацию
+ * по GPIO_Pin нужно будет вынести в одно место.
+ */
+void HAL_GPIO_EXTI_Falling_Callback(uint16_t GPIO_Pin)
+{
+    if ((GPIO_Pin & BUTTONS_EXTI_PINS) != 0U)
+    {
+        s_edge_pending = true;
+    }
+}
+
+void HAL_GPIO_EXTI_Rising_Callback(uint16_t GPIO_Pin)
+{
+    if ((GPIO_Pin & BUTTONS_EXTI_PINS) != 0U)
+    {
+        s_edge_pending = true;
+    }
+}
+
+/*
+ * Линия EXTI кнопки настроена так, как задумано: вывод привязан к линии,
+ * прерывание не замаскировано, оба фронта, вектор включён в NVIC.
+ */
+static bool button_exti_configured(const purrgo_button_hw_t *button)
+{
+    const uint32_t line = (uint32_t)__builtin_ctz((unsigned)button->gpio_pin);
+    const uint32_t mask = 1UL << line;
+    const uint32_t port_sel =
+        (EXTI->EXTICR[line >> 2U] >> ((line & 3U) * 8U)) & 0xFFU;
+
+    return (EXTI->IMR1 & mask) != 0U &&
+           (EXTI->RTSR1 & mask) != 0U &&
+           (EXTI->FTSR1 & mask) != 0U &&
+           port_sel == (uint32_t)GPIO_GET_INDEX(button->gpio_port) &&
+           NVIC_GetEnableIRQ((IRQn_Type)((int)EXTI0_IRQn + (int)line)) != 0U;
+}
+
+bool purrgo_stm32_buttons_exti_mode(void)
+{
+    return s_exti_mode;
+}
+
+void purrgo_stm32_buttons_request_poll(void)
+{
+    s_edge_pending = true;
+}
+
+bool purrgo_stm32_buttons_poll_needed(void)
+{
+    /* В idle() входит и флаг фронта. */
+    return !s_exti_mode || !purrgo_stm32_buttons_idle();
+}
+
+
+/*
+ * true - все кнопки отпущены и стабильны, событий в очереди и непрочитанных
+ * фронтов нет: опрашивать нечего, можно спать (Stop 2). Нажатую кнопку надо
+ * доопрашивать по таймеру (debounce, LONG).
  */
 bool purrgo_stm32_buttons_idle(void)
 {
-    if (event_queue_count != 0U)
+    if (event_queue_count != 0U || s_edge_pending)
     {
         return false;
     }
@@ -549,6 +629,12 @@ void purrgo_stm32_buttons_init(void)
     now = HAL_GetTick();
 
     /*
+     * Фронты, пришедшие до этого места, не нужны: состояние берётся из уровней
+     * ниже. Флаг снимается до чтения пинов (см. s_edge_pending).
+     */
+    s_edge_pending = false;
+
+    /*
      * Initialize software state from the actual electrical state.
      *
      * This prevents a button that happens to be held during reset
@@ -579,7 +665,23 @@ void purrgo_stm32_buttons_init(void)
     event_queue_count = 0U;
     combo_generated = false;
 
-    PURRGO_LOG("BUTTONS INIT\r\n");
+    s_exti_mode = true;
+    for (i = 0U; i < sizeof(buttons) / sizeof(buttons[0]); ++i)
+    {
+        if (!button_exti_configured(&buttons[i]))
+        {
+            s_exti_mode = false;
+        }
+    }
+
+    if (s_exti_mode)
+    {
+        PURRGO_LOG("BUTTONS INIT (EXTI)\r\n");
+    }
+    else
+    {
+        PURRGO_LOGW("BUTTONS INIT: EXTI not configured in CubeMX, polling mode\r\n");
+    }
 }
 
 
@@ -589,6 +691,11 @@ void purrgo_stm32_buttons_update(void)
     size_t i;
 
     now = HAL_GetTick();
+
+    /*
+     * Снять флаг фронта ДО чтения пинов в update_button() (см. s_edge_pending).
+     */
+    s_edge_pending = false;
 
     /*
      * Update every physical button on every polling cycle.
