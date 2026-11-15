@@ -14,6 +14,7 @@
 #include "purrgo/logger.h"
 #include "gnss_monitor.h"
 #include "gnss_link.h"
+#include "gnss_stop.h"
 
 /*
  * GNSS на STM32U585: LPUART1_RX -> LPDMA1 Channel 0, linked-list в круговом
@@ -24,8 +25,9 @@
  *     (HAL_DMAEx_List_LinkQ), поэтому канал инициализируется заново;
  *   - HAL_UART_Receive_DMA() сам записывает в узел размер блока, адрес RDR и
  *     адрес буфера, поэтому узел собирается с нулевыми адресами;
- *   - LPUART1 обслуживается LPDMA1 (запрос LPDMA1_REQUEST_LPUART1_RX); режим
- *     Stop 2 пока не используется;
+ *   - LPUART1 обслуживается LPDMA1 (запрос LPDMA1_REQUEST_LPUART1_RX); приём
+ *     продолжается и в Stop 2 (автономный режим LPUART1/LPDMA1/SRAM4, см. gnss_stop.h):
+ *     ядро будит прерывание RXNE LPUART1 (пришёл байт), разрешённое только на время сна;
  *   - LPDMA1 (домен SmartRun) является мастером только шины SRD и видит из всех
  *     SRAM лишь SRAM4 (RM0456, 2.1.13) - и в Run, и в Stop. Поэтому буфер приёма
  *     и узел linked-list размещены в секции .sram4 (STM32U585xx_PURRGO.ld, SRAM4);
@@ -236,6 +238,22 @@ static void gnss_apply_config(void)
 
 static void gnss_link_begin(void);
 
+/*
+ * Режим Stop для LPUART1: бит UESM, без него LPUART1 не работает в Stop. У UART STM32U5 нет флага WUF и
+ * выбора источника пробуждения (HAL_UARTEx_StopModeWakeUpSourceConfig() здесь не нужна): ядро будит обычное
+ * прерывание, разрешённое в CR1, а ядро LPUART1 (HSI16) в Stop запрашивается автономным режимом
+ * (RCC_SRDAMR, stop_mode.c). Прерывание RXNE разрешается только на время сна (purrgo_gnss_stop_arm()):
+ * в Run байты забирает LPDMA1. HAL_UART_Init() сбрасывает UESM, поэтому вызывается после каждой
+ * (пере)инициализации LPUART1.
+ */
+static void gnss_uart_stop_cfg(void)
+{
+    if (HAL_UARTEx_EnableStopMode(&hlpuart1) != HAL_OK)
+    {
+        PURRGO_LOGE("GNSS: LPUART1 Stop mode config FAILED\r\n");
+    }
+}
+
 /**
  * @brief Инициализировать приём GNSS через LPUART1.
  */
@@ -252,6 +270,8 @@ void purrgo_gnss_init(void)
         PURRGO_LOGE("GNSS DMA SETUP ERROR!\r\n");
         return;
     }
+
+    gnss_uart_stop_cfg();
 
     /*
      * 1. Запускаем непрерывный приём через Circular DMA ДО отправки конфигурации,
@@ -455,6 +475,7 @@ static bool link_set_baud(uint32_t baud, void *ctx)
         PURRGO_LOGE("GNSS: LPUART1 reinit at %lu baud FAILED\r\n", (unsigned long)baud);
         return false;
     }
+    gnss_uart_stop_cfg();
 
     gnss_rx_error_flag = false;
     purrgo_gnss_ring_reset(&gnss_ring);
@@ -788,6 +809,117 @@ bool purrgo_gnss_read_byte(uint8_t *byte)
 
     /* false - новых данных нет. */
     return gnss_pop(head, byte);
+}
+
+/* ------------------------- GNSS и Stop 2 (gnss_stop.h) ------------------------- */
+
+/* Положение producer при прошлой проверке и момент, когда оно менялось в последний раз. */
+static uint16_t gnss_stop_head;
+static uint32_t gnss_stop_change_ms;
+static bool     gnss_stop_head_valid;
+
+bool purrgo_gnss_is_powered(void)
+{
+    return gnss_powered;
+}
+
+bool purrgo_gnss_stop_ready(uint32_t now_ms)
+{
+    if (!gnss_powered)
+    {
+        gnss_stop_head_valid = false;
+        return true;
+    }
+
+    /* Приём не запущен или остановлен ошибкой: перезапуск делает основной цикл, спать рано. */
+    if ((hlpuart1.hdmarx == NULL) || gnss_rx_error_flag)
+    {
+        return false;
+    }
+
+    /* Поиск скорости и смена скорости идут по таймерам из purrgo_gnss_read_byte(). */
+    switch (gnss_link_state(&gnss_link))
+    {
+    case GNSS_LINK_IDLE:       /* приёмник без команд настройки (PURRGO_GNSS_RECEIVER_NONE) */
+    case GNSS_LINK_READY:
+    case GNSS_LINK_DEGRADED:
+    case GNSS_LINK_FAILED:
+        break;
+    default:
+        return false;
+    }
+
+    /* Отложенные команды приёмнику тоже отсчитываются по таймеру. */
+#if (PURRGO_GNSS_CONFIG_RETRY_MS > 0)
+    if (gnss_cfg_retry_pending)
+    {
+        return false;
+    }
+#endif
+#if PURRGO_GNSS_TRACKER_PSMOO_ACTIVE
+    if (gnss_profile_apply_pending)
+    {
+        return false;
+    }
+#endif
+
+    const uint16_t head = purrgo_gnss_ring_head_from_ndtr(&gnss_ring,
+                                                          __HAL_DMA_GET_COUNTER(hlpuart1.hdmarx));
+    if (!gnss_stop_head_valid || (head != gnss_stop_head))
+    {
+        /* Данные идут (или это первая проверка): отсчёт тишины заново. */
+        gnss_stop_head = head;
+        gnss_stop_change_ms = now_ms;
+        gnss_stop_head_valid = true;
+        return false;
+    }
+
+    if (head != gnss_ring.tail)
+    {
+        return false;   /* в кольце есть то, что основной цикл ещё не разобрал */
+    }
+    return (uint32_t)(now_ms - gnss_stop_change_ms) >= PURRGO_GNSS_STOP_QUIET_MS;
+}
+
+bool purrgo_gnss_stop_arm(void)
+{
+    if (!gnss_powered)
+    {
+        return true;   /* LPUART1 остановлен, будить нечему */
+    }
+    if ((hlpuart1.hdmarx == NULL) || gnss_rx_error_flag)
+    {
+        return false;
+    }
+
+    /* Байты, пришедшие после последней проверки в главном цикле, новым пробуждением не обозначатся. */
+    const uint16_t head = purrgo_gnss_ring_head_from_ndtr(&gnss_ring,
+                                                          __HAL_DMA_GET_COUNTER(hlpuart1.hdmarx));
+    if (head != gnss_ring.tail)
+    {
+        return false;
+    }
+
+    /*
+     * RXNE разрешается под PRIMASK: байт, оказавшийся в RDR уже сейчас, тоже даст прерывание, и WFI
+     * вернётся сразу. Сам байт во сне забирает LPDMA1.
+     */
+    __HAL_UART_ENABLE_IT(&hlpuart1, UART_IT_RXNE);
+    return true;
+}
+
+void purrgo_gnss_stop_disarm(void)
+{
+    if (!gnss_powered)
+    {
+        return;
+    }
+    /*
+     * Ожидающее прерывание LPUART1 в NVIC не сбрасывается: так же его мог вызвать флаг ошибки приёма
+     * (ORE/FE), и HAL_UART_IRQHandler() после __enable_irq() должен его обработать. С выключенным RXNEIE
+     * лишний вызов обработчика безвреден (в режиме DMA у HAL нет RxISR).
+     */
+    __HAL_UART_DISABLE_IT(&hlpuart1, UART_IT_RXNE);
 }
 
 /**

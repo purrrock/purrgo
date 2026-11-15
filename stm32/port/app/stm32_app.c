@@ -24,6 +24,7 @@
 #include "supply_stm32.h"
 #include "gnss_monitor.h"
 #include "stop_mode.h"
+#include "gnss_stop.h"
 #include "timebase.h"
 
 /*
@@ -38,7 +39,8 @@
 static purrgo_sd_state_t s_prev_sd_state = PURRGO_SD_NO_CARD;
 
 /*
- * Stop 2 в читалке (см. stop_mode.h). -DPURRGO_STOP2=0 отключает его целиком.
+ * Stop 2 в простое: читалка, карта, путевой компьютер, трекер (см. stop_mode.h).
+ * -DPURRGO_STOP2=0 отключает его целиком.
  */
 #ifndef PURRGO_STOP2
 #define PURRGO_STOP2 1
@@ -51,6 +53,16 @@ static purrgo_sd_state_t s_prev_sd_state = PURRGO_SD_NO_CARD;
  */
 #ifndef PURRGO_STOP2_MAX_MS
 #define PURRGO_STOP2_MAX_MS 5000U
+#endif
+
+/*
+ * То же, пока GNSS выдаёт решение каждую секунду (карта, путевой компьютер, меню). Приём сам будит МК
+ * на каждой эпохе, этот срок - страховка на случай молчания приёмника: он должен быть заметно больше
+ * периода эпохи (1 с), чтобы будильник и приём не давали два пробуждения за секунду, и не больше
+ * PURRGO_UI_MIN_DATA_REDRAW_MS: отложенная перерисовка по данным не должна ждать дольше.
+ */
+#ifndef PURRGO_STOP2_NAV_MAX_MS
+#define PURRGO_STOP2_NAV_MAX_MS 2000U
 #endif
 
 /*
@@ -76,6 +88,10 @@ _Static_assert(PURRGO_SLEEP_MAX_MS < PURRGO_TIMEBASE_MAX_GAP_MS,
                "PURRGO_SLEEP_MAX_MS is too long for the 16-bit LPTIM1 timebase");
 _Static_assert(PURRGO_STOP2_MAX_MS < PURRGO_TIMEBASE_MAX_GAP_MS,
                "PURRGO_STOP2_MAX_MS is too long for the 16-bit LPTIM1 timebase");
+_Static_assert(PURRGO_STOP2_NAV_MAX_MS < PURRGO_TIMEBASE_MAX_GAP_MS,
+               "PURRGO_STOP2_NAV_MAX_MS is too long for the 16-bit LPTIM1 timebase");
+_Static_assert(PURRGO_GNSS_STOP_QUIET_MS <= PURRGO_SLEEP_MAX_MS,
+               "GNSS quiet window must fit into one Sleep period");
 
 /*
  * Период опроса кнопок.
@@ -188,18 +204,27 @@ static void purrgo_stm32_sleep(uint32_t now_ms)
 }
 
 /*
- * Ожидание событий в конце прохода главного цикла: Stop 2, если приложение,
- * дисплей и кнопки в покое, иначе обычный Sleep (WFI, пробуждение по
- * прерыванию или будильнику LPTIM1).
+ * Ожидание событий в конце прохода главного цикла: Stop 2, если приложение, дисплей, кнопки и вход
+ * GNSS в покое, иначе обычный Sleep (WFI, пробуждение по прерыванию или будильнику LPTIM1).
+ *
+ * Пока идёт пачка данных от приёмника, МК остаётся в Sleep (будильник PURRGO_SLEEP_MAX_MS):
+ * purrgo_gnss_stop_ready() пропускает в Stop 2 только после тишины на входе, иначе МК будили бы
+ * на каждый байт пачки и каждый раз поднимали PLL.
  */
 static void purrgo_stm32_idle(uint32_t now_ms)
 {
 #if (PURRGO_STOP2 != 0)
   if (purrgo_app_deep_sleep_allowed(now_ms) &&
       display_stm32_can_stop() &&
-      purrgo_stm32_buttons_idle())
+      purrgo_stm32_buttons_idle() &&
+      purrgo_gnss_stop_ready(now_ms))
   {
-    if (purrgo_stop2_enter(PURRGO_STOP2_MAX_MS))
+    /* Приёмник выдаёт решение раз в секунду (кроме трекера с PSMOO и выключенного GNSS в читалке). */
+    const uint32_t max_ms = (purrgo_gnss_is_powered() && !purrgo_app_tracker_mode_active())
+                          ? PURRGO_STOP2_NAV_MAX_MS
+                          : PURRGO_STOP2_MAX_MS;
+
+    if (purrgo_stop2_enter(max_ms))
     {
       return;
     }
@@ -276,7 +301,7 @@ void purrgo_stm32_init(void)
   PURRGO_LOG("Buttons OK\r\n");
 
 #if (PURRGO_STOP2 != 0)
-  /* Stop 2 в читалке (таймбейз LPTIM1 уже идёт); при сбое работает обычный Sleep. */
+  /* Stop 2 в простое (таймбейз LPTIM1 уже идёт); при сбое работает обычный Sleep. */
   (void)purrgo_stop2_init();
 #endif
 
