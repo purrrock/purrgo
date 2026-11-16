@@ -65,9 +65,9 @@ bool display_stm32_ready_for_render(void)
     return !display_eink_data_busy();
 }
 
-bool display_stm32_can_stop(void)
+uint32_t display_stm32_wait_ms(bool *on_busy)
 {
-    return display_eink_can_stop();
+    return display_eink_wait_ms(on_busy);
 }
 
 /*

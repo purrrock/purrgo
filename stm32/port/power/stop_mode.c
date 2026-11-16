@@ -10,6 +10,7 @@
 #include "buttons.h"
 #include "timebase.h"
 #include "gnss_stop.h"
+#include "eink_wake.h"
 #include "purrgo/logger.h"
 
 #include <stdbool.h>
@@ -159,7 +160,7 @@ static void disarm_buttons(void)
     purrgo_stm32_buttons_request_poll();
 }
 
-bool purrgo_stop2_enter(uint32_t max_ms)
+bool purrgo_stop2_enter(uint32_t max_ms, bool wake_on_busy)
 {
     if (!s_ready)
     {
@@ -175,11 +176,18 @@ bool purrgo_stop2_enter(uint32_t max_ms)
     __disable_irq();
 
     /*
-     * Источники пробуждения: кнопки (спад), приём GNSS (первый байт, если GNSS включён) и будильник
-     * LPTIM1. Любой отказ - в Stop не входим, вызывающий уходит в обычный Sleep.
+     * Источники пробуждения: кнопки (спад), приём GNSS (первый байт, если GNSS включён), спад BUSY
+     * E-Ink (если задание ждёт панель) и будильник LPTIM1. Любой отказ (в том числе BUSY уже низкий) -
+     * в Stop не входим, вызывающий уходит в обычный Sleep.
      */
-    if (!arm_buttons() || !purrgo_gnss_stop_arm() || !purrgo_timebase_wake_arm(max_ms))
+    if (!arm_buttons() || !purrgo_gnss_stop_arm() ||
+        (wake_on_busy && !purrgo_eink_busy_wake_arm()) ||
+        !purrgo_timebase_wake_arm(max_ms))
     {
+        if (wake_on_busy)
+        {
+            purrgo_eink_busy_wake_disarm();
+        }
         purrgo_gnss_stop_disarm();
         purrgo_timebase_wake_disarm();
         disarm_buttons();
@@ -192,6 +200,10 @@ bool purrgo_stop2_enter(uint32_t max_ms)
     /* ---- проснулись; PRIMASK всё ещё взведён ---- */
 
     /* Снять NVIC-линии, пока прерывания выключены: настоящих обработчиков у них нет. */
+    if (wake_on_busy)
+    {
+        purrgo_eink_busy_wake_disarm();
+    }
     purrgo_gnss_stop_disarm();
     purrgo_timebase_wake_disarm();
     disarm_buttons();
