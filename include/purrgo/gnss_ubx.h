@@ -192,6 +192,13 @@ typedef struct {
 /* Сбросить состояние (при старте приложения). Разборщик кадров не затрагивается. */
 void purrgo_gnss_ubx_init(void);
 
+/*
+ * Как часто писать в лог диагностические строки PVT, SAT, STATUS и RF (мс, 0 - по умолчанию, 5 с).
+ * В трекере (PSMOO) приёмник бодрствует лишь часть периода, а без неба - всё время поиска: строки
+ * приходили бы слишком часто, там интервал больше.
+ */
+void purrgo_gnss_ubx_set_log_interval_ms(uint32_t interval_ms);
+
 const purrgo_gnss_ubx_status_t *purrgo_gnss_ubx_status(void);
 
 /*

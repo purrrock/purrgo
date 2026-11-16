@@ -66,6 +66,9 @@ static uint32_t last_tick_ms = 0;
  * решения приходят раз в период, а устаревший фикс остаётся действующим до таймаута; логгер получает
  * фикс один раз, а не каждую секунду (иначе при PURRGO_TRACK_DIAG он писал бы в GPX "отброшенные" копии).
  */
+/* Диагностические строки приёмника в логе в трекере: раз в минуту (на карте - раз в 5 с). */
+#define TRACKER_DIAG_LOG_INTERVAL_MS 60000U
+
 static uint32_t gnss_fix_seq = 0;
 static uint32_t tracker_logged_seq = 0;
 
@@ -199,6 +202,9 @@ static void tracker_mode_entered(void) {
      */
     purrgo_gnss_set_profile(PURRGO_GNSS_PROFILE_TRACKER);
     last_rmc_ms = purrgo_system_time_ms();
+#if PURRGO_GNSS_UBX
+    purrgo_gnss_ubx_set_log_interval_ms(TRACKER_DIAG_LOG_INTERVAL_MS);   /* реже, чем на карте */
+#endif
 }
 
 /*
@@ -211,6 +217,9 @@ static void tracker_mode_left(void) {
 
     /* Приёмник возвращается к данным каждую секунду (будится активностью на RX, см. gnss_io.h). */
     purrgo_gnss_set_profile(PURRGO_GNSS_PROFILE_NAV);
+#if PURRGO_GNSS_UBX
+    purrgo_gnss_ubx_set_log_interval_ms(0U);
+#endif
 
     purrgo_logger_set_mode(app_config.log_mode);
     last_rmc_ms = now;

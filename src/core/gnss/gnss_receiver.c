@@ -13,6 +13,8 @@
 #define UBX_SYNC2            0x62U
 #define UBX_CLASS_CFG        0x06U
 #define UBX_ID_CFG_VALSET    0x8AU
+#define UBX_ID_CFG_VALDEL    0x8CU
+#define UBX_VALDEL_MAX_KEYS  64U
 #define UBX_CLASS_MON        0x0AU
 #define UBX_ID_MON_VER       0x04U
 #define UBX_VALSET_MAX_ITEMS 64U
@@ -58,6 +60,31 @@ static size_t ubx_key_value_size(uint32_t key)
         case 4U: return 4U;
         default: return 0U;
     }
+}
+
+size_t purrgo_ubx_build_valdel(uint8_t *out, size_t out_size, uint8_t layers,
+                               const uint32_t *keys, size_t count)
+{
+    uint8_t payload[4U + 8U * 4U];
+    size_t pos = 0U;
+
+    /* Ключей для PM меньше десятка: буфер на 8 ключей, больше не нужно. */
+    if (keys == NULL || count == 0U || count > 8U || count > UBX_VALDEL_MAX_KEYS ||
+        (layers & 0x06U) == 0U || (layers & (uint8_t)~0x06U) != 0U) {
+        return 0U;
+    }
+
+    payload[pos++] = 0x00U;    /* version */
+    payload[pos++] = layers;
+    payload[pos++] = 0x00U;    /* reserved */
+    payload[pos++] = 0x00U;
+    for (size_t i = 0U; i < count; i++) {
+        for (size_t b = 0U; b < 4U; b++) {
+            payload[pos++] = (uint8_t)(keys[i] >> (8U * b));
+        }
+    }
+    return purrgo_ubx_build_frame(out, out_size, UBX_CLASS_CFG, UBX_ID_CFG_VALDEL,
+                                  payload, (uint16_t)pos);
 }
 
 size_t purrgo_ubx_build_valset(uint8_t *out, size_t out_size, uint8_t layers,
@@ -168,6 +195,7 @@ typedef struct {
     const purrgo_ubx_cfg_item_t *items;
     size_t count;
     uint8_t layers;
+    bool del;   /* true: UBX-CFG-VALDEL по ключам items[i].key (значения не используются) */
 } cfg_group_t;
 
 #define CFG_MAX_GROUPS 24U
@@ -180,6 +208,7 @@ static void add_group(cfg_group_t *groups, size_t *n, const char *name,
         groups[*n].items = items;
         groups[*n].count = count;
         groups[*n].layers = layers;
+        groups[*n].del = false;
         (*n)++;
     }
 }
@@ -187,7 +216,19 @@ static void add_group(cfg_group_t *groups, size_t *n, const char *name,
 static void send_group(purrgo_gnss_tx_fn tx, const cfg_group_t *g)
 {
     uint8_t frame[96];
-    const size_t len = purrgo_ubx_build_valset(frame, sizeof frame, g->layers, g->items, g->count);
+    size_t len;
+
+    if (g->del) {
+        uint32_t keys[8];
+        const size_t n = (g->count <= 8U) ? g->count : 8U;
+
+        for (size_t i = 0U; i < n; i++) {
+            keys[i] = g->items[i].key;
+        }
+        len = purrgo_ubx_build_valdel(frame, sizeof frame, g->layers, keys, n);
+    } else {
+        len = purrgo_ubx_build_valset(frame, sizeof frame, g->layers, g->items, g->count);
+    }
 
     if (len == 0U) {
         PURRGO_LOGE("GNSS: UBX-CFG-VALSET build failed (%s)\r\n", g->name);
@@ -223,6 +264,7 @@ void purrgo_gnss_receiver_configure_ubx_profile(purrgo_gnss_tx_fn tx, purrgo_gns
      */
 #if PURRGO_GNSS_TRACKER_PSMOO_ACTIVE
     const bool tracker = (profile == PURRGO_GNSS_PROFILE_TRACKER);
+    const bool after_tracker = (profile == PURRGO_GNSS_PROFILE_NAV_AFTER_TRACKER);
 #else
     const bool tracker = false;
     (void)profile;
@@ -231,8 +273,13 @@ void purrgo_gnss_receiver_configure_ubx_profile(purrgo_gnss_tx_fn tx, purrgo_gns
     const uint8_t layers = tracker ? (uint8_t)PURRGO_GNSS_UBX_LAYERS_PERSIST
                                    : (uint8_t)PURRGO_GNSS_UBX_LAYERS;
 #if PURRGO_GNSS_PSM_ANY
-    /* PM-ключи в слое BBR всегда: возврат из трекера перезаписывает режим, сохранённый в BBR. */
-    const uint8_t pm_layers = (uint8_t)PURRGO_GNSS_UBX_LAYERS_PERSIST;
+    /*
+     * PM-ключи: в профиле трекера - RAM и BBR (PSMOO обязан пережить состояние "off"), в навигации - только
+     * основной слой (PURRGO_GNSS_UBX_LAYERS). На железе PSMCT в BBR приёмник отклонил (NAK на OPERATEMODE = 2),
+     * а в RAM принимает. Режим PSMOO из BBR после трекера убирает кадр "PM BBR clean" (UBX-CFG-VALDEL).
+     */
+    const uint8_t pm_layers = tracker ? (uint8_t)PURRGO_GNSS_UBX_LAYERS_PERSIST
+                                      : (uint8_t)PURRGO_GNSS_UBX_LAYERS;
 #endif
 
     /* 1. Частота решений и набор NMEA (как и без UBX-расширений). */
@@ -355,6 +402,22 @@ void purrgo_gnss_receiver_configure_ubx_profile(purrgo_gnss_tx_fn tx, purrgo_gns
     static const purrgo_ubx_cfg_item_t nmea_off = { UBX_KEY_UART1OUTPROT_NMEA, 0U };
 
     add_group(groups, &n, "NMEA off", &nmea_off, 1U, layers);
+#endif
+
+#if PURRGO_GNSS_TRACKER_PSMOO_ACTIVE
+    if (after_tracker) {
+        /* Параметры PSMOO, записанные профилем трекера в BBR (ключи те же, что в профиле трекера). */
+        static const purrgo_ubx_cfg_item_t pm_bbr_keys[] = {
+            { UBX_KEY_PM_OPERATEMODE, 0U },
+            { UBX_KEY_PM_POSUPDATEPERIOD, 0U },
+            { UBX_KEY_PM_ACQPERIOD, 0U },
+            { UBX_KEY_PM_ONTIME, 0U },
+            { UBX_KEY_PM_DONOTENTEROFF, 0U },
+        };
+
+        add_group(groups, &n, "PM BBR clean", pm_bbr_keys, sizeof pm_bbr_keys / sizeof pm_bbr_keys[0], 0x02U);
+        groups[n - 1U].del = true;
+    }
 #endif
 
 #if PURRGO_GNSS_PSM_ANY

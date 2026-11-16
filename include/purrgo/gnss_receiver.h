@@ -31,7 +31,14 @@ typedef void (*purrgo_gnss_tx_fn)(const uint8_t *data, size_t len);
  */
 typedef enum {
     PURRGO_GNSS_PROFILE_NAV = 0,
-    PURRGO_GNSS_PROFILE_TRACKER
+    PURRGO_GNSS_PROFILE_TRACKER,
+    /*
+     * Навигация после трекера: то же, что PURRGO_GNSS_PROFILE_NAV, плюс удаление из слоя BBR параметров
+     * PSMOO (OPERATEMODE, периоды, ONTIME, DONOTENTEROFF), записанных профилем трекера. Слой RAM
+     * перекрывается настройкой навигации и так, удаление нужно, чтобы PSMOO не вернулся из BBR, если
+     * RAM приёмника когда-нибудь очистится (сброс, состояние "off").
+     */
+    PURRGO_GNSS_PROFILE_NAV_AFTER_TRACKER
 } purrgo_gnss_profile_t;
 
 /*
@@ -95,6 +102,13 @@ typedef struct {
  * 0x04 Flash). Возвращает длину кадра; 0 при ошибке (нет места, 0 или более
  * 64 элементов, ключ с 8-байтным значением, layers == 0).
  */
+/*
+ * UBX-CFG-VALDEL (version 0): удалить значения ключей из слоёв BBR (0x02) и/или Flash (0x04); RAM удалить
+ * нельзя. Возвращает длину кадра, 0 - ошибка (нет ключей, больше 64 ключей, нет слоя).
+ */
+size_t purrgo_ubx_build_valdel(uint8_t *out, size_t out_size, uint8_t layers,
+                               const uint32_t *keys, size_t count);
+
 size_t purrgo_ubx_build_valset(uint8_t *out, size_t out_size, uint8_t layers,
                                const purrgo_ubx_cfg_item_t *items, size_t count);
 

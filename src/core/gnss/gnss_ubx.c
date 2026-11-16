@@ -165,6 +165,7 @@ static uint32_t s_cfg_nak_mask;
 
 /* Периодическая диагностическая строка по PVT. */
 #define PVT_LOG_INTERVAL_MS 5000U
+static uint32_t s_log_interval_ms = PVT_LOG_INTERVAL_MS;
 static bool s_pvt_logged;
 static uint32_t s_pvt_logged_ms;
 
@@ -182,12 +183,17 @@ static uint32_t s_sat_logged_ms;
 
 static bool log_due(bool *logged, uint32_t *logged_ms, uint32_t now_ms)
 {
-    if (*logged && (uint32_t)(now_ms - *logged_ms) < PVT_LOG_INTERVAL_MS) {
+    if (*logged && (uint32_t)(now_ms - *logged_ms) < s_log_interval_ms) {
         return false;
     }
     *logged = true;
     *logged_ms = now_ms;
     return true;
+}
+
+void purrgo_gnss_ubx_set_log_interval_ms(uint32_t interval_ms)
+{
+    s_log_interval_ms = (interval_ms != 0U) ? interval_ms : PVT_LOG_INTERVAL_MS;
 }
 
 void purrgo_gnss_ubx_init(void)
@@ -575,7 +581,7 @@ bool purrgo_gnss_ubx_process_frame(uint8_t msg_class, uint8_t msg_id, const uint
                 return false;
             }
             /* Раз в несколько секунд: видно, есть ли время без позиции. */
-            if (!s_pvt_logged || (uint32_t)(now_ms - s_pvt_logged_ms) >= PVT_LOG_INTERVAL_MS) {
+            if (!s_pvt_logged || (uint32_t)(now_ms - s_pvt_logged_ms) >= s_log_interval_ms) {
                 s_pvt_logged = true;
                 s_pvt_logged_ms = now_ms;
                 PURRGO_LOGI("GNSS: PVT fixType=%u fixOK=%u sv=%u validTime=%u hAcc=%lu mm pDOP=%u\r\n",

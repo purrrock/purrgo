@@ -107,6 +107,8 @@ static purrgo_gnss_profile_t gnss_profile = PURRGO_GNSS_PROFILE_NAV;
 #if PURRGO_GNSS_TRACKER_PSMOO_ACTIVE
 static bool gnss_profile_apply_pending = false;
 static uint32_t gnss_profile_t_apply = 0U;
+/* В слой BBR приёмника записан профиль трекера: настройка навигации должна его очистить. */
+static bool gnss_bbr_dirty = false;
 
 static void gnss_wake_receiver(void);
 
@@ -231,7 +233,19 @@ static void gnss_uart_tx(const uint8_t *data, size_t len)
  */
 static void gnss_apply_config(void)
 {
-    purrgo_gnss_receiver_configure_profile(gnss_uart_tx, gnss_profile, gnss_link_baud(&gnss_link));
+    purrgo_gnss_profile_t profile = gnss_profile;
+
+#if PURRGO_GNSS_TRACKER_PSMOO_ACTIVE
+    if (profile == PURRGO_GNSS_PROFILE_TRACKER)
+    {
+        gnss_bbr_dirty = true;
+    }
+    else if (gnss_bbr_dirty)
+    {
+        profile = PURRGO_GNSS_PROFILE_NAV_AFTER_TRACKER;   /* заодно очистить BBR от PSMOO */
+    }
+#endif
+    purrgo_gnss_receiver_configure_profile(gnss_uart_tx, profile, gnss_link_baud(&gnss_link));
     /* В трекере приёмник молчит между фиксами: монитору не сообщать об этом как о сбое. */
     purrgo_gnss_monitor_expect_gaps(gnss_profile == PURRGO_GNSS_PROFILE_TRACKER);
 }
@@ -390,6 +404,7 @@ void purrgo_gnss_power_on(void)
     gnss_profile = PURRGO_GNSS_PROFILE_NAV;
 #if PURRGO_GNSS_TRACKER_PSMOO_ACTIVE
     gnss_profile_apply_pending = false;
+    gnss_bbr_dirty = false;
 #endif
     gnss_powered = true;
     gnss_last_head = 0U;
