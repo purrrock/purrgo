@@ -2,6 +2,7 @@
 #include "map_mlp.h"
 #include "map_projection.h"
 #include "purrgo/logger.h"
+#include "purrgo/render_prof.h"
 #include "purrgo/gfx_line.h"
 #include "purrgo/gfx_polygon.h"
 #include "purrgo/gfx_text.h"
@@ -412,6 +413,7 @@ void map_render_feature(
         int32_t sx;
         int32_t sy;
 
+        PURRGO_PROF_BEGIN(prof_proj);
         project_to_screen_i32(
             raw_x,
             raw_y,
@@ -420,6 +422,7 @@ void map_render_feature(
             &sx,
             &sy
         );
+        PURRGO_PROF_END(prof_proj, PURRGO_PROF_PROJ);
 
 
         if (screen_points != NULL) {
@@ -460,6 +463,7 @@ void map_render_feature(
 
                 gfx_color_t prev_fg = gfx->color_fg;
 
+                PURRGO_PROF_BEGIN(prof_lines);
 
                 switch (style) {
 
@@ -619,6 +623,8 @@ void map_render_feature(
                 }
 
 
+                PURRGO_PROF_END(prof_lines, PURRGO_PROF_LINES);
+
                 /*
                  * Восстанавливаем исходный цвет foreground.
                  */
@@ -720,6 +726,8 @@ void map_render_feature(
         }
 
 
+        PURRGO_PROF_BEGIN(prof_fill);
+
         if (style == PURRGO_STYLE_WETLAND_HATCH) {
 
             gfx_fill_compound_polygon_hatched(
@@ -763,6 +771,8 @@ void map_render_feature(
                 (uint16_t)part_count
             );
         }
+
+        PURRGO_PROF_END(prof_fill, PURRGO_PROF_FILL);
 
 
         /*
