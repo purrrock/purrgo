@@ -1,0 +1,154 @@
+BOOT: SBF=0 WUF1=0 RCC_CSR=0x0C004400 PA0=1
+PurrGO STM32 boot
+UART1 logger OK
+Supply: PVD level 0x000000A0, VDD above threshold
+SD: Detect_SD level 1
+SD: SDHC/SDXC, 7600 MB, SPI2 prescaler 0x10000000
+SD: mount OK, tree verified
+GNSS: listening for NMEA at 38400 baud
+GNSS LPUART1 INIT FINISHED
+Display OK
+BUTTONS INIT
+Buttons OK
+Stop2: ready (wake timer: LPTIM1 on LSI)
+DEFAULT CONFIG VALUES SET
+purrgo_fs_open: 0:/PURRGO/PURRGO.CFG opened OK
+
+LOADING CONFIG FROM FILE: 0:/PURRGO/PURRGO.CFG
+purrgo_fs_open: 0:/PURRGO/PURRGO.CFG opened OK
+
+App FSM OK
+GFX OK
+BATT: vdda=3329 mV pin=2237 mV pack=4506 mV
+purrgo_fs_open: 0:/PURRGO/MAPS/belarus/landuse.idx CLMT ok (4 of 64 dwords)
+
+purrgo_fs_open: 0:/PURRGO/MAPS/belarus/landuse.idx opened OK
+
+purrgo_fs_open: 0:/PURRGO/MAPS/belarus/landuse.mlp CLMT ok (4 of 64 dwords)
+
+purrgo_fs_open: 0:/PURRGO/MAPS/belarus/landuse.mlp opened OK
+
+purrgo_fs_open: 0:/PURRGO/MAPS/belarus/landuse.db CLMT ok (4 of 64 dwords)
+
+purrgo_fs_open: 0:/PURRGO/MAPS/belarus/landuse.db opened OK
+
+purrgo_fs_open: 0:/PURRGO/MAPS/belarus/water.idx CLMT ok (4 of 64 dwords)
+
+purrgo_fs_open: 0:/PURRGO/MAPS/belarus/water.idx opened OK
+
+purrgo_fs_open: 0:/PURRGO/MAPS/belarus/water.mlp CLMT ok (4 of 64 dwords)
+
+purrgo_fs_open: 0:/PURRGO/MAPS/belarus/water.mlp opened OK
+
+purrgo_fs_open: 0:/PURRGO/MAPS/belarus/waterways.idx CLMT ok (4 of 64 dwords)
+
+purrgo_fs_open: 0:/PURRGO/MAPS/belarus/waterways.idx opened OK
+
+purrgo_fs_open: 0:/PURRGO/MAPS/belarus/waterways.mlp CLMT ok (4 of 64 dwords)
+
+purrgo_fs_open: 0:/PURRGO/MAPS/belarus/waterways.mlp opened OK
+
+purrgo_fs_open: 0:/PURRGO/MAPS/belarus/water.db CLMT ok (4 of 64 dwords)
+
+purrgo_fs_open: 0:/PURRGO/MAPS/belarus/water.db opened OK
+
+purrgo_fs_open: 0:/PURRGO/MAPS/belarus/roads.idx CLMT ok (4 of 64 dwords)
+
+purrgo_fs_open: 0:/PURRGO/MAPS/belarus/roads.idx opened OK
+
+purrgo_fs_open: 0:/PURRGO/MAPS/belarus/roads.mlp CLMT ok (4 of 64 dwords)
+
+purrgo_fs_open: 0:/PURRGO/MAPS/belarus/roads.mlp opened OK
+
+purrgo_fs_open: 0:/PURRGO/MAPS/belarus/pois.idx CLMT ok (4 of 64 dwords)
+
+purrgo_fs_open: 0:/PURRGO/MAPS/belarus/pois.idx opened OK
+
+purrgo_fs_open: 0:/PURRGO/MAPS/belarus/pois.db CLMT ok (4 of 64 dwords)
+
+purrgo_fs_open: 0:/PURRGO/MAPS/belarus/pois.db opened OK
+
+purrgo_fs_open: 0:/PURRGO/ROUTES/–Ъ—А—Г–≥–Њ–І–µ—А–≤–µ–љ—М.gpx opened OK
+
+route: –Ъ—А—Г–≥–Њ–І–µ—А–≤–µ–љ—М.gpx entries=126 step=0 line=1
+
+purrgo_fs_open: 0:/PURRGO/ROUTES/–Ъ—А—Г–≥–Њ–І–µ—А–≤–µ–љ—М.gpx opened OK
+
+wpt layer: 0 points (route=1 dir=1)
+
+GNSS: listening for NMEA at 115200 baud
+GNSS: listening for NMEA at 38400 baud
+GNSS: NMEA at 38400 baud, module -> 115200 baud
+GNSS: UART at 115200 baud, waiting for NMEA
+GNSS: link OK at 115200 baud
+GNSS: config sent to module (54 bytes)
+GNSS: config sent to module (22 bytes)
+GNSS: config sent to module (17 bytes)
+GNSS: config sent to module (17 bytes)
+GNSS: config sent to module (17 bytes)
+GNSS: config sent to module (17 bytes)
+GNSS: config sent to module (17 bytes)
+GNSS: config sent to module (17 bytes)
+GNSS: config sent to module (17 bytes)
+GNSS: config sent to module (22 bytes)
+GNSS: config sent to module (17 bytes)
+GNSS: config sent to module (33 bytes)
+GNSS: config sent to module (17 bytes)
+GNSS: config sent to module (17 bytes)
+GNSS: config sent to module (17 bytes)
+GNSS: config sent to module (8 bytes)
+GNSS: u-blox SW "ROM SPG 5.10 (7b202e)" HW "000A0000"
+GNSS:   FWVER=SPG 5.10
+GNSS:   PROTVER=34.10
+GNSS:   GPS;GLO;GAL;BDS
+GNSS:   SBAS;QZSS
+GNSS: PVT fixType=0 fixOK=0 sv=0 validTime=1 hAcc=190015 mm pDOP=9999
+GNSS: SAT listed=21 used=0 cno avg=0 max=0 dBHz
+GNSS: STATUS gpsFix=0 flags=0x5C psm=0 spoof=1
+GNSS: RF jam=0 ant=1/2 noise=85 agc=4092 cw=13
+GNSS: config sent to module (54 bytes)
+GNSS: config sent to module (22 bytes)
+GNSS: config sent to module (17 bytes)
+GNSS: config sent to module (17 bytes)
+GNSS: config sent to module (17 bytes)
+GNSS: config sent to module (17 bytes)
+GNSS: config sent to module (17 bytes)
+GNSS: config sent to module (17 bytes)
+GNSS: config sent to module (17 bytes)
+GNSS: config sent to module (22 bytes)
+GNSS: config sent to module (17 bytes)
+GNSS: config sent to module (33 bytes)
+GNSS: config sent to module (17 bytes)
+GNSS: config sent to module (17 bytes)
+GNSS: config sent to module (17 bytes)
+GNSS: config sent to module (8 bytes)
+Stop2: first entry, wake period <= 2000 ms
+GNSS: RF jam=1 ant=1/2 noise=86 agc=4092 cw=14
+purrgo_fs_open: 0:/PURRGO/TRACKS/328DF1AB.gpx opened OK
+
+Track logging started
+
+GNSS: UBX replies: ACK=30 NAK=0 (last: ACK class 0x06 id 0x8A)
+GNSS: PSM state 3 (tracking)
+GNSS: FIX after 7 s, sats used=6 (bytes=10738, ubx frames=145)
+GNSS: PVT fixType=3 fixOK=1 sv=6 validTime=1 hAcc=7097 mm pDOP=451
+GNSS: SAT listed=21 used=6 cno avg=23 max=29 dBHz
+GNSS: STATUS gpsFix=3 flags=0xDD psm=1 spoof=1
+GNSS: RF jam=1 ant=1/2 noise=93 agc=3534 cw=11
+BATT: vdda=3326 mV pin=2243 mV pack=4519 mV
+GNSS: UBX replies: ACK=31 NAK=0 (last: ACK class 0x01 id 0x10)
+GNSS: RF jam=2 ant=1/2 noise=82 agc=4092 cw=14
+GNSS: RF jam=1 ant=1/2 noise=81 agc=4092 cw=13
+GNSS: RF jam=2 ant=1/2 noise=81 agc=4092 cw=15
+GNSS: RF jam=1 ant=1/2 noise=79 agc=4092 cw=15
+GNSS: RF jam=2 ant=1/2 noise=78 agc=4092 cw=13
+GNSS: RF jam=1 ant=1/2 noise=78 agc=3534 cw=10
+GNSS: PVT fixType=3 fixOK=1 sv=5 validTime=1 hAcc=12861 mm pDOP=708
+GNSS: SAT listed=23 used=5 cno avg=23 max=26 dBHz
+GNSS: STATUS gpsFix=3 flags=0xDD psm=1 spoof=1
+GNSS: RF jam=2 ant=1/2 noise=85 agc=4092 cw=15
+GNSS: RF jam=1 ant=1/2 noise=76 agc=3534 cw=10
+GNSS: RF jam=1 ant=1/2 noise=81 agc=4092 cw=11
+GNSS: RF jam=2 ant=1/2 noise=81 agc=4092 cw=15
+GNSS: RF jam=1 ant=1/2 noise=81 agc=4092 cw=21
+GNSS: RF jam=2 ant=1/2 noise=81 agc=3534 cw=9
