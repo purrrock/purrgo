@@ -103,9 +103,14 @@ static uint16_t measure_pin_mv_adc_on(void)
     const uint32_t full_scale = 16383u;   /* 14 бит */
     const uint32_t pin_mv = (bat_raw * vdda_mv + full_scale / 2u) / full_scale;
 
+#ifdef PURRGO_BATTERY_DEBUG_LOG
+    /* Построчный вывод каждого замера в UART: только для отладки АЦП
+     * (-DPURRGO_BATTERY_DEBUG_LOG). Штатно заряд смотрят в треке (pg:bat, pg:vbat),
+     * а в UART идёт только сообщение о критическом разряде (supply.c). */
     PURRGO_LOGD("BATT: vdda=%u mV pin=%u mV pack=%u mV\r\n", (unsigned)vdda_mv,
                 (unsigned)pin_mv,
                 (unsigned)purrgo_battery_pack_mv_from_pin(pin_mv));
+#endif
 
     return (uint16_t)pin_mv;
 }

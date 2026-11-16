@@ -113,7 +113,9 @@ bool purrgo_supply_tick(uint32_t now_ms)
     s_supply.pending = false;
     s_supply.blocked = low;
     if (low) {
-        PURRGO_LOGW("Supply low (%s): SD writes stopped, SD stays mounted\r\n",
+        /* LOGE: единственное сообщение о разряде в UART, должно проходить и в
+         * релизной сборке (уровень 1). */
+        PURRGO_LOGE("CRITICAL: battery low (%s), track recording stopped, SD writes stopped\r\n",
                     vdd_low ? "VDD" : "battery ADC");
         storage_stop();
     } else {
