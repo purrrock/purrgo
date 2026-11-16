@@ -6,6 +6,8 @@
 
 static uint32_t s_ticks[PURRGO_PROF_COUNT];
 static uint32_t s_calls[PURRGO_PROF_COUNT];
+static uint32_t s_max[PURRGO_PROF_COUNT];
+static uint32_t s_cnt[PURRGO_PROF_CNT_COUNT];
 static uint32_t s_frame_start;
 
 void purrgo_render_prof_begin_frame(void)
@@ -15,6 +17,10 @@ void purrgo_render_prof_begin_frame(void)
     for (int i = 0; i < (int)PURRGO_PROF_COUNT; i++) {
         s_ticks[i] = 0;
         s_calls[i] = 0;
+        s_max[i] = 0;
+    }
+    for (int i = 0; i < (int)PURRGO_PROF_CNT_COUNT; i++) {
+        s_cnt[i] = 0;
     }
 
     s_frame_start = purrgo_prof_ticks();
@@ -25,6 +31,16 @@ void purrgo_render_prof_add(purrgo_prof_id_t id, uint32_t ticks)
     if ((unsigned)id < (unsigned)PURRGO_PROF_COUNT) {
         s_ticks[id] += ticks;
         s_calls[id]++;
+        if (ticks > s_max[id]) {
+            s_max[id] = ticks;
+        }
+    }
+}
+
+void purrgo_render_prof_count(purrgo_prof_cnt_t id, uint32_t n)
+{
+    if ((unsigned)id < (unsigned)PURRGO_PROF_CNT_COUNT) {
+        s_cnt[id] += n;
     }
 }
 
@@ -69,8 +85,9 @@ void purrgo_render_prof_end_frame(int scale, int ok)
     const uint32_t lbl = net_ticks(PURRGO_PROF_LABELS, ovh);
     const uint32_t name = net_ticks(PURRGO_PROF_NAME, ovh);
 
+    /* В сумму кадра входят только первые пять статей, остальные лежат внутри `other`. */
     uint32_t calls = 0;
-    for (int i = 0; i < (int)PURRGO_PROF_COUNT; i++) {
+    for (int i = 0; i < (int)PURRGO_PROF_SYNC; i++) {
         calls += s_calls[i];
     }
     const uint32_t frame_net = (frame > calls * ovh) ? (frame - calls * ovh) : 0u;
@@ -90,6 +107,27 @@ void purrgo_render_prof_end_frame(int scale, int ok)
         (unsigned long)to_us(name, per_us), (unsigned long)s_calls[PURRGO_PROF_NAME],
         (unsigned long)to_us(other, per_us),
         (unsigned long)ovh, (unsigned long)per_us);
+
+    const uint32_t sync = net_ticks(PURRGO_PROF_SYNC, ovh);
+    const uint32_t mlpi = net_ticks(PURRGO_PROF_MLP_INIT, ovh);
+    const uint32_t mlpn = net_ticks(PURRGO_PROF_MLP_NEXT, ovh);
+    const uint32_t sd = net_ticks(PURRGO_PROF_SD, ovh);
+    const uint32_t inner = sync + mlpi + mlpn;
+    const uint32_t rest = (other > inner) ? (other - inner) : 0u;
+
+    purrgo_logger_write(
+        "PROF2 sync=%lu us mlpi=%lu us n=%lu mlpn=%lu us n=%lu rest=%lu us "
+        "sd=%lu us n=%lu max=%lu us sect=%lu hit=%lu rd=%lu B=%lu\r\n",
+        (unsigned long)to_us(sync, per_us),
+        (unsigned long)to_us(mlpi, per_us), (unsigned long)s_calls[PURRGO_PROF_MLP_INIT],
+        (unsigned long)to_us(mlpn, per_us), (unsigned long)s_calls[PURRGO_PROF_MLP_NEXT],
+        (unsigned long)to_us(rest, per_us),
+        (unsigned long)to_us(sd, per_us), (unsigned long)s_calls[PURRGO_PROF_SD],
+        (unsigned long)to_us(s_max[PURRGO_PROF_SD], per_us),
+        (unsigned long)s_cnt[PURRGO_PROF_CNT_SD_SECTORS],
+        (unsigned long)s_cnt[PURRGO_PROF_CNT_CACHE_HIT],
+        (unsigned long)s_cnt[PURRGO_PROF_CNT_FS_READ],
+        (unsigned long)s_cnt[PURRGO_PROF_CNT_FS_READ_BYTES]);
 }
 
 #else

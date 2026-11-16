@@ -543,7 +543,11 @@ bool purrgo_map_render_viewport(
      * Sync map files context with current map directory and layer states.
      * This opens necessary files and closes unused ones.
      */
-    if (!map_sync_files(params)) {
+    PURRGO_PROF_BEGIN(prof_sync);
+    const bool sync_ok = map_sync_files(params);
+    PURRGO_PROF_END(prof_sync, PURRGO_PROF_SYNC);
+
+    if (!sync_ok) {
         return false;
     }
 

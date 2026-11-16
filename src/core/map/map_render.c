@@ -362,6 +362,25 @@ static const gfx_tile_t s_glacier_tile = {
     }
 };
 
+#if PURRGO_RENDER_PROF
+/* Замер чтения и разбора одной точки; при PURRGO_RENDER_PROF=0 вызов идёт напрямую. */
+static bool prof_mlp_next(
+    map_mlp_iter_t *iter,
+    int32_t *raw_x,
+    int32_t *raw_y,
+    bool *is_new_part
+)
+{
+    PURRGO_PROF_BEGIN(prof_mlpn);
+    const bool ok = map_mlp_iter_next(iter, raw_x, raw_y, is_new_part);
+    PURRGO_PROF_END(prof_mlpn, PURRGO_PROF_MLP_NEXT);
+    return ok;
+}
+#define MAP_MLP_NEXT prof_mlp_next
+#else
+#define MAP_MLP_NEXT map_mlp_iter_next
+#endif
+
 
 void map_render_feature(
     purrgo_file_t *mlp_file,
@@ -383,7 +402,11 @@ void map_render_feature(
 
     map_mlp_iter_t iter;
 
-    if (!map_mlp_iter_init(&iter, mlp_file, v1_offset)) {
+    PURRGO_PROF_BEGIN(prof_mlpi);
+    const bool mlp_init_ok = map_mlp_iter_init(&iter, mlp_file, v1_offset);
+    PURRGO_PROF_END(prof_mlpi, PURRGO_PROF_MLP_INIT);
+
+    if (!mlp_init_ok) {
         return;
     }
 
@@ -402,7 +425,7 @@ void map_render_feature(
     bool is_new_part;
 
 
-    while (map_mlp_iter_next(
+    while (MAP_MLP_NEXT(
         &iter,
         &raw_x,
         &raw_y,

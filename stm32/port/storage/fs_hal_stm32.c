@@ -4,6 +4,7 @@
 #include "purrgo/purrgo_format.h"
 #include <stdio.h>
 #include "purrgo/logger.h"
+#include "purrgo/render_prof.h"
 
 #define STM32_MAX_FILES 14
 #define STM32_MAX_DIRS 2
@@ -210,14 +211,9 @@ static const uint8_t* read_block_cached(purrgo_file_t* file, uint32_t sector_num
     return lru_cache[slot].data;
 }
 
-static const uint8_t* read_cached_sector(purrgo_file_t* file, uint32_t sector_num, uint32_t* out_read_bytes) {
-    // Search in cache
-    int hit = lru_find(file, sector_num);
-    if (hit >= 0) {
-        lru_cache[hit].last_used = ++lru_counter;
-        if (out_read_bytes) *out_read_bytes = LRU_SECTOR_SIZE;
-        return lru_cache[hit].data;
-    }
+/* Промах кэша: чтение с SD (seek + f_read), одиночное или блоком read-ahead. */
+static const uint8_t* read_sector_miss(purrgo_file_t* file, uint32_t sector_num, uint32_t* out_read_bytes) {
+    PURRGO_PROF_COUNT_ADD(PURRGO_PROF_CNT_SD_SECTORS, (file->read_ahead > 1u) ? file->read_ahead : 1u);
 
     if (file->read_ahead > 1u) {
         return read_block_cached(file, sector_num, out_read_bytes);
@@ -256,6 +252,23 @@ static const uint8_t* read_cached_sector(purrgo_file_t* file, uint32_t sector_nu
 
     if (out_read_bytes) *out_read_bytes = br;
     return lru_cache[lru_index].data;
+}
+
+
+static const uint8_t* read_cached_sector(purrgo_file_t* file, uint32_t sector_num, uint32_t* out_read_bytes) {
+    // Search in cache
+    int hit = lru_find(file, sector_num);
+    if (hit >= 0) {
+        PURRGO_PROF_COUNT_ADD(PURRGO_PROF_CNT_CACHE_HIT, 1u);
+        lru_cache[hit].last_used = ++lru_counter;
+        if (out_read_bytes) *out_read_bytes = LRU_SECTOR_SIZE;
+        return lru_cache[hit].data;
+    }
+
+    PURRGO_PROF_BEGIN(prof_sd);
+    const uint8_t* data = read_sector_miss(file, sector_num, out_read_bytes);
+    PURRGO_PROF_END(prof_sd, PURRGO_PROF_SD);
+    return data;
 }
 
 static uint32_t purrgo_fs_read_cached(purrgo_file_t* file, uint8_t* buffer, uint32_t size) {
@@ -432,6 +445,8 @@ uint32_t purrgo_fs_write(purrgo_file_t* file, const uint8_t* data, uint32_t size
 
 uint32_t purrgo_fs_read(purrgo_file_t* file, uint8_t* buffer, uint32_t size) {
     if (!file || !buffer || size == 0) return 0;
+    PURRGO_PROF_COUNT_ADD(PURRGO_PROF_CNT_FS_READ, 1u);
+    PURRGO_PROF_COUNT_ADD(PURRGO_PROF_CNT_FS_READ_BYTES, size);
     return purrgo_fs_read_cached(file, buffer, size);
 }
 

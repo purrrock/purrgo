@@ -17,6 +17,18 @@
  *   other - остаток кадра: чтение .idx/.mlp с SD, разбор, отсечение, подписи POI.
  * Статьи не вложены друг в друга, поэтому frame = proj + fill + lines + lbl + name + other.
  *
+ * Вторая строка PROF2 разбирает остаток `other` (эти статьи входят в него):
+ *   sync  - map_sync_files() (открытие/закрытие файлов карты);
+ *   mlpi  - map_mlp_iter_init(): seek к объекту и чтение его заголовка, n - число объектов;
+ *   mlpn  - map_mlp_iter_next(): чтение и разбор точки (включая дочитывание буфера), n - точек;
+ *   rest  - остаток `other`: обход дерева .idx, отсечение, подписи POI, чтение .idx;
+ *   sd    - физические чтения SD (промах кэша секторов: seek + f_read), n - число промахов,
+ *           max - самое долгое одно чтение; sd НЕ вложен в другие статьи, он пересекается
+ *           с name, mlpi, mlpn и rest (какие-то из них ждут SD);
+ *   sect  - прочитано секторов с SD (с учётом read-ahead);
+ *   hit   - обращений к кэшу секторов без чтения SD;
+ *   rd    - вызовов purrgo_fs_read, B - запрошено байт.
+ *
  * Время берётся из счётчика платформы (stm32: DWT->CYCCNT, pc: timespec_get).
  * Накладные расходы одного замера (ovh, такты) измеряются в конце кадра и вычитаются
  * из статей с большим числом вызовов (proj, name).
@@ -39,8 +51,22 @@ typedef enum {
     PURRGO_PROF_LINES,
     PURRGO_PROF_LABELS,
     PURRGO_PROF_NAME,
+    /* Ниже - статьи внутри `other`, в сумму кадра не входят (см. PROF2). */
+    PURRGO_PROF_SYNC,
+    PURRGO_PROF_MLP_INIT,
+    PURRGO_PROF_MLP_NEXT,
+    PURRGO_PROF_SD,
     PURRGO_PROF_COUNT
 } purrgo_prof_id_t;
+
+/* Простые счётчики событий (без времени). */
+typedef enum {
+    PURRGO_PROF_CNT_SD_SECTORS = 0,
+    PURRGO_PROF_CNT_CACHE_HIT,
+    PURRGO_PROF_CNT_FS_READ,
+    PURRGO_PROF_CNT_FS_READ_BYTES,
+    PURRGO_PROF_CNT_COUNT
+} purrgo_prof_cnt_t;
 
 /* Платформа: монотонный 32-битный счётчик и его частота (тактов в микросекунду). */
 void purrgo_prof_platform_enable(void);
@@ -49,6 +75,7 @@ uint32_t purrgo_prof_ticks_per_us(void);
 
 void purrgo_render_prof_begin_frame(void);
 void purrgo_render_prof_add(purrgo_prof_id_t id, uint32_t ticks);
+void purrgo_render_prof_count(purrgo_prof_cnt_t id, uint32_t n);
 void purrgo_render_prof_end_frame(int scale, int ok);
 
 #ifdef __cplusplus
@@ -58,11 +85,13 @@ void purrgo_render_prof_end_frame(int scale, int ok);
 #define PURRGO_PROF_BEGIN(var) const uint32_t var = purrgo_prof_ticks()
 #define PURRGO_PROF_END(var, id) \
     purrgo_render_prof_add((id), (uint32_t)(purrgo_prof_ticks() - (var)))
+#define PURRGO_PROF_COUNT_ADD(id, n) purrgo_render_prof_count((id), (uint32_t)(n))
 
 #else /* !PURRGO_RENDER_PROF */
 
 #define PURRGO_PROF_BEGIN(var) ((void)0)
 #define PURRGO_PROF_END(var, id) ((void)0)
+#define PURRGO_PROF_COUNT_ADD(id, n) ((void)0)
 
 #endif
 
