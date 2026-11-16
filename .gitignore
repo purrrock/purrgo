@@ -25,6 +25,7 @@ cmake_install.cmake
 Debug/
 Release/
 STM32CubeIDE/
+.vscode/
 
 # Generated/temporary files
 *.log
