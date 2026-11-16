@@ -8,6 +8,7 @@
 #include "purrgo/fs_hal.h"
 #include "purrgo/pgo_text.h"
 #include "purrgo/purrgo_format.h"
+#include "purrgo/track_name.h"
 #include "purrgo/display_hal.h"
 #include "purrgo/hardware_config.h"
 #include "ui_rows.h"
@@ -27,6 +28,8 @@ void ui_menu_dir_select_reset(void) {
  */
 static void render_browser(gfx_context_t* gfx, const char* title, bool route_mode)
 {
+    const bool tracks_mode = route_mode && menu_app_dir_is_tracks();
+
     /*
      * Буфер используется только для формирования строки одного
      * отображаемого элемента.
@@ -75,13 +78,28 @@ static void render_browser(gfx_context_t* gfx, const char* title, bool route_mod
         if (!route_mode) {
             purrgo_snprintf(buf, sizeof(buf), "[%s]", dir_list[i].name);
         }
+        else if (tracks_mode) {
+            /*
+             * Трек: дата и время старта из имени файла. Выбранный сейчас помечен
+             * "*", файл, который пишется прямо сейчас, - "REC" (его открыть нельзя).
+             */
+            char label[PURRGO_ROUTE_NAME_MAX];
+
+            purrgo_track_name_label(dir_list[i].name, app_config.tz_offset_minutes,
+                                    label, sizeof label);
+            purrgo_snprintf(buf, sizeof(buf), "%s%s", label,
+                            purrgo_track_name_is_recording(dir_list[i].name) ? " REC"
+                            : (app_config.route_from_tracks &&
+                               strcmp(dir_list[i].name, app_config.route_file) == 0) ? " *" : "");
+        }
         else if (dir_list[i].name[0] == '\0') {
             purrgo_snprintf(buf, sizeof(buf), "(none)%s",
                             (app_config.route_file[0] == '\0') ? " *" : "");
         }
         else {
             purrgo_snprintf(buf, sizeof(buf), "%s%s", dir_list[i].name,
-                            (strcmp(dir_list[i].name, app_config.route_file) == 0) ? " *" : "");
+                            (!app_config.route_from_tracks &&
+                             strcmp(dir_list[i].name, app_config.route_file) == 0) ? " *" : "");
         }
 
         /*
@@ -115,7 +133,7 @@ static void render_browser(gfx_context_t* gfx, const char* title, bool route_mod
             gfx,
             10,
             y_pos,
-            route_mode ? "(No routes)" : "(No directories)"
+            tracks_mode ? "(No tracks)" : route_mode ? "(No routes)" : "(No directories)"
         );
     }
 
@@ -129,5 +147,5 @@ void ui_render_menu_dir_select(gfx_context_t* gfx)
 
 void ui_render_menu_route_select(gfx_context_t* gfx)
 {
-    render_browser(gfx, "= SELECT ROUTE =", true);
+    render_browser(gfx, menu_app_dir_is_tracks() ? "= OPEN TRACK =" : "= SELECT ROUTE =", true);
 }

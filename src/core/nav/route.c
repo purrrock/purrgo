@@ -19,6 +19,9 @@
 /* Больше этого размера файл не читается (защита от многомегабайтных GPX). */
 #define ROUTE_MAX_FILE_BYTES    (4u * 1024u * 1024u)
 
+/* Файл записанного трека длиннее: в каждой точке расширения (~350 байт). */
+#define ROUTE_MAX_TRACK_FILE_BYTES (16u * 1024u * 1024u)
+
 /* Буфер текста одного тега: <trkpt lat="..." lon="...">. */
 #define ROUTE_TAG_MAX           128u
 
@@ -51,6 +54,7 @@ static bool                 s_in_tag;
 /* Что загружено (для purrgo_route_sync). */
 static char                 s_loaded_name[PURRGO_ROUTE_NAME_MAX];
 static bool                 s_loaded_ok;
+static purrgo_route_src_t   s_loaded_src;
 
 
 /* ------------------------------------------------------------------ */
@@ -414,6 +418,11 @@ static bool name_is_valid(const char *name)
 
 bool purrgo_route_load(const char *filename)
 {
+    return purrgo_route_load_src(filename, PURRGO_ROUTE_SRC_ROUTES);
+}
+
+bool purrgo_route_load_src(const char *filename, purrgo_route_src_t src)
+{
     purrgo_route_clear();
 
     if (!name_is_valid(filename)) {
@@ -423,10 +432,16 @@ bool purrgo_route_load(const char *filename)
 
     char path[PURRGO_FS_MAX_PATH + PURRGO_ROUTE_NAME_MAX + 2];
     const int pn = purrgo_snprintf(path, sizeof path, "%s/%s",
-                                   purrgo_fs_get_routes_path(), filename);
+                                   (src == PURRGO_ROUTE_SRC_TRACKS)
+                                       ? purrgo_fs_get_tracks_path()
+                                       : purrgo_fs_get_routes_path(),
+                                   filename);
     if (pn <= 0 || (size_t)pn >= sizeof path) {
         return false;
     }
+
+    const uint32_t max_bytes = (src == PURRGO_ROUTE_SRC_TRACKS)
+        ? ROUTE_MAX_TRACK_FILE_BYTES : ROUTE_MAX_FILE_BYTES;
 
     purrgo_file_t *file = purrgo_fs_open(path, FS_READ);
     if (file == NULL) {
@@ -448,7 +463,7 @@ bool purrgo_route_load(const char *filename)
         }
         purrgo_route_feed(buf, n);
         total += n;
-        if (total >= ROUTE_MAX_FILE_BYTES) {
+        if (total >= max_bytes) {
             truncated = true;
             break;
         }
@@ -469,6 +484,11 @@ bool purrgo_route_load(const char *filename)
 
 bool purrgo_route_sync(const char *filename)
 {
+    return purrgo_route_sync_src(filename, PURRGO_ROUTE_SRC_ROUTES);
+}
+
+bool purrgo_route_sync_src(const char *filename, purrgo_route_src_t src)
+{
     if (filename == NULL || filename[0] == '\0') {
         if (s_loaded_name[0] != '\0' || s_count != 0) {
             purrgo_route_clear();
@@ -478,15 +498,31 @@ bool purrgo_route_sync(const char *filename)
         return false;
     }
 
-    if (s_loaded_ok && strcmp(filename, s_loaded_name) == 0) {
+    if (s_loaded_ok && s_loaded_src == src && strcmp(filename, s_loaded_name) == 0) {
         return true;
     }
 
-    /* Другое имя либо прошлая попытка не удалась: загружаем заново. */
-    s_loaded_ok = purrgo_route_load(filename);
+    /* Другое имя или каталог либо прошлая попытка не удалась: загружаем заново. */
+    s_loaded_ok = purrgo_route_load_src(filename, src);
+    s_loaded_src = src;
     purrgo_snprintf(s_loaded_name, sizeof s_loaded_name, "%.*s",
                     (int)(sizeof s_loaded_name - 1u), filename);
     return s_loaded_ok;
+}
+
+bool purrgo_route_get_bounds(int32_t *min_lat_1e7, int32_t *min_lon_1e7,
+                             int32_t *max_lat_1e7, int32_t *max_lon_1e7)
+{
+    if (!s_has_line || !s_bounds_valid ||
+        min_lat_1e7 == NULL || min_lon_1e7 == NULL ||
+        max_lat_1e7 == NULL || max_lon_1e7 == NULL) {
+        return false;
+    }
+    *min_lat_1e7 = s_min_lat;
+    *min_lon_1e7 = s_min_lon;
+    *max_lat_1e7 = s_max_lat;
+    *max_lon_1e7 = s_max_lon;
+    return true;
 }
 
 

@@ -71,6 +71,12 @@ typedef struct {
     char route_file[PURRGO_ROUTE_NAME_MAX];
 
     /*
+     * Каталог файла route_file: false - ROUTES, true - TRACKS (записанный трек,
+     * открытый для просмотра). Ключ ROUTE_SRC в PURRGO.CFG (0 или 1; нет ключа - 0).
+     */
+    bool route_from_tracks;
+
+    /*
      * Активная цель навигации (Waypoint): wpt_valid - цель задана. Хранится в
      * PURRGO.CFG (ключи WPT_SET, WPT_LAT, WPT_LON, WPT_NAME) и переживает
      * выключение. Задаётся и снимается в меню WAYPOINT (purrgo/waypoint.h).

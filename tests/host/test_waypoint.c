@@ -682,10 +682,11 @@ static void test_menu(void)
         "<wpt lat=\"-10\" lon=\"-20\"><name>Gamma</name></wpt>");
     snprintf(app_config.route_file, sizeof app_config.route_file, "%s", "pts.gpx");
 
-    /* Пункт в главном меню: идёт после ROUTE, показывает цель. */
+    /* Пункт в главном меню: идёт после ROUTE и OPEN TRACK, показывает цель. */
     purrgo_menu_controller_on_enter(APP_STATE_MENU_MAIN);
     const int idx = find_main_item("WAYPOINT");
-    CHECK(idx == find_main_item("ROUTE") + 1);
+    CHECK(find_main_item("OPEN TRACK") == find_main_item("ROUTE") + 1);
+    CHECK(idx == find_main_item("OPEN TRACK") + 1);
     char buf[128];
     menu_app_get_main_item_text(idx, buf, sizeof buf);
     CHECK(strcmp(buf, "WAYPOINT: NONE") == 0);
