@@ -607,14 +607,17 @@ static bool ui_map_track_visible(void) {
 static void ui_map_render_dynamic_data(gfx_context_t* gfx, const purrgo_viewport_t* map_vp, const purrgo_bbox_t* dynamic_cam) {
     /* Порядок слоёв: route, waypoints, track - см. docs/architecture.md, Layer drawing order. */
     if (purrgo_layer_on(app_config.layers, PURRGO_LAYER_ROUTE)) {
-        if (purrgo_route_sync(app_config.route_file)) {
+        if (purrgo_route_sync_src(app_config.route_file,
+                                  app_config.route_from_tracks ? PURRGO_ROUTE_SRC_TRACKS
+                                                               : PURRGO_ROUTE_SRC_ROUTES)) {
             purrgo_route_render(gfx, dynamic_cam, map_vp);
         }
     }
 
     /* Путевые точки: над маршрутом, под треком. */
     if (purrgo_layer_on(app_config.layers, PURRGO_LAYER_WAYPOINT)) {
-        if (purrgo_wpt_layer_sync(app_config.route_file)) {
+        /* Файл записанного трека точек <wpt> не содержит: берутся только WAYPTS. */
+        if (purrgo_wpt_layer_sync(app_config.route_from_tracks ? "" : app_config.route_file)) {
             purrgo_wpt_layer_render(gfx, dynamic_cam, map_vp);
         }
     }

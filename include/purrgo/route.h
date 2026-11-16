@@ -28,6 +28,15 @@
 #define PURRGO_ROUTE_MAX_POINTS 4096
 #endif
 
+/*
+ * Откуда читается файл: каталог ROUTES (подготовленные маршруты) или TRACKS
+ * (записанные треки; открываются как маршруты для просмотра на карте).
+ */
+typedef enum {
+    PURRGO_ROUTE_SRC_ROUTES = 0,
+    PURRGO_ROUTE_SRC_TRACKS = 1
+} purrgo_route_src_t;
+
 /* Значение lat_1e7, помечающее разрыв между сегментами (<trkseg>, <trk>, <rte>). */
 #define PURRGO_ROUTE_BREAK_LAT INT32_MIN
 
@@ -60,6 +69,9 @@ void purrgo_route_end(void);
  */
 bool purrgo_route_load(const char *filename);
 
+/* То же из каталога, заданного src (для TRACKS допустим файл до 16 МБ вместо 4 МБ). */
+bool purrgo_route_load_src(const char *filename, purrgo_route_src_t src);
+
 /*
  * Приводит загруженный маршрут в соответствие с настройкой: пустое имя -
  * маршрута нет; то же имя, что уже загружено, - ничего не делает; иначе
@@ -68,6 +80,12 @@ bool purrgo_route_load(const char *filename);
  * Возвращает true, если маршрут загружен и может быть нарисован.
  */
 bool purrgo_route_sync(const char *filename);
+
+/*
+ * То же с выбором каталога. Загруженным считается пара (имя, src): тот же
+ * файл из другого каталога загружается заново.
+ */
+bool purrgo_route_sync_src(const char *filename, purrgo_route_src_t src);
 
 /* Убрать маршрут из памяти. */
 void purrgo_route_clear(void);
@@ -81,6 +99,14 @@ size_t purrgo_route_entry_count(void);
 
 /* Запись i; lat_1e7 == PURRGO_ROUTE_BREAK_LAT - разрыв сегмента. */
 bool purrgo_route_get_entry(size_t i, purrgo_route_point_t *out);
+
+/*
+ * Границы загруженного маршрута в 1e-7 градуса (по сохранённым точкам; при
+ * прореживании крайние точки могут быть отброшены не более чем на шаг
+ * прореживания). false - маршрут не загружен или в нём нет линии.
+ */
+bool purrgo_route_get_bounds(int32_t *min_lat_1e7, int32_t *min_lon_1e7,
+                             int32_t *max_lat_1e7, int32_t *max_lon_1e7);
 
 /* Текущий минимальный шаг прореживания, 1e-7 градуса (0 - прореживания не было). */
 uint32_t purrgo_route_decimation_step(void);

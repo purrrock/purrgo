@@ -164,6 +164,65 @@ static void apply_auto_follow(const purrgo_gnss_solution_t* fix) {
     }
 }
 
+/* Поля вокруг прямоугольника при подгонке: пикселей с каждой стороны. */
+#define FIT_MARGIN_PX 10
+
+/*
+ * Подгонка масштаба: ширина окна в метрах, при которой прямоугольник
+ * (ширина lon_m, высота lat_m в метрах) помещается с полями FIT_MARGIN_PX.
+ * Окно имеет одинаковые метры на пиксель по обеим осям: высота окна в метрах =
+ * ширина * H / W.
+ */
+static uint64_t fit_required_width_m(uint64_t lon_m, uint64_t lat_m) {
+    const uint64_t w = PURRGO_HW_DISPLAY_WIDTH_PX;
+    const uint64_t h = PURRGO_MAP_VIEWPORT_HEIGHT_PX;
+
+    /* lon_m * W / (W - 2m) и lat_m * W / (H - 2m), округление вверх. */
+    const uint64_t by_x = (lon_m * w + (w - 2u * FIT_MARGIN_PX) - 1u) / (w - 2u * FIT_MARGIN_PX);
+    const uint64_t by_y = (lat_m * w + (h - 2u * FIT_MARGIN_PX) - 1u) / (h - 2u * FIT_MARGIN_PX);
+
+    return by_x > by_y ? by_x : by_y;
+}
+
+void purrgo_map_controller_fit_bounds(int32_t min_lat_1e7, int32_t min_lon_1e7,
+                                      int32_t max_lat_1e7, int32_t max_lon_1e7) {
+    if (min_lat_1e7 > max_lat_1e7 || min_lon_1e7 > max_lon_1e7) {
+        return;
+    }
+
+    const int64_t center_lat = ((int64_t)min_lat_1e7 + (int64_t)max_lat_1e7) / 2;
+    const int64_t center_lon = ((int64_t)min_lon_1e7 + (int64_t)max_lon_1e7) / 2;
+
+    /*
+     * Размеры в метрах. Долгота - по косинусу широты центра (как в
+     * purrgo_geo_bbox_from_center). Для маршрута, пересекающего широту
+     * около 90 градусов, косинус ограничен снизу.
+     */
+    int32_t cos_val = purrgo_geo_cos_10k((int32_t)center_lat);
+    if (cos_val < 100) cos_val = 100;
+
+    const uint64_t dlat = (uint64_t)((int64_t)max_lat_1e7 - (int64_t)min_lat_1e7);
+    const uint64_t dlon = (uint64_t)((int64_t)max_lon_1e7 - (int64_t)min_lon_1e7);
+    const uint64_t lat_m = dlat / PURRGO_1E7_PER_METER;
+    const uint64_t lon_m = (dlon * (uint64_t)cos_val) / (10000u * PURRGO_1E7_PER_METER);
+
+    const uint64_t need_m = fit_required_width_m(lon_m, lat_m);
+
+    purrgo_map_scale_t scale = (purrgo_map_scale_t)(PURRGO_MAP_SCALE_COUNT - 1);
+    for (int i = 0; i < PURRGO_MAP_SCALE_COUNT; i++) {
+        if ((uint64_t)scale_widths_m[i] >= need_m) {
+            scale = (purrgo_map_scale_t)i;
+            break;
+        }
+    }
+
+    map_center_lat_1e7 = (int32_t)center_lat;
+    map_center_lon_1e7 = (int32_t)center_lon;
+    map_zoom_level = scale;
+    manual_pan_active = true;
+    purrgo_ui_dirty_mark(UI_DIRTY_MAP);
+}
+
 /* Центрирование карты на маркёре GNSS: маркёр в центре окна карты. */
 static void center_map_on_fix(const purrgo_gnss_solution_t* fix) {
     if (!fix->valid) {

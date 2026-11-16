@@ -10,6 +10,17 @@ void purrgo_map_controller_init(void);
 void purrgo_map_controller_update(const purrgo_gnss_solution_t* current_fix);
 bool purrgo_map_controller_handle_button(purrgo_action_t button);
 
+/*
+ * Показать прямоугольник (границы маршрута или трека, 1e-7 градуса) целиком:
+ * центр карты - центр прямоугольника, масштаб - наименьший из таблицы, при
+ * котором прямоугольник помещается в окно карты с полями. Включает ручной
+ * режим (автоследование за GNSS выключено до долгого K3 CENTER). Прямоугольник
+ * не должен пересекать меридиан 180 градусов (min_lon <= max_lon). Если
+ * прямоугольник больше самого крупного масштаба, ставится самый крупный.
+ */
+void purrgo_map_controller_fit_bounds(int32_t min_lat_1e7, int32_t min_lon_1e7,
+                                      int32_t max_lat_1e7, int32_t max_lon_1e7);
+
 // COMPATIBILITY API DECLARED IN APP_FSM.H
 int32_t map_app_get_map_center_lat(void);
 int32_t map_app_get_map_center_lon(void);

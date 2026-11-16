@@ -48,7 +48,7 @@ static void keep_cursor_visible(void)
 static void on_enter(void)
 {
     /* Точки читаются из файла, выбранного как ROUTE (пустое имя очищает список). */
-    (void)purrgo_wpt_list_load(app_config.route_file);
+    (void)purrgo_wpt_list_load(app_config.route_from_tracks ? "" : app_config.route_file);
     cursor = 0;
     top = 0;
 }

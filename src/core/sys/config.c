@@ -208,6 +208,7 @@ void purrgo_config_init(void)
      * Маршрут по умолчанию не выбран.
      */
     app_config.route_file[0] = '\0';
+    app_config.route_from_tracks = false;
 
     /*
      * Цель навигации не задана.
@@ -415,6 +416,10 @@ bool purrgo_config_load(void)
                         val
                     );
                 }
+            }
+
+            else if (strcmp(key, "ROUTE_SRC") == 0) {
+                app_config.route_from_tracks = (parse_int32(val) == 1);
             }
 
             /*
@@ -663,6 +668,7 @@ bool purrgo_config_save(void)
         "TZ_MIN=%d\n"
         "MAP_DIR=%.*s\n"
         "ROUTE_FILE=%.*s\n"
+        "ROUTE_SRC=%d\n"
         "LAST_LAT_1E7=%d\n"
         "LAST_LON_1E7=%d\n"
         "POI_MODE=%d\n"
@@ -685,6 +691,8 @@ bool purrgo_config_save(void)
 
         (int)(sizeof(app_config.route_file) - 1),
         app_config.route_file,
+
+        app_config.route_from_tracks ? 1 : 0,
 
         (int)app_config.last_lat_1e7,
 

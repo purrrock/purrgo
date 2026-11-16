@@ -1,25 +1,37 @@
 #include "menu_internal.h"
 #include "purrgo/config.h"
+#include "purrgo/map_controller.h"
 #include "purrgo/purrgo_format.h"
+#include "purrgo/route.h"
+#include "purrgo/track_name.h"
 #include "purrgo/ui/ui_dirty.h"
 #include <string.h>
 
 /*
- * Экраны выбора каталога карт (DIR) и GPX-файла маршрута (ROUTE).
- * Оба работают с одним браузером: каталог читается постранично, в RAM
- * находится только текущая страница.
+ * Экраны выбора каталога карт (DIR), GPX-файла маршрута (ROUTE) и записанного
+ * трека (TRACKS). Все работают с одним браузером: каталог читается
+ * постранично, в RAM находится только текущая страница.
+ *
+ * Список треков упорядочен по имени по убыванию (новые сверху): имя файла -
+ * время старта в hex фиксированной ширины. Порядок записей FAT для этого не
+ * годится, поэтому страница набирается просмотром всего каталога с отбором
+ * DIR_PAGE_SIZE ближайших имён до или после границы (см. load_tracks_page()).
  */
 
 /* Количество записей каталога, одновременно находящихся в RAM. */
 #define DIR_PAGE_SIZE 10
 
-/* Что показывает браузер: каталоги карт или GPX-файлы маршрутов. */
+/* Что показывает браузер: каталоги карт, GPX-файлы маршрутов или записанные треки. */
 typedef enum {
     BROWSE_MAP_DIRS,
-    BROWSE_ROUTE_FILES
+    BROWSE_ROUTE_FILES,
+    BROWSE_TRACK_FILES
 } browse_kind_t;
 
 static browse_kind_t browse_kind = BROWSE_MAP_DIRS;
+
+/* Каталог, который откроет следующий вход на экран ROUTE_SELECT (задаёт главное меню). */
+static purrgo_route_src_t route_select_src = PURRGO_ROUTE_SRC_ROUTES;
 
 /* Текущая страница, число записей в ней и курсор внутри неё. */
 static purrgo_fs_dirent_t dir_page[DIR_PAGE_SIZE];
@@ -46,9 +58,11 @@ static bool dir_page_has_none = false;
 
 static const char* get_base_path(void)
 {
-    return (browse_kind == BROWSE_ROUTE_FILES)
-        ? purrgo_fs_get_routes_path()
-        : purrgo_fs_get_maps_path();
+    switch (browse_kind) {
+        case BROWSE_ROUTE_FILES: return purrgo_fs_get_routes_path();
+        case BROWSE_TRACK_FILES: return purrgo_fs_get_tracks_path();
+        default:                 return purrgo_fs_get_maps_path();
+    }
 }
 
 /* Запись "." или "..". */
@@ -64,10 +78,10 @@ static bool is_dot_directory(const purrgo_fs_dirent_t* entry)
 }
 
 /*
- * Файл маршрута: обычный файл *.gpx (регистр расширения любой), имя которого
+ * Файл маршрута или трека: обычный файл *.gpx (регистр расширения любой), имя которого
  * помещается в app_config.route_file; скрытые файлы (".", "._") пропускаются.
  */
-static bool is_route_file(const purrgo_fs_dirent_t* entry)
+static bool is_gpx_file(const purrgo_fs_dirent_t* entry)
 {
     if (entry->is_directory || entry->name[0] == '.') {
         return false;
@@ -91,8 +105,8 @@ static bool is_route_file(const purrgo_fs_dirent_t* entry)
 /* Видна ли запись пользователю в текущем браузере. */
 static bool is_visible(const purrgo_fs_dirent_t* entry)
 {
-    if (browse_kind == BROWSE_ROUTE_FILES) {
-        return is_route_file(entry);
+    if (browse_kind == BROWSE_ROUTE_FILES || browse_kind == BROWSE_TRACK_FILES) {
+        return is_gpx_file(entry);
     }
     return entry->is_directory && !is_dot_directory(entry);
 }
@@ -140,10 +154,94 @@ static void fill_page(void)
     }
 }
 
+/*
+ * Страница списка треков (новые сверху). Каталог просматривается целиком, в
+ * странице остаются DIR_PAGE_SIZE имён:
+ *   TRACKS_FIRST - самые новые;
+ *   TRACKS_OLDER - ближайшие старше ref (имена меньше ref);
+ *   TRACKS_NEWER - ближайшие новее ref (имена больше ref).
+ * Страница всегда хранится по убыванию имени. Возвращает число записей.
+ * Каталог открывается и закрывается внутри: между вызовами он не удерживается.
+ */
+typedef enum {
+    TRACKS_FIRST,
+    TRACKS_OLDER,
+    TRACKS_NEWER
+} tracks_page_t;
+
+static int load_tracks_page(tracks_page_t which, const char* ref)
+{
+    purrgo_fs_dirent_t entry;
+    int count = 0;
+
+    close_dir();
+
+    purrgo_dir_t* dir = purrgo_fs_opendir(get_base_path());
+    if (dir == NULL) {
+        return 0;
+    }
+
+    /*
+     * Для TRACKS_NEWER набираются самые маленькие из больших имён: массив
+     * держится по возрастанию, в конце разворачивается.
+     */
+    const bool ascending = (which == TRACKS_NEWER);
+
+    while (purrgo_fs_readdir(dir, &entry)) {
+        if (!is_visible(&entry)) {
+            continue;
+        }
+        if (which == TRACKS_OLDER && purrgo_track_name_cmp(entry.name, ref) >= 0) {
+            continue;
+        }
+        if (which == TRACKS_NEWER && purrgo_track_name_cmp(entry.name, ref) <= 0) {
+            continue;
+        }
+
+        /* "лучше" = ближе к началу порядка страницы. */
+        int pos = count;
+        while (pos > 0) {
+            const int c = purrgo_track_name_cmp(entry.name, dir_page[pos - 1].name);
+            if (ascending ? (c < 0) : (c > 0)) {
+                pos--;
+            } else {
+                break;
+            }
+        }
+        if (pos >= DIR_PAGE_SIZE) {
+            continue;
+        }
+
+        const int last = (count < DIR_PAGE_SIZE) ? count : DIR_PAGE_SIZE - 1;
+        for (int i = last; i > pos; i--) {
+            dir_page[i] = dir_page[i - 1];
+        }
+        dir_page[pos] = entry;
+        if (count < DIR_PAGE_SIZE) {
+            count++;
+        }
+    }
+    purrgo_fs_closedir(dir);
+
+    if (ascending) {
+        for (int i = 0, j = count - 1; i < j; i++, j--) {
+            const purrgo_fs_dirent_t tmp = dir_page[i];
+            dir_page[i] = dir_page[j];
+            dir_page[j] = tmp;
+        }
+    }
+    return count;
+}
+
 static void load_first_page(void)
 {
     close_dir();
     reset_page(0);
+
+    if (browse_kind == BROWSE_TRACK_FILES) {
+        dir_page_count = load_tracks_page(TRACKS_FIRST, NULL);
+        return;
+    }
 
     if (browse_kind == BROWSE_ROUTE_FILES) {
         add_none_entry();
@@ -234,10 +332,41 @@ static void leave_browser(void)
  * Кнопки
  * ------------------------------------------------------------------------- */
 
+/* Треки: соседняя страница (newer = true - вверх, к более новым). */
+static bool tracks_move_page(bool newer)
+{
+    if (dir_page_count <= 0) {
+        return false;
+    }
+
+    /* Граница - имя на краю текущей страницы; новая страница пишется в dir_page. */
+    char ref[PURRGO_FS_MAX_PATH];
+    purrgo_snprintf(ref, sizeof ref, "%s",
+                    newer ? dir_page[0].name : dir_page[dir_page_count - 1].name);
+
+    /*
+     * Набор идёт прямо в dir_page. Если подходящих имён нет, ни одна запись не
+     * вставляется и текущая страница остаётся нетронутой.
+     */
+    const int n = load_tracks_page(newer ? TRACKS_NEWER : TRACKS_OLDER, ref);
+    if (n == 0) {
+        return false;
+    }
+    dir_page_count = n;
+    return true;
+}
+
 static void browser_up(void)
 {
     if (dir_page_cursor > 0) {
         dir_page_cursor--;
+        return;
+    }
+
+    if (browse_kind == BROWSE_TRACK_FILES) {
+        if (tracks_move_page(true)) {
+            dir_page_cursor = dir_page_count - 1;
+        }
         return;
     }
 
@@ -258,6 +387,13 @@ static void browser_down(void)
         return;
     }
 
+    if (browse_kind == BROWSE_TRACK_FILES) {
+        if (tracks_move_page(false)) {
+            dir_page_cursor = 0;
+        }
+        return;
+    }
+
     /* Неполная страница - последняя. */
     if (dir_page_count < DIR_PAGE_SIZE) {
         return;
@@ -269,13 +405,15 @@ static void browser_down(void)
 }
 
 /*
- * SEL на маршруте: пустое имя ("(none)") снимает маршрут. Выбор файла заодно
- * включает слой Route: иначе линия не появится.
+ * SEL на маршруте или треке: пустое имя ("(none)") снимает маршрут. Выбор файла
+ * заодно включает слой Route: иначе линия не появится.
  */
-static void select_route(const char* name)
+static void select_route(const char* name, purrgo_route_src_t src)
 {
     purrgo_snprintf(app_config.route_file, sizeof(app_config.route_file),
                     "%s", name);
+    app_config.route_from_tracks =
+        (name[0] != '\0' && src == PURRGO_ROUTE_SRC_TRACKS);
 
     if (app_config.route_file[0] != '\0') {
         app_config.layers = (uint16_t)(app_config.layers | (1u << PURRGO_LAYER_ROUTE));
@@ -283,6 +421,23 @@ static void select_route(const char* name)
 
     purrgo_config_save();
     purrgo_ui_dirty_mark(UI_DIRTY_MAP);
+}
+
+/*
+ * Загрузить выбранный файл и показать его на карте целиком (центр и масштаб по
+ * границам). Если файл не загрузился (SD не готова, нет линии), карта остаётся
+ * как была: слой Route повторит загрузку при отрисовке.
+ */
+static void show_selected_route(const char* name, purrgo_route_src_t src)
+{
+    int32_t min_lat, min_lon, max_lat, max_lon;
+
+    if (name[0] == '\0' || !purrgo_route_sync_src(name, src)) {
+        return;
+    }
+    if (purrgo_route_get_bounds(&min_lat, &min_lon, &max_lat, &max_lon)) {
+        purrgo_map_controller_fit_bounds(min_lat, min_lon, max_lat, max_lon);
+    }
 }
 
 static void select_map_dir(const char* name)
@@ -303,8 +458,16 @@ static void browser_select(purrgo_state_t* next)
 
     const char* name = dir_page[dir_page_cursor].name;
 
-    if (browse_kind == BROWSE_ROUTE_FILES) {
-        select_route(name);
+    if (browse_kind == BROWSE_TRACK_FILES && purrgo_track_name_is_recording(name)) {
+        return;     /* пишется прямо сейчас: читать нельзя, на карте он и так виден */
+    }
+
+    if (browse_kind == BROWSE_ROUTE_FILES || browse_kind == BROWSE_TRACK_FILES) {
+        const purrgo_route_src_t src = (browse_kind == BROWSE_TRACK_FILES)
+            ? PURRGO_ROUTE_SRC_TRACKS : PURRGO_ROUTE_SRC_ROUTES;
+
+        select_route(name, src);
+        show_selected_route(name, src);
     }
     else {
         select_map_dir(name);
@@ -353,8 +516,14 @@ static void on_enter_dir(void)
 
 static void on_enter_route(void)
 {
-    browse_kind = BROWSE_ROUTE_FILES;
+    browse_kind = (route_select_src == PURRGO_ROUTE_SRC_TRACKS)
+        ? BROWSE_TRACK_FILES : BROWSE_ROUTE_FILES;
     load_first_page();
+}
+
+void menu_route_select_set_source(purrgo_route_src_t src)
+{
+    route_select_src = src;
 }
 
 const menu_screen_t menu_screen_dir_select = {
@@ -379,4 +548,9 @@ int menu_app_get_dir_list(purrgo_fs_dirent_t** list_out)
 int menu_app_get_dir_cursor(void)
 {
     return dir_page_cursor;
+}
+
+bool menu_app_dir_is_tracks(void)
+{
+    return browse_kind == BROWSE_TRACK_FILES;
 }

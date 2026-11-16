@@ -7,6 +7,7 @@
  */
 
 #include "purrgo/menu_controller.h"
+#include "purrgo/route.h"
 
 /*
  * Описание экрана меню. Один экран - одно состояние FSM.
@@ -38,6 +39,12 @@ extern const menu_screen_t menu_screen_wpt_select;
  * записать *next: черновик главного меню при этом сохраняется.
  */
 void menu_goto(purrgo_state_t* next, purrgo_state_t state);
+
+/*
+ * Что покажет экран APP_STATE_MENU_ROUTE_SELECT при следующем входе: файлы
+ * каталога ROUTES или записанные треки (TRACKS). Вызывается перед menu_goto().
+ */
+void menu_route_select_set_source(purrgo_route_src_t src);
 
 /*
  * Сдвиг курсора списка на delta (-1 или +1). wrap = true - перенос через край

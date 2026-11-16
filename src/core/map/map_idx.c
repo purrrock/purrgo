@@ -2,6 +2,7 @@
 #include "map_culling.h"
 #include "map_render.h"
 #include "purrgo/logger.h"
+#include "purrgo/render_prof.h"
 #include "purrgo/map_style.h"
 #include "purrgo/gfx_circle.h"
 #include <stddef.h>
@@ -45,7 +46,7 @@ static uint32_t s_tree_depth = 0u;
  * Функция учитывает различие между слоями: в обычных слоях v2=1 это dummy-запись,
  * а в слое POI dummy-записи нет.
  */
-static bool map_db_read_name(purrgo_file_t *db_file, uint32_t v2, bool is_poi, char *out_buffer, size_t max_len) {
+static bool map_db_read_name_impl(purrgo_file_t *db_file, uint32_t v2, bool is_poi, char *out_buffer, size_t max_len) {
     if (!db_file || v2 == 0 || out_buffer == NULL || max_len < 2u) return false;
     
     // В стандартных слоях v2=1 зарезервировано под dummy record, имена начинаются с 2
@@ -80,6 +81,14 @@ static bool map_db_read_name(purrgo_file_t *db_file, uint32_t v2, bool is_poi, c
     out_buffer[len] = '\0';
 
     return len > 0;
+}
+
+/* Обёртка для профилировки: время одного чтения имени (seek + read) из .db. */
+static bool map_db_read_name(purrgo_file_t *db_file, uint32_t v2, bool is_poi, char *out_buffer, size_t max_len) {
+    PURRGO_PROF_BEGIN(prof_name);
+    const bool ok = map_db_read_name_impl(db_file, v2, is_poi, out_buffer, max_len);
+    PURRGO_PROF_END(prof_name, PURRGO_PROF_NAME);
+    return ok;
 }
 
 
@@ -155,7 +164,11 @@ static bool map_idx_parse_node_impl(
             int32_t poi_y = ymin;
             int16_t sx, sy;
 
-            project_to_screen(poi_x, poi_y, cam, vp, &sx, &sy);
+            {
+                PURRGO_PROF_BEGIN(prof_proj);
+                project_to_screen(poi_x, poi_y, cam, vp, &sx, &sy);
+                PURRGO_PROF_END(prof_proj, PURRGO_PROF_PROJ);
+            }
 
             int16_t radius = 0;
             if (params->poi_mode == PURRGO_POI_MODE_ICONS) {
@@ -264,7 +277,11 @@ if (style == PURRGO_STYLE_NONE) {
                     int32_t center_y = (ymin / 2) + (ymax / 2);
 
                     int16_t sx, sy;
-                    project_to_screen(center_x, center_y, cam, vp, &sx, &sy);
+                    {
+                        PURRGO_PROF_BEGIN(prof_proj);
+                        project_to_screen(center_x, center_y, cam, vp, &sx, &sy);
+                        PURRGO_PROF_END(prof_proj, PURRGO_PROF_PROJ);
+                    }
 
                     int len = (int)strlen(name_buf);
 

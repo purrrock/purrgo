@@ -50,7 +50,7 @@ void ui_render_menu_wpt_select(gfx_context_t* gfx)
 
     int16_t y = (int16_t)(WPT_LIST_Y0 + shown * WPT_ROW_H + 6);
 
-    if (app_config.route_file[0] == '\0') {
+    if (app_config.route_file[0] == '\0' || app_config.route_from_tracks) {
         gfx_draw_string(gfx, 10, y, "Points: set ROUTE (GPX)");
     }
     else if (purrgo_wpt_list_count() == 0) {

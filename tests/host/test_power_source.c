@@ -128,7 +128,7 @@ static void test_menu(void)
         st = press(st, PURRGO_ACTION_DOWN);
     }
     CHECK(menu_app_get_main_cursor() == menu_app_get_main_count() - 1);
-    CHECK(menu_app_get_main_count() == 12);
+    CHECK(menu_app_get_main_count() == 13);
     st = press(st, PURRGO_ACTION_OK);                          /* MAP LAYERS */
     CHECK(st == APP_STATE_MENU_MAP_LAYERS);
     st = press(st, PURRGO_ACTION_MENU);                        /* назад в CONFIG */

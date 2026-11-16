@@ -73,6 +73,9 @@ purrgo_power_source_t menu_app_get_draft_power_source(void);
 int menu_app_get_dir_list(purrgo_fs_dirent_t** list_out);
 int menu_app_get_dir_cursor(void);
 
+/* true - браузер показывает записанные треки (TRACKS): имена в списке - id времени, подписи строит UI. */
+bool menu_app_dir_is_tracks(void);
+
 /*
  * Выбор цели навигации (WAYPOINT). Строки: (none), HERE, MAP CENTER, затем точки
  * GPX-файла маршрута. Видимое окно списка начинается с menu_app_get_wpt_top().

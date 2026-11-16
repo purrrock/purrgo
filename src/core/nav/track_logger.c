@@ -345,20 +345,20 @@ static const int16_t SIN1024[91] = {
     1024
 };
 
+/* round(1024 * sin(d)), d - целые градусы 0..359. */
+static int32_t sin1024_deg(uint32_t d) {
+    if (d <= 90U)  return SIN1024[d];
+    if (d <= 180U) return SIN1024[180U - d];
+    if (d <= 270U) return -SIN1024[d - 180U];
+    return -SIN1024[360U - d];
+}
+
 /* 1024 * sin(a), a - сотые доли градуса (любое неотрицательное значение). */
 static int32_t sin1024_c100(uint32_t c100) {
     uint32_t a = (c100 / 100U) % 360U;
     int32_t f = (int32_t)(c100 % 100U);
-    int32_t s0, s1;
-    for (int i = 0; i < 2; i++) {
-        uint32_t d = (a + (uint32_t)i) % 360U;
-        int32_t v;
-        if (d <= 90U)       v = SIN1024[d];
-        else if (d <= 180U) v = SIN1024[180U - d];
-        else if (d <= 270U) v = -SIN1024[d - 180U];
-        else                v = -SIN1024[360U - d];
-        if (i == 0) s0 = v; else s1 = v;
-    }
+    int32_t s0 = sin1024_deg(a);
+    int32_t s1 = sin1024_deg((a + 1U) % 360U);
     return s0 + (s1 - s0) * f / 100;
 }
 

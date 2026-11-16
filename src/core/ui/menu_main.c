@@ -4,6 +4,7 @@
 #include "purrgo/power.h"
 #include "purrgo/book_reader.h"
 #include "purrgo/track_logger.h"
+#include "purrgo/track_name.h"
 #include "purrgo/ui/ui_dirty.h"
 
 /*
@@ -152,13 +153,31 @@ static void map_dir_select(purrgo_state_t* next)
 
 static void route_format(char* buf, size_t size)
 {
-    purrgo_snprintf(buf, size, "ROUTE: %s",
-                    (app_config.route_file[0] != '\0')
-                        ? app_config.route_file : "NONE");
+    if (app_config.route_file[0] == '\0') {
+        purrgo_snprintf(buf, size, "ROUTE: NONE");
+    }
+    else if (app_config.route_from_tracks) {
+        /* Открытый для просмотра трек: подпись по времени старта. */
+        char label[PURRGO_ROUTE_NAME_MAX];
+
+        purrgo_track_name_label(app_config.route_file, app_config.tz_offset_minutes,
+                                label, sizeof label);
+        purrgo_snprintf(buf, size, "ROUTE: TRK %s", label);
+    }
+    else {
+        purrgo_snprintf(buf, size, "ROUTE: %s", app_config.route_file);
+    }
 }
 
 static void route_select(purrgo_state_t* next)
 {
+    menu_route_select_set_source(PURRGO_ROUTE_SRC_ROUTES);
+    menu_goto(next, APP_STATE_MENU_ROUTE_SELECT);
+}
+
+static void track_open_select(purrgo_state_t* next)
+{
+    menu_route_select_set_source(PURRGO_ROUTE_SRC_TRACKS);
     menu_goto(next, APP_STATE_MENU_ROUTE_SELECT);
 }
 
@@ -253,6 +272,7 @@ static const menu_item_t main_items[] = {
     { .format = tz_format, .on_select = tz_select },
     { .format = map_dir_format, .on_select = map_dir_select },
     { .format = route_format, .on_select = route_select },
+    { .title = "OPEN TRACK", .on_select = track_open_select },
     { .format = wpt_format, .on_select = wpt_select },
     { .format = poi_format, .on_select = poi_select },
     { .format = log_format, .on_select = log_select },

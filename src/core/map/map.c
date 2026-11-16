@@ -4,6 +4,7 @@
 #include "map_idx.h"
 #include "map_render.h"
 #include "purrgo/fs_hal.h"
+#include "purrgo/render_prof.h"
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -534,6 +535,10 @@ bool purrgo_map_render_viewport(
      */
     map_render_clear_labels();
 
+#if PURRGO_RENDER_PROF
+    purrgo_render_prof_begin_frame();
+#endif
+
     /*
      * Sync map files context with current map directory and layer states.
      * This opens necessary files and closes unused ones.
@@ -644,7 +649,11 @@ bool purrgo_map_render_viewport(
      * проверку коллизий и резервирует BBox каждой
      * успешно размещённой подписи.
      */
-    map_render_draw_queued_labels(gfx);
+    {
+        PURRGO_PROF_BEGIN(prof_lbl);
+        map_render_draw_queued_labels(gfx);
+        PURRGO_PROF_END(prof_lbl, PURRGO_PROF_LABELS);
+    }
 
     /* ------------------- POIS ------------------- */
 
@@ -665,6 +674,10 @@ bool purrgo_map_render_viewport(
             MAP_LAYER_POIS
         ) && ok;
     }
+
+#if PURRGO_RENDER_PROF
+    purrgo_render_prof_end_frame((int)params->scale, ok ? 1 : 0);
+#endif
 
     return ok;
 }
