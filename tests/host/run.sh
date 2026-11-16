@@ -5,11 +5,10 @@
 # Альтернатива: cmake --preset linux-gcc-test && ctest --preset linux-gcc-test
 #
 # Ошибка сборки одного теста не прерывает прогон: тест помечается BUILD-FAIL,
-# код возврата ненулевой. Тесты, которым нужен сабмодуль third_party/eink_part_refresh,
-# пропускаются (SKIP), если он не загружен.
+# код возврата ненулевой. Тесты E-Ink используют third_party/epd4g; если каталога нет, они пропускаются (SKIP).
 CC=${CC:-gcc}
 OUT=${OUT:-/tmp/purrgo_host_tests}
-EPD=third_party/eink_part_refresh/epd4g
+EPD=third_party/epd4g
 mkdir -p "$OUT"
 rc=0
 
@@ -59,7 +58,7 @@ for t in tests/host/test_*.c; do
             extra="stm32/port/gnss/gnss_link.c stm32/port/gnss/gnss_diag.c \
                 -Istm32/port/gnss" ;;
         test_display_eink)
-            if [ ! -f $EPD/src/epd4g.c ]; then echo "== $name"; echo "SKIP (нет сабмодуля eink_part_refresh)"; continue; fi
+            if [ ! -f $EPD/src/epd4g.c ]; then echo "== $name"; echo "SKIP (нет third_party/epd4g)"; continue; fi
             extra="stm32/port/display/display_eink.c $EPD/src/epd4g.c $EPD/src/epd4g_fb.c \
                 -Itests/host/stm32_shim -Istm32/port/display -I$EPD/include -DEPD4G_BW_THRESHOLD=3" ;;
     esac
@@ -78,6 +77,6 @@ if [ -f $EPD/src/epd4g.c ]; then
             -DEPD4G_BW_THRESHOLD=3 -DPURRGO_EINK_TEST_SCENES=0xFFU -Wl,--wrap=display_set_mode
     done
 else
-    echo "== eink_selftest_host"; echo "SKIP (нет сабмодуля eink_part_refresh)"
+    echo "== eink_selftest_host"; echo "SKIP (нет third_party/epd4g)"
 fi
 exit $rc

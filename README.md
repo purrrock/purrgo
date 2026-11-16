@@ -142,7 +142,7 @@ purrgo/
 ├── tests/
 │   ├── host/               # Host-тесты ядра (ctest, ASan/UBSan) и тестовые данные
 │   └── audit_maps.py       # Аудит бинарных файлов карт
-├── third_party/            # External dependencies (сабмодули: minmea, eink_part_refresh (драйвер E-Ink epd4g))
+├── third_party/            # External dependencies (minmea - сабмодуль; epd4g - драйвер E-Ink, часть проекта)
 ├── tools/                  # Компиляторы карт и книг, анализ треков, калибровка батареи, редакторы шрифта и иконок
 │
 ├── cmake/

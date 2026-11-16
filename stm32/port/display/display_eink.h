@@ -8,7 +8,7 @@
 
 /*
  * Backend E-Ink Waveshare 2.7" V2 (176 x 264) на библиотеке epd4g
- * (third_party/eink_part_refresh/epd4g).
+ * (third_party/epd4g).
  *
  * Внутренний framebuffer PurrGO всегда 2-битный (11616 байт):
  *   0 = Black, 1 = Dark Gray, 2 = Light Gray, 3 = White.
@@ -63,11 +63,23 @@ bool display_eink_data_busy(void);
 /* true, пока идёт обновление или есть невыполненный запрос. */
 bool display_eink_is_busy(void);
 
+/* display_eink_wait_ms(): ждать нечего, display_eink_poll() не нужен, пока не придут новые запросы. */
+#define DISPLAY_EINK_WAIT_FOREVER 0xFFFFFFFFu
+
 /*
- * true - дисплей полностью в покое: можно остановить SysTick (Stop 2). Панель
- * в deep sleep, обновлений и повторных попыток нет.
+ * Сколько миллисекунд МК может спать (Sleep/Stop 2), прежде чем display_eink_poll() снова сможет
+ * продвинуть дело: ожидание таймера библиотеки, BUSY панели, автоотключение питания, deep sleep после
+ * простоя, пауза перед повторной попыткой. Вызывать сразу после display_eink_poll().
+ *
+ *   0                          опрос нужен сейчас (идёт отправка кадра по SPI, ожидание закончилось,
+ *                              есть невыполненный запрос);
+ *   DISPLAY_EINK_WAIT_FOREVER  ждать нечего: панель в deep sleep (или выключена), запросов нет;
+ *   иначе                      максимальный срок сна. Просыпаться раньше безвредно.
+ *
+ * *on_busy = true: задание ждёт BUSY панели, срок - таймаут BUSY, а разбудить МК раньше может
+ * спад BUSY (purrgo_eink_busy_wake_arm(), eink_wake.h).
  */
-bool display_eink_can_stop(void);
+uint32_t display_eink_wait_ms(bool *on_busy);
 
 /*
  * Лимит частичных обновлений подряд до принудительного полного (диагностика, самотесты):

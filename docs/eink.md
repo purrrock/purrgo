@@ -4,7 +4,7 @@
 
 
 Панель управляется библиотекой [`epd4g`](https://github.com/purrrock/eink_part_refresh)
-(сабмодуль `third_party/eink_part_refresh`, используется только каталог `epd4g/`). Устройство библиотеки,
+(перенесена в проект: `third_party/epd4g`; изначально `eink_part_refresh/epd4g`). Устройство библиотеки,
 API, настройки и подключение к проекту описаны в её [README](https://github.com/purrrock/eink_part_refresh#readme); ниже только то, что относится к PurrGO.
 
 В `stm32/CMakeLists.txt` подключены `add_subdirectory(.../epd4g)` и `epd4g` в

@@ -88,12 +88,12 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${PURRGO_STM32_PORT_INCLUDES}
 )
 
-# E-Ink: библиотека epd4g (сабмодуль third_party/eink_part_refresh). INTERFACE-
+# E-Ink: библиотека epd4g (third_party/epd4g, часть проекта). INTERFACE-
 # библиотека: её исходники компилируются в этом таргете, поэтому видят main.h,
 # HAL, hspi1 и метки EINK_* из CubeMX. Порт STM32 HAL (epd4g_port_stm32_hal.c)
 # использует hspi1 и порты EINK_CS/DC/RST/BUSY.
 set(EPD4G_PORT_STM32_HAL ON)
-add_subdirectory(${PROJECT_SOURCE_DIR}/third_party/eink_part_refresh/epd4g
+add_subdirectory(${PROJECT_SOURCE_DIR}/third_party/epd4g
                  ${CMAKE_BINARY_DIR}/epd4g)
 
 # Add project symbols (macros)

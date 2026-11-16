@@ -25,6 +25,7 @@
 #include "gnss_monitor.h"
 #include "stop_mode.h"
 #include "gnss_stop.h"
+#include "eink_wake.h"
 #include "timebase.h"
 
 /*
@@ -73,14 +74,21 @@ static purrgo_sd_state_t s_prev_sd_state = PURRGO_SD_NO_CARD;
  * PURRGO_SLEEP_MAX_MS - самый долгий сон, если ничего срочного нет. Цикл
  * разбирает входной буфер GNSS, ведёт таймеры FSM/SD/батареи и перерисовку, поэтому
  * не должен молчать долго (кольцо GNSS 2048 Б при 115200 бод заполняется за ~180 мс).
- * PURRGO_SLEEP_DISPLAY_WAKE_MS - период, пока E-Ink доделывает операцию
- * (epd4g_poll() ждёт BUSY и таймеры); EXTI по BUSY вместо опроса - в TODO.md.
+ *
+ * Пока E-Ink занят, срок сна берётся у дисплея (display_stm32_wait_ms()): ожидание таймера
+ * библиотеки, таймаут BUSY, автоотключение питания, deep sleep панели после простоя. Если задание
+ * ждёт BUSY, МК будит ещё и спад BUSY (eink_wake.h): опрос раз в миллисекунду не нужен.
  */
 #ifndef PURRGO_SLEEP_MAX_MS
 #define PURRGO_SLEEP_MAX_MS 20U
 #endif
-#ifndef PURRGO_SLEEP_DISPLAY_WAKE_MS
-#define PURRGO_SLEEP_DISPLAY_WAKE_MS 1U
+
+/*
+ * Stop 2 вместо Sleep на ожидание дисплея короче этого срока не оправдан: выход из Stop 2 включает
+ * подъём PLL и восстановление тактирования (десятки - сотни мкс), а на Sleep мс ток почти не растёт.
+ */
+#ifndef PURRGO_STOP2_MIN_MS
+#define PURRGO_STOP2_MIN_MS 5U
 #endif
 
 /* Счётчик LPTIM1 16-битный: HAL_GetTick() должен вызываться чаще, чем он переполняется. */
@@ -171,6 +179,14 @@ static void purrgo_stm32_sleep(uint32_t now_ms)
     return;
   }
 
+  /* Что нужно дисплею: 0 - опрос сейчас (идёт отправка кадра по SPI, ожидание кончилось). */
+  bool on_busy = false;
+  const uint32_t display_ms = display_stm32_wait_ms(&on_busy);
+  if (display_ms == 0U)
+  {
+    return;
+  }
+
   __disable_irq();
 
   uint32_t wake_ms = PURRGO_SLEEP_MAX_MS;
@@ -187,25 +203,34 @@ static void purrgo_stm32_sleep(uint32_t now_ms)
     }
   }
 
-  if (!display_stm32_can_stop() && (PURRGO_SLEEP_DISPLAY_WAKE_MS < wake_ms))
+  if (display_ms < wake_ms)
   {
-    wake_ms = PURRGO_SLEEP_DISPLAY_WAKE_MS;
+    wake_ms = display_ms;
   }
 
-  /* false - будильник не поставлен или срок уже прошёл: следующий проход цикла сразу. */
-  if (purrgo_timebase_wake_arm(wake_ms))
+  /*
+   * Спад BUSY будит раньше срока; false - BUSY уже низкий, спать нельзя (фронт упущен). Будильник:
+   * false - не поставлен или срок уже прошёл, следующий проход цикла сразу.
+   */
+  if ((!on_busy || purrgo_eink_busy_wake_arm()) && purrgo_timebase_wake_arm(wake_ms))
   {
     __DSB();
     __WFI();
     purrgo_timebase_wake_disarm();
+  }
+  if (on_busy)
+  {
+    purrgo_eink_busy_wake_disarm();
   }
 
   __enable_irq();
 }
 
 /*
- * Ожидание событий в конце прохода главного цикла: Stop 2, если приложение, дисплей, кнопки и вход
- * GNSS в покое, иначе обычный Sleep (WFI, пробуждение по прерыванию или будильнику LPTIM1).
+ * Ожидание событий в конце прохода главного цикла: Stop 2, если приложение, кнопки и вход GNSS в покое,
+ * а дисплею от главного цикла в ближайшие PURRGO_STOP2_MIN_MS ничего не нужно (идёт волна панели,
+ * ждём BUSY, или панель уже в deep sleep), иначе обычный Sleep (WFI, пробуждение по прерыванию,
+ * спаду BUSY или будильнику LPTIM1).
  *
  * Пока идёт пачка данных от приёмника, МК остаётся в Sleep (будильник PURRGO_SLEEP_MAX_MS):
  * purrgo_gnss_stop_ready() пропускает в Stop 2 только после тишины на входе, иначе МК будили бы
@@ -214,17 +239,26 @@ static void purrgo_stm32_sleep(uint32_t now_ms)
 static void purrgo_stm32_idle(uint32_t now_ms)
 {
 #if (PURRGO_STOP2 != 0)
+  bool on_busy = false;
+  const uint32_t display_ms = display_stm32_wait_ms(&on_busy);
+
   if (purrgo_app_deep_sleep_allowed(now_ms) &&
-      display_stm32_can_stop() &&
+      (display_ms >= PURRGO_STOP2_MIN_MS) &&
       purrgo_stm32_buttons_idle() &&
       purrgo_gnss_stop_ready(now_ms))
   {
     /* Приёмник выдаёт решение раз в секунду (кроме трекера с PSMOO и выключенного GNSS в читалке). */
-    const uint32_t max_ms = (purrgo_gnss_is_powered() && !purrgo_app_tracker_mode_active())
-                          ? PURRGO_STOP2_NAV_MAX_MS
-                          : PURRGO_STOP2_MAX_MS;
+    uint32_t max_ms = (purrgo_gnss_is_powered() && !purrgo_app_tracker_mode_active())
+                    ? PURRGO_STOP2_NAV_MAX_MS
+                    : PURRGO_STOP2_MAX_MS;
 
-    if (purrgo_stop2_enter(max_ms))
+    /* Дисплей: срок библиотеки (таймер, BUSY, deep sleep панели после простоя) и спад BUSY. */
+    if (display_ms < max_ms)
+    {
+      max_ms = display_ms;
+    }
+
+    if (purrgo_stop2_enter(max_ms, on_busy))
     {
       return;
     }
