@@ -337,16 +337,51 @@ bool display_eink_is_busy(void)
     return s_op != OP_NONE || request_pending();
 }
 
-bool display_eink_can_stop(void)
+/* Сколько осталось до момента t (0 - уже наступил). */
+static uint32_t left_ms(uint32_t now, uint32_t t)
 {
-    /*
-     * Нет операции, запроса и отложенной повторной попытки; панель уже в deep
-     * sleep (или не инициализирована) и библиотека не доделывает автоотключение
-     * питания. Пока условие не выполнено, display_eink_poll() нужен по таймеру
-     * (SysTick), поэтому Stop запрещён.
-     */
-    return s_op == OP_NONE && !request_pending() && !s_have_retry &&
-           (s_hw == HW_OFF || s_mono_asleep) && !epd4g_is_busy();
+    return time_reached(now, t) ? 0U : (uint32_t)(t - now);
+}
+
+uint32_t display_eink_wait_ms(bool *on_busy)
+{
+    const uint32_t now = HAL_GetTick();
+    uint32_t ms = DISPLAY_EINK_WAIT_FOREVER;
+    int busy = 0;
+
+    *on_busy = false;
+
+    if (epd4g_is_busy()) {
+        /* Задание в библиотеке: она сама знает, чего ждёт (BUSY, таймер или отправка данных по SPI). */
+        ms = epd4g_wait_hint(&busy);
+        *on_busy = (busy != 0);
+        return ms;
+    }
+
+    /* Библиотека свободна. Операция, завершившаяся у неё, закрывается следующим display_eink_poll(). */
+    if (s_op != OP_NONE) {
+        return 0U;
+    }
+
+    /* Автоматическое выключение питания панели (epd4g_poll() запускает его после простоя). */
+    ms = epd4g_wait_hint(&busy);
+
+    if (request_pending()) {
+        if (s_have_retry) {
+            const uint32_t l = left_ms(now, s_retry_at);
+            return (l < ms) ? l : ms;
+        }
+        return 0U;                      /* start_next() запустит операцию в ближайшем poll */
+    }
+
+    /* Простой: deep sleep панели через PURRGO_EINK_SLEEP_AFTER_MS. */
+    if ((s_hw != HW_OFF) && !s_mono_asleep) {
+        const uint32_t l = left_ms(now, s_idle_since + PURRGO_EINK_SLEEP_AFTER_MS);
+        if (l < ms) {
+            ms = l;
+        }
+    }
+    return ms;
 }
 
 void display_eink_set_partial_limits(unsigned gray, unsigned mono)

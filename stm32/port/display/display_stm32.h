@@ -52,8 +52,12 @@ void display_stm32_poll(void);
  */
 bool display_stm32_ready_for_render(void);
 
-/* true - дисплей в покое, МК можно перевести в Stop 2 (см. stop_mode.h). */
-bool display_stm32_can_stop(void);
+/*
+ * Сколько мс МК может спать, пока дисплею ничего не нужно от главного цикла (display_eink_wait_ms():
+ * 0 - опрос нужен сейчас, DISPLAY_EINK_WAIT_FOREVER - ждать нечего). *on_busy - ждёт BUSY панели,
+ * можно будить по его спаду. Вызывать после display_poll().
+ */
+uint32_t display_stm32_wait_ms(bool *on_busy);
 
 void display_clear(uint8_t color);
 

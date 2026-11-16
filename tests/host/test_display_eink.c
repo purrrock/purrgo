@@ -234,6 +234,48 @@ int main(void)
     CHECK(b.act > a.act);
     CHECK(b.slp >= a.slp + 1);
 
+    /*
+     * 11. Сон по подсказке display_eink_wait_ms(): те же операции, но время идёт только скачками на
+     * срок из подсказки (или до спада BUSY). Должно дойти до deep sleep панели и затем «ждать нечего»,
+     * причём заметно меньшим числом опросов, чем при опросе раз в мс.
+     */
+    {
+        bool ob = false;
+        long polls = 0, busy_sleeps = 0, timer_sleeps = 0;
+
+        display_eink_set_mode(DISPLAY_MODE_MONO);
+        display_eink_request_full();
+        a = snap();
+        for (;;) {
+            display_eink_poll(); polls++;
+            const uint32_t h = display_eink_wait_ms(&ob);
+            if (h == DISPLAY_EINK_WAIT_FOREVER) {
+                break;
+            }
+            if (h == 0U) {
+                CHECK(!ob);
+            } else if (ob) {
+                busy_sleeps++;
+                if ((int32_t)(busy_until - now_ms) > 0) { now_ms = busy_until; }   /* спад BUSY */
+                else { now_ms += h; }
+            } else {
+                timer_sleeps++;
+                now_ms += h;
+            }
+            if (polls > 20000) { break; }
+        }
+        b = snap();
+        CHECK(polls <= 20000);
+        CHECK(!display_eink_is_busy());
+        CHECK(b.act > a.act);
+        CHECK(b.slp > a.slp);                      /* deep sleep панели по таймеру простоя */
+        CHECK(busy_sleeps >= 1);                   /* волну ждали по BUSY */
+        CHECK(timer_sleeps >= 1);
+        CHECK(polls < 400);                        /* опрос раз в мс потребовал бы >1000 */
+        bool ob2 = true;
+        CHECK(display_eink_wait_ms(&ob2) == DISPLAY_EINK_WAIT_FOREVER && !ob2);
+    }
+
     if (g_fail == 0) { printf("test_display_eink: all passed\n"); return 0; }
     printf("test_display_eink: %d failures\n", g_fail);
     return 1;
