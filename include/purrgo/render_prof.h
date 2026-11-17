@@ -42,15 +42,17 @@
  *     (у остальных как в прошивке); cmd - число команд чтения SD, вторая цифра - секторов.
  *     cmd у ccur должен быть близок к n у sd в PROF2 (проверка модели).
  * Модель считается после кадра и занимает от долей секунды до нескольких секунд, это
- * не входит ни в frame, ни в статьи. Трасса занимает PURRGO_PROF_TRACE_MAX * 4 байта RAM;
- * при переполнении ovf=1 и цифры занижены.
+ * не входит ни в frame, ни в статьи. Трасса (4 байта на запись, до PURRGO_PROF_TRACE_MAX)
+ * лежит не в своём RAM, а в буфере читалки книг (purrgo_book_reader_borrow_ram, 512 КБ):
+ * в режиме карты он свободен. Книга при этом закрывается. При переполнении трассы ovf=1
+ * и цифры занижены; ovf=1 с нулевым числом записей - буфер получить не удалось.
  *
  * Время берётся из счётчика платформы (stm32: DWT->CYCCNT, pc: timespec_get).
  * Накладные расходы одного замера (ovh, такты) измеряются в конце кадра и вычитаются
  * из статей с большим числом вызовов (proj, name).
  */
 #ifndef PURRGO_RENDER_PROF
-#define PURRGO_RENDER_PROF 0
+#define PURRGO_RENDER_PROF 1
 #endif
 
 #include <stdbool.h>
@@ -85,8 +87,9 @@ typedef enum {
     PURRGO_PROF_CNT_COUNT
 } purrgo_prof_cnt_t;
 
+/* Максимум записей трассы; сама трасса лежит в одолженном буфере читалки (см. ниже). */
 #ifndef PURRGO_PROF_TRACE_MAX
-#define PURRGO_PROF_TRACE_MAX 32768u
+#define PURRGO_PROF_TRACE_MAX 131072u
 #endif
 
 /* Платформа: монотонный 32-битный счётчик и его частота (тактов в микросекунду). */
@@ -105,6 +108,8 @@ void purrgo_render_prof_file_info(uint8_t slot, const char *path, uint8_t read_a
 /* Обращение к сектору файла: miss - сектор пришлось читать с SD. slot < 16. */
 void purrgo_render_prof_sector(uint8_t slot, uint32_t sector, bool miss);
 void purrgo_render_prof_end_frame(int scale, int ok);
+/* Кадр прерван без end_frame: перестать писать трассу (буфер снова принадлежит читалке). */
+void purrgo_render_prof_abort_frame(void);
 
 #ifdef __cplusplus
 }

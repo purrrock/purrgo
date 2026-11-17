@@ -2,6 +2,7 @@
 
 #if PURRGO_RENDER_PROF
 
+#include "purrgo/book_reader.h"
 #include "purrgo/logger.h"
 
 #include <stdlib.h>
@@ -20,9 +21,12 @@ static uint32_t s_frame_start;
 #define SIM_MAX_ENTRIES  1024u
 #define SIM_EMPTY        0xFFFFFFFFu
 
-static uint32_t s_trace[PURRGO_PROF_TRACE_MAX];
+/* Трасса живёт в одолженном буфере читалки, свой RAM не занимает. */
+static uint32_t *s_trace;
+static uint32_t s_trace_cap;
 static uint32_t s_trace_n;
 static bool s_trace_ovf;
+static bool s_trace_active; /* пишем только между begin_frame и end_frame/abort_frame */
 
 static char s_slot_name[TRACE_SLOTS][16];
 static uint8_t s_slot_ra[TRACE_SLOTS];
@@ -44,8 +48,17 @@ void purrgo_render_prof_begin_frame(void)
         s_cnt[i] = 0;
     }
 
+    size_t ram_size = 0;
+    void *ram = purrgo_book_reader_borrow_ram(&ram_size);
+
+    s_trace = (uint32_t *)ram;
+    s_trace_cap = (ram != NULL) ? (uint32_t)(ram_size / sizeof(uint32_t)) : 0u;
+    if (s_trace_cap > PURRGO_PROF_TRACE_MAX) {
+        s_trace_cap = PURRGO_PROF_TRACE_MAX;
+    }
     s_trace_n = 0;
-    s_trace_ovf = false;
+    s_trace_ovf = (s_trace_cap == 0u);
+    s_trace_active = (s_trace_cap != 0u);
 
     s_frame_start = purrgo_prof_ticks();
 }
@@ -79,7 +92,10 @@ void purrgo_render_prof_sector(uint8_t slot, uint32_t sector, bool miss)
     if (slot >= TRACE_SLOTS) {
         return;
     }
-    if (s_trace_n >= PURRGO_PROF_TRACE_MAX) {
+    if (!s_trace_active) {
+        return;
+    }
+    if (s_trace_n >= s_trace_cap) {
         s_trace_ovf = true;
         return;
     }
@@ -279,7 +295,9 @@ static void trace_report(void)
     for (uint32_t i = 0; i < s_trace_n; i++) {
         s_trace[i] &= ~TRACE_MISS_BIT;
     }
-    qsort(s_trace, s_trace_n, sizeof(s_trace[0]), cmp_u32);
+    if (s_trace_n != 0u) {
+        qsort(s_trace, s_trace_n, sizeof(s_trace[0]), cmp_u32);
+    }
     for (uint32_t i = 0; i < s_trace_n; i++) {
         if (i == 0u || s_trace[i] != s_trace[i - 1u]) {
             dist[s_trace[i] >> 28]++;
@@ -309,8 +327,15 @@ static void trace_report(void)
         (unsigned long)sim_res[5][0], (unsigned long)sim_res[5][1]);
 }
 
+void purrgo_render_prof_abort_frame(void)
+{
+    s_trace_active = false;
+}
+
 void purrgo_render_prof_end_frame(int scale, int ok)
 {
+    s_trace_active = false;
+
     const uint32_t frame = (uint32_t)(purrgo_prof_ticks() - s_frame_start);
     const uint32_t per_us = purrgo_prof_ticks_per_us();
     const uint32_t ovh = measure_overhead();
@@ -367,6 +392,11 @@ void purrgo_render_prof_end_frame(int scale, int ok)
         (unsigned long)s_cnt[PURRGO_PROF_CNT_FS_READ_BYTES]);
 
     trace_report();
+
+    /* Буфер снова принадлежит читалке: больше в него не пишем. */
+    s_trace = NULL;
+    s_trace_cap = 0;
+    s_trace_n = 0;
 }
 
 #else

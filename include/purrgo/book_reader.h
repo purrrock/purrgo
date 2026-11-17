@@ -188,6 +188,14 @@ bool purrgo_book_list_is_last(int index);
  */
 void purrgo_book_reader_set_ram(void *buffer, size_t size);
 
+/*
+ * Одолжить рабочий буфер читалки (по умолчанию 512 КБ) под временные нужды режима карты.
+ * Открытая книга закрывается: пока буфер используется, книга читаться не может, а при возврате
+ * в режим книги её надо открывать заново. Возвращает буфер (выровнен по 4 байта), его размер
+ * кладёт в *size (size может быть NULL).
+ */
+void *purrgo_book_reader_borrow_ram(size_t *size);
+
 /* Для тестов: полный сброс состояния без обращений к GNSS, логгеру и SD. */
 void purrgo_book_reader_reset(void);
 

@@ -548,6 +548,9 @@ bool purrgo_map_render_viewport(
     PURRGO_PROF_END(prof_sync, PURRGO_PROF_SYNC);
 
     if (!sync_ok) {
+#if PURRGO_RENDER_PROF
+        purrgo_render_prof_abort_frame();
+#endif
         return false;
     }
 

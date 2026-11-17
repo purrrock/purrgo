@@ -1091,6 +1091,15 @@ void purrgo_book_reader_set_ram(void *buffer, size_t size)
     }
 }
 
+void *purrgo_book_reader_borrow_ram(size_t *size)
+{
+    close_book();
+    if (size != NULL) {
+        *size = s.ram_size;
+    }
+    return s.ram;
+}
+
 void purrgo_book_reader_reset(void)
 {
     close_book();
