@@ -24,8 +24,7 @@
  * Объём записи ~0,9 МБ в час. Для штатной работы выключено.
  */
 #ifndef PURRGO_TRACK_DIAG
-#define PURRGO_TRACK_DIAG 1
-#endif
+#define PURRGO_TRACK_DIAG 0
 
 static purrgo_file_t* active_file = NULL;
 static track_logger_state_t current_state = LOGGER_STATE_IDLE;
