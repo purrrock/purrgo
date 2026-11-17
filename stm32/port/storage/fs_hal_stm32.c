@@ -260,6 +260,7 @@ static const uint8_t* read_cached_sector(purrgo_file_t* file, uint32_t sector_nu
     int hit = lru_find(file, sector_num);
     if (hit >= 0) {
         PURRGO_PROF_COUNT_ADD(PURRGO_PROF_CNT_CACHE_HIT, 1u);
+        PURRGO_PROF_SECTOR((uint8_t)(file - file_pool), sector_num, false);
         lru_cache[hit].last_used = ++lru_counter;
         if (out_read_bytes) *out_read_bytes = LRU_SECTOR_SIZE;
         return lru_cache[hit].data;
@@ -268,6 +269,7 @@ static const uint8_t* read_cached_sector(purrgo_file_t* file, uint32_t sector_nu
     PURRGO_PROF_BEGIN(prof_sd);
     const uint8_t* data = read_sector_miss(file, sector_num, out_read_bytes);
     PURRGO_PROF_END(prof_sd, PURRGO_PROF_SD);
+    PURRGO_PROF_SECTOR((uint8_t)(file - file_pool), sector_num, true);
     return data;
 }
 
@@ -385,6 +387,7 @@ purrgo_file_t* purrgo_fs_open(const char* filepath, fs_mode_t mode) {
 
     file->read_only = (mode == FS_READ);
     file->read_ahead = 1u;
+    PURRGO_PROF_FILE_INFO((uint8_t)(file - file_pool), filepath, 1u, LRU_CACHE_ENTRIES);
     file->fil.cltbl = NULL;
 
     /*
@@ -474,6 +477,7 @@ void purrgo_fs_set_read_ahead(purrgo_file_t* file, uint8_t sectors) {
     if (sectors < 1u) sectors = 1u;
     if (sectors > PURRGO_FS_READ_AHEAD_MAX_SECTORS) sectors = (uint8_t)PURRGO_FS_READ_AHEAD_MAX_SECTORS;
     file->read_ahead = sectors;
+    PURRGO_PROF_FILE_INFO((uint8_t)(file - file_pool), NULL, sectors, LRU_CACHE_ENTRIES);
 }
 
 bool purrgo_fs_sync(purrgo_file_t* file) {

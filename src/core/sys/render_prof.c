@@ -4,11 +4,32 @@
 
 #include "purrgo/logger.h"
 
+#include <stdlib.h>
+#include <string.h>
+
 static uint32_t s_ticks[PURRGO_PROF_COUNT];
 static uint32_t s_calls[PURRGO_PROF_COUNT];
 static uint32_t s_max[PURRGO_PROF_COUNT];
 static uint32_t s_cnt[PURRGO_PROF_CNT_COUNT];
 static uint32_t s_frame_start;
+
+/* Трасса обращений к секторам: slot(4) | miss(1) | sector(27). */
+#define TRACE_SLOTS      16u
+#define TRACE_MISS_BIT   (1u << 27)
+#define TRACE_SECTOR_MAX (TRACE_MISS_BIT - 1u)
+#define SIM_MAX_ENTRIES  1024u
+#define SIM_EMPTY        0xFFFFFFFFu
+
+static uint32_t s_trace[PURRGO_PROF_TRACE_MAX];
+static uint32_t s_trace_n;
+static bool s_trace_ovf;
+
+static char s_slot_name[TRACE_SLOTS][16];
+static uint8_t s_slot_ra[TRACE_SLOTS];
+static uint32_t s_cache_entries = 64u;
+
+static uint32_t s_sim_tag[SIM_MAX_ENTRIES];
+static uint32_t s_sim_stamp[SIM_MAX_ENTRIES];
 
 void purrgo_render_prof_begin_frame(void)
 {
@@ -23,7 +44,47 @@ void purrgo_render_prof_begin_frame(void)
         s_cnt[i] = 0;
     }
 
+    s_trace_n = 0;
+    s_trace_ovf = false;
+
     s_frame_start = purrgo_prof_ticks();
+}
+
+void purrgo_render_prof_file_info(uint8_t slot, const char *path, uint8_t read_ahead,
+                                  uint32_t cache_entries)
+{
+    if (slot >= TRACE_SLOTS) {
+        return;
+    }
+
+    s_slot_ra[slot] = read_ahead;
+    if (cache_entries != 0u) {
+        s_cache_entries = cache_entries;
+    }
+
+    if (path != NULL) {
+        const char *base = path;
+        for (const char *p = path; *p != '\0'; p++) {
+            if (*p == '/' || *p == '\\') {
+                base = p + 1;
+            }
+        }
+        strncpy(s_slot_name[slot], base, sizeof(s_slot_name[slot]) - 1u);
+        s_slot_name[slot][sizeof(s_slot_name[slot]) - 1u] = '\0';
+    }
+}
+
+void purrgo_render_prof_sector(uint8_t slot, uint32_t sector, bool miss)
+{
+    if (slot >= TRACE_SLOTS) {
+        return;
+    }
+    if (s_trace_n >= PURRGO_PROF_TRACE_MAX) {
+        s_trace_ovf = true;
+        return;
+    }
+    s_trace[s_trace_n++] = ((uint32_t)slot << 28) | (miss ? TRACE_MISS_BIT : 0u) |
+                           (sector & TRACE_SECTOR_MAX);
 }
 
 void purrgo_render_prof_add(purrgo_prof_id_t id, uint32_t ticks)
@@ -70,6 +131,182 @@ static uint32_t net_ticks(purrgo_prof_id_t id, uint32_t ovh)
 static uint32_t to_us(uint32_t ticks, uint32_t per_us)
 {
     return (uint32_t)(((uint64_t)ticks) / (per_us != 0u ? per_us : 1u));
+}
+
+static bool slot_is_idx(uint32_t slot)
+{
+    const char *n = s_slot_name[slot];
+    const size_t len = strlen(n);
+    return len >= 4u && strcmp(&n[len - 4u], ".idx") == 0;
+}
+
+static uint32_t slot_ra(uint32_t slot, bool idx_ra8)
+{
+    uint32_t ra = (s_slot_ra[slot] != 0u) ? s_slot_ra[slot] : 1u;
+    if (idx_ra8 && slot_is_idx(slot)) {
+        ra = 8u;
+    }
+    return ra;
+}
+
+static void sim_insert(uint32_t n, uint32_t key, uint32_t *clock)
+{
+    uint32_t victim = 0;
+    uint32_t oldest = 0xFFFFFFFFu;
+
+    for (uint32_t i = 0; i < n; i++) {
+        if (s_sim_tag[i] == SIM_EMPTY) {
+            victim = i;
+            break;
+        }
+        if (s_sim_stamp[i] < oldest) {
+            oldest = s_sim_stamp[i];
+            victim = i;
+        }
+    }
+    s_sim_tag[victim] = key;
+    s_sim_stamp[victim] = ++(*clock);
+}
+
+static int sim_find(uint32_t n, uint32_t key)
+{
+    for (uint32_t i = 0; i < n; i++) {
+        if (s_sim_tag[i] == key) {
+            return (int)i;
+        }
+    }
+    return -1;
+}
+
+/* LRU-кэш на n секторов с read-ahead по файлам; считает команды чтения SD и секторы. */
+static void sim_run(uint32_t n, bool idx_ra8, uint32_t *cmds, uint32_t *sects)
+{
+    if (n > SIM_MAX_ENTRIES) {
+        n = SIM_MAX_ENTRIES;
+    }
+    for (uint32_t i = 0; i < n; i++) {
+        s_sim_tag[i] = SIM_EMPTY;
+        s_sim_stamp[i] = 0;
+    }
+
+    uint32_t clock = 0;
+    *cmds = 0;
+    *sects = 0;
+
+    for (uint32_t i = 0; i < s_trace_n; i++) {
+        const uint32_t slot = s_trace[i] >> 28;
+        const uint32_t sector = s_trace[i] & TRACE_SECTOR_MAX;
+        const uint32_t key = s_trace[i] & ~TRACE_MISS_BIT;
+
+        const int hit = sim_find(n, key);
+        if (hit >= 0) {
+            s_sim_stamp[hit] = ++clock;
+            continue;
+        }
+
+        const uint32_t ra = slot_ra(slot, idx_ra8);
+        const uint32_t base = sector - (sector % ra);
+
+        for (uint32_t k = 0; k < ra; k++) {
+            const uint32_t s = base + k;
+            if (s == sector) {
+                continue;
+            }
+            const uint32_t other_key = (slot << 28) | s;
+            if (sim_find(n, other_key) < 0) {
+                sim_insert(n, other_key, &clock);
+            }
+        }
+        sim_insert(n, key, &clock);
+
+        (*cmds)++;
+        *sects += ra;
+    }
+}
+
+static int cmp_u32(const void *a, const void *b)
+{
+    const uint32_t x = *(const uint32_t *)a;
+    const uint32_t y = *(const uint32_t *)b;
+    return (x > y) - (x < y);
+}
+
+static void trace_report(void)
+{
+    uint32_t acc[TRACE_SLOTS] = {0};
+    uint32_t miss[TRACE_SLOTS] = {0};
+    uint32_t seq[TRACE_SLOTS] = {0};
+    uint32_t near_[TRACE_SLOTS] = {0};
+    uint32_t dist[TRACE_SLOTS] = {0};
+    uint32_t last_sector[TRACE_SLOTS] = {0};
+    bool has_last[TRACE_SLOTS] = {false};
+
+    for (uint32_t i = 0; i < s_trace_n; i++) {
+        const uint32_t slot = s_trace[i] >> 28;
+        acc[slot]++;
+
+        if ((s_trace[i] & TRACE_MISS_BIT) == 0u) {
+            continue;
+        }
+
+        const uint32_t sector = s_trace[i] & TRACE_SECTOR_MAX;
+        const uint32_t ra = slot_ra(slot, false);
+        miss[slot]++;
+
+        if (has_last[slot]) {
+            if (sector / ra == last_sector[slot] / ra + 1u) {
+                seq[slot]++;
+            }
+            const uint32_t d = (sector > last_sector[slot]) ? (sector - last_sector[slot])
+                                                           : (last_sector[slot] - sector);
+            if (d != 0u && d <= 16u) {
+                near_[slot]++;
+            }
+        }
+        last_sector[slot] = sector;
+        has_last[slot] = true;
+    }
+
+    /* Различные секторы: сортировка трассы без бита промаха (порядок дальше не нужен). */
+    uint32_t sim_res[6][2];
+    static const uint32_t sizes[3] = {0u, 256u, 768u};
+    for (uint32_t s = 0; s < 3u; s++) {
+        const uint32_t n = (sizes[s] != 0u) ? sizes[s] : s_cache_entries;
+        sim_run(n, false, &sim_res[s * 2u][0], &sim_res[s * 2u][1]);
+        sim_run(n, true, &sim_res[s * 2u + 1u][0], &sim_res[s * 2u + 1u][1]);
+    }
+
+    for (uint32_t i = 0; i < s_trace_n; i++) {
+        s_trace[i] &= ~TRACE_MISS_BIT;
+    }
+    qsort(s_trace, s_trace_n, sizeof(s_trace[0]), cmp_u32);
+    for (uint32_t i = 0; i < s_trace_n; i++) {
+        if (i == 0u || s_trace[i] != s_trace[i - 1u]) {
+            dist[s_trace[i] >> 28]++;
+        }
+    }
+
+    for (uint32_t slot = 0; slot < TRACE_SLOTS; slot++) {
+        if (acc[slot] == 0u) {
+            continue;
+        }
+        purrgo_logger_write(
+            "PROF3 f=%s ra=%lu acc=%lu miss=%lu seq=%lu near=%lu dist=%lu\r\n",
+            s_slot_name[slot], (unsigned long)slot_ra(slot, false),
+            (unsigned long)acc[slot], (unsigned long)miss[slot], (unsigned long)seq[slot],
+            (unsigned long)near_[slot], (unsigned long)dist[slot]);
+    }
+
+    purrgo_logger_write(
+        "PROF4 ovf=%d cur=%lu ccur=%lu/%lu ccuri8=%lu/%lu c256=%lu/%lu c256i8=%lu/%lu "
+        "c768=%lu/%lu c768i8=%lu/%lu\r\n",
+        s_trace_ovf ? 1 : 0, (unsigned long)s_cache_entries,
+        (unsigned long)sim_res[0][0], (unsigned long)sim_res[0][1],
+        (unsigned long)sim_res[1][0], (unsigned long)sim_res[1][1],
+        (unsigned long)sim_res[2][0], (unsigned long)sim_res[2][1],
+        (unsigned long)sim_res[3][0], (unsigned long)sim_res[3][1],
+        (unsigned long)sim_res[4][0], (unsigned long)sim_res[4][1],
+        (unsigned long)sim_res[5][0], (unsigned long)sim_res[5][1]);
 }
 
 void purrgo_render_prof_end_frame(int scale, int ok)
@@ -128,6 +365,8 @@ void purrgo_render_prof_end_frame(int scale, int ok)
         (unsigned long)s_cnt[PURRGO_PROF_CNT_CACHE_HIT],
         (unsigned long)s_cnt[PURRGO_PROF_CNT_FS_READ],
         (unsigned long)s_cnt[PURRGO_PROF_CNT_FS_READ_BYTES]);
+
+    trace_report();
 }
 
 #else

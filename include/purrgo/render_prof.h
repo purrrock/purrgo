@@ -29,6 +29,22 @@
  *   hit   - обращений к кэшу секторов без чтения SD;
  *   rd    - вызовов purrgo_fs_read, B - запрошено байт.
  *
+ * Трасса обращений к секторам (PROF3, PROF4). Все обращения к кэшу секторов за кадр
+ * (попадания и промахи) пишутся в RAM, после кадра печатаются:
+ *   PROF3 f=<файл> ra=<read-ahead> acc=.. miss=.. seq=.. near=.. dist=..
+ *     acc - обращений к секторам, miss - промахов, seq - промахи в следующий блок после
+ *     предыдущего промаха файла, near - промахи не дальше 16 секторов от предыдущего,
+ *     dist - различных секторов файла за кадр (минимум промахов при бесконечном кэше);
+ *   PROF4 ovf=.. cur=<секторов в кэше> ccur=<команд SD>/<секторов> ccuri8=.. c256=.. c256i8=..
+ *         c768=.. c768i8=..
+ *     модель LRU-кэша на этой трассе: ccur - размер кэша как сейчас в прошивке (cur), c256 и
+ *     c768 - кэш на 256 и 768 секторов, суффикс i8 - для файлов .idx read-ahead 8 секторов
+ *     (у остальных как в прошивке); cmd - число команд чтения SD, вторая цифра - секторов.
+ *     cmd у ccur должен быть близок к n у sd в PROF2 (проверка модели).
+ * Модель считается после кадра и занимает от долей секунды до нескольких секунд, это
+ * не входит ни в frame, ни в статьи. Трасса занимает PURRGO_PROF_TRACE_MAX * 4 байта RAM;
+ * при переполнении ovf=1 и цифры занижены.
+ *
  * Время берётся из счётчика платформы (stm32: DWT->CYCCNT, pc: timespec_get).
  * Накладные расходы одного замера (ovh, такты) измеряются в конце кадра и вычитаются
  * из статей с большим числом вызовов (proj, name).
@@ -37,6 +53,7 @@
 #define PURRGO_RENDER_PROF 0
 #endif
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #if PURRGO_RENDER_PROF
@@ -68,6 +85,10 @@ typedef enum {
     PURRGO_PROF_CNT_COUNT
 } purrgo_prof_cnt_t;
 
+#ifndef PURRGO_PROF_TRACE_MAX
+#define PURRGO_PROF_TRACE_MAX 32768u
+#endif
+
 /* Платформа: монотонный 32-битный счётчик и его частота (тактов в микросекунду). */
 void purrgo_prof_platform_enable(void);
 uint32_t purrgo_prof_ticks(void);
@@ -76,6 +97,13 @@ uint32_t purrgo_prof_ticks_per_us(void);
 void purrgo_render_prof_begin_frame(void);
 void purrgo_render_prof_add(purrgo_prof_id_t id, uint32_t ticks);
 void purrgo_render_prof_count(purrgo_prof_cnt_t id, uint32_t n);
+
+/* Сведения о файле в слоте пула (path == NULL - имя не менять), вызывается при open
+ * и при смене read-ahead. cache_entries - размер кэша секторов прошивки. */
+void purrgo_render_prof_file_info(uint8_t slot, const char *path, uint8_t read_ahead,
+                                  uint32_t cache_entries);
+/* Обращение к сектору файла: miss - сектор пришлось читать с SD. slot < 16. */
+void purrgo_render_prof_sector(uint8_t slot, uint32_t sector, bool miss);
 void purrgo_render_prof_end_frame(int scale, int ok);
 
 #ifdef __cplusplus
@@ -86,12 +114,18 @@ void purrgo_render_prof_end_frame(int scale, int ok);
 #define PURRGO_PROF_END(var, id) \
     purrgo_render_prof_add((id), (uint32_t)(purrgo_prof_ticks() - (var)))
 #define PURRGO_PROF_COUNT_ADD(id, n) purrgo_render_prof_count((id), (uint32_t)(n))
+#define PURRGO_PROF_FILE_INFO(slot, path, ra, entries) \
+    purrgo_render_prof_file_info((slot), (path), (ra), (entries))
+#define PURRGO_PROF_SECTOR(slot, sector, miss) \
+    purrgo_render_prof_sector((slot), (sector), (miss))
 
 #else /* !PURRGO_RENDER_PROF */
 
 #define PURRGO_PROF_BEGIN(var) ((void)0)
 #define PURRGO_PROF_END(var, id) ((void)0)
 #define PURRGO_PROF_COUNT_ADD(id, n) ((void)0)
+#define PURRGO_PROF_FILE_INFO(slot, path, ra, entries) ((void)0)
+#define PURRGO_PROF_SECTOR(slot, sector, miss) ((void)0)
 
 #endif
 
