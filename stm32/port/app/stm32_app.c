@@ -455,7 +455,6 @@ void purrgo_stm32_process(void)
   )
   {
     last_button_poll_ms = current_time_ms;
-    //обработка кнопок
     process_buttons();
   }
   // прием эмуляции кнопок через UART

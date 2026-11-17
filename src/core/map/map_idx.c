@@ -11,7 +11,6 @@
 #include "map_projection.h"
 #include "purrgo/purrgo_poi_icons.h"
 #include "purrgo/gfx_icon.h"
-#include <string.h>
 
 /*
  * Радиусы POI.

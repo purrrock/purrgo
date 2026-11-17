@@ -9,7 +9,6 @@
 #include "purrgo/gnss_io.h"
 #include "purrgo/sun.h"
 #include "purrgo/purrgo_time.h"
-#include "purrgo/map_controller.h"
 #include "purrgo/trip_computer.h"
 #include "purrgo/menu_controller.h"
 #include "purrgo/track_logger.h"
