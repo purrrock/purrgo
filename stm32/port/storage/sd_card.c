@@ -19,6 +19,7 @@
 #include "ff.h"
 #include "diskio.h"
 #include "sd_spi.h"
+#include "sd_power.h"
 #include "purrgo/logger.h"
 #include "purrgo/supply.h"
 
@@ -60,10 +61,56 @@
 #define PURRGO_SD_RETRY_PERIOD_MS 10000U
 #endif
 
+/*
+ * Питание карты.
+ *
+ * Аппаратный ключ питания (WeAct Mini Load Switch MT9700-N) управляется выводом CubeMX с
+ * меткой SD_PWR (GPIO_Output; начальный уровень - тот, что выключает ключ): макрос SD_PWR_Pin в
+ * main.h включает управление автоматически. Без метки (ключа в схеме нет) карта запитана
+ * всегда, а состояние OFF означает только «карта не выбрана, SPI2 выключен»: пауз при
+ * включении нет. Принудительно отключить: -DPURRGO_SD_POWER_SWITCH=0.
+ */
+#ifndef PURRGO_SD_POWER_SWITCH
+#if defined(SD_PWR_Pin) && defined(SD_PWR_GPIO_Port)
+#define PURRGO_SD_POWER_SWITCH 1
+#else
+#define PURRGO_SD_POWER_SWITCH 0
+#endif
+#endif
+
+/* Уровень на SD_PWR, включающий ключ: 1 - High (EN активный высокий), 0 - Low. */
+#ifndef PURRGO_SD_POWER_ACTIVE_HIGH
+#define PURRGO_SD_POWER_ACTIVE_HIGH 1
+#endif
+
+/*
+ * Пауза без питания перед повторным включением, мс. Карта должна разрядиться ниже 0,5 В
+ * не менее чем на 1 мс (SD Physical Layer Spec, power cycle), иначе она остаётся в
+ * прежнем состоянии, а не сбрасывается. Ключ без разряда выхода оставляет напряжение
+ * на карте на десятки - сотни мс: подобрать по осциллографу (VCC карты после выключения).
+ */
+#ifndef PURRGO_SD_POWER_OFF_MIN_MS
+#define PURRGO_SD_POWER_OFF_MIN_MS 250U
+#endif
+
+/* Пауза после включения ключа до первого такта: нарастание напряжения (<= 35 мс по
+ * спецификации, у ключа с плавным пуском обычно единицы мс) и запуск карты. */
+#ifndef PURRGO_SD_POWER_RAMP_MS
+#define PURRGO_SD_POWER_RAMP_MS 10U
+#endif
+
+/* Выводы SPI2 (CubeMX: PB13 SCK, PB14 MISO, PB15 MOSI); меток в main.h у них нет. */
+#define SD_SPI_PORT GPIOB
+#define SD_SCK_PIN  GPIO_PIN_13
+#define SD_MISO_PIN GPIO_PIN_14
+#define SD_MOSI_PIN GPIO_PIN_15
+
 static FATFS s_fs;
 static sd_spi_t s_card;
+static sd_power_t s_pwr;
+static bool s_pwr_inited;
 static volatile DSTATUS s_stat = STA_NOINIT;
-static purrgo_sd_state_t s_state = PURRGO_SD_NO_CARD;
+static purrgo_sd_state_t s_state = PURRGO_SD_OFF;
 
 /* Карта потеряна (извлечена или не отвечает). Сбрасывается при монтировании. */
 static volatile bool s_card_lost;
@@ -119,17 +166,30 @@ static void card_lost(const char *reason)
  * --------------------------------------------------------------------------
  */
 
+static void spi_release(void)
+{
+    /* Выключает SPI2 (такты и выводы PB13..PB15 в analog кодом CubeMX). Повторный вызов
+     * и вызов до первого Init безопасны: с выключенными тактами HAL к регистрам не лезет. */
+    if (hspi2.State != HAL_SPI_STATE_RESET)
+    {
+        (void)HAL_SPI_DeInit(&hspi2);
+    }
+}
+
 static void spi_set_prescaler(uint32_t prescaler)
 {
-    if ((hspi2.State != HAL_SPI_STATE_RESET) &&
-        (hspi2.Init.BaudRatePrescaler == prescaler))
+    if (hspi2.State != HAL_SPI_STATE_RESET)
     {
-        return;
+        if (hspi2.Init.BaudRatePrescaler == prescaler)
+        {
+            return;
+        }
+
+        /* Выводы PB13..PB15 при DeInit/Init перенастраиваются кодом CubeMX;
+         * SD_CS - отдельный GPIO и остаётся высоким. */
+        spi_release();
     }
 
-    /* Выводы PB13..PB15 при DeInit/Init перенастраиваются кодом CubeMX;
-     * SD_CS - отдельный GPIO и остаётся высоким. */
-    (void)HAL_SPI_DeInit(&hspi2);
     hspi2.Init.BaudRatePrescaler = prescaler;
     if (HAL_SPI_Init(&hspi2) != HAL_OK)
     {
@@ -341,6 +401,99 @@ static void port_fast(void *ctx)
     spi_set_prescaler(PURRGO_SD_SPI_RUN_PRESCALER);
 }
 
+/*
+ * --------------------------------------------------------------------------
+ * Привязка sd_power к GPIO
+ * --------------------------------------------------------------------------
+ */
+
+static void gpio_out(GPIO_TypeDef *port, uint32_t pin, GPIO_PinState level)
+{
+    GPIO_InitTypeDef gi = {0};
+
+    /* Уровень - до включения выхода: без выброса на линии. */
+    HAL_GPIO_WritePin(port, (uint16_t)pin, level);
+    gi.Pin = pin;
+    gi.Mode = GPIO_MODE_OUTPUT_PP;
+    gi.Pull = GPIO_NOPULL;
+    gi.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+    HAL_GPIO_Init(port, &gi);
+}
+
+static void gpio_hiz(GPIO_TypeDef *port, uint32_t pin)
+{
+    GPIO_InitTypeDef gi = {0};
+
+    gi.Pin = pin;
+    gi.Mode = GPIO_MODE_ANALOG;
+    gi.Pull = GPIO_NOPULL;
+    HAL_GPIO_Init(port, &gi);
+}
+
+#if PURRGO_SD_POWER_SWITCH
+static void pwr_rail(bool on, void *ctx)
+{
+    (void)ctx;
+    const bool high = on ? (PURRGO_SD_POWER_ACTIVE_HIGH != 0) : (PURRGO_SD_POWER_ACTIVE_HIGH == 0);
+
+    HAL_GPIO_WritePin(SD_PWR_GPIO_Port, SD_PWR_Pin, high ? GPIO_PIN_SET : GPIO_PIN_RESET);
+}
+#endif
+
+static void pwr_pins(sd_pins_t mode, void *ctx)
+{
+    (void)ctx;
+
+    /* Выводы переходят из режима SPI2 в GPIO: сначала выключить сам SPI2. */
+    spi_release();
+
+    if (mode == SD_PINS_IDLE)
+    {
+        gpio_out(SD_CS_GPIO_Port, SD_CS_Pin, GPIO_PIN_SET);
+        gpio_out(SD_SPI_PORT, SD_MOSI_PIN, GPIO_PIN_SET);
+        gpio_out(SD_SPI_PORT, SD_SCK_PIN, GPIO_PIN_RESET);
+        gpio_hiz(SD_SPI_PORT, SD_MISO_PIN);
+        return;
+    }
+
+    gpio_out(SD_SPI_PORT, SD_SCK_PIN, GPIO_PIN_RESET);
+    gpio_out(SD_SPI_PORT, SD_MOSI_PIN, GPIO_PIN_RESET);
+    gpio_hiz(SD_SPI_PORT, SD_MISO_PIN);
+#if PURRGO_SD_POWER_SWITCH
+    /* Карта обесточена: CS в Hi-Z, высокий уровень с вывода МК запитал бы её через
+     * подтяжку DAT3 на модуле. При включении подтяжка сама поднимает CS. */
+    gpio_hiz(SD_CS_GPIO_Port, SD_CS_Pin);
+#else
+    gpio_out(SD_CS_GPIO_Port, SD_CS_Pin, GPIO_PIN_SET);
+#endif
+}
+
+static void pwr_delay(uint32_t ms, void *ctx)
+{
+    (void)ctx;
+    HAL_Delay(ms);
+}
+
+static uint32_t pwr_tick(void *ctx)
+{
+    (void)ctx;
+    return HAL_GetTick();
+}
+
+static const sd_power_port_t s_pwr_port = {
+#if PURRGO_SD_POWER_SWITCH
+    .rail = pwr_rail,
+#else
+    .rail = NULL,
+#endif
+    .pins = pwr_pins,
+    .delay_ms = pwr_delay,
+    .tick_ms = pwr_tick,
+    .off_min_ms = PURRGO_SD_POWER_OFF_MIN_MS,
+    .ramp_ms = PURRGO_SD_POWER_RAMP_MS,
+    .ctx = NULL,
+};
+
 static const sd_spi_port_t s_port = {
     .cs = port_cs,
     .xfer = port_xfer,
@@ -386,6 +539,11 @@ DSTATUS disk_initialize(BYTE pdrv)
     if (pdrv != 0U)
     {
         return (DSTATUS)STA_NOINIT;
+    }
+    if (sd_power_state(&s_pwr) != SD_POWER_ON)
+    {
+        s_stat = (DSTATUS)STA_NOINIT;   /* питание карты снято: к ней не обращаемся */
+        return s_stat;
     }
     if (!card_inserted())
     {
@@ -588,8 +746,31 @@ static bool mount_card(void)
  * --------------------------------------------------------------------------
  */
 
-bool purrgo_sd_init(void)
+/* Перевести питание карты в известное состояние OFF (один раз за запуск). */
+static void power_ensure_init(void)
 {
+    if (!s_pwr_inited)
+    {
+        /* Состояние ключа после сброса МК неизвестно: карту обесточиваем явно. */
+        (void)sd_power_init(&s_pwr, &s_pwr_port);
+        s_pwr_inited = true;
+        s_state = PURRGO_SD_OFF;
+    }
+}
+
+/* Подать питание (если снято), определить наличие карты и смонтировать ФС. */
+static bool power_up_and_mount(void)
+{
+    const uint32_t t0 = HAL_GetTick();
+
+    power_ensure_init();
+
+    if (!sd_power_up(&s_pwr))
+    {
+        s_state = PURRGO_SD_MOUNT_ERROR;
+        return false;
+    }
+
 #if PURRGO_SD_DETECT_MODE != PURRGO_SD_DETECT_NONE
     PURRGO_LOG("SD: Detect_SD level %d\r\n",
                (int)HAL_GPIO_ReadPin(Detect_SD_GPIO_Port, Detect_SD_Pin));
@@ -614,8 +795,83 @@ bool purrgo_sd_init(void)
         s_retry_armed = true;
         s_retry_at_ms = HAL_GetTick() + PURRGO_SD_RETRY_PERIOD_MS;
     }
+    else
+    {
+        PURRGO_LOG("SD: power-up to ready %lu ms\r\n", (unsigned long)(HAL_GetTick() - t0));
+    }
 
     return ok;
+}
+
+bool purrgo_sd_init(void)
+{
+    return power_up_and_mount();
+}
+
+bool purrgo_sd_power_up(void)
+{
+    if ((s_state == PURRGO_SD_READY) && !s_card_lost)
+    {
+        return true;
+    }
+    return power_up_and_mount();
+}
+
+void purrgo_sd_power_down(void)
+{
+    power_ensure_init();
+
+    if (sd_power_state(&s_pwr) == SD_POWER_OFF)
+    {
+        return;
+    }
+
+    /*
+     * Все файлы закрывает вызывающий код (FatFs при f_mount(NULL) их не сбрасывает).
+     * Здесь - дождаться конца внутренней записи карты: отключение питания посреди
+     * записи блока портит его.
+     */
+    if ((s_state == PURRGO_SD_READY) && !s_card_lost)
+    {
+        (void)disk_ioctl(0, CTRL_SYNC, NULL);
+    }
+
+    unmount();
+    spi_release();
+    sd_power_down(&s_pwr);
+
+    s_state = PURRGO_SD_OFF;
+    s_retry_armed = false;
+    s_card_lost = false;
+    PURRGO_LOG("SD: power off%s\r\n", sd_power_has_switch(&s_pwr) ? "" : " (no switch: card deselected)");
+}
+
+bool purrgo_sd_is_powered(void)
+{
+    return (sd_power_state(&s_pwr) == SD_POWER_ON);
+}
+
+void purrgo_sd_standby_hold(void)
+{
+#if PURRGO_SD_POWER_SWITCH
+    uint32_t port;
+
+    if (SD_PWR_GPIO_Port == GPIOA)      { port = PWR_GPIO_A; }
+    else if (SD_PWR_GPIO_Port == GPIOB) { port = PWR_GPIO_B; }
+    else if (SD_PWR_GPIO_Port == GPIOC) { port = PWR_GPIO_C; }
+    else { return; }   /* других портов на UFQFPN48 с выведенным SD_PWR нет */
+
+    /*
+     * В Standby выводы МК без PWR-подтяжки уходят в Hi-Z: состояние EN ключа определяет
+     * подтяжка на модуле (какая - проверить на железе). PWR удерживает вывод в уровне
+     * «выключено», как для GNSS_EN. Вызывать до HAL_PWREx_EnablePullUpPullDownConfig().
+     */
+#if PURRGO_SD_POWER_ACTIVE_HIGH
+    (void)HAL_PWREx_EnableGPIOPullDown(port, SD_PWR_Pin);
+#else
+    (void)HAL_PWREx_EnableGPIOPullUp(port, SD_PWR_Pin);
+#endif
+#endif
 }
 
 void purrgo_sd_poll(uint32_t now_ms)
@@ -625,6 +881,12 @@ void purrgo_sd_poll(uint32_t now_ms)
         return;
     }
     s_last_poll_ms = now_ms;
+
+    /* Питание карты снято (purrgo_sd_power_down()): вставка и монтирование не отслеживаются. */
+    if (sd_power_state(&s_pwr) == SD_POWER_OFF)
+    {
+        return;
+    }
 
 #if PURRGO_SD_DETECT_MODE != PURRGO_SD_DETECT_NONE
     /* Антидребезг: новое значение принимается со второго одинакового отсчёта. */

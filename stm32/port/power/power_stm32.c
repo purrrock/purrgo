@@ -6,13 +6,18 @@
 #include "purrgo/power.h"
 #include "purrgo/logger.h"
 #include "stop_mode.h"
+#include "sd_card.h"
 #include "main.h"
 #include "ff.h"
 
 void purrgo_platform_storage_unmount(void)
 {
-    /* Все метаданные записаны, карта в безопасном состоянии. */
-    f_mount(NULL, "0:", 1);
+    /*
+     * Файлы закрыты ядром (power.c). Дожидаемся конца внутренней записи карты,
+     * размонтируем ФС и снимаем питание карты (с ключом SD_PWR; без него карта
+     * остаётся запитанной, но не выбрана): после этого карту можно потерять.
+     */
+    purrgo_sd_power_down();
     PURRGO_LOG("FatFs dismount\r\n");
 }
 
@@ -60,6 +65,9 @@ void purrgo_platform_enter_standby(void)
      * должна пересиливать подтяжку модуля.
      */
     (void)HAL_PWREx_EnableGPIOPullDown(PWR_GPIO_B, PWR_GPIO_BIT_0);
+
+    /* Так же и ключ питания карты (SD_PWR), если он есть: в Standby остаётся выключенным. */
+    purrgo_sd_standby_hold();
     HAL_PWREx_EnablePullUpPullDownConfig();
 
     /*

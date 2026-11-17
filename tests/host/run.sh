@@ -52,6 +52,8 @@ for t in tests/host/test_*.c; do
     case $name in
         test_sd_spi)
             extra="stm32/port/storage/sd_spi.c -Istm32/port/storage" ;;
+        test_sd_power)
+            extra="stm32/port/storage/sd_power.c -Istm32/port/storage" ;;
         test_gnss_diag)
             extra="stm32/port/gnss/gnss_diag.c -Istm32/port/gnss" ;;
         test_gnss_link)

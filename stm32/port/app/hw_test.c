@@ -19,7 +19,14 @@
  *   D. Сверка быстрого обмена по регистрам SPI2 с обменом через HAL: те же
  *      сектора читаются обоими способами и сравниваются (до замеров A-C).
  *
- * Скорость печатается в МБ/с (1 МБ = 10^6 Б) и в процентах от теоретического
+ * Тест SD_POWER. Циклы выключения и включения питания карты (purrgo_sd_power_down() /
+ * purrgo_sd_power_up()): после каждого включения карта должна инициализироваться, ФС
+ * монтироваться, сектор 0 совпадать с прочитанным до выключения. Первая фаза держит питание
+ * выключенным PURRGO_HWTEST_SD_POWER_OFF_MS, вторая включает карту сразу (драйвер сам
+ * выдерживает паузу). В строке цикла: время выключения, время без питания, время от
+ * включения до готовности и уровень Detect_SD в выключенном и включённом состоянии.
+ *
+ * Скорость в тесте SD_SPEED печатается в МБ/с (1 МБ = 10^6 Б) и в процентах от теоретического
  * предела SPI (f_spi / 8 Б/с).
  */
 
@@ -487,6 +494,142 @@ static void run_sd_speed(void)
     HT("HWTEST SD_SPEED done\r\n");
 }
 
+#elif defined(PURRGO_HW_TEST_SD_POWER)
+
+#include "spi.h"
+#include "ff.h"
+#include "diskio.h"
+#include "sd_card.h"
+
+#include <stdbool.h>
+#include <stdint.h>
+#include <string.h>
+
+/* Число циклов выключения/включения в каждой из двух фаз. */
+#ifndef PURRGO_HWTEST_SD_POWER_CYCLES
+#define PURRGO_HWTEST_SD_POWER_CYCLES 20U
+#endif
+
+/* Пауза с выключенным питанием в первой фазе, мс: за это время можно снять напряжение VCC
+ * карты мультиметром или осциллографом. Вторая фаза включает карту сразу (проверка того, что
+ * драйвер сам выдерживает PURRGO_SD_POWER_OFF_MIN_MS). */
+#ifndef PURRGO_HWTEST_SD_POWER_OFF_MS
+#define PURRGO_HWTEST_SD_POWER_OFF_MS 1000U
+#endif
+
+#define HT(...) purrgo_logger_write(__VA_ARGS__)
+
+static uint8_t s_ref0[512] __attribute__((aligned(4)));
+static uint8_t s_cur0[512] __attribute__((aligned(4)));
+
+static int detect_level(void)
+{
+#if PURRGO_SD_DETECT_MODE != PURRGO_SD_DETECT_NONE
+    return (int)HAL_GPIO_ReadPin(Detect_SD_GPIO_Port, Detect_SD_Pin);
+#else
+    return -1;
+#endif
+}
+
+/* Один цикл: down -> пауза -> up -> проверка. true - карта после включения исправна. */
+static bool power_cycle(unsigned index, uint32_t dwell_ms, uint32_t *up_ms_out)
+{
+    FILINFO fno;
+    const uint32_t t0 = HAL_GetTick();
+
+    purrgo_sd_power_down();
+
+    const uint32_t t1 = HAL_GetTick();
+    const bool off_ok = !purrgo_sd_is_powered() && (purrgo_sd_state() == PURRGO_SD_OFF);
+    const int cd_off = detect_level();
+
+    if (dwell_ms > 0U)
+    {
+        HAL_Delay(dwell_ms);
+    }
+
+    const uint32_t t2 = HAL_GetTick();
+    const bool mounted = purrgo_sd_power_up();
+    const uint32_t t3 = HAL_GetTick();
+    const int cd_on = detect_level();
+
+    bool data_ok = false;
+    bool tree_ok = false;
+
+    if (mounted)
+    {
+        memset(s_cur0, 0, sizeof s_cur0);
+        data_ok = (disk_read(0, s_cur0, 0U, 1U) == RES_OK) &&
+                  (memcmp(s_cur0, s_ref0, sizeof s_ref0) == 0);
+        tree_ok = (f_stat("0:/PURRGO", &fno) == FR_OK);
+    }
+
+    const bool ok = off_ok && mounted && data_ok && tree_ok;
+
+    HT("HWTEST SD_POWER #%u: down %lu ms, off %lu ms, up->ready %lu ms, Detect off/on=%d/%d, "
+       "off_state=%s mounted=%s sector0=%s tree=%s -> %s\r\n",
+       index, (unsigned long)(t1 - t0), (unsigned long)(t2 - t1), (unsigned long)(t3 - t2),
+       cd_off, cd_on, off_ok ? "ok" : "BAD", mounted ? "ok" : "FAIL",
+       data_ok ? "same" : "DIFF", tree_ok ? "ok" : "FAIL", ok ? "OK" : "FAIL");
+
+    *up_ms_out = t3 - t2;
+    return ok;
+}
+
+static void run_phase(const char *name, uint32_t dwell_ms, unsigned *fail_total)
+{
+    unsigned ok_n = 0U;
+    uint32_t min_ms = 0xFFFFFFFFU;
+    uint32_t max_ms = 0U;
+
+    HT("HWTEST SD_POWER phase %s (off %lu ms), %u cycles\r\n", name,
+       (unsigned long)dwell_ms, (unsigned)PURRGO_HWTEST_SD_POWER_CYCLES);
+
+    for (unsigned i = 1U; i <= PURRGO_HWTEST_SD_POWER_CYCLES; i++)
+    {
+        uint32_t up_ms = 0U;
+
+        if (power_cycle(i, dwell_ms, &up_ms))
+        {
+            ok_n++;
+            if (up_ms < min_ms) { min_ms = up_ms; }
+            if (up_ms > max_ms) { max_ms = up_ms; }
+        }
+    }
+
+    HT("HWTEST SD_POWER phase %s: %u/%u OK, up->ready min/max %lu/%lu ms\r\n", name, ok_n,
+       (unsigned)PURRGO_HWTEST_SD_POWER_CYCLES,
+       (unsigned long)((ok_n != 0U) ? min_ms : 0U), (unsigned long)max_ms);
+    *fail_total += (PURRGO_HWTEST_SD_POWER_CYCLES - ok_n);
+}
+
+static void run_sd_power(void)
+{
+    unsigned fails = 0U;
+
+    HT("HWTEST SD_POWER start\r\n");
+
+    if (!purrgo_sd_init())
+    {
+        HT("HWTEST SD_POWER: card is not mounted (state %d), aborted\r\n",
+           (int)purrgo_sd_state());
+        return;
+    }
+
+    if (disk_read(0, s_ref0, 0U, 1U) != RES_OK)
+    {
+        HT("HWTEST SD_POWER: reference read of sector 0 failed, aborted\r\n");
+        return;
+    }
+
+    HT("HWTEST SD_POWER: Detect_SD=%d, reference sector 0 read\r\n", detect_level());
+
+    run_phase("slow", PURRGO_HWTEST_SD_POWER_OFF_MS, &fails);
+    run_phase("quick", 0U, &fails);
+
+    HT("HWTEST SD_POWER done: %s (%u failed cycles)\r\n", (fails == 0U) ? "PASS" : "FAIL", fails);
+}
+
 #else
 #error "PURRGO_HW_TEST_ENABLED is set, but no PURRGO_HW_TEST_<NAME> is defined"
 #endif
@@ -497,6 +640,8 @@ void purrgo_hw_test_run(void)
 
 #if defined(PURRGO_HW_TEST_SD_SPEED)
     run_sd_speed();
+#elif defined(PURRGO_HW_TEST_SD_POWER)
+    run_sd_power();
 #endif
 
     for (;;)

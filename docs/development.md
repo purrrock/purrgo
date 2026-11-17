@@ -122,7 +122,7 @@ ctest --preset linux-gcc-test
 | Экран и интерфейс | `test_marker_pan_battery`, `test_ui_refresh_fixes`, `test_display_eink` (очередь E-Ink поверх `epd4g`, нужен сабмодуль), `test_keyboard`, `test_pgo_text` |
 | Трек и время | `test_time_logger`, `test_track_filter`, `test_track_diag`, `test_tracker_mode`, `test_negative_altitude` |
 | Навигация | `test_navigation`, `test_waypoint`, `test_wpt_layer`, `test_route` |
-| Питание | `test_power_off_screen`, `test_power_sequence`, `test_power_source`, `test_supply_low` |
+| Питание | `test_power_off_screen`, `test_power_sequence`, `test_power_source`, `test_supply_low`, `test_sd_power` (последовательность питания microSD) |
 | Читалка | `test_pgb`, `test_book_reader`, `test_book_search`, `test_book_resume_track` |
 | Хранилище и ошибки | `test_sd_spi`, `test_refact_critical` |
 
@@ -159,7 +159,7 @@ cmake --preset stm32u5-release -DPURRGO_HW_TEST=SD_SPEED
 cmake --build --preset stm32u5-release
 ```
 
-Пустое значение (`-DPURRGO_HW_TEST=`) возвращает обычную прошивку. Допустимо: `SD_SPEED`, `EINK_4GRAY`,
+Пустое значение (`-DPURRGO_HW_TEST=`) возвращает обычную прошивку. Допустимо: `SD_SPEED`, `SD_POWER`, `EINK_4GRAY`,
 `EINK_PARTIAL` (последние два включают прежние `PURRGO_EINK_SELFTEST_*`). Результаты идут в UART1 строками
 `HWTEST ...` независимо от `PURRGO_LOG_LEVEL`, поэтому тесты можно собирать и в Release. Реализация:
 `stm32/port/app/hw_test.c`, список имён: `PURRGO_HW_TEST_NAMES` в `stm32/CMakeLists.txt`.
@@ -176,6 +176,13 @@ cmake --build --preset stm32u5-release
 `PURRGO_HWTEST_SD_START_SECTOR`, `PURRGO_HWTEST_SD_FILE_BYTES`, `PURRGO_HWTEST_SD_FILE` (путь к файлу).
 Частота SPI берётся из `PURRGO_SD_SPI_RUN_PRESCALER` (`sd_card.c`, по умолчанию `/4` = 20 МГц), поэтому сравнение `/8` и `/4`
 делается двумя сборками с разным значением. Результат прогонов на плате: [`measurements/SD-speed-test-result.txt`](measurements/SD-speed-test-result.txt).
+
+**`SD_POWER`.** Циклы выключения и включения питания карты (`purrgo_sd_power_down()` / `purrgo_sd_power_up()`), две фазы по
+`PURRGO_HWTEST_SD_POWER_CYCLES` (20) циклов: «slow» держит питание выключенным `PURRGO_HWTEST_SD_POWER_OFF_MS` (1000 мс), за это время можно снять
+VCC карты мультиметром или осциллографом; «quick» включает карту сразу (драйвер сам выдерживает `PURRGO_SD_POWER_OFF_MIN_MS`). После каждого включения
+проверяется: состояние OFF в выключенном виде, монтирование, совпадение сектора 0 с прочитанным до выключения, наличие `0:/PURRGO`. В строке цикла
+печатаются время выключения, время без питания, время от включения до готовности и уровень `Detect_SD` в выключенном и включённом состоянии. Итог:
+`HWTEST SD_POWER done: PASS` или `FAIL`.
 
 ### Проверка дисплея на железе
 

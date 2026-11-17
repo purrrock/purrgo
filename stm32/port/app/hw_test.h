@@ -11,6 +11,7 @@
  * Допустимые значения:
  *     (пусто)       обычная прошивка, главный цикл навигатора;
  *     SD_SPEED      скорость чтения microSD (сырые сектора и FatFs);
+ *     SD_POWER      циклы выключения/включения питания microSD и повторной инициализации;
  *     EINK_4GRAY    самотест 4-gray    (PURRGO_EINK_SELFTEST_4GRAY);
  *     EINK_PARTIAL  самотест partial   (PURRGO_EINK_SELFTEST_PARTIAL).
  *

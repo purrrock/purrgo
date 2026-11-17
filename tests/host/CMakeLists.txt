@@ -45,6 +45,15 @@ if(TARGET test_sd_spi)
         ${PROJECT_SOURCE_DIR}/stm32/port/storage)
 endif()
 
+# test_sd_power проверяет последовательность питания microSD (HAL-независимый
+# модуль прошивки U585): порядок включения/выключения, паузу без питания, режим без ключа.
+if(TARGET test_sd_power)
+    target_sources(test_sd_power PRIVATE
+        ${PROJECT_SOURCE_DIR}/stm32/port/storage/sd_power.c)
+    target_include_directories(test_sd_power PRIVATE
+        ${PROJECT_SOURCE_DIR}/stm32/port/storage)
+endif()
+
 # test_gnss_diag проверяет разбор NMEA и определение состояния связи с GNSS
 # (HAL-независимый модуль прошивки STM32).
 if(TARGET test_gnss_diag)
