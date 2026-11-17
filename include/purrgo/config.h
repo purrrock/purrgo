@@ -119,6 +119,13 @@ typedef struct {
     purrgo_power_source_t power_source;
 
     /*
+     * Дублировать диагностический лог (UART) в файл на SD-карте: пункт SD LOG главного меню, ключ SD_LOG в
+     * PURRGO.CFG (0 или 1; нет ключа - 0). Запись потребляет ток карты, по умолчанию выключена.
+     * См. purrgo_logger_sd_set_enabled() в purrgo/logger.h.
+     */
+    bool sd_log;
+
+    /*
      * Позиция чтения: последняя открытая книга (имя файла без пути, пустая
      * строка - нет), её file_crc32 из заголовка PGB и номер страницы с нуля.
      * Ключи BOOK_FILE, BOOK_CRC (hex), BOOK_PAGE в PURRGO.CFG. Если у файла с

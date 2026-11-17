@@ -166,6 +166,15 @@ static uint32_t s_cfg_nak_mask;
 /* Периодическая диагностическая строка по PVT. */
 #define PVT_LOG_INTERVAL_MS 5000U
 static uint32_t s_log_interval_ms = PVT_LOG_INTERVAL_MS;
+
+/*
+ * Смена состояния помех (jam) логируется сразу, но не чаще раза в JAM_CHANGE_LOG_MIN_MS: у слабого сигнала
+ * состояние дребезжит между 1 и 2 несколько раз в секунду, и лог превращался в поток. В трекере (редкий лог)
+ * порог равен интервалу лога.
+ */
+#define JAM_CHANGE_LOG_MIN_MS 10000U
+static uint32_t s_rf_jam_change_ms;
+static bool s_rf_jam_change_logged;
 static bool s_pvt_logged;
 static uint32_t s_pvt_logged_ms;
 
@@ -214,6 +223,7 @@ void purrgo_gnss_ubx_init(void)
     s_pvt_logged = false;
     s_pvt_logged_ms = 0U;
     s_rf_logged = false;
+    s_rf_jam_change_logged = false;
     s_rf_logged_ms = 0U;
     s_status_logged = false;
     s_status_logged_ms = 0U;
@@ -441,7 +451,16 @@ static void process_mon_rf(const uint8_t *p, uint16_t length, uint32_t now_ms)
     s_st.rf_valid = true;
     s_st.rf_ms = now_ms;
 
-    if (log_due(&s_rf_logged, &s_rf_logged_ms, now_ms) || jam_changed) {
+    const uint32_t jam_min_ms = (s_log_interval_ms > JAM_CHANGE_LOG_MIN_MS) ? s_log_interval_ms
+                                                                         : JAM_CHANGE_LOG_MIN_MS;
+    const bool jam_log = jam_changed &&
+                         (!s_rf_jam_change_logged || (uint32_t)(now_ms - s_rf_jam_change_ms) >= jam_min_ms);
+
+    if (jam_log) {
+        s_rf_jam_change_logged = true;
+        s_rf_jam_change_ms = now_ms;
+    }
+    if (log_due(&s_rf_logged, &s_rf_logged_ms, now_ms) || jam_log) {
         PURRGO_LOGD("GNSS: RF jam=%u ant=%u/%u noise=%u agc=%u cw=%u\r\n", (unsigned)jam,
                     (unsigned)b[2], (unsigned)b[3], (unsigned)s_st.noise_per_ms,
                     (unsigned)s_st.agc_cnt, (unsigned)s_st.cw_suppression);

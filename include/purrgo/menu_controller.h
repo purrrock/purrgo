@@ -65,6 +65,7 @@ void menu_app_get_main_item_text(int index, char* buf, size_t size);
 /* Черновики настроек, которые правятся в главном меню. */
 int16_t menu_app_get_draft_tz_offset(void);
 purrgo_power_source_t menu_app_get_draft_power_source(void);
+bool menu_app_get_draft_sd_log(void);
 
 /*
  * Выбор каталога карт / файла маршрута. В режиме выбора маршрута запись

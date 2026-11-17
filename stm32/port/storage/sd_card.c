@@ -575,6 +575,7 @@ static bool mount_card(void)
     make_dir("0:/PURRGO/BOOKS");
     make_dir("0:/PURRGO/WAYPTS");
     make_dir("0:/PURRGO/ROUTES");
+    make_dir("0:/PURRGO/LOGS");
     s_state = PURRGO_SD_READY;
     PURRGO_LOG("SD: mount OK, tree verified\r\n");
     return true;

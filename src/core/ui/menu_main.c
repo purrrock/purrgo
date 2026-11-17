@@ -4,6 +4,7 @@
 #include "purrgo/power.h"
 #include "purrgo/book_reader.h"
 #include "purrgo/track_logger.h"
+#include "purrgo/logger.h"
 #include "purrgo/track_name.h"
 #include "purrgo/ui/ui_dirty.h"
 
@@ -46,6 +47,7 @@ static purrgo_poi_mode_t     draft_poi_mode;
 static track_logger_mode_t   draft_log_mode;
 static purrgo_map_details_t  draft_map_details;
 static purrgo_power_source_t draft_power_source;
+static bool                  draft_sd_log;
 
 static void reset_drafts(void)
 {
@@ -54,6 +56,7 @@ static void reset_drafts(void)
     draft_log_mode          = app_config.log_mode;
     draft_map_details       = app_config.map_details;
     draft_power_source      = app_config.power_source;
+    draft_sd_log            = app_config.sd_log;
 }
 
 static void apply_drafts(void)
@@ -63,8 +66,10 @@ static void apply_drafts(void)
     app_config.log_mode          = draft_log_mode;
     app_config.map_details       = draft_map_details;
     app_config.power_source      = draft_power_source;
+    app_config.sd_log            = draft_sd_log;
 
     purrgo_logger_set_mode(app_config.log_mode);
+    purrgo_logger_sd_set_enabled(app_config.sd_log);
     purrgo_config_save();
 }
 
@@ -239,6 +244,22 @@ static void log_select(purrgo_state_t* next)
 }
 
 
+/*
+ * SD LOG: дублировать диагностический лог (UART) в файл LOG.TXT на SD (для разбора без подключённого
+ * терминала). Включение применяется по BACK, как остальные настройки.
+ */
+static void sd_log_format(char* buf, size_t size)
+{
+    purrgo_snprintf(buf, size, "SD LOG: %s", draft_sd_log ? "ON" : "OFF");
+}
+
+static void sd_log_select(purrgo_state_t* next)
+{
+    (void)next;
+    draft_sd_log = !draft_sd_log;
+}
+
+
 static void map_details_format(char* buf, size_t size)
 {
     purrgo_snprintf(buf, size, "MAP DETAILS: %s",
@@ -276,6 +297,7 @@ static const menu_item_t main_items[] = {
     { .format = wpt_format, .on_select = wpt_select },
     { .format = poi_format, .on_select = poi_select },
     { .format = log_format, .on_select = log_select },
+    { .format = sd_log_format, .on_select = sd_log_select },
     { .format = map_details_format, .on_select = map_details_select },
     { .title = "MAP LAYERS", .on_select = map_layers_select },
 };
@@ -370,4 +392,9 @@ int16_t menu_app_get_draft_tz_offset(void)
 purrgo_power_source_t menu_app_get_draft_power_source(void)
 {
     return draft_power_source;
+}
+
+bool menu_app_get_draft_sd_log(void)
+{
+    return draft_sd_log;
 }

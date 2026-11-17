@@ -1,6 +1,9 @@
 #ifndef PURRGO_LOGGER_H
 #define PURRGO_LOGGER_H
 
+#include <stdbool.h>
+#include <stdint.h>
+
 #include "purrgo/purrgo_format.h"
 
 #ifdef __cplusplus
@@ -10,6 +13,25 @@ extern "C" {
 void purrgo_logger_init(void);
 
 void purrgo_logger_write(const char *format, ...) PURRGO_PRINTF_FORMAT(1, 2);
+
+/*
+ * Запись лога на SD-карту (STM32): всё, что уходит в UART, дополнительно пишется в файл
+ * 0:/PURRGO/LOGS/LOG.TXT, каждая строка с отметкой времени работы "[сек.мс]". Включается в меню (SD LOG).
+ *
+ * Запись идёт из основного цикла (purrgo_logger_sd_service), не из вызова purrgo_logger_write(): сообщения
+ * копятся в кольцевом буфере и сбрасываются на карту пачками. Если карта не готова, запись откладывается и
+ * повторяется. При включении предыдущий LOG.TXT переименовывается в LOG.OLD (прошлый файл LOG.OLD заменяется),
+ * размер файла ограничен (около 2 МБ). Запись на карту потребляет ток: по умолчанию выключена.
+ *
+ * PC: заглушки (лог идёт в stdout).
+ */
+void purrgo_logger_sd_set_enabled(bool enabled);
+
+/* Включена ли запись лога на SD (настройка, а не факт успешного открытия файла). */
+bool purrgo_logger_sd_enabled(void);
+
+/* Вызывать из основного цикла: сбрасывает накопленные сообщения на карту. now_ms - системное время. */
+void purrgo_logger_sd_service(uint32_t now_ms);
 
 /*
  * Уровни логирования (выбираются при сборке: -DPURRGO_LOG_LEVEL=<n>, в CMake -

@@ -299,6 +299,9 @@ void purrgo_app_init(void) {
      */
     purrgo_config_load();
 
+    /* Запись лога на SD, если включена в настройках (сам файл откроется, когда карта будет готова). */
+    purrgo_logger_sd_set_enabled(app_config.sd_log);
+
     purrgo_map_controller_init();
     purrgo_menu_controller_init();
     purrgo_trip_computer_init();

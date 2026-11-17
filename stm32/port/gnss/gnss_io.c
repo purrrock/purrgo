@@ -89,6 +89,22 @@ static purrgo_gnss_ring_t gnss_ring;
  */
 static volatile bool gnss_rx_error_flag = false;
 
+/*
+ * Шторм ошибок приёма: модуль мог сбросить настройку (на заводской настройке он снова шлёт NMEA на 38400,
+ * а у нас UART на рабочей скорости: сплошные FE/ORE; заметно по мигающему светодиоду PPS) или отвалиться.
+ * GNSS_RX_STORM_COUNT ошибок за GNSS_RX_STORM_WINDOW_MS - связь переустанавливается: сначала мягко (заново
+ * подбор скорости UART и настройка профиля), при повторном шторме вскоре после этого - выключением по EN.
+ */
+#define GNSS_RX_STORM_COUNT      5U
+#define GNSS_RX_STORM_WINDOW_MS  3000U
+#define GNSS_RX_ERR_LOG_MAX      2U      /* в одном окне в лог пишутся только первые ошибки */
+#define GNSS_RECOVER_HARD_MS     30000U  /* шторм вскоре после мягкого перезапуска - жёсткий */
+#define GNSS_EN_LOW_MS           200U    /* пауза с EN = Low при жёстком перезапуске */
+static uint32_t gnss_rx_err_count = 0U;
+static uint32_t gnss_rx_err_t0 = 0U;
+static uint32_t gnss_recover_t_soft = 0U;
+static bool gnss_recover_soft_done = false;
+
 /* Код ошибки UART, с которым вызван HAL_UART_ErrorCallback (для лога). */
 static volatile uint32_t gnss_rx_error_code = 0U;
 
@@ -698,6 +714,47 @@ static bool gnss_pop(uint16_t head, uint8_t *byte)
 }
 
 /**
+ * @brief Переустановить связь с приёмником после шторма ошибок приёма.
+ *
+ * Мягко: сброс состояния приёма и новый подбор скорости UART (gnss_link) с настройкой текущего профиля
+ * (навигация или трекер) после установления связи. Если шторм повторился в течение GNSS_RECOVER_HARD_MS
+ * после мягкого перезапуска - жёстко: EN в Low на GNSS_EN_LOW_MS и снова в High; профиль сохраняется.
+ */
+static void gnss_recover_link(uint32_t now)
+{
+    const bool hard = gnss_recover_soft_done &&
+                      ((uint32_t)(now - gnss_recover_t_soft) < GNSS_RECOVER_HARD_MS);
+
+    if (hard)
+    {
+        const purrgo_gnss_profile_t keep = gnss_profile;
+
+        PURRGO_LOGW("GNSS: RX error storm again, power cycling the module (EN)\r\n");
+        gnss_profile = PURRGO_GNSS_PROFILE_NAV;   /* без отката настройки трекера перед выключением */
+        purrgo_gnss_power_off();
+        HAL_Delay(GNSS_EN_LOW_MS);
+        purrgo_gnss_power_on();
+        gnss_profile = keep;                       /* применится после установления связи */
+        gnss_recover_soft_done = false;
+        return;
+    }
+
+    PURRGO_LOGW("GNSS: RX error storm (%u in %u ms), restarting the link\r\n",
+                (unsigned)GNSS_RX_STORM_COUNT, (unsigned)GNSS_RX_STORM_WINDOW_MS);
+    gnss_recover_soft_done = true;
+    gnss_recover_t_soft = now;
+
+    gnss_rx_error_flag = false;
+    purrgo_gnss_ring_reset(&gnss_ring);
+    gnss_last_head = 0U;
+#if PURRGO_GNSS_TRACKER_PSMOO_ACTIVE
+    gnss_profile_apply_pending = false;
+#endif
+    purrgo_gnss_monitor_expect_gaps(false);
+    gnss_link_begin();
+}
+
+/**
  * @brief Прочитать один байт из входного GNSS-потока.
  */
 bool purrgo_gnss_read_byte(uint8_t *byte)
@@ -801,13 +858,32 @@ bool purrgo_gnss_read_byte(uint8_t *byte)
         gnss_rx_error_flag = false;
         purrgo_gnss_ring_reset(&gnss_ring);
 
-        /* При поиске скорости ошибки кадра ожидаемы (приём на неверной скорости): без лога. */
+        /* При поиске скорости ошибки кадра ожидаемы (приём на неверной скорости): без лога и счёта. */
         if (!gnss_link_busy(&gnss_link))
         {
-            PURRGO_LOGE("GNSS RX error 0x%lX (PE=1 NE=2 FE=4 ORE=8 DMA=0x10), dma err 0x%lX"
-                       " (DTE=1 ULE=2 USE=4), restarting RX\r\n",
-                       (unsigned long)gnss_rx_error_code,
-                       (unsigned long)handle_LPDMA1_Channel0.ErrorCode);
+            const uint32_t now = HAL_GetTick();
+
+            if ((gnss_rx_err_count == 0U) || ((uint32_t)(now - gnss_rx_err_t0) > GNSS_RX_STORM_WINDOW_MS))
+            {
+                gnss_rx_err_count = 0U;
+                gnss_rx_err_t0 = now;
+            }
+            gnss_rx_err_count++;
+
+            if (gnss_rx_err_count <= GNSS_RX_ERR_LOG_MAX)
+            {
+                PURRGO_LOGE("GNSS RX error 0x%lX (PE=1 NE=2 FE=4 ORE=8 DMA=0x10), dma err 0x%lX"
+                           " (DTE=1 ULE=2 USE=4), restarting RX\r\n",
+                           (unsigned long)gnss_rx_error_code,
+                           (unsigned long)handle_LPDMA1_Channel0.ErrorCode);
+            }
+
+            if (gnss_rx_err_count >= GNSS_RX_STORM_COUNT)
+            {
+                gnss_rx_err_count = 0U;
+                gnss_recover_link(now);
+                return false;
+            }
         }
 
         gnss_last_head = 0U;

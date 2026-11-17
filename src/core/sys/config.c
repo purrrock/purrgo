@@ -184,6 +184,9 @@ void purrgo_config_init(void)
      */
     app_config.power_source = PURRGO_POWER_SRC_DEFAULT;
 
+    /* Запись лога на SD по умолчанию выключена. */
+    app_config.sd_log = false;
+
     /*
      * Отображение текущего трека по умолчанию включено.
      */
@@ -568,6 +571,17 @@ bool purrgo_config_load(void)
             }
 
             /*
+             * Запись диагностического лога на SD.
+             */
+            else if (strcmp(key, "SD_LOG") == 0) {
+                const int32_t on = parse_int32(val);
+
+                if (on == 0 || on == 1) {
+                    app_config.sd_log = (on == 1);
+                }
+            }
+
+            /*
              * Режим записи трека.
              */
             else if (strcmp(key, "LOG_MODE") == 0) {
@@ -676,6 +690,7 @@ bool purrgo_config_save(void)
         "LOG_MODE=%d\n"
         "MAP_DETAILS=%d\n"
         "POWER_SRC=%d\n"
+        "SD_LOG=%d\n"
         "BOOK_FILE=%.*s\n"
         "BOOK_CRC=%08X\n"
         "BOOK_PAGE=%u\n"
@@ -707,6 +722,8 @@ bool purrgo_config_save(void)
         (int)app_config.map_details,
 
         (int)app_config.power_source,
+
+        app_config.sd_log ? 1 : 0,
 
         (int)(sizeof(app_config.book_file) - 1),
         app_config.book_file,
