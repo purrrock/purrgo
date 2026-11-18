@@ -251,6 +251,30 @@ cmake --preset linux-gcc-debug -DPURRGO_MOCK_LAT_1E7=315590000 \
       -DPURRGO_MOCK_LON_1E7=354731666 -DPURRGO_MOCK_ALT_M=-430
 ```
 
+### Питание в эмуляторе
+
+На ПК напряжений нет, поэтому их задают параметры командной строки (перед COM-портом, если он
+нужен):
+
+| Параметр | Что делает |
+|---|---|
+| `--battery-mv=<мВ>` (или `--battery-mv <мВ>`) | напряжение блока батарей, 0..10000 мВ; 0 (по умолчанию) - «не измерено», процент заглушка |
+| `--supply-low` | просадка VDD ниже порога записи на SD (как PVD) |
+| `--help` | справка |
+
+```sh
+./purrgo_emulator --battery-mv=2600              # режим mock GNSS
+./purrgo_emulator --battery-mv=2600 --supply-low COM3
+```
+
+Остановка записи (`STOP:BAT`, `STOP:B+V`) зависит от источника питания: у NiMH (по умолчанию)
+порога нет, поэтому в меню CONFIG выберите ZINC_CARBON (порог 3000 мВ) или LIION_AA (2700 мВ).
+Подтверждение по батарее идёт `PURRGO_SUPPLY_BATT_CONFIRM_POLLS` опросов с периодом
+`PURRGO_SUPPLY_BATT_POLL_MS` (10 с), так что плашка появится через 20-30 с после выбора источника питания.
+`--supply-low` даёт `STOP:VDD` через `PURRGO_SUPPLY_LOW_CONFIRM_MS`. Значения задаются при
+запуске; в web-версии `argv` берётся из `Module.arguments` (`web/shell.html` его сейчас не задаёт). Реализация:
+`purrgo/pc_power.h`, `src/platform/pc/power_pc.c`.
+
 ---
 
 ## Web-эмулятор (WebAssembly + GitHub Pages)

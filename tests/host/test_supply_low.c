@@ -372,6 +372,30 @@ static void test_reason_tick_reports_change(void)
     CHECK(!purrgo_supply_tick(t + 20u));
 }
 
+/*
+ * Подтверждение по батарее - это PURRGO_SUPPLY_BATT_CONFIRM_POLLS разных замеров:
+ * опросы идут не чаще периода замера АЦП, поэтому остановка раньше
+ * (CONFIRM_POLLS - 1) периодов после появления низкого напряжения невозможна,
+ * а за CONFIRM_POLLS + 1 периодов обязательно наступает.
+ */
+static void test_battery_confirm_needs_distinct_samples(void)
+{
+    CHECK(PURRGO_SUPPLY_BATT_POLL_MS >= PURRGO_HW_BATT_PERIOD_MS);
+
+    start_recording(PURRGO_POWER_SRC_LIION_AA);
+    set_pack_mv(3800u);
+    run_ms(PURRGO_SUPPLY_BATT_POLL_MS + 500u);        /* норма, опрос уже был */
+    CHECK(!purrgo_supply_storage_blocked());
+
+    set_pack_mv(2600u);
+    run_ms(PURRGO_SUPPLY_BATT_POLL_MS * (PURRGO_SUPPLY_BATT_CONFIRM_POLLS - 1u) - 100u);
+    CHECK(!purrgo_supply_storage_blocked());          /* замеров ещё меньше, чем нужно */
+
+    run_ms(PURRGO_SUPPLY_BATT_POLL_MS * 2u + PURRGO_SUPPLY_LOW_CONFIRM_MS + 100u);
+    CHECK(purrgo_supply_storage_blocked());
+    CHECK(purrgo_supply_reason() == PURRGO_SUPPLY_REASON_BATT);
+}
+
 int main(void)
 {
     test_supply_low();
@@ -382,5 +406,6 @@ int main(void)
     test_battery_then_vdd();
     test_reason_indicator();
     test_reason_tick_reports_change();
+    test_battery_confirm_needs_distinct_samples();
     return test_finish("test_supply_low");
 }

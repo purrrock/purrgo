@@ -6,6 +6,8 @@
 #endif
 #include <stdio.h>
 #include <stdbool.h>
+#include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "display.h"
@@ -29,6 +31,7 @@
 #include <purrgo/gfx_circle.h>
 #include <purrgo/gfx_text.h>
 #include <purrgo/config.h>
+#include <purrgo/pc_power.h>
 #include "purrgo/gfx_renderer.h"
 
 #include <purrgo/sun.h>
@@ -73,6 +76,84 @@ static gfx_color_t emulator_read_pixel_cb(
 ) {
     (void)fb;
     return display_get_pixel(x, y);
+}
+
+/* Верхняя граница --battery-mv: с запасом выше любого блока батарей и питания 5 В. */
+#define EMU_BATTERY_MV_MAX 10000u
+
+static void emulator_print_usage(const char* prog) {
+#ifdef USE_MOCK_GNSS
+    fprintf(stderr, "Usage: %s [options]\n", prog);
+#else
+    fprintf(stderr, "Usage: %s [options] <COM_PORT>\n", prog);
+#endif
+    fprintf(stderr,
+        "Options (имитация питания, см. docs/development.md):\n"
+        "  --battery-mv=<mV>  напряжение блока батарей, мВ (0 - не измерено, по умолчанию);\n"
+        "                     для остановки записи выберите в меню источник ZINC_CARBON\n"
+        "                     (порог 3000 мВ) или LIION_AA (2700 мВ)\n"
+        "  --supply-low       просадка VDD ниже порога записи на SD (как PVD)\n"
+        "  --help             эта справка\n");
+}
+
+static bool emulator_parse_uint(const char* text, uint32_t max, uint32_t* out) {
+    char* end = NULL;
+
+    if (text == NULL || *text < '0' || *text > '9') {
+        return false;
+    }
+    const unsigned long value = strtoul(text, &end, 10);
+    if (*end != '\0' || value > max) {
+        return false;
+    }
+    *out = (uint32_t)value;
+    return true;
+}
+
+/*
+ * Разбор параметров питания. Опции (--имя, --имя=значение или --имя значение)
+ * убираются из argv: остаются argv[0] и позиционные аргументы (COM-порт
+ * приёмника), как и раньше. false - ошибка в параметрах или --help.
+ */
+static bool emulator_parse_options(int* argc, char* argv[]) {
+    int out = 1;
+
+    for (int i = 1; i < *argc; i++) {
+        const char* arg = argv[i];
+
+        if (strncmp(arg, "--", 2) != 0) {
+            argv[out++] = argv[i];
+            continue;
+        }
+        if (strcmp(arg, "--help") == 0) {
+            emulator_print_usage(argv[0]);
+            return false;
+        }
+        if (strcmp(arg, "--supply-low") == 0) {
+            purrgo_pc_power_set_supply_low(true);
+            printf("Emulator: VDD low simulated\n");
+            continue;
+        }
+        if (strncmp(arg, "--battery-mv", 12) == 0 && (arg[12] == '=' || arg[12] == '\0')) {
+            const char* text = (arg[12] == '=') ? arg + 13 : ((i + 1 < *argc) ? argv[++i] : NULL);
+            uint32_t mv = 0;
+
+            if (!emulator_parse_uint(text, EMU_BATTERY_MV_MAX, &mv)) {
+                fprintf(stderr, "Bad value for --battery-mv (0..%u mV): %s\n",
+                        (unsigned)EMU_BATTERY_MV_MAX, text != NULL ? text : "(missing)");
+                return false;
+            }
+            purrgo_pc_power_set_battery_mv(mv);
+            printf("Emulator: battery %u mV\n", (unsigned)mv);
+            continue;
+        }
+        fprintf(stderr, "Unknown option: %s\n", arg);
+        emulator_print_usage(argv[0]);
+        return false;
+    }
+    argv[out] = NULL;
+    *argc = out;
+    return true;
 }
 
 static SDL_Window* window = NULL;
@@ -121,11 +202,7 @@ static bool emulator_sys_init(int argc, char* argv[]) {
             return false;
         }
     } else {
-        fprintf(
-            stderr,
-            "Usage: %s <COM_PORT>\n",
-            argv[0]
-        );
+        emulator_print_usage(argv[0]);
         return false;
     }
 #endif
@@ -244,6 +321,11 @@ static void emulator_cleanup(void) {
 }
 
 int main(int argc, char* argv[]) {
+    /* До инициализации ядра: purrgo_app_init() уже читает батарею. */
+    if (!emulator_parse_options(&argc, argv)) {
+        return 1;
+    }
+
     if (!emulator_sys_init(argc, argv)) {
         return 1;
     }
