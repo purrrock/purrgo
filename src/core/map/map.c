@@ -12,52 +12,91 @@
 #include <string.h>
 
 /*
+ * Таблица слоёв карты.
+ *
+ * Всё, что относится к слою, описано одной строкой k_layers: имена файлов, переключатели
+ * в конфиге, правила открытия и параметры отрисовки. Порядок строк - порядок отрисовки
+ * снизу вверх; открывается и закрывается всё одним циклом. Новый слой - новая строка
+ * (плюс поля в purrgo_map_render_params_t) и строка в docs/architecture.md, раздел
+ * "Layer drawing order". Состояние слоя (открытые файлы, флаги "файла нет") хранится в
+ * s_map_context.layer[] под тем же индексом.
+ */
+typedef struct {
+    const char* idx_name;        /* индекс: всегда есть */
+    const char* mlp_name;        /* геометрия; NULL - слой без геометрии (POI) */
+    const char* db_name;         /* подписи; NULL - слой без подписей */
+
+    size_t enabled_off;          /* offsetof(params, <переключатель слоя>) */
+    size_t labels_off;           /* offsetof(params, <переключатель подписей>); при db_name == NULL не используется */
+
+    bool optional;               /* слоя может не быть в карте: отсутствие файлов не ошибка */
+    bool labels_optional;        /* то же для файла подписей */
+
+    purrgo_map_layer_t type;     /* как рисовать слой */
+    int fg, bg;                  /* цвета gfx_set_color перед слоем; fg < 0 - не менять */
+    bool after_labels;           /* рисовать после очереди подписей полигонов (поверх дорог) */
+    bool (*want_draw)(const purrgo_map_render_params_t* params);   /* NULL - всегда */
+} map_layer_desc_t;
+
+#define PARAM_OFF(field) offsetof(purrgo_map_render_params_t, field)
+
+/* При poi_mode == NO обход pois.idx ничего не рисует, но читает индекс с SD: слой пропускаем. */
+static bool map_want_poi(const purrgo_map_render_params_t* params)
+{
+    return params->poi_mode != PURRGO_POI_MODE_NO;
+}
+
+static const map_layer_desc_t k_layers[] = {
+    /* Landuse: полигоны; подписи уходят в очередь и рисуются поверх дорог. */
+    { "landuse.idx", "landuse.mlp", "landuse.db",
+      PARAM_OFF(layer_landuse), PARAM_OFF(layer_landuse_labels),
+      false, false, MAP_LAYER_POLYGONS, 2, 3, false, NULL },
+
+    /* Water: полигоны водоёмов; water.db нет, если в слое нет именованных объектов. */
+    { "water.idx", "water.mlp", "water.db",
+      PARAM_OFF(layer_water), PARAM_OFF(layer_water_labels),
+      true, true, MAP_LAYER_POLYGONS, 0, 3, false, NULL },
+
+    /* Waterways: линии рек и ручьёв, включаются переключателем water, подписей нет. */
+    { "waterways.idx", "waterways.mlp", NULL,
+      PARAM_OFF(layer_water), 0,
+      true, false, MAP_LAYER_LINES, 0, 3, false, NULL },
+
+    /* Roads: линии, подписей нет. */
+    { "roads.idx", "roads.mlp", NULL,
+      PARAM_OFF(layer_roads), 0,
+      false, false, MAP_LAYER_LINES, 1, 3, false, NULL },
+
+    /* POI: только индекс и подписи; цвета задаёт сама отрисовка маркеров. */
+    { "pois.idx", NULL, "pois.db",
+      PARAM_OFF(layer_poi), PARAM_OFF(layer_poi_labels),
+      false, false, MAP_LAYER_POIS, -1, -1, true, map_want_poi },
+};
+
+#define MAP_LAYER_COUNT (sizeof k_layers / sizeof k_layers[0])
+
+/*
  * Persistent map file context
  * We maintain these files open to preserve the LRU cache benefits across renders.
  */
 typedef struct {
-    char current_map_dir[PURRGO_FS_MAX_PATH];
-
-    bool layer_landuse;
-    bool layer_landuse_labels;
-    bool layer_water;
-    bool layer_water_labels;
-    bool layer_roads;
-    bool layer_poi;
-    bool layer_poi_labels;
-
-    purrgo_file_t* landuse_idx_file;
-    purrgo_file_t* landuse_mlp_file;
-    purrgo_file_t* landuse_db_file;
-
-    /* Водоёмы: полигоны + подписи. Слой необязателен (файлов может не быть). */
-    purrgo_file_t* water_idx_file;
-    purrgo_file_t* water_mlp_file;
-    purrgo_file_t* water_db_file;
-
-    /* Водотоки: линии, без подписей. Слой необязателен. Включается вместе с water. */
-    purrgo_file_t* waterways_idx_file;
-    purrgo_file_t* waterways_mlp_file;
-
-    purrgo_file_t* roads_idx_file;
-    purrgo_file_t* roads_mlp_file;
-
-    purrgo_file_t* poi_idx_file;
-    purrgo_file_t* poi_db_file;
+    purrgo_file_t* idx;
+    purrgo_file_t* mlp;
+    purrgo_file_t* db;
 
     /*
-     * Файл слоя не открылся: не пробуем снова на каждом кадре (каждая попытка -
-     * обращение к SD и строка в UART). Флаг снимается при смене каталога,
-     * выключении слоя в конфиге и purrgo_map_shutdown().
+     * Файлы слоя не открылись: не пробуем снова на каждом кадре (каждая попытка -
+     * обращение к SD и строка в UART). Флаги снимаются при смене каталога,
+     * выключении слоя (подписей) в конфиге и purrgo_map_shutdown().
+     * Слой открыт, пока открыт его idx (пара idx/mlp открывается целиком или никак).
      */
-    bool landuse_missing;
-    bool landuse_labels_missing;
-    bool water_missing;
-    bool water_labels_missing;
-    bool waterways_missing;
-    bool roads_missing;
-    bool poi_missing;
-    bool poi_labels_missing;
+    bool missing;
+    bool labels_missing;
+} map_layer_state_t;
+
+typedef struct {
+    char current_map_dir[PURRGO_FS_MAX_PATH];
+    map_layer_state_t layer[MAP_LAYER_COUNT];
 
     /* Путь map_dir не помещается в буфер (с запасом под имя файла слоя). */
     bool dir_invalid;
@@ -68,48 +107,32 @@ typedef struct {
 
 static map_context_t s_map_context = {0};
 
+static bool map_param_flag(const purrgo_map_render_params_t* params, size_t offset)
+{
+    return *(const bool*)((const char*)params + offset);
+}
+
 static void map_close_file(purrgo_file_t **file)
 {
     if (*file != NULL) { purrgo_fs_close(*file); *file = NULL; }
 }
 
+/* Закрыть файлы слоя и забыть, что их не удалось открыть. */
+static void map_layer_reset(map_layer_state_t* st)
+{
+    map_close_file(&st->idx);
+    map_close_file(&st->mlp);
+    map_close_file(&st->db);
+    st->missing = false;
+    st->labels_missing = false;
+}
+
 static void map_close_all_files(void)
 {
-    map_close_file(&s_map_context.landuse_idx_file);
-    map_close_file(&s_map_context.landuse_mlp_file);
-    map_close_file(&s_map_context.landuse_db_file);
-
-    map_close_file(&s_map_context.water_idx_file);
-    map_close_file(&s_map_context.water_mlp_file);
-    map_close_file(&s_map_context.water_db_file);
-
-    map_close_file(&s_map_context.waterways_idx_file);
-    map_close_file(&s_map_context.waterways_mlp_file);
-
-    map_close_file(&s_map_context.roads_idx_file);
-    map_close_file(&s_map_context.roads_mlp_file);
-
-    map_close_file(&s_map_context.poi_idx_file);
-    map_close_file(&s_map_context.poi_db_file);
-
-    s_map_context.layer_landuse = false;
-    s_map_context.layer_landuse_labels = false;
-    s_map_context.layer_water = false;
-    s_map_context.layer_water_labels = false;
-    s_map_context.layer_roads = false;
-    s_map_context.layer_poi = false;
-    s_map_context.layer_poi_labels = false;
-
-    s_map_context.landuse_missing = false;
-    s_map_context.landuse_labels_missing = false;
-    s_map_context.water_missing = false;
-    s_map_context.water_labels_missing = false;
-    s_map_context.waterways_missing = false;
-    s_map_context.roads_missing = false;
-    s_map_context.poi_missing = false;
-    s_map_context.poi_labels_missing = false;
+    for (size_t i = 0; i < MAP_LAYER_COUNT; i++) {
+        map_layer_reset(&s_map_context.layer[i]);
+    }
     s_map_context.dir_invalid = false;
-
     s_map_context.current_map_dir[0] = '\0';
 }
 
@@ -162,6 +185,35 @@ static bool map_open_pair(const char* map_dir, const char* name_a, const char* n
     return false;
 }
 
+/* Открыть основные файлы слоя (пару idx/mlp или один idx). */
+static void map_layer_open(const map_layer_desc_t* d, map_layer_state_t* st, const char* map_dir)
+{
+    bool ok;
+
+    if (d->mlp_name != NULL) {
+        ok = map_open_pair(map_dir, d->idx_name, d->mlp_name, &st->idx, &st->mlp, d->optional);
+    } else {
+        st->idx = map_open_file(map_dir, d->idx_name);
+        ok = (st->idx != NULL);
+        if (!ok && !d->optional) {
+            PURRGO_LOGE("Map: %s not found in %s\r\n", d->idx_name, map_dir);
+        }
+    }
+    st->missing = !ok;
+}
+
+/* Открыть файл подписей слоя. */
+static void map_layer_open_labels(const map_layer_desc_t* d, map_layer_state_t* st, const char* map_dir)
+{
+    st->db = map_open_file(map_dir, d->db_name);
+    if (st->db == NULL) {
+        st->labels_missing = true;
+        if (!d->labels_optional) {
+            PURRGO_LOGE("Map: %s not found in %s\r\n", d->db_name, map_dir);
+        }
+    }
+}
+
 /*
  * Приводит набор открытых файлов в соответствие с каталогом и конфигом.
  * Возвращает false, если путь к каталогу слишком длинный (карта не рисуется).
@@ -186,137 +238,26 @@ static bool map_sync_files(const purrgo_map_render_params_t *params)
         strcpy(s_map_context.current_map_dir, map_dir);
     }
 
-    /* Landuse */
-    if (!params->layer_landuse) {
-        map_close_file(&s_map_context.landuse_idx_file);
-        map_close_file(&s_map_context.landuse_mlp_file);
-        map_close_file(&s_map_context.landuse_db_file);
-        s_map_context.layer_landuse = false;
-        s_map_context.layer_landuse_labels = false;
-        s_map_context.landuse_missing = false;
-        s_map_context.landuse_labels_missing = false;
-    } else if (!s_map_context.layer_landuse && !s_map_context.landuse_missing) {
-        if (map_open_pair(map_dir, "landuse.idx", "landuse.mlp",
-                          &s_map_context.landuse_idx_file,
-                          &s_map_context.landuse_mlp_file, false)) {
-            s_map_context.layer_landuse = true;
-        } else {
-            s_map_context.landuse_missing = true;
-        }
-    }
+    for (size_t i = 0; i < MAP_LAYER_COUNT; i++) {
+        const map_layer_desc_t* d = &k_layers[i];
+        map_layer_state_t* st = &s_map_context.layer[i];
 
-    if (!params->layer_landuse_labels) {
-        map_close_file(&s_map_context.landuse_db_file);
-        s_map_context.layer_landuse_labels = false;
-        s_map_context.landuse_labels_missing = false;
-    } else if (s_map_context.layer_landuse &&
-               !s_map_context.layer_landuse_labels &&
-               !s_map_context.landuse_labels_missing) {
-        s_map_context.landuse_db_file = map_open_file(map_dir, "landuse.db");
-        if (s_map_context.landuse_db_file) {
-            s_map_context.layer_landuse_labels = true;
-        } else {
-            s_map_context.landuse_labels_missing = true;
-            PURRGO_LOGE("Map: landuse.db not found in %s\r\n", map_dir);
-        }
-    }
-
-    /* Water: полигоны водоёмов */
-    if (!params->layer_water) {
-        map_close_file(&s_map_context.water_idx_file);
-        map_close_file(&s_map_context.water_mlp_file);
-        map_close_file(&s_map_context.water_db_file);
-        map_close_file(&s_map_context.waterways_idx_file);
-        map_close_file(&s_map_context.waterways_mlp_file);
-        s_map_context.layer_water = false;
-        s_map_context.layer_water_labels = false;
-        s_map_context.water_missing = false;
-        s_map_context.water_labels_missing = false;
-        s_map_context.waterways_missing = false;
-    } else {
-        if (!s_map_context.layer_water && !s_map_context.water_missing) {
-            if (map_open_pair(map_dir, "water.idx", "water.mlp",
-                              &s_map_context.water_idx_file,
-                              &s_map_context.water_mlp_file, true)) {
-                s_map_context.layer_water = true;
-            } else {
-                s_map_context.water_missing = true;
-            }
+        if (!map_param_flag(params, d->enabled_off)) {
+            map_layer_reset(st);
+        } else if (st->idx == NULL && !st->missing) {
+            map_layer_open(d, st, map_dir);
         }
 
-        /* Waterways: линии рек и ручьёв, включаются тем же переключателем. */
-        if (!s_map_context.waterways_idx_file && !s_map_context.waterways_missing) {
-            if (!map_open_pair(map_dir, "waterways.idx", "waterways.mlp",
-                               &s_map_context.waterways_idx_file,
-                               &s_map_context.waterways_mlp_file, true)) {
-                s_map_context.waterways_missing = true;
-            }
+        if (d->db_name == NULL) {
+            continue;
         }
-    }
 
-    if (!params->layer_water_labels) {
-        map_close_file(&s_map_context.water_db_file);
-        s_map_context.layer_water_labels = false;
-        s_map_context.water_labels_missing = false;
-    } else if (s_map_context.layer_water &&
-               !s_map_context.layer_water_labels &&
-               !s_map_context.water_labels_missing) {
-        s_map_context.water_db_file = map_open_file(map_dir, "water.db");
-        if (s_map_context.water_db_file) {
-            s_map_context.layer_water_labels = true;
-        } else {
-            /* water.db нет, если в слое нет именованных объектов: не ошибка. */
-            s_map_context.water_labels_missing = true;
-        }
-    }
-
-    /* Roads */
-    if (!params->layer_roads) {
-        map_close_file(&s_map_context.roads_idx_file);
-        map_close_file(&s_map_context.roads_mlp_file);
-        s_map_context.layer_roads = false;
-        s_map_context.roads_missing = false;
-    } else if (!s_map_context.layer_roads && !s_map_context.roads_missing) {
-        if (map_open_pair(map_dir, "roads.idx", "roads.mlp",
-                          &s_map_context.roads_idx_file,
-                          &s_map_context.roads_mlp_file, false)) {
-            s_map_context.layer_roads = true;
-        } else {
-            s_map_context.roads_missing = true;
-        }
-    }
-
-    /* POIs */
-    if (!params->layer_poi) {
-        map_close_file(&s_map_context.poi_idx_file);
-        map_close_file(&s_map_context.poi_db_file);
-        s_map_context.layer_poi = false;
-        s_map_context.layer_poi_labels = false;
-        s_map_context.poi_missing = false;
-        s_map_context.poi_labels_missing = false;
-    } else if (!s_map_context.layer_poi && !s_map_context.poi_missing) {
-        s_map_context.poi_idx_file = map_open_file(map_dir, "pois.idx");
-        if (s_map_context.poi_idx_file) {
-            s_map_context.layer_poi = true;
-        } else {
-            s_map_context.poi_missing = true;
-            PURRGO_LOGE("Map: pois.idx not found in %s\r\n", map_dir);
-        }
-    }
-
-    if (!params->layer_poi_labels) {
-        map_close_file(&s_map_context.poi_db_file);
-        s_map_context.layer_poi_labels = false;
-        s_map_context.poi_labels_missing = false;
-    } else if (s_map_context.layer_poi &&
-               !s_map_context.layer_poi_labels &&
-               !s_map_context.poi_labels_missing) {
-        s_map_context.poi_db_file = map_open_file(map_dir, "pois.db");
-        if (s_map_context.poi_db_file) {
-            s_map_context.layer_poi_labels = true;
-        } else {
-            s_map_context.poi_labels_missing = true;
-            PURRGO_LOGE("Map: pois.db not found in %s\r\n", map_dir);
+        /* Подписи открываются только у открытого слоя. */
+        if (!map_param_flag(params, d->labels_off)) {
+            map_close_file(&st->db);
+            st->labels_missing = false;
+        } else if (st->idx != NULL && st->db == NULL && !st->labels_missing) {
+            map_layer_open_labels(d, st, map_dir);
         }
     }
 
@@ -575,123 +516,52 @@ bool purrgo_map_render_viewport(
      */
     bool ok = true;
 
-    /* ------------------- LANDUSE ------------------- */
-
-    if (s_map_context.landuse_idx_file && s_map_context.landuse_mlp_file) {
-
-        gfx_set_color(gfx, 2, 3);
-
-        ok = purrgo_map_render_layer(
-            s_map_context.landuse_idx_file,
-            s_map_context.landuse_mlp_file,
-            s_map_context.landuse_db_file,
-            gfx,
-            camera,
-            viewport,
-            params,
-            MAP_LAYER_POLYGONS
-        ) && ok;
-    }
-
-    /* ------------------- WATER (полигоны) ------------------- */
-
-    if (s_map_context.water_idx_file && s_map_context.water_mlp_file) {
-
-        gfx_set_color(gfx, 0, 3);
-
-        ok = purrgo_map_render_layer(
-            s_map_context.water_idx_file,
-            s_map_context.water_mlp_file,
-            s_map_context.water_db_file,
-            gfx,
-            camera,
-            viewport,
-            params,
-            MAP_LAYER_POLYGONS
-        ) && ok;
-    }
-
-    /* ------------------- WATERWAYS (линии) ------------------- */
-
-    if (s_map_context.waterways_idx_file && s_map_context.waterways_mlp_file) {
-
-        gfx_set_color(gfx, 0, 3);
-
-        /* Линии рек и ручьёв не подписываем: db_file не передаём. */
-        ok = purrgo_map_render_layer(
-            s_map_context.waterways_idx_file,
-            s_map_context.waterways_mlp_file,
-            NULL,
-            gfx,
-            camera,
-            viewport,
-            params,
-            MAP_LAYER_LINES
-        ) && ok;
-    }
-
-    /* ------------------- ROADS ------------------- */
-
-    if (s_map_context.roads_idx_file && s_map_context.roads_mlp_file) {
-
-        gfx_set_color(gfx, 1, 3);
-
-        /*
-         * Дороги не подписываем —
-         * передаём NULL вместо db_file.
-         */
-        ok = purrgo_map_render_layer(
-            s_map_context.roads_idx_file,
-            s_map_context.roads_mlp_file,
-            NULL,
-            gfx,
-            camera,
-            viewport,
-            params,
-            MAP_LAYER_LINES
-        ) && ok;
-    }
-
     /*
-     * ------------------------------------------------
-     * LANDUSE LABELS
-     * ------------------------------------------------
+     * Слои сверху вниз в порядке k_layers. Слой, чьи файлы не открыты, пропускается.
      *
-     * К этому моменту:
-     *
-     *   1. все landuse-полигоны уже нарисованы;
-     *   2. все roads уже нарисованы.
-     *
-     * Поэтому теперь можно вывести отложенные
-     * подписи landuse поверх дорог.
-     *
-     * map_render_draw_queued_labels() также выполняет
-     * проверку коллизий и резервирует BBox каждой
+     * Перед слоями с after_labels (POI) выводятся отложенные подписи полигонов. К этому
+     * моменту landuse, water и roads уже нарисованы, поэтому подписи ложатся поверх дорог.
+     * map_render_draw_queued_labels() проверяет коллизии и резервирует BBox каждой
      * успешно размещённой подписи.
      */
-    {
-        PURRGO_PROF_BEGIN(prof_lbl);
-        map_render_draw_queued_labels(gfx);
-        PURRGO_PROF_END(prof_lbl, PURRGO_PROF_LABELS);
-    }
+    bool labels_drawn = false;
 
-    /* ------------------- POIS ------------------- */
+    for (size_t i = 0; i <= MAP_LAYER_COUNT; i++) {
+        const bool end = (i == MAP_LAYER_COUNT);
 
-    /*
-     * При poi_mode == NO обход pois.idx ничего не рисует, но читает с SD индекс
-     * (около пятой части передач кадра на 500 м): слой пропускаем целиком.
-     */
-    if (s_map_context.poi_idx_file && params->poi_mode != PURRGO_POI_MODE_NO) {
+        if (!labels_drawn && (end || k_layers[i].after_labels)) {
+            PURRGO_PROF_BEGIN(prof_lbl);
+            map_render_draw_queued_labels(gfx);
+            PURRGO_PROF_END(prof_lbl, PURRGO_PROF_LABELS);
+            labels_drawn = true;
+        }
+        if (end) {
+            break;
+        }
 
+        const map_layer_desc_t* d = &k_layers[i];
+        const map_layer_state_t* st = &s_map_context.layer[i];
+
+        if (st->idx == NULL || (d->mlp_name != NULL && st->mlp == NULL)) {
+            continue;
+        }
+        if (d->want_draw != NULL && !d->want_draw(params)) {
+            continue;
+        }
+        if (d->fg >= 0) {
+            gfx_set_color(gfx, (gfx_color_t)d->fg, (gfx_color_t)d->bg);
+        }
+
+        /* db у слоёв без подписей всегда NULL: файл не открывается. */
         ok = purrgo_map_render_layer(
-            s_map_context.poi_idx_file,
-            NULL,
-            s_map_context.poi_db_file,
+            st->idx,
+            st->mlp,
+            st->db,
             gfx,
             camera,
             viewport,
             params,
-            MAP_LAYER_POIS
+            d->type
         ) && ok;
     }
 

@@ -131,6 +131,10 @@ static void check_log(const char *const *exp, int n, int line)
 
 /* ------------------------------------------------------------- тесты --- */
 
+/*
+ * Файлы слоя открываются подряд: сначала основные, затем подписи (.db), и только потом
+ * следующий слой, поэтому water.db идёт раньше waterways.*.
+ */
 static void test_first_frame_and_repeat(void)
 {
     purrgo_map_shutdown();
@@ -141,9 +145,8 @@ static void test_first_frame_and_repeat(void)
     /* Первый кадр: слои открываются сверху вниз; кадр с битыми заголовками - false. */
     CHECK(!render("maps/t"));
     EXPECT_LOG(O("t", "landuse.idx"), O("t", "landuse.mlp"), O("t", "landuse.db"),
-               O("t", "water.idx"), O("t", "water.mlp"),
+               O("t", "water.idx"), O("t", "water.mlp"), O("t", "water.db"),
                O("t", "waterways.idx"), O("t", "waterways.mlp"),
-               O("t", "water.db"),
                O("t", "roads.idx"), O("t", "roads.mlp"),
                O("t", "pois.idx"), O("t", "pois.db"),
                READ_ALL("t"));
@@ -186,9 +189,8 @@ static void test_layer_toggles(void)
                R("t", "landuse.idx"), R("t", "roads.idx"), R("t", "pois.idx"));
     g_params.layer_water = true;
     CHECK(!render("maps/t"));
-    EXPECT_LOG(O("t", "water.idx"), O("t", "water.mlp"),
+    EXPECT_LOG(O("t", "water.idx"), O("t", "water.mlp"), O("t", "water.db"),
                O("t", "waterways.idx"), O("t", "waterways.mlp"),
-               O("t", "water.db"),
                READ_ALL("t"));
 
     g_params.layer_water_labels = false;
