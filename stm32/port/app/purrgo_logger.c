@@ -17,6 +17,7 @@
 #include "purrgo/fs_hal.h"
 
 #include <stdarg.h>
+#include <string.h>
 #include "purrgo/purrgo_format.h"
 
 /*
@@ -214,6 +215,44 @@ static bool sd_log_open(uint32_t now_ms)
     return true;
 }
 
+/*
+ * Дописать накопленное, при необходимости добавить завершающую строку trailer, синхронизировать и закрыть
+ * файл; запись выключается (настройка в PURRGO.CFG не меняется). Если файл не открыт (карты нет, ждём
+ * повтор), накопленное просто отбрасывается.
+ */
+static void sd_log_finish(const char *trailer)
+{
+    sd_log_in_service = true;
+    if (sd_log_file != NULL)
+    {
+        char chunk[SD_LOG_CHUNK];
+        uint32_t n;
+        bool ok = true;
+
+        const uint32_t lost = sd_dropped;
+        if (lost != 0U)
+        {
+            const int m = purrgo_snprintf(chunk, sizeof chunk, "[SD LOG: %lu messages dropped]\r\n",
+                                          (unsigned long)lost);
+            sd_dropped = 0U;
+            ok = !((m > 0) && !sd_log_write(chunk, (uint32_t)m));
+        }
+        while (ok && ((n = sd_ring_pop(chunk, sizeof chunk)) != 0U))
+        {
+            ok = sd_log_write(chunk, n);
+        }
+        if (ok && (trailer != NULL))
+        {
+            (void)sd_log_write(trailer, (uint32_t)strlen(trailer));
+        }
+        (void)purrgo_fs_sync(sd_log_file);
+    }
+    sd_log_close();
+    sd_log_in_service = false;
+    sd_log_enabled = false;
+    sd_ring_tail = sd_ring_head;
+}
+
 void purrgo_logger_sd_set_enabled(bool enabled)
 {
     if (enabled == sd_log_enabled)
@@ -233,25 +272,23 @@ void purrgo_logger_sd_set_enabled(bool enabled)
     }
     else
     {
-        /* Дописать накопленное и закрыть файл. */
-        sd_log_in_service = true;
-        if (sd_log_file != NULL)
-        {
-            char chunk[SD_LOG_CHUNK];
-            uint32_t n;
-
-            while ((n = sd_ring_pop(chunk, sizeof chunk)) != 0U)
-            {
-                if (!sd_log_write(chunk, n)) { break; }
-            }
-            (void)purrgo_fs_sync(sd_log_file);
-        }
-        sd_log_close();
-        sd_log_in_service = false;
-        sd_log_enabled = false;
-        sd_ring_tail = sd_ring_head;
+        sd_log_finish(NULL);
         purrgo_logger_write("SD LOG: disabled\r\n");
     }
+}
+
+void purrgo_logger_sd_shutdown(void)
+{
+    if (!sd_log_enabled)
+    {
+        return;
+    }
+
+    char line[64];
+    const uint32_t tick = HAL_GetTick();
+    const int n = purrgo_snprintf(line, sizeof line, "=== PURRGO power off, uptime %lu ms ===\r\n",
+                                  (unsigned long)tick);
+    sd_log_finish((n > 0) ? line : NULL);
 }
 
 bool purrgo_logger_sd_enabled(void)

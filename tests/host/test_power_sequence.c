@@ -10,6 +10,7 @@
 #include "purrgo/app_ui.h"
 #include "purrgo/config.h"
 #include "purrgo/fs_hal.h"
+#include "purrgo/logger.h"
 #include "purrgo/map.h"
 #include "purrgo/power.h"
 #include "purrgo/track_logger.h"
@@ -137,7 +138,9 @@ static void test_power_off_sequence(void)
     app_config.tz_offset_minutes = (int16_t)(app_config.tz_offset_minutes + 180);
 
     fake_power_set_unmount_probe(probe);
+    purrgo_logger_sd_set_enabled(true);
     purrgo_system_power_off();
+    CHECK(!purrgo_logger_sd_enabled());                          /* лог на SD дописан и закрыт при выключении */
 
     CHECK(fake_power_unmount_calls() == 1);
     CHECK(fake_power_standby_calls() == 1);

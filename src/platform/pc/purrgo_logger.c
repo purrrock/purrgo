@@ -21,6 +21,10 @@ void purrgo_logger_sd_set_enabled(bool enabled) {
     s_sd_log_enabled = enabled;
 }
 
+void purrgo_logger_sd_shutdown(void) {
+    s_sd_log_enabled = false;
+}
+
 bool purrgo_logger_sd_enabled(void) {
     return s_sd_log_enabled;
 }
