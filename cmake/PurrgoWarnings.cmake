@@ -2,8 +2,8 @@
 # emulator/src, пользовательские файлы прошивки). Сторонний и сгенерированный CubeMX
 # код (HAL, FatFs, minmea, драйвер Waveshare) эти флаги не получает.
 #
-#   PURRGO_WERROR=ON  - превращает предупреждения в ошибки (включена в пресете
-#                       linux-gcc-test, то есть в CI).
+#   PURRGO_WERROR=ON  - превращает предупреждения в ошибки. Включена в пресете
+#                       linux-gcc-test и в CI-сборке прошивки (-DPURRGO_WERROR=ON в ci.yml).
 
 option(PURRGO_WERROR "Treat warnings as errors in project code" OFF)
 

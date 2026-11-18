@@ -216,6 +216,8 @@ static void add_group(cfg_group_t *groups, size_t *n, const char *name,
     }
 }
 
+/* Расшифровка нужна только log_group() при уровне лога INFO и выше; в Release её нет. */
+#if PURRGO_LOG_LEVEL >= PURRGO_LOG_LEVEL_INFO
 /*
  * Текстовая расшифровка отправленных команд для лога: "GNSS: TX NMEA/rate VALSET[RAM] RATE-MEAS=1000 ... (54 B)".
  * Имена ключей совпадают с UBX_KEY_* выше; неизвестный ключ печатается числом.
@@ -317,6 +319,7 @@ static void log_layers(char *buf, size_t size, size_t *pos, uint8_t layers)
     }
     log_append(buf, size, pos, "]");
 }
+#endif /* PURRGO_LOG_LEVEL >= PURRGO_LOG_LEVEL_INFO */
 
 static void log_group(const cfg_group_t *g, size_t frame_len)
 {

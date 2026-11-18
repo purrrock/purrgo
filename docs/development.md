@@ -76,7 +76,7 @@ cmake --build --preset stm32u5-debug
 |---|---|
 | `-DPURRGO_HW_TEST=SD_SPEED\|EINK_4GRAY\|EINK_PARTIAL` | Аппаратный тест вместо навигатора, см. [`docs/hardware.md`](hardware.md) |
 | `-DPURRGO_TRACK_DIAG=ON` | Диагностическая запись трека (каждая эпоха GNSS), см. раздел [«Полевой тест фильтров трека»](#полевой-тест-фильтров-трека) |
-| `-DPURRGO_WERROR=ON` | Предупреждения - ошибки (кроме `-Wconversion`) |
+| `-DPURRGO_WERROR=ON` | Предупреждения кода проекта - ошибки (включена в CI: host-тесты и сборка прошивки) |
 
 Результат сборки: `out/build/<пресет>/`. Прошивка — `out/build/stm32u5-*/PurrGO_STM32U5.elf`,
 эмулятор — `out/build/<пресет>/emulator/purrgo_emulator`.
@@ -135,15 +135,19 @@ Python-проверки в CI: `tests/check_pgo_text_table.py` (таблица P
 ## CI
 
 `.github/workflows/ci.yml` на каждый push и pull request: host-тесты (ASan/UBSan), сборка
-PC-эмулятора, сборка прошивки STM32 (с выводом использования RAM/FLASH), `cppcheck`
-(блокирующий) и `clang-tidy` (информативный, набор проверок в `.clang-tidy`).
+PC-эмулятора, сборка прошивки STM32 с `-DPURRGO_WERROR=ON` (с выводом использования RAM/FLASH),
+`cppcheck` (блокирующий; ядро, платформа PC и HAL-free модули `stm32/port`: `sd_spi.c`, `sd_power.c`,
+`gnss_link.c`, `gnss_diag.c`, `system_time.c`, `display_stm32.c`) и `clang-tidy` (информативный, набор
+проверок в `.clang-tidy`). Новый файл `stm32/port`, который не включает `main.h` и HAL, добавляйте в список
+cppcheck в `ci.yml`.
 
 ### Флаги сборки
 
 Код проекта (`src/core`, `src/platform`, `emulator`, пользовательские файлы прошивки)
 собирается с `-Wall -Wextra -Wshadow -Wformat=2 -Wconversion -Wdouble-promotion`
 (`cmake/PurrgoWarnings.cmake`); сторонний и сгенерированный CubeMX код - без них. Опция
-`-DPURRGO_WERROR=ON` превращает предупреждения в ошибки (кроме `-Wconversion`). Для
+`-DPURRGO_WERROR=ON` превращает предупреждения в ошибки (все флаги набора, включая `-Wconversion`); в CI
+она включена для host-тестов и для прошивки (локально по умолчанию выключена). Для
 прошивки `-ffunction-sections -fdata-sections -fstack-usage`, `--gc-sections` и
 `--print-memory-usage` задаёт CubeMX-тулчейн; для ПК секции добавляются тем же файлом.
 

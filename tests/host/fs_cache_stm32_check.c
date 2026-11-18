@@ -78,6 +78,8 @@ FRESULT f_lseek(FIL *fp, FSIZE_t ofs)
 }
 FRESULT f_write(FIL *fp, const void *b, UINT n, UINT *bw) { (void)fp; (void)b; *bw = n; return FR_OK; }
 FRESULT f_sync(FIL *fp) { (void)fp; return FR_OK; }
+/* Как FatFs: обрезает файл по текущему положению указателя. */
+FRESULT f_truncate(FIL *fp) { fp->fsize = fp->fptr; return FR_OK; }
 FRESULT f_unlink(const TCHAR *p) { (void)p; return FR_NO_FILE; }
 FRESULT f_rename(const TCHAR *a, const TCHAR *b) { (void)a; (void)b; return FR_NO_FILE; }
 FRESULT f_stat(const TCHAR *p, FILINFO *f) { (void)p; (void)f; return FR_NO_FILE; }

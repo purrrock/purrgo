@@ -59,8 +59,10 @@ jobs:
         run: git submodule update --init --depth 1
       - name: Install
         run: sudo apt-get update && sudo apt-get install -y ninja-build gcc-arm-none-eabi
+      # -Werror только в CI (пресет не меняем, чтобы локальная сборка не падала на предупреждениях):
+      # предупреждения кода проекта (ядро и stm32/port; HAL, FatFs и epd4g флагов не получают).
       - name: Configure
-        run: cmake --preset stm32u5-release
+        run: cmake --preset stm32u5-release -DPURRGO_WERROR=ON
       - name: Build
         run: cmake --build --preset stm32u5-release
       - name: Size and soft-float check
@@ -75,7 +77,8 @@ jobs:
             out/build/stm32u5-release/PurrGO_STM32U5.elf
             out/build/stm32u5-release/PurrGO_STM32U5.map
 
-  # Статический анализ ядра. cppcheck блокирует при ошибках/предупреждениях,
+  # Статический анализ ядра и HAL-free модулей stm32/port (не включающих main.h и HAL).
+  # cppcheck блокирует при ошибках/предупреждениях,
   # clang-tidy информативный (набор проверок - в .clang-tidy).
   static-analysis:
     runs-on: ubuntu-24.04
@@ -90,8 +93,13 @@ jobs:
           cppcheck --std=c11 --enable=warning,portability --inline-suppr \
             --error-exitcode=1 -q \
             --suppress=duplicateAssignExpression:src/core/ui/ui_map.c \
-            -Iinclude -Isrc/core -Ithird_party/minmea -Istm32/port/storage -D__GNUC__ \
-            src/core src/platform/pc include stm32/port/storage/sd_spi.c
+            -Iinclude -Isrc/core -Ithird_party/minmea \
+            -Istm32/port/storage -Istm32/port/gnss -Istm32/port/display -Istm32/port/app \
+            -D__GNUC__ \
+            src/core src/platform/pc include \
+            stm32/port/storage/sd_spi.c stm32/port/storage/sd_power.c \
+            stm32/port/gnss/gnss_link.c stm32/port/gnss/gnss_diag.c \
+            stm32/port/app/system_time.c stm32/port/display/display_stm32.c
       - name: Configure (compile_commands.json)
         run: cmake --preset linux-gcc-test
       - name: clang-tidy (informational)

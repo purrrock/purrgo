@@ -202,12 +202,12 @@
 
 - [x] Убрать дублирующиеся `#include` (`app_fsm.c:3` и `:12` - `purrgo/map_controller.h`; `map_idx.c:9` и `:14` - `string.h`) и случайный комментарий `stm32_app.c:458` (`//обработка кнопок`). Подробности: `docs/review-2026-11.md`, 3.6.
 
-- [ ] Статанализ (cppcheck в CI) распространить на HAL-free модули `stm32/port` (`gnss_link.c`, `gnss_diag.c`, `sd_power.c` - они уже покрыты host-тестами без HAL). Подробности: `docs/review-2026-11.md`, 3.5.
+- [x] Статанализ (cppcheck в CI) распространить на HAL-free модули `stm32/port` (`gnss_link.c`, `gnss_diag.c`, `sd_power.c` - они уже покрыты host-тестами без HAL). Подробности: `docs/review-2026-11.md`, 3.5.
 
 ---
 
 - [x] Синхронизировать документацию с кодом: `docs/eink.md` (EXTI BUSY реализован в `eink_wake.c` и отмечен `[x]` в P1 - убрать из «Не реализовано», добавить файл в таблицу) и комментарий `hardware_config.h` (блок строк 52-91: «PSMOO не поддержан намеренно» противоречит режиму трекера в строках 118+). Подробности: `docs/review-2026-11.md`, 3.2-3.3.
-- [ ] Включить `PURRGO_WERROR=ON` в CI-сборке прошивки (сейчас - только в пресете host-тестов `linux-gcc-test`): сначала убедиться, что `stm32u5-release` собирается чисто под arm-none-eabi-gcc. Подробности: `docs/review-2026-11.md`, 3.5.
+- [x] Включить `PURRGO_WERROR=ON` в CI-сборке прошивки (сейчас - только в пресете host-тестов `linux-gcc-test`): сначала убедиться, что `stm32u5-release` собирается чисто под arm-none-eabi-gcc. Подробности: `docs/review-2026-11.md`, 3.5.
 - [ ] Прошивка собирается пресетом `stm32u5-release`, CI зелёный, `tools/check_softfloat.sh` чисто. Локально на 05.11.2026:
   сборка проходит (ROM 148 КБ из 2 МБ, RAM 87 %), `check_softfloat.sh` — OK; статус CI не проверялся.
 

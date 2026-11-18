@@ -146,9 +146,12 @@ static sector_cache_t* cache_active(void) {
     return g_cache;
 }
 
+#if PURRGO_RENDER_PROF
+/* Нужна только PURRGO_PROF_FILE_INFO; без профилирования макрос пустой. */
 static uint32_t cache_entries(void) {
     return cache_active()->count;
 }
+#endif
 
 static uint8_t* cache_data(const sector_cache_t* c, uint16_t i) {
     return c->data + (size_t)i * LRU_SECTOR_SIZE;

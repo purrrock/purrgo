@@ -51,6 +51,7 @@ FRESULT f_read(FIL *fp, void *buff, UINT btr, UINT *br);
 FRESULT f_write(FIL *fp, const void *buff, UINT btw, UINT *bw);
 FRESULT f_lseek(FIL *fp, FSIZE_t ofs);
 FRESULT f_sync(FIL *fp);
+FRESULT f_truncate(FIL *fp);
 FRESULT f_unlink(const TCHAR *path);
 FRESULT f_rename(const TCHAR *old_name, const TCHAR *new_name);
 FRESULT f_stat(const TCHAR *path, FILINFO *fno);
