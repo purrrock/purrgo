@@ -701,7 +701,12 @@ static void test_viewport_read_ahead_and_poi_skip(void)
     fake_fs_put_bin("maps/ra/roads.mlp", mlp.d, mlp.n);
     gfx_reset();
     CHECK(render_dir("maps/ra"));
+#if PURRGO_MAP_MLP_ADAPTIVE_RA
+    CHECK(fake_fs_adaptive_read_ahead("maps/ra/roads.mlp") == PURRGO_MAP_MLP_READ_AHEAD_SECTORS);
+    CHECK(fake_fs_read_ahead("maps/ra/roads.mlp") == 0);                /* фиксированный не задаётся */
+#else
     CHECK(fake_fs_read_ahead("maps/ra/roads.mlp") == PURRGO_MAP_MLP_READ_AHEAD_SECTORS);
+#endif
     CHECK(fake_fs_read_ahead("maps/ra/roads.idx") == 0);                /* для .idx не задаётся */
     purrgo_map_shutdown();
 

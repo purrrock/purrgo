@@ -144,8 +144,12 @@ static bool map_open_pair(const char* map_dir, const char* name_a, const char* n
     purrgo_file_t* b = map_open_file(map_dir, name_b);
 
     if (a && b) {
-        /* b - всегда .mlp (геометрия читается подряд): включаем read-ahead. */
+        /* b - всегда .mlp: включаем read-ahead (адаптивный или фиксированный, см. map_internal.h). */
+#if PURRGO_MAP_MLP_ADAPTIVE_RA
+        purrgo_fs_set_adaptive_read_ahead(b, (uint8_t)PURRGO_MAP_MLP_READ_AHEAD_SECTORS);
+#else
         purrgo_fs_set_read_ahead(b, (uint8_t)PURRGO_MAP_MLP_READ_AHEAD_SECTORS);
+#endif
         *out_a = a;
         *out_b = b;
         return true;
