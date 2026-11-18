@@ -97,6 +97,7 @@ uint32_t purrgo_fs_write(purrgo_file_t* f, const uint8_t* d, uint32_t n) {
     ff->data = realloc(ff->data, f->pos + n + 1);
     memcpy(ff->data + f->pos, d, n); f->pos += n;
     if (f->pos > ff->size) ff->size = f->pos;
+    ff->data[ff->size] = 0;     /* data всегда с запасным нулём: тесты читают как строку */
     return n;
 }
 uint32_t purrgo_fs_read(purrgo_file_t* f, uint8_t* b, uint32_t n) {
@@ -109,6 +110,13 @@ uint32_t purrgo_fs_read(purrgo_file_t* f, uint8_t* b, uint32_t n) {
     return n;
 }
 bool purrgo_fs_seek(purrgo_file_t* f, uint32_t o) { f->pos = o; return true; }
+bool purrgo_fs_size(purrgo_file_t* f, uint32_t* out) { *out = files[f->idx].size; return true; }
+bool purrgo_fs_truncate(purrgo_file_t* f, uint32_t size) {
+    ffile_t* ff = &files[f->idx];
+    if (g_fault.fail_truncate || size > ff->size) return false;
+    ff->size = size; ff->data[size] = 0; f->pos = size;
+    return true;
+}
 void purrgo_fs_set_read_ahead(purrgo_file_t* f, uint8_t sectors) { files[f->idx].read_ahead = sectors; }
 void purrgo_fs_set_adaptive_read_ahead(purrgo_file_t* f, uint8_t max_sectors) { files[f->idx].adaptive_ra = max_sectors; }
 uint8_t fake_fs_adaptive_read_ahead(const char* name) { int i = find(name); return i < 0 ? 0 : files[i].adaptive_ra; }

@@ -36,6 +36,14 @@ void purrgo_track_name_label(const char *name, int16_t tz_offset_min,
  */
 bool purrgo_track_name_is_recording(const char *name);
 
+/*
+ * true - файл name из каталога TRACKS числится активным у логгера: идёт запись или
+ * запись прервана ошибкой SD и файл будет дописан после возобновления. Такой файл
+ * нельзя ни чинить, ни переписывать (в отличие от purrgo_track_name_is_recording()
+ * учитывается и состояние ERROR).
+ */
+bool purrgo_track_name_is_active(const char *name);
+
 /* Сравнение имён без учёта регистра ASCII: <0, 0, >0 (порядок = порядок по времени для hex-имён). */
 int purrgo_track_name_cmp(const char *a, const char *b);
 

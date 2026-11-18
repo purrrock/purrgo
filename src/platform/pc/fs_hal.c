@@ -1,3 +1,7 @@
+#if !defined(_WIN32) && !defined(_POSIX_C_SOURCE)
+#define _POSIX_C_SOURCE 200809L     /* ftruncate(), fileno() */
+#endif
+
 #include "purrgo/fs_hal.h"
 
 #include <stdio.h>
@@ -5,6 +9,11 @@
 #include <string.h>
 #include <stdlib.h>
 #include <sys/stat.h>
+#ifdef _WIN32
+#include <io.h>
+#else
+#include <unistd.h>
+#endif
 
 /*
  * PC-specific implementation of the opaque purrgo_dir_t object.
@@ -133,6 +142,50 @@ bool purrgo_fs_seek(
         (long)offset,
         SEEK_SET
     ) == 0;
+}
+
+
+bool purrgo_fs_size(purrgo_file_t* file, uint32_t* size_out) {
+    if (!file || !size_out) {
+        return false;
+    }
+
+    FILE* f = (FILE*)file;
+    const long pos = ftell(f);
+    if (pos < 0 || fseek(f, 0, SEEK_END) != 0) {
+        return false;
+    }
+    const long end = ftell(f);
+    (void)fseek(f, pos, SEEK_SET);
+    if (end < 0) {
+        return false;
+    }
+    *size_out = (uint32_t)end;
+    return true;
+}
+
+
+bool purrgo_fs_truncate(purrgo_file_t* file, uint32_t size) {
+    uint32_t cur = 0;
+
+    if (!file || !purrgo_fs_size(file, &cur) || size > cur) {
+        return false;
+    }
+
+    FILE* f = (FILE*)file;
+    if (fflush(f) != 0) {
+        return false;
+    }
+#ifdef _WIN32
+    if (_chsize_s(_fileno(f), (long long)size) != 0) {
+        return false;
+    }
+#else
+    if (ftruncate(fileno(f), (off_t)size) != 0) {
+        return false;
+    }
+#endif
+    return fseek(f, (long)size, SEEK_SET) == 0;
 }
 
 

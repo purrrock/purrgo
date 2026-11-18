@@ -27,6 +27,15 @@ uint32_t purrgo_fs_write(purrgo_file_t* file, const uint8_t* data, uint32_t size
 // Добавлена функция чтения (уже использовалась в прототипе gpx_parser)
 uint32_t purrgo_fs_read(purrgo_file_t* file, uint8_t* buffer, uint32_t size);
 bool purrgo_fs_seek(purrgo_file_t* file, uint32_t offset);
+/* Текущий размер файла в байтах (с учётом ещё не сброшенных на носитель записей). false - ошибка. */
+bool purrgo_fs_size(purrgo_file_t* file, uint32_t* size_out);
+/*
+ * Обрезает файл (открытый на запись) до size байт; size не больше текущего размера.
+ * После вызова позиция записи - в конце файла: следующий purrgo_fs_write() дописывает
+ * данные сразу за обрезанным хвостом. Изменение попадёт на носитель при purrgo_fs_sync()
+ * или закрытии файла. false - ошибка (файл не обрезан или обрезан не до конца).
+ */
+bool purrgo_fs_truncate(purrgo_file_t* file, uint32_t size);
 /*
  * Подсказка HAL: при промахе кэша секторов читать файл (открытый на чтение)
  * блоками по `sectors` секторов (512 Б), одним многосекторным запросом к SD.

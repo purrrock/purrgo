@@ -2,8 +2,10 @@
 #include "purrgo/config.h"
 #include "purrgo/fs_hal.h"
 #include "purrgo/gfx_line.h"
+#include "purrgo/gpx_repair.h"
 #include "purrgo/logger.h"
 #include "purrgo/purrgo_format.h"
+#include "purrgo/track_name.h"
 #include "map/map_projection.h"
 #include <string.h>
 
@@ -21,6 +23,15 @@
 
 /* Файл записанного трека длиннее: в каждой точке расширения (~350 байт). */
 #define ROUTE_MAX_TRACK_FILE_BYTES (16u * 1024u * 1024u)
+
+/*
+ * Автопочинка недописанных GPX (см. gpx_repair.h): всегда для записанных треков (TRACKS);
+ * для файлов маршрутов (ROUTES) только при -DPURRGO_GPX_REPAIR_ROUTES=1 - это чужие файлы,
+ * молча обрезать их на карте не стоит.
+ */
+#ifndef PURRGO_GPX_REPAIR_ROUTES
+#define PURRGO_GPX_REPAIR_ROUTES 0
+#endif
 
 /* Буфер текста одного тега: <trkpt lat="..." lon="...">. */
 #define ROUTE_TAG_MAX           128u
@@ -50,6 +61,10 @@ static bool                 s_has_line;
 static char                 s_tag[ROUTE_TAG_MAX];
 static uint8_t              s_tag_len;
 static bool                 s_in_tag;
+
+/* Файл, который не удалось починить: повторять попытку при каждой перерисовке не нужно. */
+static char                 s_repair_failed_name[PURRGO_ROUTE_NAME_MAX];
+static purrgo_route_src_t   s_repair_failed_src;
 
 /* Что загружено (для purrgo_route_sync). */
 static char                 s_loaded_name[PURRGO_ROUTE_NAME_MAX];
@@ -452,6 +467,10 @@ bool purrgo_route_load_src(const char *filename, purrgo_route_src_t src)
 
     purrgo_route_begin();
 
+    const bool may_repair = (src == PURRGO_ROUTE_SRC_TRACKS) || PURRGO_GPX_REPAIR_ROUTES;
+    purrgo_gpx_scan_t scan;
+    purrgo_gpx_scan_init(&scan);
+
     char buf[ROUTE_READ_CHUNK];
     uint32_t total = 0;
     bool truncated = false;
@@ -462,6 +481,9 @@ bool purrgo_route_load_src(const char *filename, purrgo_route_src_t src)
             break;
         }
         purrgo_route_feed(buf, n);
+        if (may_repair) {
+            purrgo_gpx_scan_feed(&scan, buf, n);
+        }
         total += n;
         if (total >= max_bytes) {
             truncated = true;
@@ -471,6 +493,23 @@ bool purrgo_route_load_src(const char *filename, purrgo_route_src_t src)
     (void)purrgo_fs_close(file);
 
     purrgo_route_end();
+
+    /*
+     * Недописанный файл (оборван без </trkseg></trk></gpx>) чинится на SD: хвост после
+     * последней целой точки отбрасывается, закрывающие теги дописываются. Чтение уже
+     * закрыто, правка идёт отдельным открытием на запись. Файл, который логгер ведёт
+     * сейчас, не трогается; обрезанный лимитом размера - тоже (прочитан не весь).
+     */
+    if (may_repair && !truncated && purrgo_gpx_scan_is_broken(&scan) &&
+        !(src == PURRGO_ROUTE_SRC_TRACKS && purrgo_track_name_is_active(filename)) &&
+        !(s_repair_failed_name[0] != '\0' && s_repair_failed_src == src &&
+          strcmp(s_repair_failed_name, filename) == 0)) {
+        if (!purrgo_gpx_repair_file(path, &scan)) {
+            s_repair_failed_src = src;
+            purrgo_snprintf(s_repair_failed_name, sizeof s_repair_failed_name, "%.*s",
+                            (int)(sizeof s_repair_failed_name - 1u), filename);
+        }
+    }
 
     if (truncated) {
         PURRGO_LOGW("route: %s is too large, read only the first %lu bytes\n\r",

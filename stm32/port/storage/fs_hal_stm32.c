@@ -617,6 +617,33 @@ bool purrgo_fs_seek(purrgo_file_t* file, uint32_t offset) {
     return true;
 }
 
+bool purrgo_fs_size(purrgo_file_t* file, uint32_t* size_out) {
+    if (!file || !file->in_use || !size_out) return false;
+    *size_out = (uint32_t)f_size(&file->fil);
+    return true;
+}
+
+bool purrgo_fs_truncate(purrgo_file_t* file, uint32_t size) {
+    if (!file || !file->in_use || file->read_only) return false;
+    if (size > (uint32_t)f_size(&file->fil)) return false;
+
+    invalidate_cache_for_file(file);
+
+    /* f_truncate() режет файл по текущему положению указателя FatFs. */
+    FRESULT res = FR_OK;
+    if (f_tell(&file->fil) != size) {
+        res = f_lseek(&file->fil, size);
+    }
+    if (res == FR_OK) {
+        res = f_truncate(&file->fil);
+    }
+    file->logical_offset = (uint32_t)f_tell(&file->fil);
+    if (res != FR_OK) {
+        PURRGO_LOGE("purrgo_fs_truncate: error: %d\n\r", res);
+    }
+    return res == FR_OK;
+}
+
 void purrgo_fs_set_read_ahead(purrgo_file_t* file, uint8_t sectors) {
     if (!file || !file->in_use || !file->read_only) return;
 

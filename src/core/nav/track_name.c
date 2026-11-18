@@ -98,14 +98,11 @@ void purrgo_track_name_label(const char *name, int16_t tz_offset_min,
     (void)purrgo_snprintf(out, size, "%s", (name != NULL) ? name : "");
 }
 
-bool purrgo_track_name_is_recording(const char *name)
+/* Совпадает ли name из каталога TRACKS с файлом, который логгер ведёт сейчас. */
+static bool matches_active_file(const char *name)
 {
-    if (name == NULL || purrgo_logger_get_state() != LOGGER_STATE_RECORDING) {
-        return false;
-    }
-
     const char *active = purrgo_logger_get_active_filename();
-    if (active == NULL) {
+    if (name == NULL || active == NULL) {
         return false;
     }
 
@@ -119,4 +116,14 @@ bool purrgo_track_name_is_recording(const char *name)
         return false;
     }
     return purrgo_track_name_cmp(path, active) == 0;
+}
+
+bool purrgo_track_name_is_recording(const char *name)
+{
+    return purrgo_logger_get_state() == LOGGER_STATE_RECORDING && matches_active_file(name);
+}
+
+bool purrgo_track_name_is_active(const char *name)
+{
+    return matches_active_file(name);
 }

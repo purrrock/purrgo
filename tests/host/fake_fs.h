@@ -3,7 +3,7 @@
 #include <stdint.h>
 typedef struct {
     int fail_write, fail_sync, fail_close, fail_replace;
-    int fail_open_append, fail_open_all;
+    int fail_open_append, fail_open_all, fail_truncate;
     uint32_t partial_write_bytes;   /* однократная частичная запись, затем fail_write_next_full */
     int fail_write_next_full;
 } fake_fs_faults_t;
