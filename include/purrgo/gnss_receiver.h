@@ -25,9 +25,10 @@ typedef void (*purrgo_gnss_tx_fn)(const uint8_t *data, size_t len);
  * Профиль настройки приёмника:
  *   PURRGO_GNSS_PROFILE_NAV     - навигация (карта, путевой компьютер): данные каждую секунду,
  *                                 при PURRGO_GNSS_PSM = PSMCT;
- *   PURRGO_GNSS_PROFILE_TRACKER - режим "трекер с отключённым дисплеем": PSMOO, фиксы раз в
- *                                 PURRGO_GNSS_TRACKER_PERIOD_S (если PURRGO_GNSS_TRACKER_PSMOO = 0,
- *                                 совпадает с PURRGO_GNSS_PROFILE_NAV).
+ *   PURRGO_GNSS_PROFILE_TRACKER - режим "трекер с отключённым дисплеем": решения раз в
+ *                                 PURRGO_GNSS_TRACKER_PERIOD_S, PSMCT (PURRGO_GNSS_TRACKER_MODE_CT, по умолчанию)
+ *                                 или PSMOO (MODE_OO); при PURRGO_GNSS_TRACKER_MODE_OFF совпадает с
+ *                                 PURRGO_GNSS_PROFILE_NAV.
  */
 typedef enum {
     PURRGO_GNSS_PROFILE_NAV = 0,

@@ -545,7 +545,7 @@ static uint32_t stamp_age_ms(uint32_t now_ms, uint32_t stamp_ms) {
  * между фиксами (период PURRGO_GNSS_TRACKER_PERIOD_S), поэтому там срок длиннее.
  */
 static uint32_t gnss_fix_timeout_ms(void) {
-#if PURRGO_GNSS_TRACKER_PSMOO_ACTIVE
+#if PURRGO_GNSS_TRACKER_ACTIVE
     if (current_state == APP_STATE_TRACKER_SCREEN_OFF) {
         return PURRGO_GNSS_TRACKER_FIX_TIMEOUT_MS;
     }

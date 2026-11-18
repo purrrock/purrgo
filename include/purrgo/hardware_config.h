@@ -119,82 +119,108 @@
 #endif
 
 /*
- * PSMOO (ON/OFF) в режиме "трекер с отключённым дисплеем" (TRACKER (SCREEN OFF)).
+ * Режим приёмника в "трекере с отключённым дисплеем" (TRACKER (SCREEN OFF)).
  *
- * В этом режиме экран не обновляется, а запись трека не требует фикса каждую секунду.
- * Приёмник переводится в PSMOO: раз в PURRGO_GNSS_TRACKER_PERIOD_S секунд просыпается,
- * ищет фикс (горячий старт - порядка секунд), выдаёт решения PURRGO_GNSS_TRACKER_ONTIME_S
- * секунд и засыпает; в остальное время чип приёмника почти не потребляет (между фиксами в
- * потоке тишина, это штатно). При выходе из режима (K1+K4) приёмник будится по активности на
- * RX (любой фронт на линии), получает обычную настройку и возвращается к PSMCT (или к полной
- * мощности при PURRGO_GNSS_PSM = 0).
+ * В этом режиме экран не обновляется, а запись трека не требует фикса каждую секунду. При входе в режим
+ * приёмнику отправляется профиль трекера (purrgo_gnss_set_profile), при выходе (K1+K4) - профиль навигации.
  *
- *   PURRGO_GNSS_TRACKER_PSMOO     1 - использовать PSMOO в трекере (по умолчанию), 0 - не менять
- *                                 режим приёмника при входе в трекер (как раньше).
- *   PURRGO_GNSS_TRACKER_PERIOD_S  период фиксов, с (по умолчанию 15). Допустимо >= 5 с (предел
- *                                 CFG-PM-POSUPDATEPERIOD), по manual PSMOO предназначен для периодов
- *                                 дольше 10 с (до 10 с - PSMCT). Все периоды привязаны к сетке
- *                                 времени GPS (GRIDOFFSET = 0).
- *   PURRGO_GNSS_TRACKER_ONTIME_S  сколько секунд приёмник остаётся в слежении после фикса и выдаёт
- *                                 решения (по умолчанию 2). 0 - слежение лишь на миг: решение может
- *                                 не успеть уйти по UART. Первая эпоха после горячего старта хуже
- *                                 по точности, чем следующие: ONTIME побольше - точнее точка трека,
- *                                 но больше ток.
+ *   PURRGO_GNSS_TRACKER_MODE_OFF (0) - приёмник не трогать (работает как на карте).
+ *   PURRGO_GNSS_TRACKER_MODE_CT  (1) - PSMCT с редкими решениями: тот же циклический режим, что в навигации,
+ *                                     но период решений PURRGO_GNSS_TRACKER_PERIOD_S (по умолчанию 10 с, предел
+ *                                     PSMCT; CFG-RATE-MEAS). Настройка только в RAM, приёмник не уходит в "off".
+ *                                     По умолчанию.
+ *   PURRGO_GNSS_TRACKER_MODE_OO  (2) - PSMOO (ON/OFF): приёмник просыпается раз в период, ищет фикс и засыпает.
+ *                                     НЕ РАБОТАЕТ на G10A-F30: см. ниже.
  *
- * Что нужно PSMOO по manual (MAX-M10S, 3.6.2.4): в состоянии "off" RAM приёмника очищается вместе с
- * настройкой, поэтому всё, что должно сохраниться (скорость UART, набор сообщений, параметры PSM),
- * отправляется в слои RAM и BBR (PURRGO_GNSS_UBX_LAYERS_PERSIST); RTC работает на питании V_IO (у
- * G10A-F30 вывода V_BCKP нет), пока EN = High. Если приёмник не может получить фикс, он не выходит из
- * цикла: DONOTENTEROFF = 0 и ACQPERIOD = период, повторная попытка через период.
- * Время ядра в трекере: фикс считается устаревшим по PURRGO_GNSS_TRACKER_FIX_TIMEOUT_MS.
+ * Почему по умолчанию PSMCT, а не PSMOO. Проверка на железе (лог с SD, 17.11.2026): в состоянии "off" PSMOO приёмник
+ * терял всю настройку, в том числе слой BBR, и просыпался на заводской скорости 38400 бод с NMEA и мигающим PPS
+ * (лог: "GNSS RX error" -> "RX error storm" -> "listening for NMEA at 38400 baud"). Настройка (скорость UART,
+ * набор сообщений) принималась (ACK), но не переживала "off": судя по всему, у модуля нет резервного питания backup-домена
+ * (на 6-контактном разъёме вывода V_BCKP нет). Поэтому в "off" приёмник возвращается к заводскому состоянию и каждый
+ * цикл его надо настраивать заново. Для режима MODE_OO это оставлено как эксперимент (например, для модуля с батарейкой
+ * на V_BCKP) и описано ниже; восстановление связи после сброса модуля (мягкий перезапуск и EN, gnss_io.c) работает и
+ * там, и при любом другом сбросе приёмника.
+ *
+ *   PURRGO_GNSS_TRACKER_PERIOD_S  период решений, с. MODE_CT: 1..10 (по умолчанию 10); MODE_OO: 5..3600 (по
+ *                                 умолчанию 15; по manual PSMOO - для периодов дольше 10 с). Время ядра в трекере:
+ *                                 фикс считается устаревшим по PURRGO_GNSS_TRACKER_FIX_TIMEOUT_MS.
+ *   PURRGO_GNSS_TRACKER_ONTIME_S  только MODE_OO: сколько секунд приёмник остаётся в слежении после фикса и выдаёт
+ *                                 решения (по умолчанию 2).
+ *
+ * MODE_OO по manual (MAX-M10S, 3.6.2.4): в состоянии "off" RAM приёмника очищается вместе с настройкой, поэтому всё,
+ * что должно сохраниться (скорость UART, набор сообщений, параметры PSM), отправляется в слои RAM и BBR
+ * (PURRGO_GNSS_UBX_LAYERS_PERSIST); RTC и BBR живут на питании backup-домена. DONOTENTEROFF = 0, ACQPERIOD = период.
  */
-#ifndef PURRGO_GNSS_TRACKER_PSMOO
-#define PURRGO_GNSS_TRACKER_PSMOO 1
+#define PURRGO_GNSS_TRACKER_MODE_OFF 0
+#define PURRGO_GNSS_TRACKER_MODE_CT  1
+#define PURRGO_GNSS_TRACKER_MODE_OO  2
+
+#ifndef PURRGO_GNSS_TRACKER_MODE
+#define PURRGO_GNSS_TRACKER_MODE PURRGO_GNSS_TRACKER_MODE_CT
 #endif
-#if (PURRGO_GNSS_TRACKER_PSMOO != 0) && (PURRGO_GNSS_TRACKER_PSMOO != 1)
-#error "PURRGO_GNSS_TRACKER_PSMOO must be 0 or 1"
+#if (PURRGO_GNSS_TRACKER_MODE != PURRGO_GNSS_TRACKER_MODE_OFF) && \
+    (PURRGO_GNSS_TRACKER_MODE != PURRGO_GNSS_TRACKER_MODE_CT) && \
+    (PURRGO_GNSS_TRACKER_MODE != PURRGO_GNSS_TRACKER_MODE_OO)
+#error "PURRGO_GNSS_TRACKER_MODE must be PURRGO_GNSS_TRACKER_MODE_OFF (0), _CT (1) or _OO (2)"
 #endif
 
 #ifndef PURRGO_GNSS_TRACKER_PERIOD_S
+#if PURRGO_GNSS_TRACKER_MODE == PURRGO_GNSS_TRACKER_MODE_OO
 #define PURRGO_GNSS_TRACKER_PERIOD_S 15
+#else
+#define PURRGO_GNSS_TRACKER_PERIOD_S 10
+#endif
 #endif
 #ifndef PURRGO_GNSS_TRACKER_ONTIME_S
 #define PURRGO_GNSS_TRACKER_ONTIME_S 2
 #endif
 
-#if (PURRGO_HW_GNSS_RECEIVER == PURRGO_GNSS_RECEIVER_UBX) && PURRGO_GNSS_TRACKER_PSMOO
+#if (PURRGO_HW_GNSS_RECEIVER == PURRGO_GNSS_RECEIVER_UBX) && (PURRGO_GNSS_TRACKER_MODE != PURRGO_GNSS_TRACKER_MODE_OFF)
+#define PURRGO_GNSS_TRACKER_ACTIVE 1
+#define PURRGO_GNSS_TRACKER_PM_FRAMES 2   /* PSMCT: DONOTENTEROFF и OPERATEMODE; PSMOO: параметры и OPERATEMODE */
+/*
+ * Фикс в трекере моложе этого срока считается действующим: два периода (пропущенный цикл) и запас
+ * на поиск спутников после потери сигнала - 30 с.
+ */
+#define PURRGO_GNSS_TRACKER_FIX_TIMEOUT_MS \
+    ((2U * (unsigned)PURRGO_GNSS_TRACKER_PERIOD_S + 30U) * 1000U)
+#if PURRGO_GNSS_TRACKER_MODE == PURRGO_GNSS_TRACKER_MODE_OO
 #define PURRGO_GNSS_TRACKER_PSMOO_ACTIVE 1
+#define PURRGO_GNSS_TRACKER_PSMCT_ACTIVE 0
+#define PURRGO_GNSS_TRACKER_BAUD_FRAME 1  /* скорость UART в слой BBR (после пробуждения RAM пуста) */
 #if (PURRGO_GNSS_TRACKER_PERIOD_S < 5) || (PURRGO_GNSS_TRACKER_PERIOD_S > 3600)
-#error "PURRGO_GNSS_TRACKER_PERIOD_S must be 5..3600 (CFG-PM-POSUPDATEPERIOD >= 5 s)"
+#error "PURRGO_GNSS_TRACKER_PERIOD_S must be 5..3600 for PSMOO (CFG-PM-POSUPDATEPERIOD >= 5 s)"
 #endif
 #if (PURRGO_GNSS_TRACKER_ONTIME_S < 0) || (PURRGO_GNSS_TRACKER_ONTIME_S >= PURRGO_GNSS_TRACKER_PERIOD_S)
 #error "PURRGO_GNSS_TRACKER_ONTIME_S must be 0..PURRGO_GNSS_TRACKER_PERIOD_S-1"
 #endif
-#define PURRGO_GNSS_TRACKER_PM_FRAMES 2   /* параметры PSMOO и OPERATEMODE */
-#define PURRGO_GNSS_TRACKER_BAUD_FRAME 1  /* скорость UART в слой BBR (после пробуждения RAM пуста) */
-/*
- * Фикс в трекере моложе этого срока считается действующим: два периода (пропущенный цикл) и запас
- * на поиск спутников после пробуждения (холодный поиск после потери сигнала) - 30 с.
- */
-#define PURRGO_GNSS_TRACKER_FIX_TIMEOUT_MS \
-    ((2U * (unsigned)PURRGO_GNSS_TRACKER_PERIOD_S + 30U) * 1000U)
 #else
 #define PURRGO_GNSS_TRACKER_PSMOO_ACTIVE 0
+#define PURRGO_GNSS_TRACKER_PSMCT_ACTIVE 1
+#define PURRGO_GNSS_TRACKER_BAUD_FRAME 0
+#if (PURRGO_GNSS_TRACKER_PERIOD_S < 1) || (PURRGO_GNSS_TRACKER_PERIOD_S > 10)
+#error "PURRGO_GNSS_TRACKER_PERIOD_S must be 1..10 for PSMCT (CFG-RATE-MEAS)"
+#endif
+#endif
+#else
+#define PURRGO_GNSS_TRACKER_ACTIVE 0
+#define PURRGO_GNSS_TRACKER_PSMOO_ACTIVE 0
+#define PURRGO_GNSS_TRACKER_PSMCT_ACTIVE 0
 #define PURRGO_GNSS_TRACKER_PM_FRAMES 0
 #define PURRGO_GNSS_TRACKER_BAUD_FRAME 0
 #endif
 
-/* Приёмнику могут включить любой режим PSM (PSMCT в навигации или PSMOO в трекере). */
-#define PURRGO_GNSS_PSM_ANY ((PURRGO_GNSS_PSM_ACTIVE) || (PURRGO_GNSS_TRACKER_PSMOO_ACTIVE))
+/* Приёмнику могут включить любой режим PSM (PSMCT в навигации, PSMCT или PSMOO в трекере). */
+#define PURRGO_GNSS_PSM_ANY ((PURRGO_GNSS_PSM_ACTIVE) || (PURRGO_GNSS_TRACKER_ACTIVE))
 
 /*
  * Кадры PM в профиле навигации: при PSMCT - два (DONOTENTEROFF и OPERATEMODE); если PSMCT выключен, но
- * возможен PSMOO в трекере - один (OPERATEMODE = FULL), чтобы возврат из трекера однозначно
- * выключал PSMOO в слоях RAM и BBR.
+ * в трекере режим энергосбережения возможен - один (OPERATEMODE = FULL), чтобы возврат из трекера
+ * однозначно возвращал полную мощность.
  */
 #if PURRGO_GNSS_PSM_ACTIVE
 #define PURRGO_GNSS_NAV_PM_FRAMES 2
-#elif PURRGO_GNSS_TRACKER_PSMOO_ACTIVE
+#elif PURRGO_GNSS_TRACKER_ACTIVE
 #define PURRGO_GNSS_NAV_PM_FRAMES 1
 #else
 #define PURRGO_GNSS_NAV_PM_FRAMES 0

@@ -230,7 +230,7 @@ static void test_tracker_exit_restores_off(void)
  */
 static void test_tracker_sparse_fixes(void)
 {
-#if PURRGO_GNSS_TRACKER_PSMOO_ACTIVE
+#if PURRGO_GNSS_TRACKER_ACTIVE
     gfx_context_t g;
 
     fake_fs_reset();

@@ -184,6 +184,7 @@ size_t purrgo_ubx_build_valset(uint8_t *out, size_t out_size, uint8_t layers,
 
 #define UBX_PM_MODE_FULL  0U   /* CFG-PM-OPERATEMODE: нормальная работа */
 #define UBX_PM_MODE_PSMOO 1U   /* ON/OFF */
+#define UBX_PM_MODE_PSMCT 2U   /* циклическое слежение */
 
 /*
  * Группа настройки: один UBX-CFG-VALSET. Имя нужно логу NAK (gnss_ubx.c приписывает ответ
@@ -240,8 +241,25 @@ static void send_group(purrgo_gnss_tx_fn tx, const cfg_group_t *g)
 void purrgo_gnss_receiver_configure_ubx_profile(purrgo_gnss_tx_fn tx, purrgo_gnss_profile_t profile,
                                                 uint32_t uart_baud)
 {
-    static const purrgo_ubx_cfg_item_t items[] = {
-        { UBX_KEY_RATE_MEAS,        (uint32_t)PURRGO_GNSS_UPDATE_PERIOD_MS },
+    /*
+     * Профиль трекера в режиме PSMCT (PURRGO_GNSS_TRACKER_MODE_CT): те же кадры, что в навигации, но решения
+     * реже (PURRGO_GNSS_TRACKER_PERIOD_S); настройка только в RAM.
+     */
+#if PURRGO_GNSS_TRACKER_PSMCT_ACTIVE
+    const bool tracker_ct = (profile == PURRGO_GNSS_PROFILE_TRACKER);
+#else
+    const bool tracker_ct = false;
+#endif
+    (void)tracker_ct;
+    uint32_t rate_ms = (uint32_t)PURRGO_GNSS_UPDATE_PERIOD_MS;
+
+#if PURRGO_GNSS_TRACKER_PSMCT_ACTIVE
+    if (tracker_ct) {
+        rate_ms = (uint32_t)PURRGO_GNSS_TRACKER_PERIOD_S * 1000U;
+    }
+#endif
+    const purrgo_ubx_cfg_item_t items[] = {
+        { UBX_KEY_RATE_MEAS,        rate_ms },
         { UBX_KEY_RATE_NAV,         1U },
         { UBX_KEY_MSGOUT_GGA_UART1, 1U },
         { UBX_KEY_MSGOUT_RMC_UART1, 1U },
@@ -267,9 +285,11 @@ void purrgo_gnss_receiver_configure_ubx_profile(purrgo_gnss_tx_fn tx, purrgo_gns
     const bool after_tracker = (profile == PURRGO_GNSS_PROFILE_NAV_AFTER_TRACKER);
 #else
     const bool tracker = false;
-    (void)profile;
+    const bool after_tracker = false;
     (void)uart_baud;
 #endif
+    (void)after_tracker;
+    (void)profile;
     const uint8_t layers = tracker ? (uint8_t)PURRGO_GNSS_UBX_LAYERS_PERSIST
                                    : (uint8_t)PURRGO_GNSS_UBX_LAYERS;
 #if PURRGO_GNSS_PSM_ANY
@@ -448,23 +468,28 @@ void purrgo_gnss_receiver_configure_ubx_profile(purrgo_gnss_tx_fn tx, purrgo_gns
     } else
 #endif
     {
-#if PURRGO_GNSS_PSM_ACTIVE
         /*
-         * Циклическое слежение (PSMCT). DONOTENTEROFF = 1: при потере фикса поиск продолжается, а
-         * поток NMEA не пропадает (ядро и gnss_link рассчитывают на данные каждую секунду), настройка
-         * в слое RAM не стирается. Период решений PSMCT задаёт CFG-RATE-MEAS из базового кадра.
+         * Циклическое слежение (PSMCT): в навигации при PURRGO_GNSS_PSM, в профиле трекера - в режиме
+         * PURRGO_GNSS_TRACKER_MODE_CT. DONOTENTEROFF = 1: при потере фикса поиск продолжается, а поток данных
+         * не пропадает, приёмник не уходит в "off", настройка в слое RAM не стирается. Период решений PSMCT
+         * задаёт CFG-RATE-MEAS из базового кадра.
          */
-        static const purrgo_ubx_cfg_item_t psm_no_off = { UBX_KEY_PM_DONOTENTEROFF, 1U };
-        static const purrgo_ubx_cfg_item_t psm_mode   = { UBX_KEY_PM_OPERATEMODE, (uint32_t)PURRGO_GNSS_PSM };
-
-        add_group(groups, &n, "PSM no-off", &psm_no_off, 1U, pm_layers);
-        add_group(groups, &n, "PSM mode", &psm_mode, 1U, pm_layers);
-#else
-        /* PSMCT выключен, но в трекере возможен PSMOO: после него режим однозначно возвращается к полному. */
-        static const purrgo_ubx_cfg_item_t psm_full = { UBX_KEY_PM_OPERATEMODE, UBX_PM_MODE_FULL };
-
-        add_group(groups, &n, "PSM mode", &psm_full, 1U, pm_layers);
+        bool psmct = tracker_ct;
+#if PURRGO_GNSS_PSM_ACTIVE
+        psmct = true;
 #endif
+        if (psmct) {
+            static const purrgo_ubx_cfg_item_t psm_no_off = { UBX_KEY_PM_DONOTENTEROFF, 1U };
+            static const purrgo_ubx_cfg_item_t psm_mode   = { UBX_KEY_PM_OPERATEMODE, UBX_PM_MODE_PSMCT };
+
+            add_group(groups, &n, "PSM no-off", &psm_no_off, 1U, pm_layers);
+            add_group(groups, &n, "PSM mode", &psm_mode, 1U, pm_layers);
+        } else {
+            /* PSMCT в навигации выключен, но в трекере режим энергосбережения возможен: возврат к полной мощности. */
+            static const purrgo_ubx_cfg_item_t psm_full = { UBX_KEY_PM_OPERATEMODE, UBX_PM_MODE_FULL };
+
+            add_group(groups, &n, "PSM mode", &psm_full, 1U, pm_layers);
+        }
     }
 #endif
 

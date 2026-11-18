@@ -198,7 +198,7 @@ static void test_power_save(void)
     CHECK(no_off == 1 && p2 == 1 && f2 + 1 == frame);
     CHECK(find_key(0x10D0000AU, &f2, &p2) == -1);                  /* UPDATEEPH по умолчанию уже включён */
     CHECK(find_key(0x30210001U, &f2, &p2) >= 0 && f2 != frame);    /* частота решений - в другом кадре */
-#elif PURRGO_GNSS_TRACKER_PSMOO_ACTIVE
+#elif PURRGO_GNSS_TRACKER_ACTIVE
     CHECK(mode == 0 && pairs == 1 && no_off == -1);                /* только возврат к полной мощности */
 #else
     CHECK(mode == -1 && no_off == -1);

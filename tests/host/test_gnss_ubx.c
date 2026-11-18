@@ -713,7 +713,7 @@ static void test_configure_frames(void)
     CHECK(valset_value(no_off, 0x10D00008U, &v) && v == 1);
     CHECK(!valset_value(no_off, 0x20D00001U, &v));
     CHECK(valset_value(mode, 0x20D00001U, &v) && v == (uint32_t)PURRGO_GNSS_PSM);
-#elif PURRGO_GNSS_TRACKER_PSMOO_ACTIVE
+#elif PURRGO_GNSS_TRACKER_ACTIVE
     /* PSMCT выключен, но возможен PSMOO: возврат из трекера однозначно выключает его (OPERATEMODE = FULL). */
     CHECK(no_off == -1);
     CHECK(mode == valsets - 1 && valset_value(mode, 0x20D00001U, &v) && v == 0);
@@ -784,8 +784,7 @@ static void test_configure_frames(void)
 #endif
 }
 
-/* Профиль трекера: PSMOO, вся настройка в слоях RAM и BBR (после "off" RAM приёмника пуста). */
-#if PURRGO_GNSS_UBX && PURRGO_GNSS_TRACKER_PSMOO_ACTIVE
+#if PURRGO_GNSS_UBX && PURRGO_GNSS_TRACKER_ACTIVE
 /* Значение ключа любого размера (1, 2 или 4 байта, little-endian) в кадре VALSET. */
 static bool valset_value_n(int frame_idx, uint32_t key, uint32_t *value)
 {
@@ -807,7 +806,10 @@ static bool valset_value_n(int frame_idx, uint32_t key, uint32_t *value)
     }
     return false;
 }
+#endif
 
+/* Профиль трекера: PSMOO, вся настройка в слоях RAM и BBR (после "off" RAM приёмника пуста). */
+#if PURRGO_GNSS_UBX && PURRGO_GNSS_TRACKER_PSMOO_ACTIVE
 static void test_tracker_profile(void)
 {
     uint32_t v = 99;
@@ -923,6 +925,71 @@ static void test_valdel_builder(void)
 #else
 static void test_tracker_profile(void) {}
 static void test_valdel_builder(void) {}
+#endif
+
+/*
+ * Профиль трекера в режиме PSMCT (по умолчанию): те же кадры, что в навигации, но период решений
+ * PURRGO_GNSS_TRACKER_PERIOD_S; настройка только в RAM (приёмник не уходит в "off"), без скорости UART,
+ * параметров PSMOO и очистки BBR.
+ */
+#if PURRGO_GNSS_UBX && PURRGO_GNSS_TRACKER_PSMCT_ACTIVE
+static void test_tracker_profile_ct(void)
+{
+    uint32_t v = 99;
+    const int common = 7 + PURRGO_GNSS_SIGNAL_FRAME + PURRGO_GNSS_SEC_SIG + PURRGO_GNSS_DIAG_FRAMES +
+                       PURRGO_GNSS_NMEA_OFF_FRAMES + PURRGO_GNSS_TIMEPULSE_FRAMES;
+
+    g_cfg_count = 0;
+    purrgo_gnss_receiver_configure_profile(cfg_tx, PURRGO_GNSS_PROFILE_TRACKER, 115200U);
+    const int valsets = common + PURRGO_GNSS_TRACKER_PM_FRAMES;
+    CHECK(g_cfg_count == valsets + 1);
+
+    /* Все VALSET - только в основной слой (RAM), без BBR. */
+    for (int i = 0; i < valsets; i++) {
+        CHECK(g_cfg[i][2] == 0x06 && g_cfg[i][3] == 0x8A);
+        CHECK(g_cfg[i][7] == (uint8_t)PURRGO_GNSS_UBX_LAYERS);
+        CHECK((g_cfg[i][7] & 0x02U) == 0U);
+    }
+
+    /* Период решений трекера - в базовом кадре (CFG-RATE-MEAS, мс). */
+    CHECK(valset_value_n(0, 0x30210001U, &v) && v == (uint32_t)PURRGO_GNSS_TRACKER_PERIOD_S * 1000U);
+
+    /* Нет скорости UART, параметров PSMOO и VALDEL. */
+    CHECK(frame_with_key(0x40520001U) == -1);
+    CHECK(frame_with_key(0x40D00002U) == -1 && frame_with_key(0x40D00003U) == -1 && frame_with_key(0x30D00005U) == -1);
+    for (int i = 0; i < g_cfg_count; i++) {
+        CHECK(!(g_cfg[i][2] == 0x06 && g_cfg[i][3] == 0x8C));
+    }
+
+    /* PSMCT: DONOTENTEROFF = 1, затем OPERATEMODE = 2 последним VALSET. */
+    const int no_off = frame_with_key(0x10D00008U);
+    const int mode = frame_with_key(0x20D00001U);
+    CHECK(no_off > 0 && mode == no_off + 1 && mode == valsets - 1);
+    CHECK(valset_value_n(no_off, 0x10D00008U, &v) && v == 1);
+    CHECK(valset_value_n(mode, 0x20D00001U, &v) && v == 2);
+    CHECK(strcmp(purrgo_gnss_ubx_cfg_name((uint8_t)no_off), "PSM no-off") == 0);
+    CHECK(strcmp(purrgo_gnss_ubx_cfg_name((uint8_t)mode), "PSM mode") == 0);
+    CHECK(purrgo_gnss_ubx_cfg_name((uint8_t)valsets) == NULL);
+
+    /* BeiDou и SBAS выключены и здесь (в PSM не работают). */
+    CHECK(frame_with_key(0x10310022U) == 1 && frame_with_key(0x10310020U) == 1);
+
+    /* Навигация (в том числе после трекера): обычная частота решений, без VALDEL. */
+    g_cfg_count = 0;
+    purrgo_gnss_receiver_configure_profile(cfg_tx, PURRGO_GNSS_PROFILE_NAV, 115200U);
+    CHECK(g_cfg_count == common + PURRGO_GNSS_NAV_PM_FRAMES + 1);
+    CHECK(valset_value_n(0, 0x30210001U, &v) && v == (uint32_t)PURRGO_GNSS_UPDATE_PERIOD_MS);
+
+    g_cfg_count = 0;
+    purrgo_gnss_receiver_configure_profile(cfg_tx, PURRGO_GNSS_PROFILE_NAV_AFTER_TRACKER, 115200U);
+    CHECK(g_cfg_count == common + PURRGO_GNSS_NAV_PM_FRAMES + 1);
+    CHECK(valset_value_n(0, 0x30210001U, &v) && v == (uint32_t)PURRGO_GNSS_UPDATE_PERIOD_MS);
+    for (int i = 0; i < g_cfg_count; i++) {
+        CHECK(!(g_cfg[i][2] == 0x06 && g_cfg[i][3] == 0x8C));
+    }
+}
+#else
+static void test_tracker_profile_ct(void) {}
 #endif
 
 /* ------------------------------------------------------------------------- */
@@ -1624,6 +1691,7 @@ int main(void)
     test_trip_distance();
     test_configure_frames();
     test_tracker_profile();
+    test_tracker_profile_ct();
     test_valdel_builder();
     test_logger_hacc_and_gpx();
 #if PURRGO_GNSS_UBX

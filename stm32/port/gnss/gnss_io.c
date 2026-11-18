@@ -120,7 +120,7 @@ static bool gnss_cfg_retry_pending = false;
  * будится активностью на RX, настройка навигации отправляется после паузы (gnss_profile_apply_pending).
  */
 static purrgo_gnss_profile_t gnss_profile = PURRGO_GNSS_PROFILE_NAV;
-#if PURRGO_GNSS_TRACKER_PSMOO_ACTIVE
+#if PURRGO_GNSS_TRACKER_ACTIVE
 static bool gnss_profile_apply_pending = false;
 static uint32_t gnss_profile_t_apply = 0U;
 /* В слой BBR приёмника записан профиль трекера: настройка навигации должна его очистить. */
@@ -251,7 +251,7 @@ static void gnss_apply_config(void)
 {
     purrgo_gnss_profile_t profile = gnss_profile;
 
-#if PURRGO_GNSS_TRACKER_PSMOO_ACTIVE
+#if PURRGO_GNSS_TRACKER_ACTIVE
     if (profile == PURRGO_GNSS_PROFILE_TRACKER)
     {
         gnss_bbr_dirty = true;
@@ -343,7 +343,7 @@ void purrgo_gnss_power_off(void)
         return;
     }
 
-#if PURRGO_GNSS_TRACKER_PSMOO_ACTIVE
+#if PURRGO_GNSS_TRACKER_ACTIVE
     /*
      * EN в Low не гарантирует, что приёмник забудет режим: если питание backup-домена сохраняется, в BBR
      * остался бы PSMOO, и после следующего включения приёмник замолчал бы до первого периода. Поэтому, если
@@ -418,7 +418,7 @@ void purrgo_gnss_power_on(void)
     /* 3. DMA-приём, затем связь с модулем (скорость, набор NMEA). Модуль после EN Low -> High
      *    снова на заводской скорости (настройка слоя RAM потеряна). */
     gnss_profile = PURRGO_GNSS_PROFILE_NAV;
-#if PURRGO_GNSS_TRACKER_PSMOO_ACTIVE
+#if PURRGO_GNSS_TRACKER_ACTIVE
     gnss_profile_apply_pending = false;
     gnss_bbr_dirty = false;
 #endif
@@ -616,7 +616,7 @@ static void gnss_link_begin(void)
 #endif
 }
 
-#if PURRGO_GNSS_TRACKER_PSMOO_ACTIVE
+#if PURRGO_GNSS_TRACKER_ACTIVE
 /**
  * @brief Разбудить приёмник из состояния "off" PSMOO.
  *
@@ -636,7 +636,7 @@ static void gnss_wake_receiver(void)
  */
 void purrgo_gnss_set_profile(purrgo_gnss_profile_t profile)
 {
-#if PURRGO_GNSS_TRACKER_PSMOO_ACTIVE
+#if PURRGO_GNSS_TRACKER_ACTIVE
     if (profile == gnss_profile)
     {
         return;
@@ -658,7 +658,8 @@ void purrgo_gnss_set_profile(purrgo_gnss_profile_t profile)
     if (profile == PURRGO_GNSS_PROFILE_TRACKER)
     {
         /* Вход: приёмник работает, настройка сразу (и повтор через PURRGO_GNSS_CONFIG_RETRY_MS). */
-        PURRGO_LOG("GNSS: profile TRACKER (PSMOO, fix every %u s)\r\n",
+        PURRGO_LOG("GNSS: profile TRACKER (%s, fix every %u s)\r\n",
+                   PURRGO_GNSS_TRACKER_PSMOO_ACTIVE ? "PSMOO" : "PSMCT",
                    (unsigned)PURRGO_GNSS_TRACKER_PERIOD_S);
         gnss_apply_config();
 #if (PURRGO_GNSS_CONFIG_RETRY_MS > 0)
@@ -747,7 +748,7 @@ static void gnss_recover_link(uint32_t now)
     gnss_rx_error_flag = false;
     purrgo_gnss_ring_reset(&gnss_ring);
     gnss_last_head = 0U;
-#if PURRGO_GNSS_TRACKER_PSMOO_ACTIVE
+#if PURRGO_GNSS_TRACKER_ACTIVE
     gnss_profile_apply_pending = false;
 #endif
     purrgo_gnss_monitor_expect_gaps(false);
@@ -791,7 +792,7 @@ bool purrgo_gnss_read_byte(uint8_t *byte)
     }
 #endif
 
-#if PURRGO_GNSS_TRACKER_PSMOO_ACTIVE
+#if PURRGO_GNSS_TRACKER_ACTIVE
     /* Выход из трекера: приёмник разбужен, пауза прошла - отправить настройку навигации. */
     if (gnss_profile_apply_pending &&
         ((uint32_t)(HAL_GetTick() - gnss_profile_t_apply) >= GNSS_WAKE_SETTLE_MS))
@@ -947,7 +948,7 @@ bool purrgo_gnss_stop_ready(uint32_t now_ms)
         return false;
     }
 #endif
-#if PURRGO_GNSS_TRACKER_PSMOO_ACTIVE
+#if PURRGO_GNSS_TRACKER_ACTIVE
     if (gnss_profile_apply_pending)
     {
         return false;
