@@ -20,6 +20,7 @@ API, настройки и подключение к проекту описан
 | `src/core/ui/app_ui.c` | режим выбирается по экрану: карта и экран выключения — 4 gray, остальное — 1 bit |
 | `stm32/port/display/display_eink.c` | очередь обновлений поверх epd4g |
 | `stm32/port/display/display_stm32.c` | framebuffer, накопление области, `display_stm32_poll()`, `display_stm32_ready_for_render()` |
+| `stm32/port/display/eink_wake.c` | пробуждение МК по спаду BUSY (PB2, EXTI2): `purrgo_eink_busy_wake_arm()` / `_disarm()` на время сна, вектор `EXTI2_IRQHandler` |
 | `stm32/port/app/stm32_app.c` | `display_stm32_poll()` на каждом проходе цикла; рендер только при `display_stm32_ready_for_render()` |
 | `stm32/port/display/eink_test.c` | самотесты на железе (`PURRGO_EINK_SELFTEST_4GRAY`, `PURRGO_EINK_SELFTEST_PARTIAL`) |
 | `stm32/port/app/hw_test.c` | аппаратные замеры вместо навигатора (`-DPURRGO_HW_TEST=SD_SPEED`), см. `docs/hardware.md` |
@@ -64,6 +65,12 @@ Framebuffer PurrGO (176×264, 2 бита на пиксель, 0 = чёрный �
   молчаливое задание power off идёт ~0,3 с с `epd4g_is_busy() == 1`. Поэтому `display_eink_poll()` вызывает
   `epd4g_poll()` на каждом проходе, даже когда своей операции нет, и не запускает новое задание, пока
   библиотека занята.
+* Ожидание BUSY без опроса: пока задание ждёт BUSY (волна панели 0,3 .. 2,5 с), главный цикл спит
+  (Sleep или Stop 2), а будит его спад BUSY (PB2, EXTI2) или будильник LPTIM1 на срок из
+  `display_stm32_wait_ms()` (`epd4g_wait_hint()` плюс сроки самого драйвера). Линия EXTI включается из кода
+  только на время сна (`stm32/port/display/eink_wake.c`, в CubeMX PB2 остаётся обычным входом).
+  Если BUSY уже низкий, фронт упущен: спать нельзя, нужен опрос. Подробности по току:
+  [`hardware.md`](hardware.md).
 * Простой 1 с → `epd4g_start_sleep()` (только команда deep sleep: питание уже снято). Следующее обновление будит
   панель: в 4 gray через `epd4g_init()` (картинка на панели сохраняется, обновление остаётся
   частичным), в 1 bit — сам `epd4g_bw_partial()` ([сон в 1-bit режиме](https://github.com/purrrock/eink_part_refresh#1-bit-режим)). Повторный
@@ -88,7 +95,6 @@ SPI панели: делитель `/8` (`PURRGO_EINK_SPI_PRESCALER`), 10 МГц
 
 Не реализовано (по необходимости):
 
-* прерывание EXTI по BUSY вместо опроса (пока панель занята, главный цикл просыпается по будильнику LPTIM1 каждую миллисекунду);
 * SPI через DMA: не нужен, пока `epd4g_poll()` укладывается в миллисекунду (CS и D/C
-  переключаются пачками, а не на каждый байт);
+  переключаются пачками, а не на каждый байт; см. `TODO.md`, P2);
 * градации серого в 1-bit режиме (серые заливки `landuse` дают чёрное), см. `TODO.md`.

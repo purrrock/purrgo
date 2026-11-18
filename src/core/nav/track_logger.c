@@ -25,6 +25,7 @@
  */
 #ifndef PURRGO_TRACK_DIAG
 #define PURRGO_TRACK_DIAG 0
+#endif
 
 static purrgo_file_t* active_file = NULL;
 static track_logger_state_t current_state = LOGGER_STATE_IDLE;
