@@ -124,6 +124,11 @@ static bool state_shows_battery(purrgo_state_t state) {
     return state == APP_STATE_MAP || state == APP_STATE_BOOK_READ;
 }
 
+// Экраны с постоянным индикатором блокировки записи из-за низкого питания (purrgo/supply.h).
+static bool state_shows_supply_indicator(purrgo_state_t state) {
+    return state == APP_STATE_MAP || state == APP_STATE_TRIP_COMPUTER;
+}
+
 /*
  * Общий итог обработки кнопки для всех режимов: перерисовка нужна, если
  * контроллер принял кнопку (changed) или экран сменился; возврат на карту -
@@ -577,10 +582,17 @@ static void gnss_check_fix_timeout(uint32_t now_ms) {
 void purrgo_app_tick(uint32_t current_time_ms) {
     /*
      * Напряжение питания: при просадке ниже порога безопасной записи на SD
-     * закрываем трек и размонтируем карту (supply.c). Первым в такте: чем
-     * раньше остановим запись, тем больше запас по питанию.
+     * закрываем трек (supply.c). Первым в такте: чем раньше остановим запись,
+     * тем больше запас по питанию.
+     *
+     * Остановка записи (и смена причины) - важное событие: индикатор на карте и
+     * в путевом компьютере выводится сразу, без отсрочки перерисовки по данным,
+     * чтобы пользователь узнал о стопе до потери трека.
      */
-    (void)purrgo_supply_tick(current_time_ms);
+    if (purrgo_supply_tick(current_time_ms) && state_shows_supply_indicator(current_state)) {
+        purrgo_ui_dirty_mark(UI_DIRTY_STATUS);
+        purrgo_ui_dirty_now(current_time_ms);
+    }
 
     // Читалка: запись позиции чтения на SD по тайм-ауту бездействия и очередной шаг поиска по книге.
     if (purrgo_book_reader_tick(current_time_ms)) {

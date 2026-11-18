@@ -122,7 +122,7 @@ ctest --preset linux-gcc-test
 | Экран и интерфейс | `test_marker_pan_battery`, `test_ui_refresh_fixes`, `test_display_eink` (очередь E-Ink поверх `epd4g`, нужен сабмодуль), `test_keyboard`, `test_pgo_text` |
 | Трек и время | `test_time_logger`, `test_track_filter`, `test_track_diag`, `test_tracker_mode`, `test_negative_altitude` |
 | Навигация | `test_navigation`, `test_waypoint`, `test_wpt_layer`, `test_route` |
-| Питание | `test_power_off_screen`, `test_power_sequence`, `test_power_source`, `test_supply_low`, `test_sd_power` (последовательность питания microSD) |
+| Питание | `test_power_off_screen`, `test_power_sequence`, `test_power_source`, `test_supply_low`, `test_supply_ui` (индикатор причины остановки записи на карте и в путевом компьютере), `test_sd_power` (последовательность питания microSD) |
 | Читалка | `test_pgb`, `test_book_reader`, `test_book_search`, `test_book_resume_track` |
 | Хранилище и ошибки | `test_sd_spi`, `test_refact_critical` |
 

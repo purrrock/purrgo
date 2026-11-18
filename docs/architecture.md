@@ -325,7 +325,10 @@ and battery and speed extensions. The menu item `TRACKER (SCREEN OFF)` records i
 display switched off; the way out is the K1+K4 combination (`docs/user-guide.md`).
 
 When the supply voltage is low, `supply.c` closes the track file (GPX footer) and stops writing to the card;
-reading from the card continues.
+reading from the card continues. The reason (VDD dip, battery ADC, or both) is exposed to the UI by
+`purrgo_supply_reason()` / `purrgo_supply_reason_text()` and shown as a persistent indicator on the map
+(`STOP:VDD` / `STOP:BAT` / `STOP:B+V` in place of the REC state) and on the trip computer (an inverted
+`REC STOP: LOW ...` bar in the top line).
 
 Buffering and batched writes are used to reduce unnecessary storage activity and support low-power operation.
 

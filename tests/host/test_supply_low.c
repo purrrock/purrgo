@@ -9,7 +9,9 @@
  *     новым файлом;
  *   - порог по батарее зависит от источника: солевые 1000 мВ/элемент, Li-ion AA
  *     900 мВ/элемент, у остальных источников автоостановки нет; срабатывает после
- *     нескольких опросов подряд и держится до смены источника питания.
+ *     нескольких опросов подряд и держится до смены источника питания;
+ *   - причина блокировки (VDD, батарея или обе) доступна UI: purrgo_supply_reason(),
+ *     purrgo_supply_reason_text(); purrgo_supply_tick() сообщает и о смене причин.
  */
 #include <stdlib.h>
 #include <string.h>
@@ -279,6 +281,97 @@ static void test_battery_then_vdd(void)
     CHECK(!purrgo_supply_storage_blocked());
 }
 
+/* Причина блокировки для индикатора UI: VDD, батарея, обе сразу; пусто без блокировки. */
+static void test_reason_indicator(void)
+{
+    start_recording(PURRGO_POWER_SRC_LIION_AA);
+    CHECK(purrgo_supply_reason() == PURRGO_SUPPLY_REASON_NONE);
+    CHECK(strcmp(purrgo_supply_reason_text(false), "") == 0);
+    CHECK(strcmp(purrgo_supply_reason_text(true), "") == 0);
+
+    /* Только PVD. */
+    fake_power_set_supply_low(true);
+    run_ms(PURRGO_SUPPLY_LOW_CONFIRM_MS + 20u);
+    CHECK(purrgo_supply_storage_blocked());
+    CHECK(purrgo_supply_reason() == PURRGO_SUPPLY_REASON_VDD);
+    CHECK(strcmp(purrgo_supply_reason_text(false), "VDD") == 0);
+    CHECK(strcmp(purrgo_supply_reason_text(true), "VDD") == 0);
+
+    /* Во время отсчёта возврата к норме показываются последние причины. */
+    fake_power_set_supply_low(false);
+    run_ms(PURRGO_SUPPLY_RECOVER_MS / 2u);
+    CHECK(purrgo_supply_storage_blocked());
+    CHECK(purrgo_supply_reason() == PURRGO_SUPPLY_REASON_VDD);
+
+    /* Восстановление: причин нет. */
+    run_ms(PURRGO_SUPPLY_RECOVER_MS);
+    CHECK(!purrgo_supply_storage_blocked());
+    CHECK(purrgo_supply_reason() == PURRGO_SUPPLY_REASON_NONE);
+    CHECK(strcmp(purrgo_supply_reason_text(false), "") == 0);
+
+    /* Только батарея. */
+    set_pack_mv(2600u);
+    run_ms(BATT_STOP_RUN_MS);
+    CHECK(purrgo_supply_storage_blocked());
+    CHECK(purrgo_supply_reason() == PURRGO_SUPPLY_REASON_BATT);
+    CHECK(strcmp(purrgo_supply_reason_text(false), "BATT") == 0);
+    CHECK(strcmp(purrgo_supply_reason_text(true), "BAT") == 0);
+
+    /* К батарее добавилась просадка VDD: обе причины, потом снова одна батарея. */
+    fake_power_set_supply_low(true);
+    run_ms(500u);
+    CHECK(purrgo_supply_reason() == (PURRGO_SUPPLY_REASON_BATT | PURRGO_SUPPLY_REASON_VDD));
+    CHECK(strcmp(purrgo_supply_reason_text(false), "BATT+VDD") == 0);
+    CHECK(strcmp(purrgo_supply_reason_text(true), "B+V") == 0);
+    fake_power_set_supply_low(false);
+    run_ms(500u);
+    CHECK(purrgo_supply_reason() == PURRGO_SUPPLY_REASON_BATT);
+
+    /* Сброс забывает причины. */
+    purrgo_supply_reset();
+    CHECK(purrgo_supply_reason() == PURRGO_SUPPLY_REASON_NONE);
+}
+
+/* purrgo_supply_tick() возвращает true на каждое видимое изменение: блокировку и смену причин. */
+static void test_reason_tick_reports_change(void)
+{
+    uint32_t t = 900000u;
+
+    memset(&app_config, 0, sizeof app_config);
+    fake_power_reset();
+    purrgo_supply_reset();
+    app_config.power_source = PURRGO_POWER_SRC_LIION_AA;
+    purrgo_supply_reset();            /* источник питания запоминается при сбросе */
+    set_pack_mv(3800u);               /* батареи в норме */
+
+    CHECK(!purrgo_supply_tick(t));
+
+    /* VDD: сначала отсчёт подтверждения (без изменений), затем блокировка. */
+    fake_power_set_supply_low(true);
+    CHECK(!purrgo_supply_tick(t));
+    t += PURRGO_SUPPLY_LOW_CONFIRM_MS;
+    CHECK(purrgo_supply_tick(t));
+    CHECK(purrgo_supply_reason() == PURRGO_SUPPLY_REASON_VDD);
+    CHECK(!purrgo_supply_tick(t + 1u));       /* без изменений - false */
+
+    /* Батарея просела при уже действующей блокировке: добавилась причина - true ровно один раз. */
+    set_pack_mv(2600u);
+    bool reported = false;
+    for (unsigned i = 0; i < PURRGO_SUPPLY_BATT_CONFIRM_POLLS + 1u; i++) {
+        t += PURRGO_SUPPLY_BATT_POLL_MS;
+        if (purrgo_supply_tick(t)) { CHECK(!reported); reported = true; }
+    }
+    CHECK(reported);
+    CHECK(purrgo_supply_reason() == (PURRGO_SUPPLY_REASON_VDD | PURRGO_SUPPLY_REASON_BATT));
+
+    /* VDD вернулся в норму: остаётся батарея, это тоже изменение причин. */
+    fake_power_set_supply_low(false);
+    CHECK(purrgo_supply_tick(t + 10u));
+    CHECK(purrgo_supply_storage_blocked());
+    CHECK(purrgo_supply_reason() == PURRGO_SUPPLY_REASON_BATT);
+    CHECK(!purrgo_supply_tick(t + 20u));
+}
+
 int main(void)
 {
     test_supply_low();
@@ -287,5 +380,7 @@ int main(void)
     test_battery_sticky_and_source_change();
     test_battery_other_sources();
     test_battery_then_vdd();
+    test_reason_indicator();
+    test_reason_tick_reports_change();
     return test_finish("test_supply_low");
 }

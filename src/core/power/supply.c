@@ -6,6 +6,7 @@
 
 static struct {
     bool     blocked;
+    uint8_t  reason;       /* purrgo_supply_reason_t: что держит блокировку (0, пока не заблокировано) */
     bool     pending;      /* идёт отсчёт: низкое (до блокировки) или нормальное (после) */
     uint32_t pending_ms;   /* момент начала отсчёта */
     bool     batt_low;     /* причина 2: напряжение батарей по АЦП (держится до смены источника) */
@@ -66,9 +67,25 @@ bool purrgo_supply_storage_blocked(void)
     return s_supply.blocked;
 }
 
+uint8_t purrgo_supply_reason(void)
+{
+    return s_supply.blocked ? s_supply.reason : (uint8_t)PURRGO_SUPPLY_REASON_NONE;
+}
+
+const char* purrgo_supply_reason_text(bool compact)
+{
+    static const char* const k_full[4]    = { "", "VDD", "BATT", "BATT+VDD" };
+    static const char* const k_compact[4] = { "", "VDD", "BAT",  "B+V" };
+    const uint8_t r = purrgo_supply_reason() &
+                      (uint8_t)(PURRGO_SUPPLY_REASON_VDD | PURRGO_SUPPLY_REASON_BATT);
+
+    return compact ? k_compact[r] : k_full[r];
+}
+
 void purrgo_supply_reset(void)
 {
     s_supply.blocked = false;
+    s_supply.reason = PURRGO_SUPPLY_REASON_NONE;
     s_supply.pending = false;
     s_supply.pending_ms = 0;
     s_supply.batt_low = false;
@@ -92,12 +109,24 @@ static void storage_stop(void)
 bool purrgo_supply_tick(uint32_t now_ms)
 {
     const bool vdd_low = purrgo_platform_supply_low();
-    const bool low = vdd_low || battery_low(now_ms);
+    /* Опрос батарей идёт всегда (не в short-circuit с PVD): причина должна быть известна точно. */
+    const bool batt_low = battery_low(now_ms);
+    const bool low = vdd_low || batt_low;
+    const uint8_t cause = (uint8_t)((vdd_low ? PURRGO_SUPPLY_REASON_VDD : 0u) |
+                                    (batt_low ? PURRGO_SUPPLY_REASON_BATT : 0u));
+    bool changed = false;
+
+    /* Блокировка уже держится, а причины сменились (добавилась или ушла одна из двух). */
+    if (s_supply.blocked && low && cause != s_supply.reason) {
+        s_supply.reason = cause;
+        changed = true;
+        PURRGO_LOGW("Supply low reason changed: %s\r\n", purrgo_supply_reason_text(false));
+    }
 
     /* Состояние, противоположное текущему, должно продержаться заданное время. */
     if (low == s_supply.blocked) {
         s_supply.pending = false;
-        return false;
+        return changed;
     }
 
     if (!s_supply.pending) {
@@ -107,18 +136,20 @@ bool purrgo_supply_tick(uint32_t now_ms)
 
     const uint32_t need_ms = low ? PURRGO_SUPPLY_LOW_CONFIRM_MS : PURRGO_SUPPLY_RECOVER_MS;
     if ((uint32_t)(now_ms - s_supply.pending_ms) < need_ms) {
-        return false;
+        return changed;
     }
 
     s_supply.pending = false;
     s_supply.blocked = low;
     if (low) {
+        s_supply.reason = cause;
         /* LOGE: единственное сообщение о разряде в UART, должно проходить и в
          * релизной сборке (уровень 1). */
         PURRGO_LOGE("CRITICAL: battery low (%s), track recording stopped, SD writes stopped\r\n",
-                    vdd_low ? "VDD" : "battery ADC");
+                    purrgo_supply_reason_text(false));
         storage_stop();
     } else {
+        s_supply.reason = PURRGO_SUPPLY_REASON_NONE;
         PURRGO_LOGW("Supply recovered: SD writes allowed\r\n");
     }
     return true;

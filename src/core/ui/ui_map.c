@@ -18,6 +18,7 @@
 #include "purrgo/display_hal.h"
 #include "purrgo/purrgo_time.h"
 #include "purrgo/battery.h"
+#include "purrgo/supply.h"
 #include "purrgo/gfx_icon.h"
 #include "purrgo/purrgo_poi_icons.h"
 
@@ -530,7 +531,24 @@ static void ui_update_status_bar(gfx_context_t* gfx, const purrgo_gnss_solution_
     const char* rec_str = "NO-REC";
     if (new_state.rec_state == LOGGER_STATE_RECORDING) rec_str = "REC";
     else if (new_state.rec_state == LOGGER_STATE_ERROR) rec_str = "ERR-REC";
+
+    /*
+     * Запись остановлена из-за низкого питания (purrgo/supply.h): вместо статуса
+     * записи постоянный инверсный индикатор с причиной - STOP:VDD, STOP:BAT или
+     * STOP:B+V. Заметен и пока трек ещё виден на экране.
+     */
+    char stop_str[12];
+    const bool supply_stop = purrgo_supply_storage_blocked();
+    if (supply_stop) {
+        purrgo_snprintf(stop_str, sizeof(stop_str), "STOP:%s", purrgo_supply_reason_text(true));
+        rec_str = stop_str;
+        gfx_set_color(gfx, WHITE, BLACK);
+        gfx_fill_rect(gfx, (int16_t)(next_x - 2), 0, (int16_t)(get_string_width(rec_str) + 3), status_h);
+    }
     gfx_draw_string(gfx, next_x, 1, rec_str);
+    if (supply_stop) {
+        gfx_set_color(gfx, 0, 3);
+    }
 
     const char* scale_label = map_app_get_map_scale_label();
     int16_t scale_x = (int16_t)(PURRGO_HW_DISPLAY_WIDTH_PX - (int)(strlen(scale_label) * 6) - 2);
@@ -541,11 +559,12 @@ static void ui_update_status_bar(gfx_context_t* gfx, const purrgo_gnss_solution_
      * Если в строке не хватает места (длинный масштаб + ERR-REC + NO-FIX),
      * заряд не рисуется. Текст ("85%", "5V", "--%") даёт общий монитор
      * заряда, тот же, что и в строке статуса читалки (purrgo/battery.h).
+     * При остановке записи по питанию заряд не рисуется: его заменяет индикатор STOP.
      */
     const char* bat_str = purrgo_battery_status_text();
     const int16_t rec_end_x = (int16_t)(next_x + get_string_width(rec_str));
     const int16_t bat_x = (int16_t)(scale_x - 6 - get_string_width(bat_str));
-    if (bat_x >= rec_end_x + 4) {
+    if (!supply_stop && bat_x >= rec_end_x + 4) {
         gfx_draw_string(gfx, bat_x, 1, bat_str);
     }
 

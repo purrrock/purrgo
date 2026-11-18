@@ -12,6 +12,7 @@
 #include "purrgo/hardware_config.h"
 #include "purrgo/trip_computer.h"
 #include "purrgo/gnss_ubx.h"
+#include "purrgo/supply.h"
 #include <string.h>
 
 /* Порядок строк (шаг 12 px, первая строка y = 10). */
@@ -56,6 +57,9 @@
 #define TRIP_ARROW_BOX_Y (TRIP_ARROW_CY - 25)
 #define TRIP_ARROW_BOX_W 48
 #define TRIP_ARROW_BOX_H 51
+
+/* Верхняя полоса (y = 0..8, как строка статуса карты): индикатор остановки записи по питанию. */
+#define TRIP_BANNER_H  9
 
 /* Ширина поля значения в символах (от x = 40 до края экрана 176). */
 #define TRIP_VALUE_CHARS 22
@@ -210,6 +214,31 @@ void ui_trip_render_grid(gfx_context_t* gfx) {
 #endif
 }
 
+/*
+ * Постоянный индикатор остановки записи из-за низкого питания (purrgo/supply.h):
+ * инверсная полоса вверху экрана "REC STOP: LOW BATT" / "LOW VDD" / "LOW BATT+VDD".
+ * Полоса перерисовывается при каждом проходе: без блокировки она просто очищается,
+ * поэтому индикатор исчезает сам, когда запись разрешена снова.
+ */
+static void ui_trip_render_supply_banner(gfx_context_t* gfx)
+{
+    gfx_set_color(gfx, 0, 3);
+    gfx_fill_rect(gfx, 0, 0, PURRGO_HW_DISPLAY_WIDTH_PX, TRIP_BANNER_H);
+
+    if (!purrgo_supply_storage_blocked()) {
+        return;
+    }
+
+    char buf[32];
+    purrgo_snprintf(buf, sizeof(buf), "REC STOP: LOW %s", purrgo_supply_reason_text(false));
+
+    const int16_t w = (int16_t)(6 * strlen(buf));
+    gfx_set_color(gfx, WHITE, BLACK);
+    gfx_fill_rect(gfx, 0, 0, PURRGO_HW_DISPLAY_WIDTH_PX, TRIP_BANNER_H);
+    gfx_draw_string(gfx, (int16_t)((PURRGO_HW_DISPLAY_WIDTH_PX - w) / 2), 1, buf);
+    gfx_set_color(gfx, 0, 3);
+}
+
 #if PURRGO_GNSS_UBX
 /*
  * Строки данных UBX из снимка путевого компьютера (обновляется раз в секунду).
@@ -292,6 +321,8 @@ static void ui_trip_render_ubx(gfx_context_t* gfx, int16_t val_x)
 
 void ui_trip_render_values(gfx_context_t* gfx, const purrgo_gnss_solution_t* gnss, const purrgo_sun_info_t* sun) {
     char buf[64];
+
+    ui_trip_render_supply_banner(gfx);
     gfx_set_color(gfx, 0, 3);
 
     const int16_t val_x = 40; // x offset for values after 4-char label like "UTC: " (10 + 4 * 6 + 6)
