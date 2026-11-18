@@ -424,6 +424,7 @@ static sd_spi_port_t make_port(model_t *m)
     p.tick_ms = port_tick;
     p.set_fast = port_fast;
     p.ctx = m;
+    p.cycles = NULL;
     return p;
 }
 
@@ -656,11 +657,61 @@ static void test_state_and_params(void)
     model_free(&m);
 }
 
+/* Счётчик тактов модели: растёт на 1 при каждом обращении (имитация DWT->CYCCNT). */
+static uint32_t port_cycles(void *ctx)
+{
+    (void)ctx;
+    static uint32_t c;
+    return c += 10U;
+}
+
+static void test_read_stats(void)
+{
+    static uint8_t buf[BLK * 5U];
+    sd_spi_t sd;
+    model_t m;
+
+    /* Без port.cycles статистика не ведётся. */
+    model_setup(&m, true, true);
+    sd_spi_port_t p = make_port(&m);
+    CHECK(sd_spi_init(&sd, &p) == SD_SPI_OK);
+    CHECK(sd_spi_read(&sd, buf, 10U, 1U) == SD_SPI_OK);
+    CHECK(sd.stats.reads == 0U && sd.stats.calls == 0U && sd.stats.data == 0U);
+    model_free(&m);
+
+    /* Со счётчиком: один сектор (CMD17), затем пять (CMD18 + CMD12). */
+    model_setup(&m, true, true);
+    p = make_port(&m);
+    p.cycles = port_cycles;
+    CHECK(sd_spi_init(&sd, &p) == SD_SPI_OK);
+    CHECK(sd.stats.reads == 0U);          /* инициализация не считается */
+
+    CHECK(sd_spi_read(&sd, buf, 10U, 1U) == SD_SPI_OK);
+    CHECK(sectors_equal(&m, 10U, 1U, buf));
+    CHECK(sd.stats.reads == 1U && sd.stats.blocks == 1U && sd.stats.multi == 0U);
+    CHECK(sd.stats.cmd > 0U && sd.stats.tok > 0U && sd.stats.data > 0U && sd.stats.post > 0U);
+    CHECK(sd.stats.stop == 0U);
+    CHECK(sd.stats.polls >= 1U && sd.stats.calls > 3U);
+    CHECK(!sd.prof_on);
+
+    const sd_spi_stats_t s1 = sd.stats;
+
+    CHECK(sd_spi_read(&sd, buf, 1000U, 5U) == SD_SPI_OK);
+    CHECK(sectors_equal(&m, 1000U, 5U, buf));
+    CHECK(sd.stats.reads == 2U && sd.stats.blocks == 6U && sd.stats.multi == 1U);
+    CHECK(sd.stats.stop > 0U);
+    CHECK(sd.stats.polls >= s1.polls + 5U);   /* токен каждого блока */
+    CHECK(sd.stats.data > s1.data);
+    CHECK(!sd.prof_on);
+    model_free(&m);
+}
+
 int main(void)
 {
     test_init_variants();
     test_init_failures();
     test_read();
+    test_read_stats();
     test_write();
     test_faults();
     test_state_and_params();

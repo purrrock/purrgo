@@ -36,13 +36,27 @@
 /* Низкоуровневый обмен                                                      */
 /* ------------------------------------------------------------------------ */
 
+/* Такты ЦП для разбора времени (0, если счётчика нет). */
+static uint32_t cyc(const sd_spi_t *sd)
+{
+    return (sd->port.cycles != NULL) ? sd->port.cycles(sd->port.ctx) : 0U;
+}
+
 static bool spi_rx(sd_spi_t *sd, uint8_t *dst, size_t len)
 {
+    if (sd->prof_on)
+    {
+        sd->stats.calls++;
+    }
     return sd->port.xfer(NULL, dst, len, sd->port.ctx);
 }
 
 static bool spi_tx(sd_spi_t *sd, const uint8_t *src, size_t len)
 {
+    if (sd->prof_on)
+    {
+        sd->stats.calls++;
+    }
     return sd->port.xfer(src, NULL, len, sd->port.ctx);
 }
 
@@ -118,6 +132,8 @@ static uint8_t send_cmd(sd_spi_t *sd, uint8_t cmd, uint32_t arg)
         }
     }
 
+    const uint32_t t_pre = sd->prof_on ? cyc(sd) : 0U;
+
     /* Каждая команда, кроме CMD12, начинается с выбора карты и ожидания. */
     if (cmd != CMD12)
     {
@@ -128,6 +144,7 @@ static uint8_t send_cmd(sd_spi_t *sd, uint8_t cmd, uint32_t arg)
             return 0xFFU;
         }
     }
+    const uint32_t t_cmd = sd->prof_on ? cyc(sd) : 0U;
 
     uint8_t frame[6];
 
@@ -159,6 +176,11 @@ static uint8_t send_cmd(sd_spi_t *sd, uint8_t cmd, uint32_t arg)
         n--;
     } while (((r1 & 0x80U) != 0U) && (n != 0U));
 
+    if (sd->prof_on)
+    {
+        sd->stats.pre += t_cmd - t_pre;
+        sd->stats.cmd += cyc(sd) - t_cmd;
+    }
     return r1;
 }
 
@@ -169,13 +191,22 @@ static uint8_t send_cmd(sd_spi_t *sd, uint8_t cmd, uint32_t arg)
 static sd_spi_res_t rx_data_block(sd_spi_t *sd, uint8_t *buf, size_t len)
 {
     const uint32_t start = now_ms(sd);
+    const uint32_t t_tok = sd->prof_on ? cyc(sd) : 0U;
     uint8_t token;
 
     do
     {
         token = spi_rx_byte(sd);
+        if (sd->prof_on)
+        {
+            sd->stats.polls++;
+        }
     } while ((token == 0xFFU) && !elapsed(sd, start, READ_TOKEN_TIMEOUT_MS));
 
+    if (sd->prof_on)
+    {
+        sd->stats.tok += cyc(sd) - t_tok;
+    }
     if (token == 0xFFU)
     {
         return SD_SPI_ERR_TIMEOUT;
@@ -185,6 +216,8 @@ static sd_spi_res_t rx_data_block(sd_spi_t *sd, uint8_t *buf, size_t len)
         return SD_SPI_ERR_IO;
     }
 
+    const uint32_t t_data = sd->prof_on ? cyc(sd) : 0U;
+
     if (!spi_rx(sd, buf, len))
     {
         return SD_SPI_ERR_IO;
@@ -193,6 +226,10 @@ static sd_spi_res_t rx_data_block(sd_spi_t *sd, uint8_t *buf, size_t len)
     /* Два байта CRC отбрасываются. */
     (void)spi_rx_byte(sd);
     (void)spi_rx_byte(sd);
+    if (sd->prof_on)
+    {
+        sd->stats.data += cyc(sd) - t_data;
+    }
     return SD_SPI_OK;
 }
 
@@ -399,8 +436,20 @@ sd_spi_res_t sd_spi_read(sd_spi_t *sd, uint8_t *buf, uint32_t sector, uint32_t c
     sd_spi_res_t res = SD_SPI_OK;
     const uint8_t cmd = (count == 1U) ? CMD17 : CMD18;
 
+    sd->prof_on = (sd->port.cycles != NULL);
+    if (sd->prof_on)
+    {
+        sd->stats.reads++;
+        sd->stats.blocks += count;
+        if (count > 1U)
+        {
+            sd->stats.multi++;
+        }
+    }
+
     if (send_cmd(sd, cmd, card_addr(sd, sector)) != 0U)
     {
+        sd->prof_on = false;
         deselect_card(sd);
         return SD_SPI_ERR_IO;
     }
@@ -416,10 +465,27 @@ sd_spi_res_t sd_spi_read(sd_spi_t *sd, uint8_t *buf, uint32_t sector, uint32_t c
 
     if (count > 1U)
     {
+        /* CMD12 целиком идёт в статью stop, а не в pre/cmd. */
+        const bool prof = sd->prof_on;
+        const uint32_t t_stop = prof ? cyc(sd) : 0U;
+
+        sd->prof_on = false;
         (void)send_cmd(sd, CMD12, 0U);
+        sd->prof_on = prof;
+        if (prof)
+        {
+            sd->stats.stop += cyc(sd) - t_stop;
+        }
     }
 
+    const uint32_t t_post = sd->prof_on ? cyc(sd) : 0U;
+
     deselect_card(sd);
+    if (sd->prof_on)
+    {
+        sd->stats.post += cyc(sd) - t_post;
+    }
+    sd->prof_on = false;
     return res;
 }
 

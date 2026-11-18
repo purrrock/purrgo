@@ -22,6 +22,7 @@
 #include "sd_power.h"
 #include "purrgo/logger.h"
 #include "purrgo/supply.h"
+#include "purrgo/render_prof.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -493,12 +494,23 @@ static const sd_power_port_t s_pwr_port = {
     .ctx = NULL,
 };
 
+#if PURRGO_RENDER_PROF
+static uint32_t port_cycles(void *ctx)
+{
+    (void)ctx;
+    return DWT->CYCCNT;
+}
+#endif
+
 static const sd_spi_port_t s_port = {
     .cs = port_cs,
     .xfer = port_xfer,
     .tick_ms = port_tick,
     .set_fast = port_fast,
     .ctx = NULL,
+#if PURRGO_RENDER_PROF
+    .cycles = port_cycles,
+#endif
 };
 
 
@@ -582,7 +594,26 @@ DRESULT disk_read(BYTE pdrv, BYTE *buff, LBA_t sector, UINT count)
         return RES_NOTRDY;
     }
 
+#if PURRGO_RENDER_PROF
+    const sd_spi_stats_t st0 = s_card.stats;
+#endif
     const sd_spi_res_t res = sd_spi_read(&s_card, buff, (uint32_t)sector, count);
+#if PURRGO_RENDER_PROF
+    {
+        /* Разбор времени SD по стадиям попадает в PROF5 (render_prof.h). */
+        const sd_spi_stats_t *st = &s_card.stats;
+
+        purrgo_render_prof_count(PURRGO_PROF_CNT_SDX_PRE, st->pre - st0.pre);
+        purrgo_render_prof_count(PURRGO_PROF_CNT_SDX_CMD, st->cmd - st0.cmd);
+        purrgo_render_prof_count(PURRGO_PROF_CNT_SDX_TOK, st->tok - st0.tok);
+        purrgo_render_prof_count(PURRGO_PROF_CNT_SDX_DATA, st->data - st0.data);
+        purrgo_render_prof_count(PURRGO_PROF_CNT_SDX_STOP, st->stop - st0.stop);
+        purrgo_render_prof_count(PURRGO_PROF_CNT_SDX_POST, st->post - st0.post);
+        purrgo_render_prof_count(PURRGO_PROF_CNT_SDX_CALLS, st->calls - st0.calls);
+        purrgo_render_prof_count(PURRGO_PROF_CNT_SDX_POLLS, st->polls - st0.polls);
+        purrgo_render_prof_count(PURRGO_PROF_CNT_SDX_MULTI, st->multi - st0.multi);
+    }
+#endif
 
     return (res == SD_SPI_OK) ? RES_OK : io_failed(res);
 }

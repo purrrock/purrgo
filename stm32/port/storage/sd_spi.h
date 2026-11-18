@@ -44,7 +44,34 @@ typedef struct
     void (*set_fast)(void *ctx);
 
     void *ctx;
+
+    /*
+     * Необязательный счётчик тактов ЦП (stm32: DWT->CYCCNT). Если не NULL, sd_spi_read()
+     * накапливает в sd_spi_t.stats разбор времени чтения (диагностика, см. sd_spi_stats_t).
+     * Добавлен в конец структуры, прежние инициализаторы остаются верными.
+     */
+    uint32_t (*cycles)(void *ctx);
 } sd_spi_port_t;
+
+/*
+ * Разбор времени sd_spi_read() по стадиям, такты ЦП (накопительно, переполнение uint32_t
+ * допустимо, разности считаются беззнаковым вычитанием). Считается только в sd_spi_read()
+ * и только при port.cycles != NULL.
+ *   pre   - перед командой: отпускание CS, выбор карты, ожидание готовности (wait_ready);
+ *   cmd   - отправка 6 байт команды и ожидание R1;
+ *   tok   - ожидание токена начала данных (задержка самой карты), включая токены
+ *           следующих блоков при CMD18;
+ *   data  - приём 512 байт блока и двух байт CRC (чистый обмен);
+ *   stop  - CMD12 после многоблочного чтения (с ожиданием R1);
+ *   post  - заключительное отпускание CS;
+ *   calls - число вызовов port.xfer(); polls - число опросов токена данных;
+ *   reads - число sd_spi_read(); multi - из них многоблочных (CMD18); blocks - секторов.
+ */
+typedef struct
+{
+    uint32_t pre, cmd, tok, data, stop, post;
+    uint32_t calls, polls, reads, multi, blocks;
+} sd_spi_stats_t;
 
 typedef enum
 {
@@ -63,6 +90,8 @@ typedef struct
     bool initialized;
     bool block_addressing;   /* SDHC/SDXC: адрес в блоках, иначе в байтах */
     uint32_t sector_count;   /* 0, если CSD прочитать не удалось */
+    sd_spi_stats_t stats;    /* диагностика, см. sd_spi_stats_t */
+    bool prof_on;            /* внутренний флаг: идёт замер sd_spi_read() */
 } sd_spi_t;
 
 /**

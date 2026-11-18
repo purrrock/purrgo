@@ -29,6 +29,19 @@
  *   hit   - обращений к кэшу секторов без чтения SD;
  *   rd    - вызовов purrgo_fs_read, B - запрошено байт.
  *
+ * Строка PROF5 разбирает время физических чтений SD (то же, что sd в PROF2) по стадиям,
+ * мкс за кадр (считает драйвер sd_spi, stm32/port/storage/sd_spi.h, по DWT->CYCCNT):
+ *   pre  - перед командой (отпускание CS, выбор, ожидание готовности);
+ *   cmd  - отправка команды и ожидание R1;
+ *   tok  - ожидание токена данных (задержка самой карты + шаг опроса);
+ *   data - приём 512 байт и CRC (чистый обмен);
+ *   stop - CMD12 после многоблочного чтения;
+ *   post - заключительное отпускание CS;
+ *   sum  - сумма стадий; sd - значение sd из PROF2 (разница - накладные расходы вне
+ *          sd_spi: fs_hal, FatFs, f_lseek, копирование);
+ *   calls - вызовов обмена SPI, polls - опросов токена, multi - многоблочных команд (CMD18).
+ * Для PROF5 нужен PURRGO_RENDER_PROF 1 и прошивка с драйвером из sd_card.c.
+ *
  * Трасса обращений к секторам (PROF3, PROF4). Все обращения к кэшу секторов за кадр
  * (попадания и промахи) пишутся в RAM, после кадра печатаются:
  *   PROF3 f=<файл> ra=<read-ahead> acc=.. miss=.. seq=.. near=.. dist=..
@@ -86,6 +99,16 @@ typedef enum {
     PURRGO_PROF_CNT_CACHE_HIT,
     PURRGO_PROF_CNT_FS_READ,
     PURRGO_PROF_CNT_FS_READ_BYTES,
+    /* Разбор времени SD по стадиям (такты ЦП, кроме CALLS/POLLS/MULTI), см. PROF5. */
+    PURRGO_PROF_CNT_SDX_PRE,
+    PURRGO_PROF_CNT_SDX_CMD,
+    PURRGO_PROF_CNT_SDX_TOK,
+    PURRGO_PROF_CNT_SDX_DATA,
+    PURRGO_PROF_CNT_SDX_STOP,
+    PURRGO_PROF_CNT_SDX_POST,
+    PURRGO_PROF_CNT_SDX_CALLS,
+    PURRGO_PROF_CNT_SDX_POLLS,
+    PURRGO_PROF_CNT_SDX_MULTI,
     PURRGO_PROF_CNT_COUNT
 } purrgo_prof_cnt_t;
 

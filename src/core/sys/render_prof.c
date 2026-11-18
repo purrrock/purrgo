@@ -399,6 +399,28 @@ void purrgo_render_prof_end_frame(int scale, int ok)
         (unsigned long)s_cnt[PURRGO_PROF_CNT_FS_READ],
         (unsigned long)s_cnt[PURRGO_PROF_CNT_FS_READ_BYTES]);
 
+    {
+        const uint32_t pre = s_cnt[PURRGO_PROF_CNT_SDX_PRE];
+        const uint32_t cmd = s_cnt[PURRGO_PROF_CNT_SDX_CMD];
+        const uint32_t tok = s_cnt[PURRGO_PROF_CNT_SDX_TOK];
+        const uint32_t data = s_cnt[PURRGO_PROF_CNT_SDX_DATA];
+        const uint32_t stop = s_cnt[PURRGO_PROF_CNT_SDX_STOP];
+        const uint32_t post = s_cnt[PURRGO_PROF_CNT_SDX_POST];
+
+        purrgo_logger_write(
+            "PROF5 pre=%lu us cmd=%lu us tok=%lu us data=%lu us stop=%lu us post=%lu us "
+            "sum=%lu us sd=%lu us calls=%lu polls=%lu multi=%lu\r\n",
+            (unsigned long)to_us(pre, per_us), (unsigned long)to_us(cmd, per_us),
+            (unsigned long)to_us(tok, per_us), (unsigned long)to_us(data, per_us),
+            (unsigned long)to_us(stop, per_us), (unsigned long)to_us(post, per_us),
+            (unsigned long)(to_us(pre, per_us) + to_us(cmd, per_us) + to_us(tok, per_us) +
+                            to_us(data, per_us) + to_us(stop, per_us) + to_us(post, per_us)),
+            (unsigned long)to_us(sd, per_us),
+            (unsigned long)s_cnt[PURRGO_PROF_CNT_SDX_CALLS],
+            (unsigned long)s_cnt[PURRGO_PROF_CNT_SDX_POLLS],
+            (unsigned long)s_cnt[PURRGO_PROF_CNT_SDX_MULTI]);
+    }
+
     trace_report();
 
     /* Запись между кадрами не ведётся (s_trace_active), память остаётся за режимом карты. */
