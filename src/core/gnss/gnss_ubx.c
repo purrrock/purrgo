@@ -254,6 +254,11 @@ uint8_t purrgo_gnss_ubx_cfg_replies(void)
     return s_cfg_replies;
 }
 
+uint8_t purrgo_gnss_ubx_cfg_count(void)
+{
+    return s_cfg_count;
+}
+
 /* Ответ приёмника на UBX-CFG-VALSET (класс 0x06, id 0x8A): ACK или NAK. */
 static void process_cfg_reply(bool nak, const uint8_t *payload)
 {

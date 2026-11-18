@@ -1,6 +1,7 @@
 #include "purrgo/gnss_io.h"
 #include "purrgo/gnss_ring.h"
 #include "purrgo/gnss_receiver.h"
+#include "purrgo/gnss_ubx.h"
 #include "usart.h"
 #include "lpdma.h"
 #include "main.h"
@@ -265,6 +266,21 @@ static void gnss_apply_config(void)
     /* В трекере приёмник молчит между фиксами: монитору не сообщать об этом как о сбое. */
     purrgo_gnss_monitor_expect_gaps(gnss_profile == PURRGO_GNSS_PROFILE_TRACKER);
 }
+
+#if (PURRGO_GNSS_CONFIG_RETRY_MS > 0)
+/**
+ * @brief Приёмник ответил (ACK или NAK) на все группы последней серии настройки.
+ *
+ * Только для UBX: ответы считает gnss_ubx.c по cfg_begin() из gnss_receiver.c. Для приёмников
+ * без UBX (серия не отслеживается, count = 0) подтвердить нечем, повтор остаётся.
+ */
+static bool gnss_cfg_all_replied(void)
+{
+    const uint8_t count = purrgo_gnss_ubx_cfg_count();
+
+    return (count > 0U) && (purrgo_gnss_ubx_cfg_replies() >= count);
+}
+#endif
 
 static void gnss_link_begin(void);
 
@@ -785,12 +801,26 @@ bool purrgo_gnss_read_byte(uint8_t *byte)
     gnss_link_poll(&gnss_link, HAL_GetTick());
 
 #if (PURRGO_GNSS_CONFIG_RETRY_MS > 0)
-    /* Повторяем настройку один раз после установления связи: команда могла потеряться. */
+    /*
+     * Повторяем настройку один раз после установления связи: команда могла потеряться. Если приёмник
+     * UBX уже ответил (ACK/NAK) на все группы серии, повтор не нужен: потерь не было, а NAK при
+     * повторе придёт снова (причина уже в логе).
+     */
     if (gnss_cfg_retry_pending &&
         ((uint32_t)(HAL_GetTick() - gnss_t_cfg) >= (uint32_t)PURRGO_GNSS_CONFIG_RETRY_MS))
     {
         gnss_cfg_retry_pending = false;
-        gnss_apply_config();
+        if (gnss_cfg_all_replied())
+        {
+            PURRGO_LOG("GNSS: config confirmed by module (%u/%u replies), retry skipped\r\n",
+                       (unsigned)purrgo_gnss_ubx_cfg_replies(), (unsigned)purrgo_gnss_ubx_cfg_count());
+        }
+        else
+        {
+            PURRGO_LOG("GNSS: config not confirmed (%u/%u replies), retry\r\n",
+                       (unsigned)purrgo_gnss_ubx_cfg_replies(), (unsigned)purrgo_gnss_ubx_cfg_count());
+            gnss_apply_config();
+        }
     }
 #endif
 

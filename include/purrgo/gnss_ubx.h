@@ -233,6 +233,9 @@ uint32_t purrgo_gnss_ubx_cfg_nak_mask(void);
 /* Сколько ответов (ACK или NAK) на группы получено с последнего cfg_begin(). */
 uint8_t purrgo_gnss_ubx_cfg_replies(void);
 
+/* Сколько групп отправлено в последней серии (count из cfg_begin(), 0 - серии не было). */
+uint8_t purrgo_gnss_ubx_cfg_count(void);
+
 /* Отправить UBX-MON-VER (опрос версии) через purrgo_gnss_write(). true - передано. */
 bool purrgo_gnss_ubx_poll_version(void);
 

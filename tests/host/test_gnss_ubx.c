@@ -760,12 +760,13 @@ static void test_configure_frames(void)
     purrgo_gnss_solution_t sol;
     memset(&sol, 0, sizeof sol);
     CHECK(purrgo_gnss_ubx_cfg_replies() == 0 && purrgo_gnss_ubx_cfg_nak_mask() == 0);
+    CHECK(purrgo_gnss_ubx_cfg_count() == (uint8_t)groups);   /* по нему gnss_io решает, нужен ли повтор настройки */
     for (int i = 0; i < groups; i++) {
         const bool nak = (i == odo) || (i == dyn);
         uint8_t ack[2] = { 0x06, 0x8A };
         CHECK(!purrgo_gnss_ubx_process_frame(0x05, nak ? 0x00 : 0x01, ack, 2, &sol, 1000));
     }
-    CHECK(purrgo_gnss_ubx_cfg_replies() == (uint8_t)groups);
+    CHECK(purrgo_gnss_ubx_cfg_replies() == purrgo_gnss_ubx_cfg_count());
     CHECK(purrgo_gnss_ubx_cfg_nak_mask() == ((1UL << odo) | (1UL << dyn)));
     {   /* лишние ответы (не от этой серии) ничего не портят */
         uint8_t nak[2] = { 0x06, 0x8A };
