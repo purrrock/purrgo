@@ -78,6 +78,14 @@ cmake --build --preset stm32u5-debug
 | `-DPURRGO_TRACK_DIAG=ON` | Диагностическая запись трека (каждая эпоха GNSS), см. раздел [«Полевой тест фильтров трека»](#полевой-тест-фильтров-трека) |
 | `-DPURRGO_WERROR=ON` | Предупреждения кода проекта - ошибки (включена в CI: host-тесты и сборка прошивки) |
 
+| `-DPURRGO_GNSS_TRACKER_MODE=2 -DPURRGO_STOP2=0` | Собрать PSMOO с отключённым Stop 2 и включенным PSMOO |
+| `-D-DPURRGO_STOP_HSI_KERNEL_ON=1` | так HSI16 не гаснет в Stop |
+| `-DPURRGO_GNSS_TIMEPULSE=0 ` | не отключать LED 1PPS|
+
+Чтобы параметры точно передались копилятору, пишем так:
+cmake --preset stm32u5-debug -DCMAKE_C_FLAGS="-DPURRGO_GNSS_TRACKER_MODE=2 -DPURRGO_STOP2=1 -DPURRGO_STOP_HSI_KERNEL_ON=0"
+cmake --build --preset stm32u5-debug
+
 Результат сборки: `out/build/<пресет>/`. Прошивка — `out/build/stm32u5-*/PurrGO_STM32U5.elf`,
 эмулятор — `out/build/<пресет>/emulator/purrgo_emulator`.
 

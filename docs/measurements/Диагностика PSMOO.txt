@@ -1,0 +1,13 @@
+Выполнена диагностика в режиме терекера.
+
+Контрольная сборка: PSMOO без изменений энергосбережения STM32
+cmake --preset stm32u5-debug -DCMAKE_C_FLAGS="-DPURRGO_GNSS_TRACKER_MODE=2 -DPURRGO_STOP2=1 -DPURRGO_STOP_HSI_KERNEL_ON=0 -DPURRGO_GNSS_TIMEPULSE=0"
+cmake --build --preset stm32u5-debug
+
+Проверка без Stop 2
+cmake --preset stm32u5-debug -DCMAKE_C_FLAGS="-DPURRGO_GNSS_TRACKER_MODE=2 -DPURRGO_STOP2=0 -DPURRGO_STOP_HSI_KERNEL_ON=0 -DPURRGO_GNSS_TIMEPULSE=0"
+cmake --build --preset stm32u5-debug
+
+Проверка с постоянно работающим HSI16 в Stop 2
+cmake --preset stm32u5-debug -DCMAKE_C_FLAGS="-DPURRGO_GNSS_TRACKER_MODE=2 -DPURRGO_STOP2=1 -DPURRGO_STOP_HSI_KERNEL_ON=1 -DPURRGO_GNSS_TIMEPULSE=0"
+cmake --build --preset stm32u5-debug
