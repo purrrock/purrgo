@@ -94,6 +94,32 @@ void purrgo_fs_set_read_ahead(
 }
 
 
+void purrgo_fs_set_adaptive_read_ahead(
+    purrgo_file_t* file,
+    uint8_t max_sectors
+) {
+    (void)file;
+    (void)max_sectors;
+}
+
+
+/* На PC своего кэша секторов нет (буферизует libc). */
+size_t purrgo_fs_cache_bytes(uint32_t sectors) {
+    (void)sectors;
+    return 0u;
+}
+
+bool purrgo_fs_cache_attach(void* mem, size_t size, uint32_t sectors) {
+    (void)mem;
+    (void)size;
+    (void)sectors;
+    return false;
+}
+
+void purrgo_fs_cache_detach(void) {
+}
+
+
 bool purrgo_fs_seek(
     purrgo_file_t* file,
     uint32_t offset

@@ -77,6 +77,115 @@ static bool clip_line(gfx_context_t *ctx, int16_t *x0, int16_t *y0, int16_t *x1,
     return accept;
 }
 
+/*
+ * Рисование линий: пиксели пишутся напрямую через callback платформы с отсечением по
+ * области clip (без вызова gfx_draw_pixel на каждый пиксель), вычисления в int32_t,
+ * а длинные пологие линии выводятся горизонтальными отрезками (fill_span).
+ * Набор закрашиваемых пикселей совпадает с прежней реализацией (проверяет
+ * test_gfx_line_equiv).
+ */
+typedef struct {
+    gfx_draw_pixel_fn put;
+    gfx_fill_span_fn span;     /* может быть NULL */
+    void *fb;
+    uint8_t *fb2;              /* не NULL: прямая запись в 2-bpp буфер (ctx->direct_fb2bpp) */
+    int32_t width;             /* строка 2-bpp буфера, пикселей */
+    gfx_color_t color;
+    int32_t x0, y0;            /* область отсечения [x0, x1) x [y0, y1) */
+    int32_t x1, y1;
+} line_painter_t;
+
+/* Отрезок короче этого выводится по пикселям: вызов fill_span на коротком отрезке не окупается. */
+#ifndef GFX_LINE_SPAN_MIN
+#define GFX_LINE_SPAN_MIN 6
+#endif
+/* Пологие линии короче этого по dx идут пиксель за пикселем (отрезки в них слишком короткие). */
+#ifndef GFX_LINE_RUN_MIN_DX
+#define GFX_LINE_RUN_MIN_DX 16
+#endif
+
+static void lp_init(line_painter_t *p, const gfx_context_t *ctx)
+{
+    p->put = ctx->draw_pixel;
+    p->span = ctx->fill_span;
+    p->fb = ctx->framebuffer;
+    p->fb2 = NULL;
+    p->width = ctx->width;
+    p->color = ctx->color_fg;
+    p->x0 = ctx->clip_x;
+    p->y0 = ctx->clip_y;
+    p->x1 = (int32_t)ctx->clip_x + ctx->clip_w;
+    p->y1 = (int32_t)ctx->clip_y + ctx->clip_h;
+
+    if (ctx->direct_fb2bpp && ctx->framebuffer != NULL) {
+        /* Прямая запись обходит проверки границ draw_pixel: область - не шире экрана. */
+        p->fb2 = (uint8_t *)ctx->framebuffer;
+        if (p->x0 < 0) p->x0 = 0;
+        if (p->y0 < 0) p->y0 = 0;
+        if (p->x1 > ctx->width) p->x1 = ctx->width;
+        if (p->y1 > ctx->height) p->y1 = ctx->height;
+    }
+}
+
+/* Пиксель внутри области отсечения (и экрана): без проверок границ. */
+static inline void lp_put(const line_painter_t *p, int32_t x, int32_t y)
+{
+    if (p->fb2 != NULL) {
+        const uint32_t idx = (uint32_t)y * (uint32_t)p->width + (uint32_t)x;
+        const unsigned shift = (3u - (idx & 3u)) << 1;
+        p->fb2[idx >> 2] = (uint8_t)((p->fb2[idx >> 2] & ~(0x03u << shift)) |
+                                     (((unsigned)p->color & 3u) << shift));
+    } else {
+        p->put(p->fb, (int16_t)x, (int16_t)y, p->color);
+    }
+}
+
+static inline void lp_pixel(const line_painter_t *p, int32_t x, int32_t y)
+{
+    if (x >= p->x0 && x < p->x1 && y >= p->y0 && y < p->y1) {
+        lp_put(p, x, y);
+    }
+}
+
+/* Горизонтальный отрезок [xa, xb] (xa <= xb) в строке y с отсечением. */
+static void lp_hspan(const line_painter_t *p, int32_t xa, int32_t xb, int32_t y)
+{
+    if (y < p->y0 || y >= p->y1) {
+        return;
+    }
+    if (xa < p->x0) {
+        xa = p->x0;
+    }
+    if (xb >= p->x1) {
+        xb = p->x1 - 1;
+    }
+    if (xa > xb) {
+        return;
+    }
+    if (p->span != NULL && xb - xa + 1 >= GFX_LINE_SPAN_MIN) {
+        p->span(p->fb, (int16_t)xa, (int16_t)xb, (int16_t)y, p->color);
+        return;
+    }
+    for (int32_t x = xa; x <= xb; x++) {
+        lp_put(p, x, y);
+    }
+}
+
+static inline int32_t abs32(int32_t v)
+{
+    return v < 0 ? -v : v;
+}
+
+/* Отрезок пикселей одной строки по ходу линии: от xa до xb в любом порядке. */
+static inline void lp_run(const line_painter_t *p, int32_t xa, int32_t xb, int32_t y)
+{
+    if (xa <= xb) {
+        lp_hspan(p, xa, xb, y);
+    } else {
+        lp_hspan(p, xb, xa, y);
+    }
+}
+
 void gfx_draw_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1, int16_t y1)
 {
     if (ctx == NULL || ctx->draw_pixel == NULL) return;
@@ -86,31 +195,61 @@ void gfx_draw_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1, int16
         return;
     }
 
-    // 2. Отрисовка видимой части (Bresenham optimized)
-    int16_t dx = gfx_abs(x1 - x0);
-    int16_t sx = x0 < x1 ? 1 : -1;
-    int16_t dy = -gfx_abs(y1 - y0);
-    int16_t sy = y0 < y1 ? 1 : -1;
-    
-    int16_t err = dx + dy; 
-    int16_t e2;
+    // 2. Отрисовка видимой части (Bresenham)
+    line_painter_t p;
+    lp_init(&p, ctx);
 
-    while (true) {
-        gfx_draw_pixel(ctx, x0, y0);
+    int32_t cx = x0;
+    int32_t cy = y0;
+    const int32_t ex = x1;
+    const int32_t ey = y1;
+    const int32_t dx = abs32(ex - cx);
+    const int32_t sx = (cx < ex) ? 1 : -1;
+    const int32_t dy = -abs32(ey - cy);
+    const int32_t sy = (cy < ey) ? 1 : -1;
+    int32_t err = dx + dy;
 
-        if (x0 == x1 && y0 == y1) {
+    if (p.span != NULL && dx >= GFX_LINE_RUN_MIN_DX && dx > -dy) {
+        /* Длинная пологая линия: пиксели одной строки подряд выводятся отрезком. */
+        int32_t run_x = cx;
+        for (;;) {
+            if (cx == ex && cy == ey) {
+                lp_run(&p, run_x, cx, cy);
+                break;
+            }
+
+            const int32_t e2 = err * 2;
+            const bool step_y = (e2 <= dx);
+            if (step_y) {
+                lp_run(&p, run_x, cx, cy);
+            }
+            if (e2 >= dy) {
+                err += dy;
+                cx += sx;
+            }
+            if (step_y) {
+                err += dx;
+                cy += sy;
+                run_x = cx;
+            }
+        }
+        return;
+    }
+
+    for (;;) {
+        lp_pixel(&p, cx, cy);
+        if (cx == ex && cy == ey) {
             break;
         }
 
-        e2 = err * 2;
-        
+        const int32_t e2 = err * 2;
         if (e2 >= dy) {
             err += dy;
-            x0 += sx;
+            cx += sx;
         }
         if (e2 <= dx) {
             err += dx;
-            y0 += sy;
+            cy += sy;
         }
     }
 }
@@ -188,103 +327,119 @@ void gfx_draw_thick_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1,
         return;
     }
 
+    if (ctx->draw_pixel == NULL) return;
+
     // Сохраняем исходные координаты для отрисовки "шапок" на стыках
-    int16_t orig_x0 = x0;
-    int16_t orig_y0 = y0;
-    int16_t orig_x1 = x1;
-    int16_t orig_y1 = y1;
+    const int16_t orig_x0 = x0;
+    const int16_t orig_y0 = y0;
+    const int16_t orig_x1 = x1;
+    const int16_t orig_y1 = y1;
 
     // 1. Отсечение отрезка (Cohen-Sutherland)
     if (!clip_line(ctx, &x0, &y0, &x1, &y1)) {
         return;
     }
 
-    int16_t dx = gfx_abs(x1 - x0);
-    int16_t sx = (x0 < x1) ? 1 : -1;
-    int16_t dy = -gfx_abs(y1 - y0); 
-    int16_t sy = (y0 < y1) ? 1 : -1;
-    
-    int16_t err = dx + dy; 
-    int16_t e2;
+    line_painter_t p;
+    lp_init(&p, ctx);
+
+    int32_t cx = x0;
+    int32_t cy = y0;
+    const int32_t ex = x1;
+    const int32_t ey = y1;
+    const int32_t dx = abs32(ex - cx);
+    const int32_t sx = (cx < ex) ? 1 : -1;
+    const int32_t dy = -abs32(ey - cy);
+    const int32_t sy = (cy < ey) ? 1 : -1;
+    int32_t err = dx + dy;
 
     // Флаг ориентации линии: если dx больше абсолютного dy, линия пологая
-    bool is_horizontal = (dx > -dy);
+    const bool is_horizontal = (dx > -dy);
+
+    // Смещения толщины поперёк линии: [lo, hi] (толщина 2: 0..1, 3: -1..1, иначе по центру).
+    int32_t lo;
+    int32_t hi;
+    if (thickness == 2) {
+        lo = 0;
+        hi = 1;
+    } else if (thickness == 3) {
+        lo = -1;
+        hi = 1;
+    } else {
+        lo = -(int32_t)(thickness >> 1);
+        hi = lo + thickness - 1;
+    }
 
     // Отрисовка концов ("caps"), если они не были отсечены (чтобы не было пробелов на стыках).
-    if (thickness == 2) {
+    if (thickness == 2 || thickness == 3) {
+        const int32_t c_lo = (thickness == 2) ? 0 : -1;
+        const int32_t c_hi = 1;
         if (x0 == orig_x0 && y0 == orig_y0) {
-            gfx_draw_pixel(ctx, orig_x0, orig_y0);
-            gfx_draw_pixel(ctx, orig_x0 + 1, orig_y0);
-            gfx_draw_pixel(ctx, orig_x0, orig_y0 + 1);
-            gfx_draw_pixel(ctx, orig_x0 + 1, orig_y0 + 1);
-        }
-        if (x1 == orig_x1 && y1 == orig_y1) {
-            gfx_draw_pixel(ctx, orig_x1, orig_y1);
-            gfx_draw_pixel(ctx, orig_x1 + 1, orig_y1);
-            gfx_draw_pixel(ctx, orig_x1, orig_y1 + 1);
-            gfx_draw_pixel(ctx, orig_x1 + 1, orig_y1 + 1);
-        }
-    } else if (thickness == 3) {
-        if (x0 == orig_x0 && y0 == orig_y0) {
-            for (int16_t oy = -1; oy <= 1; ++oy) {
-                for (int16_t ox = -1; ox <= 1; ++ox) {
-                    gfx_draw_pixel(ctx, orig_x0 + ox, orig_y0 + oy);
+            for (int32_t oy = c_lo; oy <= c_hi; ++oy) {
+                for (int32_t ox = c_lo; ox <= c_hi; ++ox) {
+                    lp_pixel(&p, (int32_t)orig_x0 + ox, (int32_t)orig_y0 + oy);
                 }
             }
         }
         if (x1 == orig_x1 && y1 == orig_y1) {
-            for (int16_t oy = -1; oy <= 1; ++oy) {
-                for (int16_t ox = -1; ox <= 1; ++ox) {
-                    gfx_draw_pixel(ctx, orig_x1 + ox, orig_y1 + oy);
+            for (int32_t oy = c_lo; oy <= c_hi; ++oy) {
+                for (int32_t ox = c_lo; ox <= c_hi; ++ox) {
+                    lp_pixel(&p, (int32_t)orig_x1 + ox, (int32_t)orig_y1 + oy);
                 }
             }
         }
     }
 
-    while (true) {
-        // Отрисовка с программным отсечением (gfx_draw_pixel)
-        if (thickness == 2) {
-            gfx_draw_pixel(ctx, x0, y0);
-            if (is_horizontal) {
-                gfx_draw_pixel(ctx, x0, y0 + 1);
-            } else {
-                gfx_draw_pixel(ctx, x0 + 1, y0);
-            }
-        } else if (thickness == 3) {
-            gfx_draw_pixel(ctx, x0, y0);
-            if (is_horizontal) {
-                gfx_draw_pixel(ctx, x0, y0 - 1);
-                gfx_draw_pixel(ctx, x0, y0 + 1);
-            } else {
-                gfx_draw_pixel(ctx, x0 - 1, y0);
-                gfx_draw_pixel(ctx, x0 + 1, y0);
-            }
-        } else {
-            int16_t half_thick = thickness >> 1;
-            int16_t start_offset = -half_thick;
-            int16_t end_offset = (int16_t)(start_offset + thickness - 1);
-            for (int16_t offset = start_offset; offset <= end_offset; ++offset) {
-                if (is_horizontal) {
-                    gfx_draw_pixel(ctx, x0, y0 + offset);
-                } else {
-                    gfx_draw_pixel(ctx, x0 + offset, y0);
+    if (is_horizontal && p.span != NULL && dx >= GFX_LINE_RUN_MIN_DX) {
+        /* Длинная пологая линия: каждая из thickness строк выводится отрезком на весь ход. */
+        int32_t run_x = cx;
+        for (;;) {
+            const bool last = (cx == ex && cy == ey);
+            const int32_t e2 = err * 2;
+            const bool step_y = !last && (e2 <= dx);
+
+            if (last || step_y) {
+                for (int32_t off = lo; off <= hi; ++off) {
+                    lp_run(&p, run_x, cx, cy + off);
                 }
             }
+            if (last) {
+                break;
+            }
+            if (e2 >= dy) {
+                err += dy;
+                cx += sx;
+            }
+            if (step_y) {
+                err += dx;
+                cy += sy;
+                run_x = cx;
+            }
+        }
+        return;
+    }
+
+    for (;;) {
+        if (is_horizontal) {
+            for (int32_t off = lo; off <= hi; ++off) {
+                lp_pixel(&p, cx, cy + off);
+            }
+        } else {
+            lp_hspan(&p, cx + lo, cx + hi, cy);
         }
 
-        if (x0 == x1 && y0 == y1) {
+        if (cx == ex && cy == ey) {
             break;
         }
 
-        e2 = err * 2;
-        
+        const int32_t e2 = err * 2;
         if (e2 >= dy) {
             err += dy;
-            x0 += sx;
+            cx += sx;
         }
         if (e2 <= dx) {
             err += dx;
-            y0 += sy;
+            cy += sy;
         }
     }
 }

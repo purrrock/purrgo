@@ -1,4 +1,5 @@
 #include "purrgo/book_reader.h"
+#include "purrgo/ram_arena.h"
 
 #include "purrgo/book_search.h"
 #include "purrgo/fs_hal.h"
@@ -25,8 +26,6 @@
 #define BOOK_FIND_BUF (PGB_SCREEN_MAX_TEXT_BYTES + 1u + PURRGO_BOOK_SEARCH_MAX + \
                        PURRGO_BOOK_SEARCH_TAIL_SLACK)
 
-static _Alignas(4) uint8_t s_default_ram[PURRGO_BOOK_RAM_BYTES];
-
 static struct {
     bool active;
 
@@ -38,6 +37,7 @@ static struct {
     /* RAM-буфер: [0, data_offset) - начало файла, затем окно данных. */
     uint8_t *ram;
     uint32_t ram_size;
+    bool ram_custom;   /* буфер подменён purrgo_book_reader_set_ram() (тесты), арена не нужна */
 
     /* открытая книга */
     bool          open;
@@ -84,7 +84,7 @@ static struct {
     uint32_t      hit_len;
     uint8_t       find_buf[BOOK_FIND_BUF];
     uint8_t       find_next[PGB_SCREEN_MAX_TEXT_BYTES];
-} s = { .ram = s_default_ram, .ram_size = sizeof(s_default_ram) };
+} s = { .ram = NULL, .ram_size = 0 };
 
 /* ---- Вспомогательное ------------------------------------------------------- */
 
@@ -184,6 +184,12 @@ static void close_book(void)
     if (s.fp != NULL) {
         (void)purrgo_fs_close(s.fp);
         s.fp = NULL;
+    }
+    if (!s.ram_custom) {
+        /* Книга закрыта: арена свободна для режима карты. */
+        purrgo_arena_release(PURRGO_ARENA_BOOK);
+        s.ram = NULL;
+        s.ram_size = 0u;
     }
     s.open = false;
     s.win_start = 0u;
@@ -318,6 +324,34 @@ static bool fetch_page(uint32_t page)
     return false;
 }
 
+/* Арену забирает другой режим (карта): книга закрывается, память больше не наша. */
+static void book_arena_revoked(void *ctx)
+{
+    (void)ctx;
+    close_book();
+}
+
+/* Занять арену под книгу (если буфер не подменён). false - получить RAM не удалось. */
+static bool book_ram_acquire(void)
+{
+    if (s.ram_custom) {
+        return s.ram != NULL;
+    }
+    if (purrgo_arena_owner() == PURRGO_ARENA_BOOK && s.ram != NULL) {
+        return true;
+    }
+
+    (void)purrgo_arena_acquire(PURRGO_ARENA_BOOK, book_arena_revoked, NULL);
+    const size_t size = purrgo_arena_remaining(PURRGO_ARENA_BOOK);
+    uint8_t *ram = (uint8_t *)purrgo_arena_alloc(PURRGO_ARENA_BOOK, size);
+    if (ram == NULL) {
+        return false;
+    }
+    s.ram = ram;
+    s.ram_size = (size > 0xFFFFFFFFu) ? 0xFFFFFFFFu : (uint32_t)size;
+    return true;
+}
+
 /*
  * Открывает книгу и предзагружает её в RAM. Позиция: сохранённая, если это
  * последняя открытая книга с тем же file_crc32, иначе начало. При ошибке
@@ -331,6 +365,11 @@ static bool open_book(const char *file)
     s.error = PGB_OK;
     memset(&s.hdr, 0, sizeof(s.hdr));
     purrgo_snprintf(s.file, sizeof(s.file), "%s", file);
+
+    if (!book_ram_acquire()) {
+        s.error = PGB_ERR_BUFFER;
+        return false;
+    }
 
     if (!make_path(path, sizeof(path), file)) {
         s.error = PGB_ERR_IO;
@@ -1083,21 +1122,14 @@ void purrgo_book_reader_set_ram(void *buffer, size_t size)
 {
     close_book();
     if (buffer == NULL || size == 0u) {
-        s.ram = s_default_ram;
-        s.ram_size = sizeof(s_default_ram);
+        s.ram_custom = false;
+        s.ram = NULL;
+        s.ram_size = 0u;
     } else {
+        s.ram_custom = true;
         s.ram = (uint8_t *)buffer;
         s.ram_size = (size > 0xFFFFFFFFu) ? 0xFFFFFFFFu : (uint32_t)size;
     }
-}
-
-void *purrgo_book_reader_borrow_ram(size_t *size)
-{
-    close_book();
-    if (size != NULL) {
-        *size = s.ram_size;
-    }
-    return s.ram;
 }
 
 void purrgo_book_reader_reset(void)

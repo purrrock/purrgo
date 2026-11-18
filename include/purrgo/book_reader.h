@@ -6,6 +6,7 @@
 #include <stdint.h>
 
 #include "purrgo/app_fsm.h"
+#include "purrgo/ram_arena.h"
 #include "purrgo/config.h"
 #include "purrgo/keyboard.h"
 #include "purrgo/pgb.h"
@@ -66,9 +67,13 @@
  * чтением). Страницы распаковываются из RAM (LZ4 Block) по запросу.
  */
 
-/* Размер RAM-буфера под книгу (заголовок + индекс + окно данных), байт. */
+/*
+ * Размер RAM под книгу (заголовок + индекс + окно данных), байт. Память берётся из общей арены
+ * (purrgo/ram_arena.h, PURRGO_ARENA_BYTES) на время открытой книги; режим карты забирает её
+ * у читалки, и книга при этом закрывается.
+ */
 #ifndef PURRGO_BOOK_RAM_BYTES
-#define PURRGO_BOOK_RAM_BYTES (512u * 1024u)
+#define PURRGO_BOOK_RAM_BYTES PURRGO_ARENA_BYTES
 #endif
 
 /* Через сколько мс без перелистывания позиция записывается на SD. */
@@ -188,13 +193,6 @@ bool purrgo_book_list_is_last(int index);
  */
 void purrgo_book_reader_set_ram(void *buffer, size_t size);
 
-/*
- * Одолжить рабочий буфер читалки (по умолчанию 512 КБ) под временные нужды режима карты.
- * Открытая книга закрывается: пока буфер используется, книга читаться не может, а при возврате
- * в режим книги её надо открывать заново. Возвращает буфер (выровнен по 4 байта), его размер
- * кладёт в *size (size может быть NULL).
- */
-void *purrgo_book_reader_borrow_ram(size_t *size);
 
 /* Для тестов: полный сброс состояния без обращений к GNSS, логгеру и SD. */
 void purrgo_book_reader_reset(void);

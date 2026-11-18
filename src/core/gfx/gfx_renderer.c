@@ -29,6 +29,7 @@ bool gfx_init(gfx_context_t *ctx,
      */
     ctx->clear = NULL;
     ctx->fill_span = NULL;
+    ctx->direct_fb2bpp = false;
 
     ctx->color_fg = 1;
     ctx->color_bg = 0;
@@ -39,6 +40,13 @@ bool gfx_init(gfx_context_t *ctx,
     ctx->clip_h = height;
 
     return true;
+}
+
+void gfx_set_direct_fb2bpp(gfx_context_t *ctx, bool enable)
+{
+    if (ctx != NULL) {
+        ctx->direct_fb2bpp = enable;
+    }
 }
 
 void gfx_set_clear_callback(gfx_context_t *ctx, gfx_clear_fn clear_cb)

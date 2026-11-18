@@ -121,6 +121,12 @@ typedef struct {
      */
     gfx_fill_span_fn fill_span;
 
+    /*
+     * Прямая запись пикселей линий в 2-bpp framebuffer (см. gfx_set_direct_fb2bpp()).
+     * По умолчанию выключена: пиксели идут через draw_pixel.
+     */
+    bool direct_fb2bpp;
+
     gfx_color_t color_fg;       /* Текущий цвет переднего плана */
     gfx_color_t color_bg;       /* Текущий цвет фона */
 
@@ -174,6 +180,15 @@ void gfx_set_fill_span_callback(
     gfx_context_t *ctx,
     gfx_fill_span_fn fill_span_cb
 );
+
+/*
+ * Разрешить рисованию линий (gfx_line.h) писать пиксели прямо в framebuffer, минуя
+ * draw_pixel: на каждый пиксель не тратится косвенный вызов и повторные проверки границ.
+ * Платформа этим подтверждает, что framebuffer - это uint8_t[] в раскладке 2-bpp из
+ * purrgo/gfx_fb2bpp.h со строкой в width пикселей, а её draw_pixel эквивалентен
+ * gfx_fb2bpp_set_pixel() над этим буфером. Результат на экране не меняется.
+ */
+void gfx_set_direct_fb2bpp(gfx_context_t *ctx, bool enable);
 
 /*
  * Установка области отсечения (clipping).

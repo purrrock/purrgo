@@ -38,7 +38,10 @@ struct purrgo_file_s {
     FIL fil;
     bool in_use;
     bool read_only;       /* открыт в режиме FS_READ */
-    uint8_t read_ahead;   /* секторов за один запрос при промахе кэша (1 - по одному) */
+    uint8_t read_ahead;   /* секторов за один запрос при промахе кэша (1 - по одному); у адаптивного - максимум */
+    bool ra_adaptive;     /* адаптивный read-ahead: блок растёт, пока промахи идут подряд */
+    uint8_t ra_cur;       /* размер последнего прочитанного блока (адаптивный режим) */
+    uint32_t ra_next;     /* сектор сразу за последним прочитанным блоком (адаптивный режим) */
     
     /* 
      * Логический (виртуальный) указатель.
@@ -59,71 +62,239 @@ static struct purrgo_file_s file_pool[STM32_MAX_FILES] = {0};
 static struct purrgo_dir_s dir_pool[STM32_MAX_DIRS] = {0};
 
 /*
- * LRU Cache for files.
- * Cache memory footprint:
- * 64 entries * (512 + 16 bytes overhead) ≈ 33 KB
- *
- * 64 записей, а не 32: read-ahead за один промах вытесняет до
- * PURRGO_FS_READ_AHEAD_MAX_SECTORS записей.
+ * Кэш секторов файлов (512 Б). Память двух видов:
+ *  - встроенный маленький (PURRGO_FS_LRU_ENTRIES секторов, статический RAM): есть всегда;
+ *  - большой в арене (purrgo_fs_cache_attach): на время режима карты, сотни секторов.
+ * Структура одна: хэш-таблица для поиска, двусвязный список LRU для вытеснения и список
+ * свободных записей. Поиск и вытеснение O(1): прежний линейный перебор при сотнях записей
+ * стоил бы заметных долей кадра. Кэш живёт между кадрами: повторный рисунок того же вида
+ * и перекрывающиеся виды читаются из RAM, а не с SD.
  */
 #ifndef PURRGO_FS_LRU_ENTRIES
 #define PURRGO_FS_LRU_ENTRIES 64
 #endif
-#define LRU_CACHE_ENTRIES PURRGO_FS_LRU_ENTRIES
-#define LRU_SECTOR_SIZE 512
+#define LRU_SECTOR_SIZE 512u
+#define CACHE_NONE 0xFFFFu
+#define CACHE_MAX_SECTORS 4096u
+
+/* Поиск по хэшу сектор-файл: бакетов 2 * записей, степень двойки. */
+#define SMALL_BUCKETS (PURRGO_FS_LRU_ENTRIES * 2)
 
 _Static_assert(PURRGO_FS_READ_AHEAD_MAX_SECTORS < PURRGO_FS_LRU_ENTRIES,
                "read-ahead блок должен помещаться в LRU-кэш");
+_Static_assert((SMALL_BUCKETS & (SMALL_BUCKETS - 1)) == 0,
+               "PURRGO_FS_LRU_ENTRIES должно быть степенью двойки");
 
 typedef struct {
-    bool valid;
-    purrgo_file_t* file_id;
-    uint32_t sector_num;
-    uint32_t last_used;
-    uint8_t data[LRU_SECTOR_SIZE];
-} lru_cache_entry_t;
+    uint32_t sector;     /* номер сектора в файле */
+    uint16_t prev;       /* к более свежей записи (к head) */
+    uint16_t next;       /* к более давней (к tail); у свободных - следующая свободная */
+    uint16_t hnext;      /* следующая запись в том же бакете */
+    uint8_t  slot;       /* слот файла в file_pool */
+    uint8_t  valid;
+} cache_meta_t;
 
-static lru_cache_entry_t lru_cache[LRU_CACHE_ENTRIES];
-static uint32_t lru_counter = 0;
+typedef struct {
+    cache_meta_t *meta;
+    uint8_t *data;
+    uint16_t *bucket;
+    uint32_t count;
+    uint32_t bucket_mask;
+    uint16_t head;       /* самая свежая запись */
+    uint16_t tail;       /* самая давняя запись */
+    uint16_t free_head;
+    uint16_t slot_used[STM32_MAX_FILES];   /* записей кэша у каждого файла */
+} sector_cache_t;
+
+static cache_meta_t s_small_meta[PURRGO_FS_LRU_ENTRIES];
+static uint16_t s_small_bucket[SMALL_BUCKETS];
+static uint8_t s_small_data[PURRGO_FS_LRU_ENTRIES * LRU_SECTOR_SIZE] __attribute__((aligned(4)));
+static sector_cache_t s_small = {
+    .meta = s_small_meta, .data = s_small_data, .bucket = s_small_bucket,
+    .count = PURRGO_FS_LRU_ENTRIES, .bucket_mask = SMALL_BUCKETS - 1u,
+};
+static sector_cache_t s_big;
+static sector_cache_t *g_cache;     /* активный кэш; NULL до первого обращения */
 
 /* Буфер для многосекторного чтения: FatFs читает в него одним запросом к SD. */
 static uint8_t ra_buf[PURRGO_FS_READ_AHEAD_MAX_SECTORS * LRU_SECTOR_SIZE] __attribute__((aligned(4)));
 
+static uint32_t cache_hash(uint8_t slot, uint32_t sector) {
+    uint32_t h = sector * 0x9E3779B1u + (uint32_t)slot * 0x85EBCA6Bu;
+    return h ^ (h >> 15);
+}
+
+static void cache_reset(sector_cache_t* c) {
+    for (uint32_t i = 0; i < c->count; i++) {
+        c->meta[i].valid = 0;
+        c->meta[i].next = (i + 1u < c->count) ? (uint16_t)(i + 1u) : CACHE_NONE;
+    }
+    for (uint32_t i = 0; i <= c->bucket_mask; i++) {
+        c->bucket[i] = CACHE_NONE;
+    }
+    c->free_head = (c->count != 0u) ? 0u : CACHE_NONE;
+    c->head = CACHE_NONE;
+    c->tail = CACHE_NONE;
+    memset(c->slot_used, 0, sizeof(c->slot_used));
+}
+
+static sector_cache_t* cache_active(void) {
+    if (g_cache == NULL) {
+        cache_reset(&s_small);
+        g_cache = &s_small;
+    }
+    return g_cache;
+}
+
+static uint32_t cache_entries(void) {
+    return cache_active()->count;
+}
+
+static uint8_t* cache_data(const sector_cache_t* c, uint16_t i) {
+    return c->data + (size_t)i * LRU_SECTOR_SIZE;
+}
+
+static void lru_unlink(sector_cache_t* c, uint16_t i) {
+    const uint16_t p = c->meta[i].prev;
+    const uint16_t n = c->meta[i].next;
+    if (p != CACHE_NONE) c->meta[p].next = n; else c->head = n;
+    if (n != CACHE_NONE) c->meta[n].prev = p; else c->tail = p;
+}
+
+static void lru_push_head(sector_cache_t* c, uint16_t i) {
+    c->meta[i].prev = CACHE_NONE;
+    c->meta[i].next = c->head;
+    if (c->head != CACHE_NONE) c->meta[c->head].prev = i; else c->tail = i;
+    c->head = i;
+}
+
+static void cache_touch(sector_cache_t* c, uint16_t i) {
+    if (c->head == i) return;
+    lru_unlink(c, i);
+    lru_push_head(c, i);
+}
+
+static void bucket_remove(sector_cache_t* c, uint16_t i) {
+    const uint32_t b = cache_hash(c->meta[i].slot, c->meta[i].sector) & c->bucket_mask;
+    uint16_t prev = CACHE_NONE;
+    uint16_t cur = c->bucket[b];
+    while (cur != CACHE_NONE && cur != i) {
+        prev = cur;
+        cur = c->meta[cur].hnext;
+    }
+    if (cur != i) return;
+    if (prev == CACHE_NONE) c->bucket[b] = c->meta[i].hnext; else c->meta[prev].hnext = c->meta[i].hnext;
+}
+
+/* Запись выбывает из списка, из хэша и становится свободной. */
+static void cache_evict(sector_cache_t* c, uint16_t i) {
+    lru_unlink(c, i);
+    bucket_remove(c, i);
+    if (c->slot_used[c->meta[i].slot] != 0u) c->slot_used[c->meta[i].slot]--;
+    c->meta[i].valid = 0;
+    c->meta[i].next = c->free_head;
+    c->free_head = i;
+}
+
+/* Индекс записи кэша с данным сектором файла или CACHE_NONE. */
+static uint16_t cache_find(sector_cache_t* c, uint8_t slot, uint32_t sector) {
+    uint16_t i = c->bucket[cache_hash(slot, sector) & c->bucket_mask];
+    while (i != CACHE_NONE) {
+        if (c->meta[i].sector == sector && c->meta[i].slot == slot) return i;
+        i = c->meta[i].hnext;
+    }
+    return CACHE_NONE;
+}
+
+/* Новая запись под сектор (самая давняя вытесняется) становится самой свежей. */
+static uint16_t cache_insert(sector_cache_t* c, uint8_t slot, uint32_t sector) {
+    if (c->free_head == CACHE_NONE) {
+        cache_evict(c, c->tail);
+    }
+    const uint16_t i = c->free_head;
+    c->free_head = c->meta[i].next;
+
+    c->meta[i].sector = sector;
+    c->meta[i].slot = slot;
+    c->meta[i].valid = 1;
+    const uint32_t b = cache_hash(slot, sector) & c->bucket_mask;
+    c->meta[i].hnext = c->bucket[b];
+    c->bucket[b] = i;
+    lru_push_head(c, i);
+    c->slot_used[slot]++;
+    return i;
+}
+
+static void cache_invalidate_slot(sector_cache_t* c, uint8_t slot) {
+    if (c->slot_used[slot] == 0u) return;
+    for (uint32_t i = 0; i < c->count; i++) {
+        if (c->meta[i].valid && c->meta[i].slot == slot) {
+            cache_evict(c, (uint16_t)i);
+        }
+    }
+}
+
+static uint8_t file_slot(const purrgo_file_t* file) {
+    return (uint8_t)(file - file_pool);
+}
+
 static void invalidate_cache_for_file(purrgo_file_t* file) {
-    for (int i = 0; i < LRU_CACHE_ENTRIES; i++) {
-        if (lru_cache[i].valid && lru_cache[i].file_id == file) {
-            lru_cache[i].valid = false;
-        }
-    }
+    cache_invalidate_slot(cache_active(), file_slot(file));
 }
 
-/* Индекс записи кэша с данным сектором файла или -1. */
-static int lru_find(purrgo_file_t* file, uint32_t sector_num) {
-    for (int i = 0; i < LRU_CACHE_ENTRIES; i++) {
-        if (lru_cache[i].valid && lru_cache[i].file_id == file && lru_cache[i].sector_num == sector_num) {
-            return i;
-        }
-    }
-    return -1;
+/* ---- Большой кэш в арене ------------------------------------------------- */
+
+static uint32_t pow2_at_least(uint32_t v) {
+    uint32_t p = 1u;
+    while (p < v) p <<= 1;
+    return p;
 }
 
-/*
- * Запись под новый сектор: пустая, иначе самая давняя. Записи с locked[i]
- * (уже занятые текущим блоком read-ahead) не вытесняются. -1 - нет кандидатов.
- */
-static int lru_victim(const bool* locked) {
-    int victim = -1;
-    uint32_t oldest_time = 0xFFFFFFFFu;
+/* Раскладка кэша в одном блоке памяти: meta | bucket | data. */
+static size_t cache_layout(uint32_t sectors, size_t* bucket_off, size_t* data_off, uint32_t* buckets) {
+    const uint32_t nb = pow2_at_least(sectors * 2u);
+    const size_t meta_bytes = ((size_t)sectors * sizeof(cache_meta_t) + 7u) & ~(size_t)7u;
+    const size_t bucket_bytes = (((size_t)nb * sizeof(uint16_t)) + 7u) & ~(size_t)7u;
+    *bucket_off = meta_bytes;
+    *data_off = meta_bytes + bucket_bytes;
+    *buckets = nb;
+    return *data_off + (size_t)sectors * LRU_SECTOR_SIZE;
+}
 
-    for (int i = 0; i < LRU_CACHE_ENTRIES; i++) {
-        if (locked && locked[i]) continue;
-        if (!lru_cache[i].valid) return i;
-        if (victim == -1 || lru_cache[i].last_used < oldest_time) {
-            victim = i;
-            oldest_time = lru_cache[i].last_used;
-        }
+size_t purrgo_fs_cache_bytes(uint32_t sectors) {
+    if (sectors <= PURRGO_FS_READ_AHEAD_MAX_SECTORS || sectors > CACHE_MAX_SECTORS) return 0u;
+    size_t bucket_off, data_off;
+    uint32_t buckets;
+    return cache_layout(sectors, &bucket_off, &data_off, &buckets);
+}
+
+bool purrgo_fs_cache_attach(void* mem, size_t size, uint32_t sectors) {
+    const size_t need = purrgo_fs_cache_bytes(sectors);
+    if (mem == NULL || need == 0u || size < need || ((uintptr_t)mem & 7u) != 0u) {
+        return false;
     }
-    return victim;
+
+    size_t bucket_off, data_off;
+    uint32_t buckets;
+    (void)cache_layout(sectors, &bucket_off, &data_off, &buckets);
+
+    uint8_t* base = (uint8_t*)mem;
+    s_big.meta = (cache_meta_t*)base;
+    s_big.bucket = (uint16_t*)(base + bucket_off);
+    s_big.data = base + data_off;
+    s_big.count = sectors;
+    s_big.bucket_mask = buckets - 1u;
+    cache_reset(&s_big);
+    g_cache = &s_big;
+    return true;
+}
+
+void purrgo_fs_cache_detach(void) {
+    if (g_cache == &s_big) {
+        memset(&s_big, 0, sizeof(s_big));
+        cache_reset(&s_small);
+        g_cache = &s_small;
+    }
 }
 
 /*
@@ -135,34 +306,14 @@ static bool file_seek_physical(purrgo_file_t* file, FSIZE_t offset) {
     return f_lseek(&file->fil, offset) == FR_OK;
 }
 
-/* Положить сектор в кэш: valid_bytes из data, остальное нули. */
-static int lru_store(purrgo_file_t* file, uint32_t sector_num, const uint8_t* data,
-                     uint32_t valid_bytes, bool* locked) {
-    int slot = lru_victim(locked);
-    if (slot < 0) return -1;
-
-    memcpy(lru_cache[slot].data, data, valid_bytes);
-    if (valid_bytes < LRU_SECTOR_SIZE) {
-        memset(lru_cache[slot].data + valid_bytes, 0, LRU_SECTOR_SIZE - valid_bytes);
-    }
-    lru_cache[slot].valid = true;
-    lru_cache[slot].file_id = file;
-    lru_cache[slot].sector_num = sector_num;
-    lru_cache[slot].last_used = ++lru_counter;
-    if (locked) locked[slot] = true;
-    return slot;
-}
-
 /*
- * Промах при включённом read-ahead: читаем выровненный блок из read_ahead
- * секторов, содержащий нужный, одним f_read (FatFs отдаёт его драйверу SD как
- * многосекторное чтение). Остальные сектора блока кладутся в кэш раньше
- * запрошенного, поэтому запрошенный остаётся самым свежим.
+ * Промах: читаем блок из n секторов с сектора base одним f_read (FatFs отдаёт его драйверу SD
+ * как многосекторное чтение), кладём в кэш. Остальные сектора блока кладутся раньше
+ * запрошенного, поэтому запрошенный остаётся самым свежим. Уже лежащие в кэше сектора
+ * блока обновляются (не дублируются).
  */
-static const uint8_t* read_block_cached(purrgo_file_t* file, uint32_t sector_num, uint32_t* out_read_bytes) {
-    const uint32_t n = file->read_ahead;
-    const uint32_t base = sector_num - (sector_num % n);
-
+static const uint8_t* read_block_cached(purrgo_file_t* file, uint32_t base, uint32_t n,
+                                        uint32_t sector_num, uint32_t* out_read_bytes) {
     if (out_read_bytes) *out_read_bytes = 0;
 
     if (!file_seek_physical(file, (FSIZE_t)base * LRU_SECTOR_SIZE)) {
@@ -180,96 +331,88 @@ static const uint8_t* read_block_cached(purrgo_file_t* file, uint32_t sector_num
         return NULL;    /* запрошенный сектор за концом файла */
     }
 
-    bool locked[LRU_CACHE_ENTRIES] = {false};
+    /* Состояние адаптивного read-ahead: следующий сектор после прочитанного блока. */
+    file->ra_cur = (uint8_t)n;
+    file->ra_next = base + sectors_got;
+
+    sector_cache_t* c = cache_active();
+    const uint8_t slot = file_slot(file);
 
     for (uint32_t k = 0; k < sectors_got; k++) {
         if (k == wanted) continue;
 
-        int existing = lru_find(file, base + k);
-        if (existing >= 0) {
-            locked[existing] = true;    /* уже в кэше (данные те же): не вытеснять */
+        const uint16_t existing = cache_find(c, slot, base + k);
+        if (existing != CACHE_NONE) {
+            cache_touch(c, existing);
             continue;
         }
 
         uint32_t valid = (uint32_t)br - k * LRU_SECTOR_SIZE;
         if (valid > LRU_SECTOR_SIZE) valid = LRU_SECTOR_SIZE;
-        (void)lru_store(file, base + k, ra_buf + k * LRU_SECTOR_SIZE, valid, locked);
+        const uint16_t i = cache_insert(c, slot, base + k);
+        memcpy(cache_data(c, i), ra_buf + k * LRU_SECTOR_SIZE, valid);
+        if (valid < LRU_SECTOR_SIZE) memset(cache_data(c, i) + valid, 0, LRU_SECTOR_SIZE - valid);
     }
 
     uint32_t valid = (uint32_t)br - wanted * LRU_SECTOR_SIZE;
     if (valid > LRU_SECTOR_SIZE) valid = LRU_SECTOR_SIZE;
 
-    int slot = lru_find(file, sector_num);
-    if (slot >= 0) {
-        lru_cache[slot].last_used = ++lru_counter;
+    uint16_t i = cache_find(c, slot, sector_num);
+    if (i != CACHE_NONE) {
+        cache_touch(c, i);
     } else {
-        slot = lru_store(file, sector_num, ra_buf + wanted * LRU_SECTOR_SIZE, valid, locked);
-        if (slot < 0) return NULL;
+        i = cache_insert(c, slot, sector_num);
+        memcpy(cache_data(c, i), ra_buf + wanted * LRU_SECTOR_SIZE, valid);
+        if (valid < LRU_SECTOR_SIZE) memset(cache_data(c, i) + valid, 0, LRU_SECTOR_SIZE - valid);
     }
 
     if (out_read_bytes) *out_read_bytes = valid;
-    return lru_cache[slot].data;
+    return cache_data(c, i);
 }
 
-/* Промах кэша: чтение с SD (seek + f_read), одиночное или блоком read-ahead. */
+/*
+ * Промах кэша: чтение с SD (seek + f_read). Размер блока:
+ *  - обычный файл: read_ahead секторов, блок выровнен по read_ahead;
+ *  - адаптивный (ra_adaptive): 1 сектор, а если промах пришёлся ровно на сектор за концом
+ *    предыдущего прочитанного блока (обход идёт подряд) - вдвое больше предыдущего блока
+ *    (2, 4, ... до read_ahead), блок начинается с нужного сектора.
+ */
 static const uint8_t* read_sector_miss(purrgo_file_t* file, uint32_t sector_num, uint32_t* out_read_bytes) {
-    PURRGO_PROF_COUNT_ADD(PURRGO_PROF_CNT_SD_SECTORS, (file->read_ahead > 1u) ? file->read_ahead : 1u);
+    uint32_t n = (file->read_ahead > 1u) ? file->read_ahead : 1u;
+    uint32_t base;
 
-    if (file->read_ahead > 1u) {
-        return read_block_cached(file, sector_num, out_read_bytes);
+    if (file->ra_adaptive) {
+        if (file->ra_next == sector_num && n > 1u) {
+            uint32_t grown = (uint32_t)file->ra_cur * 2u;
+            if (grown < 2u) grown = 2u;
+            if (grown < n) n = grown;
+        } else {
+            n = 1u;
+        }
+        base = sector_num;
+    } else {
+        base = sector_num - (sector_num % n);
     }
 
-    // Cache miss: Load from disk
-    int lru_index = lru_victim(NULL);
-    FSIZE_t sector_offset = (FSIZE_t)sector_num * LRU_SECTOR_SIZE;
-
-    /* 
-     * ИСПРАВЛЕНИЕ КОНФЛИКТА С FATFS:
-     * Выполняем физический seek только если внутренний указатель FatFs 
-     * сбился и не равен началу нужного нам сектора.
-     */
-    if (!file_seek_physical(file, sector_offset)) {
-        if (out_read_bytes) *out_read_bytes = 0;
-        return NULL;
-    }
-
-    UINT br = 0;
-    FRESULT res = f_read(&file->fil, lru_cache[lru_index].data, LRU_SECTOR_SIZE, &br);
-
-    if (res != FR_OK || br == 0) {
-        if (out_read_bytes) *out_read_bytes = 0;
-        return NULL;
-    }
-
-    lru_cache[lru_index].valid = true;
-    lru_cache[lru_index].file_id = file;
-    lru_cache[lru_index].sector_num = sector_num;
-    lru_cache[lru_index].last_used = ++lru_counter;
-
-    if (br < LRU_SECTOR_SIZE) {
-        memset(lru_cache[lru_index].data + br, 0, LRU_SECTOR_SIZE - br);
-    }
-
-    if (out_read_bytes) *out_read_bytes = br;
-    return lru_cache[lru_index].data;
+    PURRGO_PROF_COUNT_ADD(PURRGO_PROF_CNT_SD_SECTORS, n);
+    return read_block_cached(file, base, n, sector_num, out_read_bytes);
 }
-
 
 static const uint8_t* read_cached_sector(purrgo_file_t* file, uint32_t sector_num, uint32_t* out_read_bytes) {
-    // Search in cache
-    int hit = lru_find(file, sector_num);
-    if (hit >= 0) {
+    sector_cache_t* c = cache_active();
+    const uint16_t hit = cache_find(c, file_slot(file), sector_num);
+    if (hit != CACHE_NONE) {
         PURRGO_PROF_COUNT_ADD(PURRGO_PROF_CNT_CACHE_HIT, 1u);
-        PURRGO_PROF_SECTOR((uint8_t)(file - file_pool), sector_num, false);
-        lru_cache[hit].last_used = ++lru_counter;
+        PURRGO_PROF_SECTOR(file_slot(file), sector_num, false);
+        cache_touch(c, hit);
         if (out_read_bytes) *out_read_bytes = LRU_SECTOR_SIZE;
-        return lru_cache[hit].data;
+        return cache_data(c, hit);
     }
 
     PURRGO_PROF_BEGIN(prof_sd);
     const uint8_t* data = read_sector_miss(file, sector_num, out_read_bytes);
     PURRGO_PROF_END(prof_sd, PURRGO_PROF_SD);
-    PURRGO_PROF_SECTOR((uint8_t)(file - file_pool), sector_num, true);
+    PURRGO_PROF_SECTOR(file_slot(file), sector_num, true);
     return data;
 }
 
@@ -387,7 +530,10 @@ purrgo_file_t* purrgo_fs_open(const char* filepath, fs_mode_t mode) {
 
     file->read_only = (mode == FS_READ);
     file->read_ahead = 1u;
-    PURRGO_PROF_FILE_INFO((uint8_t)(file - file_pool), filepath, 1u, LRU_CACHE_ENTRIES);
+    file->ra_adaptive = false;
+    file->ra_cur = 1u;
+    file->ra_next = 0xFFFFFFFFu;
+    PURRGO_PROF_FILE_INFO(file_slot(file), filepath, 1u, cache_entries());
     file->fil.cltbl = NULL;
 
     /*
@@ -477,7 +623,21 @@ void purrgo_fs_set_read_ahead(purrgo_file_t* file, uint8_t sectors) {
     if (sectors < 1u) sectors = 1u;
     if (sectors > PURRGO_FS_READ_AHEAD_MAX_SECTORS) sectors = (uint8_t)PURRGO_FS_READ_AHEAD_MAX_SECTORS;
     file->read_ahead = sectors;
-    PURRGO_PROF_FILE_INFO((uint8_t)(file - file_pool), NULL, sectors, LRU_CACHE_ENTRIES);
+    file->ra_adaptive = false;
+    PURRGO_PROF_FILE_INFO(file_slot(file), NULL, sectors, cache_entries());
+}
+
+void purrgo_fs_set_adaptive_read_ahead(purrgo_file_t* file, uint8_t max_sectors) {
+    if (!file || !file->in_use || !file->read_only) return;
+
+    if (max_sectors < 1u) max_sectors = 1u;
+    if (max_sectors > PURRGO_FS_READ_AHEAD_MAX_SECTORS) max_sectors = (uint8_t)PURRGO_FS_READ_AHEAD_MAX_SECTORS;
+    file->read_ahead = max_sectors;
+    file->ra_adaptive = (max_sectors > 1u);
+    file->ra_cur = 1u;
+    file->ra_next = 0xFFFFFFFFu;
+    /* Для трассы PROF это файл с read-ahead 1: блок растёт только по факту подряд идущих промахов. */
+    PURRGO_PROF_FILE_INFO(file_slot(file), NULL, 1u, cache_entries());
 }
 
 bool purrgo_fs_sync(purrgo_file_t* file) {

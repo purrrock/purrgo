@@ -20,5 +20,6 @@ int fake_fs_sync_calls(void);   /* число вызовов purrgo_fs_sync с �
 uint32_t fake_fs_read_calls(void);      /* число вызовов purrgo_fs_read */
 uint32_t fake_fs_max_read_end(void);    /* наибольшая позиция файла, до которой дошло чтение */
 void fake_fs_reset_read_stats(void);
+uint8_t fake_fs_adaptive_read_ahead(const char* name);   /* значение purrgo_fs_set_adaptive_read_ahead() (0 - не задавалось) */
 uint8_t fake_fs_read_ahead(const char* name);   /* значение purrgo_fs_set_read_ahead() для файла (0 - не задавалось) */
 #endif

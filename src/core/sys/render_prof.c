@@ -2,8 +2,8 @@
 
 #if PURRGO_RENDER_PROF
 
-#include "purrgo/book_reader.h"
 #include "purrgo/logger.h"
+#include "purrgo/ram_arena.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -21,9 +21,10 @@ static uint32_t s_frame_start;
 #define SIM_MAX_ENTRIES  1024u
 #define SIM_EMPTY        0xFFFFFFFFu
 
-/* Трасса живёт в одолженном буфере читалки, свой RAM не занимает. */
+/* Трасса живёт в арене режима карты (остаток после кэша секторов), свой RAM не занимает. */
 static uint32_t *s_trace;
 static uint32_t s_trace_cap;
+static uint32_t s_trace_session;   /* purrgo_arena_session(), при котором выделена трасса */
 static uint32_t s_trace_n;
 static bool s_trace_ovf;
 static bool s_trace_active; /* пишем только между begin_frame и end_frame/abort_frame */
@@ -48,13 +49,20 @@ void purrgo_render_prof_begin_frame(void)
         s_cnt[i] = 0;
     }
 
-    size_t ram_size = 0;
-    void *ram = purrgo_book_reader_borrow_ram(&ram_size);
+    if (purrgo_arena_owner() != PURRGO_ARENA_MAP) {
+        s_trace = NULL;
+        s_trace_cap = 0u;
+    } else if (s_trace == NULL || s_trace_session != purrgo_arena_session()) {
+        /* Первый кадр в этой сессии арены: берём весь остаток (кэш секторов уже выделен). */
+        const size_t rest = purrgo_arena_remaining(PURRGO_ARENA_MAP);
+        void *ram = (rest != 0u) ? purrgo_arena_alloc(PURRGO_ARENA_MAP, rest) : NULL;
 
-    s_trace = (uint32_t *)ram;
-    s_trace_cap = (ram != NULL) ? (uint32_t)(ram_size / sizeof(uint32_t)) : 0u;
-    if (s_trace_cap > PURRGO_PROF_TRACE_MAX) {
-        s_trace_cap = PURRGO_PROF_TRACE_MAX;
+        s_trace = (uint32_t *)ram;
+        s_trace_cap = (ram != NULL) ? (uint32_t)(rest / sizeof(uint32_t)) : 0u;
+        if (s_trace_cap > PURRGO_PROF_TRACE_MAX) {
+            s_trace_cap = PURRGO_PROF_TRACE_MAX;
+        }
+        s_trace_session = purrgo_arena_session();
     }
     s_trace_n = 0;
     s_trace_ovf = (s_trace_cap == 0u);
@@ -393,9 +401,7 @@ void purrgo_render_prof_end_frame(int scale, int ok)
 
     trace_report();
 
-    /* Буфер снова принадлежит читалке: больше в него не пишем. */
-    s_trace = NULL;
-    s_trace_cap = 0;
+    /* Запись между кадрами не ведётся (s_trace_active), память остаётся за режимом карты. */
     s_trace_n = 0;
 }
 

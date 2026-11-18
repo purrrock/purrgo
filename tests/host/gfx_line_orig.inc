@@ -1,0 +1,362 @@
+#include "purrgo/gfx_line.h"
+#include "purrgo/gfx_renderer.h"
+
+// Битовые маски зон для алгоритма Коэна-Сазерленда
+#define INSIDE 0 // 0000
+#define LEFT   1 // 0001
+#define RIGHT  2 // 0010
+#define BOTTOM 4 // 0100
+#define TOP    8 // 1000
+
+// Побитовая оптимизация модуля без ветвления для архитектуры ARM Cortex
+static inline int16_t gfx_abs(int16_t a) {
+    int16_t mask = a >> 15;
+    return (a + mask) ^ mask;
+}
+
+// Вычисление кода зоны для точки относительно границ экрана
+static uint8_t compute_outcode(gfx_context_t *ctx, int16_t x, int16_t y) {
+    uint8_t code = INSIDE;
+    if (x < ctx->clip_x) {
+        code |= LEFT;
+    } else if (x >= ctx->clip_x + ctx->clip_w) {
+        code |= RIGHT;
+    }
+    
+    if (y < ctx->clip_y) {
+        code |= BOTTOM;
+    } else if (y >= ctx->clip_y + ctx->clip_h) {
+        code |= TOP;
+    }
+    return code;
+}
+
+static bool clip_line(gfx_context_t *ctx, int16_t *x0, int16_t *y0, int16_t *x1, int16_t *y1) {
+    uint8_t outcode0 = compute_outcode(ctx, *x0, *y0);
+    uint8_t outcode1 = compute_outcode(ctx, *x1, *y1);
+    bool accept = false;
+
+    while (true) {
+        if (!(outcode0 | outcode1)) {
+            accept = true;
+            break;
+        } else if (outcode0 & outcode1) {
+            break;
+        } else {
+            int16_t x = 0, y = 0;
+            uint8_t outcodeOut = outcode0 ? outcode0 : outcode1;
+
+            int32_t dx = *x1 - *x0;
+            int32_t dy = *y1 - *y0;
+
+            if (outcodeOut & TOP) {
+                x = (int16_t)(*x0 + dx * (ctx->clip_y + ctx->clip_h - 1 - *y0) / dy);
+                y = (int16_t)(ctx->clip_y + ctx->clip_h - 1);
+            } else if (outcodeOut & BOTTOM) {
+                x = (int16_t)(*x0 + dx * (ctx->clip_y - *y0) / dy);
+                y = ctx->clip_y;
+            } else if (outcodeOut & RIGHT) {
+                y = (int16_t)(*y0 + dy * (ctx->clip_x + ctx->clip_w - 1 - *x0) / dx);
+                x = (int16_t)(ctx->clip_x + ctx->clip_w - 1);
+            } else if (outcodeOut & LEFT) {
+                y = (int16_t)(*y0 + dy * (ctx->clip_x - *x0) / dx);
+                x = ctx->clip_x;
+            }
+
+            if (outcodeOut == outcode0) {
+                *x0 = x;
+                *y0 = y;
+                outcode0 = compute_outcode(ctx, *x0, *y0);
+            } else {
+                *x1 = x;
+                *y1 = y;
+                outcode1 = compute_outcode(ctx, *x1, *y1);
+            }
+        }
+    }
+    return accept;
+}
+
+void gfx_draw_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1, int16_t y1)
+{
+    if (ctx == NULL || ctx->draw_pixel == NULL) return;
+
+    // 1. Отсечение отрезка (Cohen-Sutherland)
+    if (!clip_line(ctx, &x0, &y0, &x1, &y1)) {
+        return;
+    }
+
+    // 2. Отрисовка видимой части (Bresenham optimized)
+    int16_t dx = gfx_abs(x1 - x0);
+    int16_t sx = x0 < x1 ? 1 : -1;
+    int16_t dy = -gfx_abs(y1 - y0);
+    int16_t sy = y0 < y1 ? 1 : -1;
+    
+    int16_t err = dx + dy; 
+    int16_t e2;
+
+    while (true) {
+        gfx_draw_pixel(ctx, x0, y0);
+
+        if (x0 == x1 && y0 == y1) {
+            break;
+        }
+
+        e2 = err * 2;
+        
+        if (e2 >= dy) {
+            err += dy;
+            x0 += sx;
+        }
+        if (e2 <= dx) {
+            err += dx;
+            y0 += sy;
+        }
+    }
+}
+
+void gfx_draw_dashed_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1, int16_t y1)
+{
+    if (ctx == NULL || ctx->draw_pixel == NULL) return;
+
+    // Сохраняем геометрическое начало линии для синхронизации фазы штрихов
+    int16_t orig_x0 = x0;
+    int16_t orig_y0 = y0;
+
+    // 1. Отсечение отрезка (Cohen-Sutherland)
+    if (!clip_line(ctx, &x0, &y0, &x1, &y1)) {
+        return;
+    }
+
+    // Параметры паттерна штриха
+    const int16_t dash_len = 4;
+    const int16_t gap_len = 4;
+    const int16_t pattern_len = dash_len + gap_len; // 8 пикселей
+
+    // Вычисляем количество пропущенных пикселей (Chebyshev distance)
+    int16_t dx_clip = gfx_abs(x0 - orig_x0);
+    int16_t dy_clip = gfx_abs(y0 - orig_y0);
+    int16_t clipped_steps = (dx_clip > dy_clip) ? dx_clip : dy_clip;
+    
+    // Инициализируем счетчик с учетом отсеченной части.
+    // Так как pattern_len = 8 (степень двойки), компилятор оптимизирует 
+    // операцию деления с остатком (%) в побитовое И (& 7).
+    int16_t dash_counter = clipped_steps & 7;
+
+    // 2. Отрисовка видимой части (Bresenham optimized)
+    int16_t dx = gfx_abs(x1 - x0);
+    int16_t sx = x0 < x1 ? 1 : -1;
+    int16_t dy = -gfx_abs(y1 - y0);
+    int16_t sy = y0 < y1 ? 1 : -1;
+
+    int16_t err = dx + dy;
+    int16_t e2;
+
+    while (true) {
+        if (dash_counter < dash_len) {
+            gfx_draw_pixel(ctx, x0, y0);
+        }
+
+        dash_counter++;
+        if (dash_counter >= pattern_len) {
+            dash_counter = 0;
+        }
+
+        if (x0 == x1 && y0 == y1) {
+            break;
+        }
+
+        e2 = err * 2;
+
+        if (e2 >= dy) {
+            err += dy;
+            x0 += sx;
+        }
+        if (e2 <= dx) {
+            err += dx;
+            y0 += sy;
+        }
+    }
+}
+
+void gfx_draw_thick_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1, int16_t y1, int16_t thickness)
+{
+    if (ctx == NULL || thickness <= 0) return;
+
+    if (thickness == 1) {
+        gfx_draw_line(ctx, x0, y0, x1, y1);
+        return;
+    }
+
+    // Сохраняем исходные координаты для отрисовки "шапок" на стыках
+    int16_t orig_x0 = x0;
+    int16_t orig_y0 = y0;
+    int16_t orig_x1 = x1;
+    int16_t orig_y1 = y1;
+
+    // 1. Отсечение отрезка (Cohen-Sutherland)
+    if (!clip_line(ctx, &x0, &y0, &x1, &y1)) {
+        return;
+    }
+
+    int16_t dx = gfx_abs(x1 - x0);
+    int16_t sx = (x0 < x1) ? 1 : -1;
+    int16_t dy = -gfx_abs(y1 - y0); 
+    int16_t sy = (y0 < y1) ? 1 : -1;
+    
+    int16_t err = dx + dy; 
+    int16_t e2;
+
+    // Флаг ориентации линии: если dx больше абсолютного dy, линия пологая
+    bool is_horizontal = (dx > -dy);
+
+    // Отрисовка концов ("caps"), если они не были отсечены (чтобы не было пробелов на стыках).
+    if (thickness == 2) {
+        if (x0 == orig_x0 && y0 == orig_y0) {
+            gfx_draw_pixel(ctx, orig_x0, orig_y0);
+            gfx_draw_pixel(ctx, orig_x0 + 1, orig_y0);
+            gfx_draw_pixel(ctx, orig_x0, orig_y0 + 1);
+            gfx_draw_pixel(ctx, orig_x0 + 1, orig_y0 + 1);
+        }
+        if (x1 == orig_x1 && y1 == orig_y1) {
+            gfx_draw_pixel(ctx, orig_x1, orig_y1);
+            gfx_draw_pixel(ctx, orig_x1 + 1, orig_y1);
+            gfx_draw_pixel(ctx, orig_x1, orig_y1 + 1);
+            gfx_draw_pixel(ctx, orig_x1 + 1, orig_y1 + 1);
+        }
+    } else if (thickness == 3) {
+        if (x0 == orig_x0 && y0 == orig_y0) {
+            for (int16_t oy = -1; oy <= 1; ++oy) {
+                for (int16_t ox = -1; ox <= 1; ++ox) {
+                    gfx_draw_pixel(ctx, orig_x0 + ox, orig_y0 + oy);
+                }
+            }
+        }
+        if (x1 == orig_x1 && y1 == orig_y1) {
+            for (int16_t oy = -1; oy <= 1; ++oy) {
+                for (int16_t ox = -1; ox <= 1; ++ox) {
+                    gfx_draw_pixel(ctx, orig_x1 + ox, orig_y1 + oy);
+                }
+            }
+        }
+    }
+
+    while (true) {
+        // Отрисовка с программным отсечением (gfx_draw_pixel)
+        if (thickness == 2) {
+            gfx_draw_pixel(ctx, x0, y0);
+            if (is_horizontal) {
+                gfx_draw_pixel(ctx, x0, y0 + 1);
+            } else {
+                gfx_draw_pixel(ctx, x0 + 1, y0);
+            }
+        } else if (thickness == 3) {
+            gfx_draw_pixel(ctx, x0, y0);
+            if (is_horizontal) {
+                gfx_draw_pixel(ctx, x0, y0 - 1);
+                gfx_draw_pixel(ctx, x0, y0 + 1);
+            } else {
+                gfx_draw_pixel(ctx, x0 - 1, y0);
+                gfx_draw_pixel(ctx, x0 + 1, y0);
+            }
+        } else {
+            int16_t half_thick = thickness >> 1;
+            int16_t start_offset = -half_thick;
+            int16_t end_offset = (int16_t)(start_offset + thickness - 1);
+            for (int16_t offset = start_offset; offset <= end_offset; ++offset) {
+                if (is_horizontal) {
+                    gfx_draw_pixel(ctx, x0, y0 + offset);
+                } else {
+                    gfx_draw_pixel(ctx, x0 + offset, y0);
+                }
+            }
+        }
+
+        if (x0 == x1 && y0 == y1) {
+            break;
+        }
+
+        e2 = err * 2;
+        
+        if (e2 >= dy) {
+            err += dy;
+            x0 += sx;
+        }
+        if (e2 <= dx) {
+            err += dx;
+            y0 += sy;
+        }
+    }
+}
+
+void gfx_draw_dotted_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1, int16_t y1)
+{
+    if (ctx == NULL || ctx->draw_pixel == NULL) return;
+
+    // Сохраняем геометрическое начало линии для синхронизации фазы
+    int16_t orig_x0 = x0;
+    int16_t orig_y0 = y0;
+
+    // 1. Отсечение отрезка (Cohen-Sutherland)
+    if (!clip_line(ctx, &x0, &y0, &x1, &y1)) {
+        return;
+    }
+
+    // Вычисляем количество пропущенных пикселей (Chebyshev distance)
+    int16_t dx_clip = gfx_abs(x0 - orig_x0);
+    int16_t dy_clip = gfx_abs(y0 - orig_y0);
+    int16_t clipped_steps = (dx_clip > dy_clip) ? dx_clip : dy_clip;
+
+    // Инициализируем счетчик с учетом отсеченной части (по модулю 2, через & 1)
+    int16_t dot_counter = clipped_steps & 1;
+
+    // 2. Отрисовка видимой части (Bresenham optimized)
+    int16_t dx = gfx_abs(x1 - x0);
+    int16_t sx = x0 < x1 ? 1 : -1;
+    int16_t dy = -gfx_abs(y1 - y0);
+    int16_t sy = y0 < y1 ? 1 : -1;
+
+    int16_t err = dx + dy;
+    int16_t e2;
+
+    while (true) {
+        // Чередование: 1 пиксель рисуем, 1 пропускаем
+        if (dot_counter == 0) {
+            gfx_draw_pixel(ctx, x0, y0);
+        }
+
+        dot_counter = (dot_counter + 1) & 1;
+
+        if (x0 == x1 && y0 == y1) {
+            break;
+        }
+
+        e2 = err * 2;
+
+        if (e2 >= dy) {
+            err += dy;
+            x0 += sx;
+        }
+        if (e2 <= dx) {
+            err += dx;
+            y0 += sy;
+        }
+    }
+}
+
+void gfx_draw_railway_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1, int16_t y1)
+{
+    if (ctx == NULL || ctx->draw_pixel == NULL) return;
+
+    gfx_color_t original_fg = ctx->color_fg;
+
+    // Отрисовка сплошной 3-пиксельной черной линии
+    ctx->color_fg = BLACK;
+    gfx_draw_thick_line(ctx, x0, y0, x1, y1, 3);
+
+    // Отрисовка 1-пиксельной белой прерывистой линии поверх
+    ctx->color_fg = WHITE;
+    gfx_draw_dashed_line(ctx, x0, y0, x1, y1);
+
+    ctx->color_fg = original_fg;
+}

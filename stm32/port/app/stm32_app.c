@@ -390,6 +390,12 @@ void purrgo_stm32_init(void)
    */
   gfx_set_fill_span_callback(&global_gfx_ctx, stm32_fill_span_cb);
 
+  /*
+   * Линии пишут пиксели прямо в 2-bpp буфер дисплея: stm32_draw_pixel_cb - это
+   * gfx_fb2bpp_set_pixel() над тем же буфером (display_stm32.c), раскладка одна.
+   */
+  gfx_set_direct_fb2bpp(&global_gfx_ctx, true);
+
   PURRGO_LOG("GFX OK\r\n");
 
   /*

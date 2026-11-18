@@ -122,7 +122,14 @@ static purrgo_file_t* map_open_file(const char* map_dir, const char* name)
     if (n < 0 || (size_t)n >= sizeof(path_buf)) {
         return NULL;
     }
-    return purrgo_fs_open(path_buf, FS_READ);
+    purrgo_file_t* file = purrgo_fs_open(path_buf, FS_READ);
+
+    /* Индекс обходится то прыжками, то подряд: адаптивный read-ahead (см. map_internal.h). */
+    const size_t name_len = strlen(name);
+    if (file != NULL && name_len > 4u && strcmp(name + name_len - 4u, ".idx") == 0) {
+        purrgo_fs_set_adaptive_read_ahead(file, (uint8_t)PURRGO_MAP_IDX_READ_AHEAD_MAX_SECTORS);
+    }
+    return file;
 }
 
 /*
@@ -534,6 +541,8 @@ bool purrgo_map_render_viewport(
      * и очередь отложенных подписей.
      */
     map_render_clear_labels();
+
+    map_ram_enter();
 
 #if PURRGO_RENDER_PROF
     purrgo_render_prof_begin_frame();

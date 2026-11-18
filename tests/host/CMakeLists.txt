@@ -22,6 +22,7 @@ foreach(test_src IN LISTS PURRGO_HOST_TESTS)
         ${CMAKE_CURRENT_SOURCE_DIR}/fake_fs.c
         ${CMAKE_CURRENT_SOURCE_DIR}/fake_power.c
         ${PROJECT_SOURCE_DIR}/src/platform/pc/display_hal.c
+        ${PROJECT_SOURCE_DIR}/src/platform/pc/render_prof_pc.c
         ${PROJECT_SOURCE_DIR}/src/platform/pc/purrgo_logger.c)
     target_include_directories(${test_name} PRIVATE
         ${PROJECT_SOURCE_DIR}/include
@@ -35,6 +36,29 @@ foreach(test_src IN LISTS PURRGO_HOST_TESTS)
     add_test(NAME ${test_name} COMMAND ${test_name}
              WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 endforeach()
+
+# test_gfx_line_equiv сравнивает ускоренные линии с прежней реализацией (gfx_line_ref.c).
+if(TARGET test_gfx_line_equiv)
+    target_sources(test_gfx_line_equiv PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/gfx_line_ref.c)
+endif()
+
+# test_fs_cache_stm32 проверяет кэш секторов и read-ahead прошивочного fs_hal_stm32.c на заглушке
+# FatFs (tests/host/ff_stub). Файл теста назван не test_*.c: ему нужен свой fs_hal, а не fake_fs.
+add_executable(test_fs_cache_stm32
+    ${CMAKE_CURRENT_SOURCE_DIR}/fs_cache_stm32_check.c
+    ${PROJECT_SOURCE_DIR}/stm32/port/storage/fs_hal_stm32.c
+    ${PROJECT_SOURCE_DIR}/src/platform/pc/purrgo_logger.c
+    ${PROJECT_SOURCE_DIR}/src/platform/pc/render_prof_pc.c)
+target_include_directories(test_fs_cache_stm32 PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/ff_stub
+    ${PROJECT_SOURCE_DIR}/include
+    ${PROJECT_SOURCE_DIR}/src/core
+    ${CMAKE_CURRENT_SOURCE_DIR})
+purrgo_target_warnings(test_fs_cache_stm32)
+target_link_libraries(test_fs_cache_stm32 PRIVATE purrgo_core m)
+add_test(NAME test_fs_cache_stm32 COMMAND test_fs_cache_stm32
+         WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 
 # test_sd_spi проверяет протокол microSD в SPI-режиме (HAL-независимый модуль
 # прошивки U585) на программной модели карты.
