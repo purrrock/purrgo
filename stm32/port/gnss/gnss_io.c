@@ -234,13 +234,13 @@ static bool gnss_tx_raw(const uint8_t *data, size_t len)
 
 /**
  * @brief Отправка настройки приёмнику GNSS (транспорт для gnss_receiver).
+ *
+ * Расшифровку команды (группа, ключи, значения) пишет в лог gnss_receiver перед отправкой;
+ * здесь логируется только сбой передачи (в gnss_tx_raw).
  */
 static void gnss_uart_tx(const uint8_t *data, size_t len)
 {
-    if (gnss_tx_raw(data, len))
-    {
-        PURRGO_LOG("GNSS: config sent to module (%u bytes)\r\n", (unsigned)len);
-    }
+    (void)gnss_tx_raw(data, len);
 }
 
 /*
@@ -535,6 +535,7 @@ static bool link_send_baud_cmd(uint32_t baud, void *ctx)
         PURRGO_LOGW("GNSS: receiver model cannot change baud rate\r\n");
         return false;
     }
+    PURRGO_LOGI("GNSS: TX UART1-BAUDRATE=%lu (%u B)\r\n", (unsigned long)baud, (unsigned)len);
     return gnss_tx_raw(frame, len);
 }
 
@@ -627,6 +628,7 @@ static void gnss_wake_receiver(void)
 {
     static const uint8_t wake[] = { 0xFF, 0xFF, 0xFF, 0xFF };
 
+    PURRGO_LOGI("GNSS: TX wake-up 4 x 0xFF (PSMOO)\r\n");
     (void)gnss_tx_raw(wake, sizeof wake);
 }
 #endif

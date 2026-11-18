@@ -2,7 +2,9 @@
 #include "purrgo/gnss_ubx.h"
 #include "purrgo/hardware_config.h"
 #include "purrgo/logger.h"
+#include "purrgo/purrgo_format.h"
 
+#include <stdarg.h>
 #include <string.h>
 
 /* ------------------------------------------------------------------------- */
@@ -214,6 +216,142 @@ static void add_group(cfg_group_t *groups, size_t *n, const char *name,
     }
 }
 
+/*
+ * Текстовая расшифровка отправленных команд для лога: "GNSS: TX NMEA/rate VALSET[RAM] RATE-MEAS=1000 ... (54 B)".
+ * Имена ключей совпадают с UBX_KEY_* выше; неизвестный ключ печатается числом.
+ */
+typedef struct {
+    uint32_t key;
+    const char *name;
+} key_name_t;
+
+static const key_name_t k_key_names[] = {
+    { UBX_KEY_RATE_MEAS,            "RATE-MEAS" },
+    { UBX_KEY_RATE_NAV,             "RATE-NAV" },
+    { UBX_KEY_MSGOUT_GGA_UART1,     "MSGOUT-GGA" },
+    { UBX_KEY_MSGOUT_GLL_UART1,     "MSGOUT-GLL" },
+    { UBX_KEY_MSGOUT_GSA_UART1,     "MSGOUT-GSA" },
+    { UBX_KEY_MSGOUT_GSV_UART1,     "MSGOUT-GSV" },
+    { UBX_KEY_MSGOUT_RMC_UART1,     "MSGOUT-RMC" },
+    { UBX_KEY_MSGOUT_VTG_UART1,     "MSGOUT-VTG" },
+    { UBX_KEY_MSGOUT_PVT_UART1,     "MSGOUT-NAV-PVT" },
+    { UBX_KEY_MSGOUT_ODO_UART1,     "MSGOUT-NAV-ODO" },
+    { UBX_KEY_MSGOUT_MON_RF_UART1,  "MSGOUT-MON-RF" },
+    { UBX_KEY_MSGOUT_DOP_UART1,     "MSGOUT-NAV-DOP" },
+    { UBX_KEY_MSGOUT_STATUS_UART1,  "MSGOUT-NAV-STATUS" },
+    { UBX_KEY_MSGOUT_SAT_UART1,     "MSGOUT-NAV-SAT" },
+    { UBX_KEY_MSGOUT_SEC_SIG_UART1, "MSGOUT-SEC-SIG" },
+    { UBX_KEY_ITFM_ENABLE,          "ITFM-ENABLE" },
+    { UBX_KEY_ODO_USE_ODO,          "ODO-USE" },
+    { UBX_KEY_ODO_PROFILE,          "ODO-PROFILE" },
+    { UBX_KEY_UART1OUTPROT_NMEA,    "UART1OUTPROT-NMEA" },
+    { UBX_KEY_NAVSPG_DYNMODEL,      "DYNMODEL" },
+    { UBX_KEY_TP_TP1_ENA,           "TP1-ENA" },
+    { UBX_KEY_TP_LEN_TP1,           "TP-LEN" },
+    { UBX_KEY_TP_LEN_LOCK_TP1,      "TP-LEN-LOCK" },
+    { UBX_KEY_PM_OPERATEMODE,       "PM-OPERATEMODE" },
+    { UBX_KEY_PM_DONOTENTEROFF,     "PM-DONOTENTEROFF" },
+    { UBX_KEY_PM_POSUPDATEPERIOD,   "PM-POSUPDATEPERIOD" },
+    { UBX_KEY_PM_ACQPERIOD,         "PM-ACQPERIOD" },
+    { UBX_KEY_PM_ONTIME,            "PM-ONTIME" },
+    { UBX_KEY_SIGNAL_SBAS_ENA,      "SIGNAL-SBAS" },
+    { UBX_KEY_SIGNAL_BDS_ENA,       "SIGNAL-BDS" },
+    { UBX_KEY_SIGNAL_GLO_ENA,       "SIGNAL-GLO" },
+    { UBX_KEY_UART1_BAUDRATE,       "UART1-BAUDRATE" },
+};
+
+static const char *key_name(uint32_t key)
+{
+    for (size_t i = 0U; i < sizeof k_key_names / sizeof k_key_names[0]; i++) {
+        if (k_key_names[i].key == key) {
+            return k_key_names[i].name;
+        }
+    }
+    return NULL;
+}
+
+/* Значение PM-OPERATEMODE словом, остальные - числом. */
+static const char *pm_mode_name(uint32_t v)
+{
+    switch (v) {
+        case UBX_PM_MODE_FULL:  return "FULL";
+        case UBX_PM_MODE_PSMOO: return "PSMOO";
+        case UBX_PM_MODE_PSMCT: return "PSMCT";
+        default:                return NULL;
+    }
+}
+
+/* Дописать в buf (размер size, текущая длина *pos) отформатированный текст; при нехватке места обрезает. */
+static void log_append(char *buf, size_t size, size_t *pos, const char *fmt, ...) PURRGO_PRINTF_FORMAT(4, 5);
+
+static void log_append(char *buf, size_t size, size_t *pos, const char *fmt, ...)
+{
+    va_list ap;
+
+    if (*pos >= size - 1U) {
+        return;
+    }
+    va_start(ap, fmt);
+    const int n = purrgo_vsnprintf(buf + *pos, size - *pos, fmt, ap);
+    va_end(ap);
+    if (n > 0) {
+        *pos += ((size_t)n < size - *pos) ? (size_t)n : (size - *pos - 1U);
+    }
+}
+
+static void log_layers(char *buf, size_t size, size_t *pos, uint8_t layers)
+{
+    const char *sep = "";
+
+    log_append(buf, size, pos, "[");
+    if ((layers & 0x01U) != 0U) {
+        log_append(buf, size, pos, "%sRAM", sep);
+        sep = "+";
+    }
+    if ((layers & 0x02U) != 0U) {
+        log_append(buf, size, pos, "%sBBR", sep);
+        sep = "+";
+    }
+    if ((layers & 0x04U) != 0U) {
+        log_append(buf, size, pos, "%sFlash", sep);
+    }
+    log_append(buf, size, pos, "]");
+}
+
+static void log_group(const cfg_group_t *g, size_t frame_len)
+{
+#if PURRGO_LOG_LEVEL >= PURRGO_LOG_LEVEL_INFO
+    char line[200];
+    size_t pos = 0U;
+
+    log_append(line, sizeof line, &pos, "GNSS: TX %s %s", g->name, g->del ? "VALDEL" : "VALSET");
+    log_layers(line, sizeof line, &pos, g->layers);
+    for (size_t i = 0U; i < g->count; i++) {
+        const char *name = key_name(g->items[i].key);
+
+        if (name == NULL) {
+            log_append(line, sizeof line, &pos, " 0x%08lX", (unsigned long)g->items[i].key);
+        } else {
+            log_append(line, sizeof line, &pos, " %s", name);
+        }
+        if (!g->del) {
+            const char *vname = (g->items[i].key == UBX_KEY_PM_OPERATEMODE)
+                                    ? pm_mode_name(g->items[i].value) : NULL;
+
+            if (vname != NULL) {
+                log_append(line, sizeof line, &pos, "=%s", vname);
+            } else {
+                log_append(line, sizeof line, &pos, "=%lu", (unsigned long)g->items[i].value);
+            }
+        }
+    }
+    PURRGO_LOGI("%s (%u B)\r\n", line, (unsigned)frame_len);
+#else
+    (void)g;
+    (void)frame_len;
+#endif
+}
+
 static void send_group(purrgo_gnss_tx_fn tx, const cfg_group_t *g)
 {
     uint8_t frame[96];
@@ -235,6 +373,7 @@ static void send_group(purrgo_gnss_tx_fn tx, const cfg_group_t *g)
         PURRGO_LOGE("GNSS: UBX-CFG-VALSET build failed (%s)\r\n", g->name);
         return;
     }
+    log_group(g, len);
     tx(frame, len);
 }
 
@@ -517,6 +656,7 @@ void purrgo_gnss_receiver_configure_ubx_profile(purrgo_gnss_tx_fn tx, purrgo_gns
     const size_t ver_len = purrgo_ubx_build_frame(ver, sizeof ver, UBX_CLASS_MON, UBX_ID_MON_VER,
                                                   NULL, 0U);
     if (ver_len != 0U) {
+        PURRGO_LOGI("GNSS: TX poll UBX-MON-VER (%u B)\r\n", (unsigned)ver_len);
         tx(ver, ver_len);
     }
 #endif
