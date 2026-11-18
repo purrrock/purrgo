@@ -13,8 +13,9 @@ static struct purrgo_dir_s fdir;
 
 typedef struct { char name[320]; uint8_t* data; uint32_t size; int used; uint8_t read_ahead; uint8_t adaptive_ra; } ffile_t;
 static ffile_t files[32];
-static struct purrgo_file_s handles[8];
-static int handle_used[8];
+#define FAKE_HANDLES 16   /* карта со всеми слоями держит открытыми 12 файлов */
+static struct purrgo_file_s handles[FAKE_HANDLES];
+static int handle_used[FAKE_HANDLES];
 
 fake_fs_faults_t g_fault;
 static int open_calls;
@@ -23,12 +24,25 @@ static uint32_t max_read_end;
 static int sync_calls;
 int fake_fs_open_calls(void) { return open_calls; }
 
+/* Журнал событий: "open <путь>" (каждый вызов, в том числе неудачный), "close <файл>", "read <файл>". */
+#define EV_MAX 160
+#define EV_LEN 96
+static char ev_log[EV_MAX][EV_LEN];
+static int ev_count;
+static void ev_add(const char* kind, const char* name) {
+    if (ev_count < EV_MAX) { snprintf(ev_log[ev_count++], EV_LEN, "%s %s", kind, name); }
+}
+void fake_fs_log_reset(void) { ev_count = 0; }
+int fake_fs_log_count(void) { return ev_count; }
+const char* fake_fs_log_at(int i) { return (i >= 0 && i < ev_count) ? ev_log[i] : ""; }
+
 void fake_fs_reset(void) {
     for (int i = 0; i < 32; i++) { free(files[i].data); }
     memset(files, 0, sizeof(files));
     memset(handle_used, 0, sizeof(handle_used));
     memset(&g_fault, 0, sizeof(g_fault));
     open_calls = 0;
+    ev_count = 0;
     sync_calls = 0;
     read_calls = 0;
     max_read_end = 0;
@@ -46,7 +60,7 @@ static int find(const char* n) {
 const uint8_t* fake_fs_data(const char* n, uint32_t* size) {
     int i = find(n); if (i < 0) return NULL; *size = files[i].size; return files[i].data;
 }
-int fake_fs_open_handles(void) { int c = 0; for (int i = 0; i < 8; i++) c += handle_used[i]; return c; }
+int fake_fs_open_handles(void) { int c = 0; for (int i = 0; i < FAKE_HANDLES; i++) c += handle_used[i]; return c; }
 
 void fake_fs_put(const char* n, const char* text) {
     int i = find(n);
@@ -73,6 +87,7 @@ void fake_fs_put_bin(const char* n, const uint8_t* d, uint32_t size) {
 
 purrgo_file_t* purrgo_fs_open(const char* p, fs_mode_t m) {
     open_calls++;
+    ev_add("open", p);
     if (g_fault.fail_open_append && m == FS_WRITE_APPEND) return NULL;
     if (g_fault.fail_open_all) return NULL;
     int i = find(p);
@@ -83,7 +98,7 @@ purrgo_file_t* purrgo_fs_open(const char* p, fs_mode_t m) {
         snprintf(files[i].name, sizeof(files[i].name), "%s", p);
         files[i].data = malloc(1); files[i].size = 0; files[i].used = 1;
     }
-    for (int h = 0; h < 8; h++) if (!handle_used[h]) {
+    for (int h = 0; h < FAKE_HANDLES; h++) if (!handle_used[h]) {
         handle_used[h] = 1; handles[h].idx = i;
         handles[h].pos = (m == FS_WRITE_APPEND) ? files[i].size : 0;
         return &handles[h];
@@ -103,6 +118,7 @@ uint32_t purrgo_fs_write(purrgo_file_t* f, const uint8_t* d, uint32_t n) {
 uint32_t purrgo_fs_read(purrgo_file_t* f, uint8_t* b, uint32_t n) {
     ffile_t* ff = &files[f->idx];
     read_calls++;
+    ev_add("read", ff->name);
     if (f->pos >= ff->size) return 0;
     if (n > ff->size - f->pos) n = ff->size - f->pos;
     memcpy(b, ff->data + f->pos, n); f->pos += n;
@@ -126,7 +142,11 @@ void purrgo_fs_cache_detach(void) { }
 uint8_t fake_fs_read_ahead(const char* name) { int i = find(name); return i < 0 ? 0 : files[i].read_ahead; }
 bool purrgo_fs_sync(purrgo_file_t* f) { (void)f; sync_calls++; return !g_fault.fail_sync; }
 int fake_fs_sync_calls(void) { return sync_calls; }
-bool purrgo_fs_close(purrgo_file_t* f) { handle_used[f - handles] = 0; return !g_fault.fail_close; }
+bool purrgo_fs_close(purrgo_file_t* f) {
+    ev_add("close", files[f->idx].name);
+    handle_used[f - handles] = 0;
+    return !g_fault.fail_close;
+}
 bool purrgo_fs_replace(const char* s, const char* d) {
     if (g_fault.fail_replace) return false;
     int i = find(s); if (i < 0) return false;

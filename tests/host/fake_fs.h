@@ -15,6 +15,10 @@ const uint8_t* fake_fs_data(const char* name, uint32_t* size);
 int fake_fs_open_handles(void);
 int fake_fs_open_dirs(void);    /* 1, если каталог открыт и не закрыт */
 int fake_fs_open_calls(void);   /* число вызовов purrgo_fs_open с момента fake_fs_reset() */
+/* Журнал событий ФС: порядок открытий, закрытий и чтений (до 160 записей, сбрасывается fake_fs_reset()). */
+void fake_fs_log_reset(void);
+int fake_fs_log_count(void);
+const char* fake_fs_log_at(int i);   /* "open <путь>", "close <файл>", "read <файл>" */
 int fake_fs_sync_calls(void);   /* число вызовов purrgo_fs_sync с момента fake_fs_reset() */
 /* Статистика чтения (сбрасывается fake_fs_reset() и fake_fs_reset_read_stats()). */
 uint32_t fake_fs_read_calls(void);      /* число вызовов purrgo_fs_read */
