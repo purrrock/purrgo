@@ -15,7 +15,7 @@ cmake_install.cmake
 *.user
 *.userosscache
 *.suo
-.vscode
+.vscode/
 settings.json
 
 # STM32CubeIDE / Eclipse / расширение STM32Cube для VS Code
