@@ -1,0 +1,9 @@
+/* Сгенерировано cmake/PurrgoVersionGen.cmake при сборке - не править и не коммитить. */
+#ifndef PURRGO_VERSION_H
+#define PURRGO_VERSION_H
+
+#define PURRGO_VERSION_STRING "@PURRGO_VERSION@"
+#define PURRGO_GIT_REVISION   "@PURRGO_GIT_REVISION@"
+#define PURRGO_BUILD_IS_DEBUG @PURRGO_BUILD_IS_DEBUG@
+
+#endif /* PURRGO_VERSION_H */

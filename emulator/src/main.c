@@ -41,6 +41,7 @@
 
 #include "emu_window.h"
 #include <purrgo/app_ui.h>
+#include <purrgo/boot_banner.h>
 
 /*
  * Период обновления E-Ink framebuffer.
@@ -229,6 +230,9 @@ static bool emulator_sys_init(int argc, char* argv[]) {
 static uint32_t loop_last_gnss_time = 0;
 static uint32_t loop_last_eink_refresh = 0;
 static bool loop_quit = false;
+/* Загрузочный баннер показывается до этого момента (purrgo_system_time_ms()); приложение до тех пор не рисует. */
+static uint32_t loop_banner_until = 0;
+static bool loop_banner_active = false;
 
 static void emulator_loop_step(void) {
     uint32_t current_time = purrgo_system_time_ms();
@@ -256,6 +260,19 @@ static void emulator_loop_step(void) {
      * 1. Обновление FSM/GNSS.
      */
     purrgo_app_tick(current_time);
+
+    /*
+     * Загрузочный баннер: пока он на экране, UI не рисует (флаги перерисовки остаются
+     * взведёнными, первый кадр появится сразу после баннера). Окно и GNSS живут как обычно.
+     */
+    if (loop_banner_active) {
+        if ((int32_t)(current_time - loop_banner_until) < 0) {
+            emu_window_process_events(&loop_quit);
+            return;
+        }
+        loop_banner_active = false;
+        loop_last_eink_refresh = 0;
+    }
 
     /*
      * 2. Отрисовка framebuffer с частотой 3 FPS.
@@ -290,6 +307,13 @@ static void emulator_run_loop(void) {
     loop_last_gnss_time = purrgo_system_time_ms();
     loop_last_eink_refresh = 0;
     loop_quit = false;
+
+    purrgo_boot_banner_render(&global_gfx_ctx);
+    emu_window_render(renderer, fb_texture);
+    loop_banner_until = purrgo_system_time_ms() + PURRGO_BOOT_BANNER_MS;
+    loop_banner_active = true;
+    printf("PurrGO v%s (%s)%s\n", purrgo_boot_version(), purrgo_boot_revision(),
+           purrgo_boot_is_debug() ? " [DEBUG BUILD]" : "");
 
 #ifdef __EMSCRIPTEN__
     /*

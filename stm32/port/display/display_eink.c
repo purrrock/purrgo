@@ -396,6 +396,11 @@ uint8_t display_eink_partial_count(void)
     return (uint8_t)((n > 255U) ? 255U : n);
 }
 
+void display_eink_forget_image(void)
+{
+    s_img_valid = false;
+}
+
 void display_eink_wait(void)
 {
     const uint32_t start = HAL_GetTick();

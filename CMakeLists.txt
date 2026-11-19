@@ -122,6 +122,7 @@ endif()
 
 include(cmake/PurrgoWarnings.cmake)
 include(cmake/PurrgoMap.cmake)
+include(cmake/PurrgoVersion.cmake)   # PURRGO_VERSION, purrgo_version.h для загрузочного баннера
 
 # ==============================================================================
 # Общая часть: внешние зависимости и портативное ядро

@@ -235,6 +235,31 @@ int main(void)
     CHECK(b.slp >= a.slp + 1);
 
     /*
+     * 10b. Заставка (загрузочный баннер): после display_eink_forget_image() первый запрос области
+     * выполняется полным обновлением, а не частичным поверх заставки. Без забывания - частичным.
+     */
+    display_eink_set_mode(DISPLAY_MODE_GRAY4);
+    display_eink_request_full();
+    settle(40000);
+    set_px(10, 10, 0);
+    display_eink_request_region(10, 10, 1, 1);
+    settle(20000);
+    CHECK(display_eink_partial_count() == 1);      /* без забывания - частичное */
+    display_eink_request_full();
+    settle(40000);
+    CHECK(display_eink_partial_count() == 0);
+    display_eink_forget_image();
+    CHECK(!display_eink_is_busy());                /* сама по себе обновление не запрашивает */
+    set_px(11, 11, 0);
+    display_eink_request_region(11, 11, 1, 1);
+    a = snap();
+    settle(40000);
+    b = snap();
+    CHECK(b.act > a.act);
+    CHECK(display_eink_partial_count() == 0);      /* выполнено полное */
+    CHECK(b.bytes - a.bytes > 5000);               /* и целым кадром */
+
+    /*
      * 11. Сон по подсказке display_eink_wait_ms(): те же операции, но время идёт только скачками на
      * срок из подсказки (или до спада BUSY). Должно дойти до deep sleep панели и затем «ждать нечего»,
      * причём заметно меньшим числом опросов, чем при опросе раз в мс.

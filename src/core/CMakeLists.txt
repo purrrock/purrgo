@@ -13,6 +13,11 @@ target_include_directories(purrgo_core PUBLIC
 # Внутри одной подсистемы - по короткому имени (#include "map_idx.h").
 target_include_directories(purrgo_core PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
+# purrgo_version.h (версия, ревизия git, признак Debug для загрузочного баннера) генерируется
+# при сборке в ${CMAKE_BINARY_DIR}/generated (cmake/PurrgoVersion.cmake); нужен только ядру.
+target_include_directories(purrgo_core PRIVATE ${PURRGO_VERSION_HEADER_DIR})
+add_dependencies(purrgo_core purrgo_version)
+
 # Линкуем библиотеку парсинга NMEA
 target_link_libraries(purrgo_core PRIVATE minmea)
 

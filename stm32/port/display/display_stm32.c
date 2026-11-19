@@ -70,6 +70,16 @@ uint32_t display_stm32_wait_ms(bool *on_busy)
     return display_eink_wait_ms(on_busy);
 }
 
+void display_stm32_wait_idle(void)
+{
+    display_eink_wait();
+}
+
+void display_stm32_forget_image(void)
+{
+    display_eink_forget_image();
+}
+
 /*
  * Перевод дисплея в режим пониженного энергопотребления.
  */
