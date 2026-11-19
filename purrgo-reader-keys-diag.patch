@@ -1,0 +1,141 @@
+diff --git a/src/core/book/book_reader.c b/src/core/book/book_reader.c
+index 993012d..440e305 100644
+--- a/src/core/book/book_reader.c
++++ b/src/core/book/book_reader.c
+@@ -1048,8 +1048,8 @@ static bool handle_read(purrgo_btn_t b, purrgo_state_t *next)
+     }
+ }
+ 
+-bool purrgo_book_reader_handle_button(purrgo_state_t state, purrgo_btn_t button,
+-                                      purrgo_state_t *next_state)
++static bool reader_handle_button(purrgo_state_t state, purrgo_btn_t button,
++                                 purrgo_state_t *next_state)
+ {
+     purrgo_state_t dummy;
+     if (next_state == NULL) {
+@@ -1072,6 +1072,29 @@ bool purrgo_book_reader_handle_button(purrgo_state_t state, purrgo_btn_t button,
+     return false;
+ }
+ 
++/*
++ * Диагностика (только Debug, PURRGO_LOGD): что читалка сделала с кнопкой. Если после записи
++ * "BUTTON KEYx SHORT" строки "BOOK: btn" нет, событие не дошло до читалки; если redraw=0 -
++ * читалка его отвергла (причина: find/jump/active/open в той же строке).
++ */
++bool purrgo_book_reader_handle_button(purrgo_state_t state, purrgo_btn_t button,
++                                      purrgo_state_t *next_state)
++{
++    purrgo_state_t next = state;
++    const uint32_t page_before = s.page;
++    const bool redraw = reader_handle_button(state, button, &next);
++
++    if (next_state != NULL) {
++        *next_state = next;
++    }
++    PURRGO_LOGD("[%lu] BOOK: btn=%d state=%d->%d redraw=%d page=%lu->%lu/%lu act=%d open=%d find=%d jump=%d\r\n",
++                (unsigned long)purrgo_system_time_ms(), (int)button, (int)state, (int)next,
++                (int)redraw, (unsigned long)page_before, (unsigned long)s.page,
++                (unsigned long)s.hdr.page_count, (int)s.active, (int)s.open, (int)s.find,
++                (int)s.jump);
++    return redraw;
++}
++
+ /* ---- Для отрисовки и тестов ------------------------------------------------------ */
+ 
+ void purrgo_book_reader_get_view(purrgo_book_view_t *v)
+diff --git a/src/core/ui/ui_book.c b/src/core/ui/ui_book.c
+index e13093c..238bddc 100644
+--- a/src/core/ui/ui_book.c
++++ b/src/core/ui/ui_book.c
+@@ -8,9 +8,11 @@
+ #include "purrgo/gfx_rect.h"
+ #include "purrgo/gfx_text.h"
+ #include "purrgo/hardware_config.h"
++#include "purrgo/logger.h"
+ #include "purrgo/pgb.h"
+ #include "purrgo/pgo_text.h"
+ #include "purrgo/purrgo_format.h"
++#include "purrgo/system_time.h"
+ 
+ #include <string.h>
+ 
+@@ -250,11 +252,15 @@ void ui_render_book_read(gfx_context_t* gfx)
+     const uint32_t hash = body_hash(&v);
+     if (s_read_frame.valid && hash == s_read_frame.body_hash) {
+         if (strcmp(status, s_read_frame.status) == 0) {
++            PURRGO_LOGD("[%lu] BOOK: render skip (page %lu, hash and status unchanged)\r\n",
++                        (unsigned long)purrgo_system_time_ms(), (unsigned long)v.page);
+             return;   /* на экране ничего не изменилось: ни рисования, ни обновления дисплея */
+         }
+         /* Изменилась только строка статуса (заряд, процент перехода): обновляется одна строка. */
+         draw_status(gfx, status);
+         memcpy(s_read_frame.status, status, sizeof(status));
++        PURRGO_LOGD("[%lu] BOOK: render status only (page %lu)\r\n",
++                    (unsigned long)purrgo_system_time_ms(), (unsigned long)v.page);
+         display_refresh_region(0, 0, PURRGO_HW_DISPLAY_WIDTH_PX, CELL_H);
+         return;
+     }
+@@ -298,6 +304,8 @@ void ui_render_book_read(gfx_context_t* gfx)
+     memcpy(s_read_frame.status, status, sizeof(status));
+ 
+     /* Страница меняется по всей площади: обновляется весь экран (1 bit - частичное обновление). */
++    PURRGO_LOGD("[%lu] BOOK: render page %lu\r\n", (unsigned long)purrgo_system_time_ms(),
++                (unsigned long)v.page);
+     display_refresh_region(0, 0, PURRGO_HW_DISPLAY_WIDTH_PX, PURRGO_HW_DISPLAY_HEIGHT_PX);
+ }
+ 
+diff --git a/stm32/port/app/stm32_app.c b/stm32/port/app/stm32_app.c
+index abc147d..5f8daef 100644
+--- a/stm32/port/app/stm32_app.c
++++ b/stm32/port/app/stm32_app.c
+@@ -480,6 +480,30 @@ void purrgo_stm32_process(void)
+    * Саму волну обновления (секунды) ждать не нужно: запрос на новое
+    * обновление встаёт в очередь display_eink.c.
+    */
++#if (PURRGO_LOG_LEVEL >= PURRGO_LOG_LEVEL_DEBUG)
++  /* Диагностика: сколько рендер ждал, пока E-Ink принимал данные предыдущего кадра. */
++  {
++    static bool     s_render_wait;
++    static uint32_t s_render_wait_t0;
++    const bool needs = purrgo_app_ui_needs_render(current_time_ms);
++
++    if (needs && !display_stm32_ready_for_render())
++    {
++      if (!s_render_wait)
++      {
++        s_render_wait = true;
++        s_render_wait_t0 = current_time_ms;
++        PURRGO_LOGD("[%lu] UI: render waits for E-Ink frame data\r\n", (unsigned long)current_time_ms);
++      }
++    }
++    else if (s_render_wait)
++    {
++      s_render_wait = false;
++      PURRGO_LOGD("[%lu] UI: render waited %lu ms\r\n", (unsigned long)current_time_ms,
++                  (unsigned long)(current_time_ms - s_render_wait_t0));
++    }
++  }
++#endif
+   if (display_stm32_ready_for_render() &&
+       purrgo_app_ui_needs_render(current_time_ms))
+   {
+diff --git a/stm32/port/display/display_eink.c b/stm32/port/display/display_eink.c
+index d96b225..22ea4b5 100644
+--- a/stm32/port/display/display_eink.c
++++ b/stm32/port/display/display_eink.c
+@@ -134,6 +134,7 @@ static void op_done(int rc, uint32_t now)
+         return;
+     }
+ 
++    PURRGO_LOGD("[%lu] E-Ink: done op=%d\n\r", (unsigned long)now, (int)op);
+     switch (op) {
+         case OP_INIT:
+             s_hw = (s_op_mode == DISPLAY_MODE_GRAY4) ? HW_GRAY : HW_MONO;
+@@ -154,6 +155,7 @@ static void op_done(int rc, uint32_t now)
+ /* Запуск операции; rc != OK - сразу ошибка, !busy после OK - завершилась мгновенно. */
+ static void op_started(eink_op_t op, display_mode_t mode, int rc, uint32_t now)
+ {
++    PURRGO_LOGD("[%lu] E-Ink: start op=%d mode=%d rc=%d\n\r", (unsigned long)now, (int)op, (int)mode, rc);
+     s_op = op;
+     s_op_mode = mode;
+     if (rc != EPD4G_OK || !epd4g_is_busy()) {

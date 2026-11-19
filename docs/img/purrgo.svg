@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 900" width="600" height="900">
+  <defs>
+    <style>
+      .black { fill: #050505; }
+      .dark-gray { fill: #555555; }
+      .light-gray { fill: #b0b0b0; }
+      .cap-button { fill: #c4c4c4; }
+      .white { fill: #ffffff; }
+      .text-logo {
+        fill: #1c1c1c;
+        font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        font-weight: 800;
+        font-size: 112px;
+        letter-spacing: -1px;
+      }
+    </style>
+  </defs>
+
+  <!-- Голова и уши кота -->
+  <path class="black" d="
+    M 176 135
+    L 54 52
+    C 43 45, 38 52, 40 65
+    L 54 270
+    C 54 415, 165 482, 300 482
+    C 435 482, 546 415, 546 270
+    L 560 65
+    C 562 52, 557 45, 546 52
+    L 424 135
+    C 345 108, 255 108, 176 135 Z" />
+
+  <!-- Тулья кепки -->
+  <path class="dark-gray" d="
+    M 92 182
+    C 210 100, 390 100, 508 182
+    L 508 218
+    C 385 172, 215 172, 92 218 Z" />
+
+  <!-- Пуговка на макушке кепки -->
+  <circle class="cap-button" cx="300" cy="136" r="21" />
+
+  <!-- Козырёк кепки -->
+  <path class="dark-gray" d="
+    M 112 238
+    C 220 198, 380 198, 488 238
+    C 462 290, 138 290, 112 238 Z" />
+
+  <!-- Глаза -->
+  <path d="M 156 332 Q 195 292 234 332" fill="none" stroke="#ffffff" stroke-width="18" stroke-linecap="round" />
+  <path d="M 366 332 Q 405 292 444 332" fill="none" stroke="#ffffff" stroke-width="18" stroke-linecap="round" />
+
+  <!-- Нос -->
+  <path class="white" d="M 268 386 L 332 386 L 300 418 Z" />
+
+  <!-- Рот -->
+  <path d="M 300 414 L 300 442" fill="none" stroke="#ffffff" stroke-width="9" stroke-linecap="round" />
+  <path d="M 267 438 C 275 452, 294 452, 300 442 C 306 452, 325 452, 333 438" fill="none" stroke="#ffffff" stroke-width="9" stroke-linecap="round" />
+
+  <!-- Геометка (пин) -->
+  <path class="dark-gray" stroke="#050505" stroke-width="15" stroke-linejoin="round" d="
+    M 300 462
+    C 236 462, 198 512, 198 564
+    C 198 625, 255 685, 300 726
+    C 345 685, 402 625, 402 564
+    C 402 512, 364 462, 300 462 Z" />
+
+  <!-- Отверстие в геометке -->
+  <circle class="white" stroke="#050505" stroke-width="15" cx="300" cy="560" r="46" />
+
+  <!-- Левая лапка -->
+  <g>
+    <path class="black" stroke="#b0b0b0" stroke-width="11" stroke-linejoin="round" d="
+      M 185 516
+      C 142 516, 118 552, 118 592
+      C 118 632, 145 660, 185 660
+      C 214 660, 232 642, 232 622
+      C 232 612, 224 604, 214 602
+      C 230 598, 240 584, 238 568
+      C 236 554, 222 544, 206 544
+      C 214 532, 204 516, 185 516 Z" />
+    <!-- Контуры пальчиков -->
+    <path d="M 206 544 C 194 544, 188 552, 192 560" fill="none" stroke="#b0b0b0" stroke-width="9" stroke-linecap="round" />
+    <path d="M 214 602 C 198 602, 190 594, 194 584" fill="none" stroke="#b0b0b0" stroke-width="9" stroke-linecap="round" />
+  </g>
+
+  <!-- Правая лапка (зеркальное отражение левой) -->
+  <g transform="translate(600, 0) scale(-1, 1)">
+    <path class="black" stroke="#b0b0b0" stroke-width="11" stroke-linejoin="round" d="
+      M 185 516
+      C 142 516, 118 552, 118 592
+      C 118 632, 145 660, 185 660
+      C 214 660, 232 642, 232 622
+      C 232 612, 224 604, 214 602
+      C 230 598, 240 584, 238 568
+      C 236 554, 222 544, 206 544
+      C 214 532, 204 516, 185 516 Z" />
+    <!-- Контуры пальчиков -->
+    <path d="M 206 544 C 194 544, 188 552, 192 560" fill="none" stroke="#b0b0b0" stroke-width="9" stroke-linecap="round" />
+    <path d="M 214 602 C 198 602, 190 594, 194 584" fill="none" stroke="#b0b0b0" stroke-width="9" stroke-linecap="round" />
+  </g>
+
+  <!-- Надпись PurrGO -->
+  <text class="text-logo" x="300" y="832" text-anchor="middle">PurrGO</text>
+</svg>
