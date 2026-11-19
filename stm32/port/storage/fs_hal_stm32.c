@@ -315,6 +315,30 @@ static bool file_seek_physical(purrgo_file_t* file, FSIZE_t offset) {
  * запрошенного, поэтому запрошенный остаётся самым свежим. Уже лежащие в кэше сектора
  * блока обновляются (не дублируются).
  */
+/*
+ * Копирование сектора из ra_buf в кэш. Замер Release (prof5_1.log): вне драйвера SD на один
+ * промахнувшийся сектор уходит около 40 мкс (sd - sum в PROF5), что похоже на побайтный
+ * memcpy из newlib-nano (-Os). Для целого выровненного сектора копируем словами, по 8 слов
+ * на итерацию (чтение всех, потом запись: компилятор не превращает цикл обратно в memcpy).
+ */
+typedef uint32_t __attribute__((may_alias)) sector_word_t;
+
+static void copy_sector_in(uint8_t* dst, const uint8_t* src, uint32_t valid) {
+    if (valid == LRU_SECTOR_SIZE && (((uintptr_t)dst | (uintptr_t)src) & 3u) == 0u) {
+        sector_word_t* d = (sector_word_t*)dst;
+        const sector_word_t* s = (const sector_word_t*)src;
+        for (uint32_t i = 0; i < LRU_SECTOR_SIZE / 4u; i += 8u) {
+            const uint32_t a0 = s[i], a1 = s[i + 1], a2 = s[i + 2], a3 = s[i + 3];
+            const uint32_t a4 = s[i + 4], a5 = s[i + 5], a6 = s[i + 6], a7 = s[i + 7];
+            d[i] = a0; d[i + 1] = a1; d[i + 2] = a2; d[i + 3] = a3;
+            d[i + 4] = a4; d[i + 5] = a5; d[i + 6] = a6; d[i + 7] = a7;
+        }
+        return;
+    }
+    memcpy(dst, src, valid);
+    if (valid < LRU_SECTOR_SIZE) memset(dst + valid, 0, LRU_SECTOR_SIZE - valid);
+}
+
 static const uint8_t* read_block_cached(purrgo_file_t* file, uint32_t base, uint32_t n,
                                         uint32_t sector_num, uint32_t* out_read_bytes) {
     if (out_read_bytes) *out_read_bytes = 0;
@@ -353,8 +377,7 @@ static const uint8_t* read_block_cached(purrgo_file_t* file, uint32_t base, uint
         uint32_t valid = (uint32_t)br - k * LRU_SECTOR_SIZE;
         if (valid > LRU_SECTOR_SIZE) valid = LRU_SECTOR_SIZE;
         const uint16_t i = cache_insert(c, slot, base + k);
-        memcpy(cache_data(c, i), ra_buf + k * LRU_SECTOR_SIZE, valid);
-        if (valid < LRU_SECTOR_SIZE) memset(cache_data(c, i) + valid, 0, LRU_SECTOR_SIZE - valid);
+        copy_sector_in(cache_data(c, i), ra_buf + k * LRU_SECTOR_SIZE, valid);
     }
 
     uint32_t valid = (uint32_t)br - wanted * LRU_SECTOR_SIZE;
@@ -365,8 +388,7 @@ static const uint8_t* read_block_cached(purrgo_file_t* file, uint32_t base, uint
         cache_touch(c, i);
     } else {
         i = cache_insert(c, slot, sector_num);
-        memcpy(cache_data(c, i), ra_buf + wanted * LRU_SECTOR_SIZE, valid);
-        if (valid < LRU_SECTOR_SIZE) memset(cache_data(c, i) + valid, 0, LRU_SECTOR_SIZE - valid);
+        copy_sector_in(cache_data(c, i), ra_buf + wanted * LRU_SECTOR_SIZE, valid);
     }
 
     if (out_read_bytes) *out_read_bytes = valid;
