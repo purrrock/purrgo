@@ -51,6 +51,14 @@ typedef struct
      * Добавлен в конец структуры, прежние инициализаторы остаются верными.
      */
     uint32_t (*cycles)(void *ctx);
+
+    /*
+     * Необязательное переключение частоты SPI для приёма блоков данных: on = true - быстрая
+     * (High Speed, 40 МГц), false - обычная рабочая. Вызывается только при sd_spi_t.hs и
+     * только вокруг приёма данных одной команды чтения; команды, CMD12 и запись идут на обычной
+     * частоте. NULL - режим High Speed не используется.
+     */
+    void (*set_hs)(void *ctx, bool on);
 } sd_spi_port_t;
 
 /*
@@ -90,6 +98,8 @@ typedef struct
     bool initialized;
     bool block_addressing;   /* SDHC/SDXC: адрес в блоках, иначе в байтах */
     uint32_t sector_count;   /* 0, если CSD прочитать не удалось */
+    bool v2;                 /* карта SD v2+ (ответила на CMD8) */
+    bool hs;                 /* чтение блоков данных на быстрой частоте включено */
     sd_spi_stats_t stats;    /* диагностика, см. sd_spi_stats_t */
     bool prof_on;            /* внутренний флаг: идёт замер sd_spi_read() */
 } sd_spi_t;
@@ -102,7 +112,12 @@ typedef struct
  */
 sd_spi_res_t sd_spi_init(sd_spi_t *sd, const sd_spi_port_t *port);
 
-/** @brief Прочитать count секторов по 512 байт, начиная с sector. */
+/**
+ * @brief Прочитать count секторов по 512 байт, начиная с sector.
+ *
+ * Если включён sd_spi_t.hs и приём данных не удался (таймаут или неверный токен), быстрый
+ * режим выключается насовсем, и чтение один раз повторяется на обычной частоте.
+ */
 sd_spi_res_t sd_spi_read(sd_spi_t *sd, uint8_t *buf, uint32_t sector, uint32_t count);
 
 /** @brief Записать count секторов по 512 байт, начиная с sector. */

@@ -41,6 +41,17 @@
 #define PURRGO_SD_SPI_RUN_PRESCALER SPI_BAUDRATEPRESCALER_4
 #endif
 
+/*
+ * Чтение блоков данных на 40 МГц (SPI_BAUDRATEPRESCALER_2) после CMD6 (High Speed) и проверки
+ * чтением при инициализации (sd_spi.c, verify_high_speed). Команды и запись остаются на
+ * PURRGO_SD_SPI_RUN_PRESCALER. Даташит STM32U585 (таблица SPI characteristics): для range 2
+ * значения fSCK нет, tv(MO) для PB15 до 12,5 нс; на чтении MOSI держится в 0xFF и не
+ * переключается. 0 - выключить режим, остаётся 20 МГц.
+ */
+#ifndef PURRGO_SD_SPI_HS
+#define PURRGO_SD_SPI_HS 1
+#endif
+
 /* Быстрый обмен по регистрам SPI2 (см. xfer_fast). 0 - только HAL. */
 #ifndef PURRGO_SD_SPI_FAST_XFER
 #define PURRGO_SD_SPI_FAST_XFER 1
@@ -401,6 +412,19 @@ static void port_fast(void *ctx)
     spi_set_prescaler(PURRGO_SD_SPI_RUN_PRESCALER);
 }
 
+#if PURRGO_SD_SPI_HS
+/*
+ * Смена делителя без переинициализации HAL: SPE между обменами сброшен (xfer_fast),
+ * hspi2.Init.BaudRatePrescaler остаётся рабочим, поэтому spi_set_prescaler() не страдает.
+ */
+static void port_hs(void *ctx, bool on)
+{
+    (void)ctx;
+    MODIFY_REG(hspi2.Instance->CFG1, SPI_CFG1_MBR,
+               on ? SPI_BAUDRATEPRESCALER_2 : PURRGO_SD_SPI_RUN_PRESCALER);
+}
+#endif
+
 /*
  * --------------------------------------------------------------------------
  * Привязка sd_power к GPIO
@@ -511,6 +535,9 @@ static const sd_spi_port_t s_port = {
 #if PURRGO_RENDER_PROF
     .cycles = port_cycles,
 #endif
+#if PURRGO_SD_SPI_HS
+    .set_hs = port_hs,
+#endif
 };
 
 
@@ -575,6 +602,7 @@ DSTATUS disk_initialize(BYTE pdrv)
         return s_stat;
     }
 
+    PURRGO_LOGI("SD: read data at %s\r\n", s_card.hs ? "40 MHz (High Speed)" : "20 MHz");
     s_stat = 0;
     return s_stat;
 }

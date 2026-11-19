@@ -36,6 +36,8 @@ typedef struct
     bool stuck_busy;          /* DO удерживается в 0 */
     bool read_error;          /* вместо токена данных - токен ошибки */
     bool reject_write;        /* ответ на запись: CRC error */
+    bool hs_cap;              /* CMD6 включает High Speed (иначе - ошибка команды) */
+    bool hs_bad;              /* на быстрой частоте данные искажаются */
     unsigned busy_len;        /* байт занятости после блока записи */
 
     /* Состояние. */
@@ -63,6 +65,10 @@ typedef struct
     bool cmd0_seen;
     uint32_t last_addr_arg;
     unsigned set_fast_calls;
+    unsigned cmd6_calls;
+    bool hs_on;               /* порт сейчас на быстрой частоте */
+    unsigned hs_switches;     /* вызовов set_hs */
+    size_t hs_bytes;          /* байт, принятых на быстрой частоте */
     uint32_t tick;
 } model_t;
 
@@ -199,6 +205,26 @@ static void handle_cmd(model_t *m)
         }
         q_byte(m, 0x00U);
         q_byte(m, 0x00U);
+    }
+    else if (idx == 6U)
+    {
+        m->cmd6_calls++;
+        if (!m->hs_cap)
+        {
+            q_byte(m, 0x04U);   /* illegal command */
+        }
+        else
+        {
+            q_byte(m, 0x00U);
+            q_byte(m, 0xFFU);
+            q_byte(m, 0xFEU);
+            for (unsigned i = 0U; i < 64U; i++)
+            {
+                q_byte(m, (i == 16U) ? 0x01U : 0x00U);   /* группа 1: функция 1 выбрана */
+            }
+            q_byte(m, 0x12U);
+            q_byte(m, 0x34U);
+        }
     }
     else if (idx == 17U || idx == 18U)
     {
@@ -380,6 +406,14 @@ static bool port_xfer(const uint8_t *tx, uint8_t *rx, size_t len, void *ctx)
             rx[i] = r;
         }
     }
+    if (m->hs_on)
+    {
+        m->hs_bytes += len;
+        if (m->hs_bad && (rx != NULL) && (len >= 64U))
+        {
+            rx[len / 2U] ^= 0xFFU;   /* искажение данных на быстрой частоте */
+        }
+    }
     return true;
 }
 
@@ -391,6 +425,14 @@ static uint32_t port_tick(void *ctx)
 static void port_fast(void *ctx)
 {
     ((model_t *)ctx)->set_fast_calls++;
+}
+
+static void port_hs(void *ctx, bool on)
+{
+    model_t *m = (model_t *)ctx;
+
+    m->hs_on = on;
+    m->hs_switches++;
 }
 
 static void model_setup(model_t *m, bool v2, bool sdhc)
@@ -425,6 +467,7 @@ static sd_spi_port_t make_port(model_t *m)
     p.set_fast = port_fast;
     p.ctx = m;
     p.cycles = NULL;
+    p.set_hs = NULL;
     return p;
 }
 
@@ -706,12 +749,93 @@ static void test_read_stats(void)
     model_free(&m);
 }
 
+static void test_high_speed(void)
+{
+    static uint8_t buf[BLK * 5U];
+    sd_spi_t sd;
+    model_t m;
+    sd_spi_port_t p;
+
+    /* Карта с High Speed: режим включается, блоки идут на быстрой частоте, данные верны. */
+    model_setup(&m, true, true);
+    m.hs_cap = true;
+    p = make_port(&m);
+    p.set_hs = port_hs;
+    CHECK(sd_spi_init(&sd, &p) == SD_SPI_OK);
+    CHECK(sd.hs && m.cmd6_calls == 1U);
+    CHECK(!m.hs_on);
+    const size_t verify_bytes = m.hs_bytes;
+    CHECK(sd_spi_read(&sd, buf, 20U, 1U) == SD_SPI_OK);
+    CHECK(sectors_equal(&m, 20U, 1U, buf));
+    CHECK(sd_spi_read(&sd, buf, 100U, 5U) == SD_SPI_OK);
+    CHECK(sectors_equal(&m, 100U, 5U, buf));
+    CHECK(!m.hs_on && (m.hs_switches % 2U) == 0U);
+    CHECK(m.hs_bytes >= verify_bytes + 6U * BLK);
+    model_free(&m);
+
+    /* Карта без CMD6 (ошибка команды): остаётся обычная частота, set_hs не вызывается. */
+    model_setup(&m, true, true);
+    p = make_port(&m);
+    p.set_hs = port_hs;
+    CHECK(sd_spi_init(&sd, &p) == SD_SPI_OK);
+    CHECK(!sd.hs && m.cmd6_calls == 1U);
+    CHECK(sd_spi_read(&sd, buf, 20U, 2U) == SD_SPI_OK);
+    CHECK(sectors_equal(&m, 20U, 2U, buf));
+    CHECK(m.hs_switches == 0U);
+    model_free(&m);
+
+    /* SD v1: CMD6 не посылается. */
+    model_setup(&m, false, false);
+    m.hs_cap = true;
+    p = make_port(&m);
+    p.set_hs = port_hs;
+    CHECK(sd_spi_init(&sd, &p) == SD_SPI_OK);
+    CHECK(!sd.hs && m.cmd6_calls == 0U);
+    model_free(&m);
+
+    /* Данные искажаются на быстрой частоте: проверка при init отключает режим. */
+    model_setup(&m, true, true);
+    m.hs_cap = true;
+    m.hs_bad = true;
+    p = make_port(&m);
+    p.set_hs = port_hs;
+    CHECK(sd_spi_init(&sd, &p) == SD_SPI_OK);
+    CHECK(!sd.hs && !m.hs_on);
+    CHECK(sd_spi_read(&sd, buf, 30U, 3U) == SD_SPI_OK);
+    CHECK(sectors_equal(&m, 30U, 3U, buf));
+    model_free(&m);
+
+    /* Без set_hs в порте режим не включается. */
+    model_setup(&m, true, true);
+    m.hs_cap = true;
+    p = make_port(&m);
+    CHECK(sd_spi_init(&sd, &p) == SD_SPI_OK);
+    CHECK(!sd.hs && m.cmd6_calls == 0U);
+    model_free(&m);
+
+    /* Сбой приёма данных на быстрой частоте: режим выключается, чтение повторяется. */
+    model_setup(&m, true, true);
+    m.hs_cap = true;
+    p = make_port(&m);
+    p.set_hs = port_hs;
+    CHECK(sd_spi_init(&sd, &p) == SD_SPI_OK);
+    CHECK(sd.hs);
+    m.read_error = true;
+    CHECK(sd_spi_read(&sd, buf, 40U, 1U) != SD_SPI_OK);
+    CHECK(!sd.hs && !m.hs_on);
+    m.read_error = false;
+    CHECK(sd_spi_read(&sd, buf, 40U, 1U) == SD_SPI_OK);
+    CHECK(sectors_equal(&m, 40U, 1U, buf));
+    model_free(&m);
+}
+
 int main(void)
 {
     test_init_variants();
     test_init_failures();
     test_read();
     test_read_stats();
+    test_high_speed();
     test_write();
     test_faults();
     test_state_and_params();

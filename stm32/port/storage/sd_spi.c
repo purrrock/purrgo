@@ -9,6 +9,7 @@
 /* Команды SPI-режима (индекс; бит 0x80 - команда прикладная, ACMD). */
 #define CMD0   0U           /* GO_IDLE_STATE */
 #define CMD8   8U           /* SEND_IF_COND */
+#define CMD6   6U           /* SWITCH_FUNC (High Speed) */
 #define CMD9   9U           /* SEND_CSD */
 #define CMD12  12U          /* STOP_TRANSMISSION */
 #define CMD16  16U          /* SET_BLOCKLEN */
@@ -314,6 +315,101 @@ static uint32_t read_sector_count(sd_spi_t *sd)
 /* Публичный API                                                             */
 /* ------------------------------------------------------------------------ */
 
+static sd_spi_res_t read_blocks(sd_spi_t *sd, uint8_t *buf, uint32_t sector, uint32_t count,
+                                bool *data_failed);
+
+/*
+ * CMD6 (режим переключения, группа 1 = High Speed). В SPI-режиме карта отвечает R1 и блоком
+ * состояния 64 байта; выбранная функция группы 1 - младшая тетрада байта 16 (биты 379:376).
+ * 1 - High Speed включён. Карты без поддержки отвечают ошибкой команды или другим значением.
+ */
+static bool switch_high_speed(sd_spi_t *sd)
+{
+    uint8_t status[64];
+
+    if (send_cmd(sd, CMD6, 0x80FFFFF1UL) != 0U)
+    {
+        deselect_card(sd);
+        return false;
+    }
+
+    const sd_spi_res_t r = rx_data_block(sd, status, sizeof status);
+
+    deselect_card(sd);
+    return (r == SD_SPI_OK) && ((status[16] & 0x0FU) == 1U);
+}
+
+static uint32_t fnv1a(uint32_t h, const uint8_t *p, size_t n)
+{
+    for (size_t i = 0U; i < n; i++)
+    {
+        h = (h ^ p[i]) * 16777619UL;
+    }
+    return h;
+}
+
+#define HS_VERIFY_SECTORS 16U
+#define HS_VERIFY_PASSES  3U
+
+/*
+ * Проверка быстрого чтения: первые секторы читаются на обычной частоте (эталон), затем
+ * несколько раз на быстрой, хеши должны совпасть. CRC данных в SPI-режиме выключен, поэтому
+ * сбой по таймингам иначе не виден. Возвращает true, если быстрый режим можно использовать.
+ */
+static bool verify_high_speed(sd_spi_t *sd)
+{
+    uint8_t buf[SD_SPI_BLOCK_SIZE];
+    uint32_t n = HS_VERIFY_SECTORS;
+    uint32_t ref = 2166136261UL;
+    bool failed = false;
+
+    if ((sd->sector_count != 0U) && (sd->sector_count < n))
+    {
+        n = sd->sector_count;
+    }
+
+    sd->hs = false;
+    for (uint32_t i = 0U; i < n; i++)
+    {
+        if (read_blocks(sd, buf, i, 1U, &failed) != SD_SPI_OK)
+        {
+            return false;
+        }
+        ref = fnv1a(ref, buf, sizeof buf);
+    }
+
+    sd->hs = true;
+    for (uint32_t pass = 0U; pass < HS_VERIFY_PASSES; pass++)
+    {
+        uint32_t h = 2166136261UL;
+
+        for (uint32_t i = 0U; i < n; i++)
+        {
+            if (read_blocks(sd, buf, i, 1U, &failed) != SD_SPI_OK)
+            {
+                sd->hs = false;
+                return false;
+            }
+            h = fnv1a(h, buf, sizeof buf);
+        }
+        if (h != ref)
+        {
+            sd->hs = false;
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool enable_high_speed(sd_spi_t *sd)
+{
+    if (!switch_high_speed(sd))
+    {
+        return false;
+    }
+    return verify_high_speed(sd);
+}
+
 sd_spi_res_t sd_spi_init(sd_spi_t *sd, const sd_spi_port_t *port)
 {
     if ((sd == NULL) || (port == NULL) || (port->cs == NULL) ||
@@ -374,6 +470,7 @@ sd_spi_res_t sd_spi_init(sd_spi_t *sd, const sd_spi_port_t *port)
 
         (void)spi_rx(sd, ocr, sizeof ocr);
         block = ((ocr[0] & 0x40U) != 0U);     /* бит CCS */
+        sd->v2 = true;
     }
     else
     {
@@ -419,20 +516,18 @@ sd_spi_res_t sd_spi_init(sd_spi_t *sd, const sd_spi_port_t *port)
     }
 
     sd->sector_count = read_sector_count(sd);
+
+    /* Быстрое чтение данных: только SD v2+, после CMD6 и проверки чтением. */
+    if ((sd->port.set_hs != NULL) && sd->v2)
+    {
+        sd->hs = enable_high_speed(sd);
+    }
     return SD_SPI_OK;
 }
 
-sd_spi_res_t sd_spi_read(sd_spi_t *sd, uint8_t *buf, uint32_t sector, uint32_t count)
+static sd_spi_res_t read_blocks(sd_spi_t *sd, uint8_t *buf, uint32_t sector, uint32_t count,
+                                bool *data_failed)
 {
-    if ((sd == NULL) || (buf == NULL) || (count == 0U))
-    {
-        return SD_SPI_ERR_PARAM;
-    }
-    if (!sd->initialized)
-    {
-        return SD_SPI_ERR_NOINIT;
-    }
-
     sd_spi_res_t res = SD_SPI_OK;
     const uint8_t cmd = (count == 1U) ? CMD17 : CMD18;
 
@@ -454,13 +549,23 @@ sd_spi_res_t sd_spi_read(sd_spi_t *sd, uint8_t *buf, uint32_t sector, uint32_t c
         return SD_SPI_ERR_IO;
     }
 
+    /* Блоки данных - на быстрой частоте (MOSI при этом держится в 0xFF), остальное - на обычной. */
+    if (sd->hs)
+    {
+        sd->port.set_hs(sd->port.ctx, true);
+    }
     for (uint32_t i = 0U; i < count; i++)
     {
         res = rx_data_block(sd, buf + ((size_t)i * SD_SPI_BLOCK_SIZE), SD_SPI_BLOCK_SIZE);
         if (res != SD_SPI_OK)
         {
+            *data_failed = true;
             break;
         }
+    }
+    if (sd->hs)
+    {
+        sd->port.set_hs(sd->port.ctx, false);
     }
 
     if (count > 1U)
@@ -577,4 +682,28 @@ void sd_spi_deinit(sd_spi_t *sd)
         sd->port.cs(false, sd->port.ctx);
     }
     sd->initialized = false;
+}
+
+sd_spi_res_t sd_spi_read(sd_spi_t *sd, uint8_t *buf, uint32_t sector, uint32_t count)
+{
+    if ((sd == NULL) || (buf == NULL) || (count == 0U))
+    {
+        return SD_SPI_ERR_PARAM;
+    }
+    if (!sd->initialized)
+    {
+        return SD_SPI_ERR_NOINIT;
+    }
+
+    bool data_failed = false;
+    sd_spi_res_t res = read_blocks(sd, buf, sector, count, &data_failed);
+
+    if ((res != SD_SPI_OK) && data_failed && sd->hs)
+    {
+        /* Сбой приёма данных на быстрой частоте: дальше только обычная. */
+        sd->hs = false;
+        data_failed = false;
+        res = read_blocks(sd, buf, sector, count, &data_failed);
+    }
+    return res;
 }
