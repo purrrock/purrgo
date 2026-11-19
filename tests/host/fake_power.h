@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include "purrgo/sound.h"
 /*
  * Тестовые платформенные хуки выключения (purrgo_platform_storage_unmount,
  * purrgo_platform_enter_standby): запоминают порядок вызовов и не завершают процесс.
@@ -32,6 +33,15 @@ void fake_power_set_battery_pin_mv(uint16_t mv);
 uint16_t fake_power_pin_for_pack_mv(uint32_t pack_mv);
 /* Низкое напряжение питания, которое вернёт purrgo_platform_supply_low() (по умолчанию false). */
 void fake_power_set_supply_low(bool low);
+
+/*
+ * Звуковые сигналы, которые ядро передало платформе (purrgo_platform_sound_play()):
+ * общее число, число по виду и последний. fake_power_reset() их тоже очищает.
+ */
+void fake_sound_reset(void);
+int fake_sound_total(void);
+int fake_sound_count(purrgo_sound_t sound);
+purrgo_sound_t fake_sound_last(void);
 
 /* Вызовы purrgo_gnss_set_profile(): число вызовов и последний профиль (purrgo_gnss_profile_t). */
 int fake_gnss_profile_calls(void);

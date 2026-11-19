@@ -28,6 +28,7 @@
 #include "gnss_stop.h"
 #include "eink_wake.h"
 #include "timebase.h"
+#include "sound_stm32.h"
 
 /*
  * Интервал обновления логики GNSS/FSM.
@@ -188,6 +189,13 @@ static void purrgo_stm32_sleep(uint32_t now_ms)
     return;
   }
 
+  /* Звуковой сигнал: следующий шаг (пауза, конец тона) пора выполнить сейчас. */
+  const uint32_t sound_ms = purrgo_sound_stm32_wait_ms(now_ms);
+  if (sound_ms == 0U)
+  {
+    return;
+  }
+
   __disable_irq();
 
   uint32_t wake_ms = PURRGO_SLEEP_MAX_MS;
@@ -207,6 +215,12 @@ static void purrgo_stm32_sleep(uint32_t now_ms)
   if (display_ms < wake_ms)
   {
     wake_ms = display_ms;
+  }
+
+  /* Шаги звукового сигнала (щелчок длится 3 мс): будить точно к концу шага, а не по периоду цикла. */
+  if (sound_ms < wake_ms)
+  {
+    wake_ms = sound_ms;
   }
 
   /*
@@ -244,6 +258,7 @@ static void purrgo_stm32_idle(uint32_t now_ms)
   const uint32_t display_ms = display_stm32_wait_ms(&on_busy);
 
   if (purrgo_app_deep_sleep_allowed(now_ms) &&
+      !purrgo_sound_stm32_busy() &&   /* TIM16 в Stop 2 не работает: сигнал доигрывается в Sleep */
       (display_ms >= PURRGO_STOP2_MIN_MS) &&
       purrgo_stm32_buttons_idle() &&
       purrgo_gnss_stop_ready(now_ms))
@@ -424,6 +439,9 @@ void purrgo_stm32_init(void)
   purrgo_stm32_buttons_init();
   PURRGO_LOG("Buttons OK\r\n");
 
+  /* Пьезоизлучатель (TIM16, MX_TIM16_Init() уже вызван из main.c). */
+  purrgo_sound_stm32_init();
+
 #if (PURRGO_STOP2 != 0)
   /* Stop 2 в простое (таймбейз LPTIM1 уже идёт); при сбое работает обычный Sleep. */
   (void)purrgo_stop2_init();
@@ -556,6 +574,9 @@ void purrgo_stm32_process(void)
     }
     s_prev_sd_state = sd_state;
   }
+
+  /* Звуковой сигнал: переход к следующему шагу (пауза, конец тона). */
+  purrgo_sound_stm32_service(purrgo_system_time_ms());
 
   /*
    * Ждём событий

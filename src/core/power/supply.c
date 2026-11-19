@@ -2,6 +2,7 @@
 #include "purrgo/battery.h"
 #include "purrgo/config.h"
 #include "purrgo/logger.h"
+#include "purrgo/sound.h"
 #include "purrgo/track_logger.h"
 
 static struct {
@@ -149,6 +150,9 @@ bool purrgo_supply_tick(uint32_t now_ms)
         PURRGO_LOGE("CRITICAL: battery low (%s), track recording stopped, SD writes stopped\r\n",
                     purrgo_supply_reason_text(false));
         storage_stop();
+        /* Остановка записи - единственное событие, после которого теряется трек, а экран
+         * в кармане не виден: длинный громкий сигнал (один раз, при переходе в блокировку). */
+        purrgo_sound_play(PURRGO_SOUND_ERROR);
     } else {
         s_supply.reason = PURRGO_SUPPLY_REASON_NONE;
         PURRGO_LOGW("Supply recovered: SD writes allowed\r\n");

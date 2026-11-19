@@ -67,7 +67,7 @@
  * из статей с большим числом вызовов (proj, name).
  */
 #ifndef PURRGO_RENDER_PROF
-#define PURRGO_RENDER_PROF 1
+#define PURRGO_RENDER_PROF 0
 #endif
 
 #include <stdbool.h>

@@ -23,6 +23,7 @@
 #include "lpdma.h"
 #include "usart.h"
 #include "spi.h"
+#include "tim.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
@@ -103,6 +104,7 @@ int main(void)
   MX_USART1_UART_Init();
   MX_ADC1_Init();
   MX_LPUART1_UART_Init();
+  MX_TIM16_Init();
   /* USER CODE BEGIN 2 */
   /* ADC1 нужен только для редкого измерения батареи (battery_adc.c): сразу
    * обесточиваем регулятор АЦП, VREFINT и тактирование, измерение включит их

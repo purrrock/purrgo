@@ -187,6 +187,9 @@ void purrgo_config_init(void)
     /* Запись лога на SD по умолчанию выключена. */
     app_config.sd_log = false;
 
+    /* Звуковые сигналы по умолчанию выключены. */
+    app_config.sound_on = false;
+
     /*
      * Отображение текущего трека по умолчанию включено.
      */
@@ -582,6 +585,17 @@ bool purrgo_config_load(void)
             }
 
             /*
+             * Звуковые сигналы.
+             */
+            else if (strcmp(key, "SOUND") == 0) {
+                const int32_t on = parse_int32(val);
+
+                if (on == 0 || on == 1) {
+                    app_config.sound_on = (on == 1);
+                }
+            }
+
+            /*
              * Режим записи трека.
              */
             else if (strcmp(key, "LOG_MODE") == 0) {
@@ -691,6 +705,7 @@ bool purrgo_config_save(void)
         "MAP_DETAILS=%d\n"
         "POWER_SRC=%d\n"
         "SD_LOG=%d\n"
+        "SOUND=%d\n"
         "BOOK_FILE=%.*s\n"
         "BOOK_CRC=%08X\n"
         "BOOK_PAGE=%u\n"
@@ -724,6 +739,8 @@ bool purrgo_config_save(void)
         (int)app_config.power_source,
 
         app_config.sd_log ? 1 : 0,
+
+        app_config.sound_on ? 1 : 0,
 
         (int)(sizeof(app_config.book_file) - 1),
         app_config.book_file,

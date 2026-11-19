@@ -5,6 +5,7 @@
 #include "purrgo/gpx_parser.h"
 #include "purrgo/logger.h"
 #include "purrgo/purrgo_format.h"
+#include "purrgo/sound.h"
 #include "purrgo/supply.h"
 #include "purrgo/trig.h"
 #include "purrgo/purrgo_poi_icons.h"
@@ -23,6 +24,20 @@ _Static_assert(PURRGO_WPT_TARGET_ICON < PURRGO_POI_ICON_COUNT, "wpt target icon 
 static purrgo_waypoint_t s_target;
 
 static purrgo_wpt_nav_t s_nav;
+
+/*
+ * Сигнал прибытия: один раз при входе в радиус цели. Повторно взводится, когда человек
+ * отошёл от цели дальше PURRGO_WPT_ARRIVAL_REARM_M (гистерезис: дрожание GNSS на границе
+ * радиуса не должно давать серию сигналов). Если цель задана, когда человек уже в радиусе
+ * (например HERE), сигнал не нужен: первый расчёт после смены цели только запоминает состояние.
+ */
+typedef enum {
+    ARRIVAL_UNKNOWN = 0,   /* цель только что задана или снята: состояние ещё не известно */
+    ARRIVAL_ARMED,         /* вне радиуса: вход в радиус даст сигнал */
+    ARRIVAL_ANNOUNCED      /* в радиусе (сигнал был или не нужен): ждём, пока отойдут */
+} arrival_state_t;
+
+static arrival_state_t s_arrival = ARRIVAL_UNKNOWN;
 
 static purrgo_waypoint_t s_list[PURRGO_WPT_LIST_MAX];
 static size_t s_list_count;
@@ -107,6 +122,7 @@ bool purrgo_wpt_set(int32_t lat_1e7, int32_t lon_1e7, const char *name)
     }
 
     memset(&s_nav, 0, sizeof s_nav);
+    s_arrival = ARRIVAL_UNKNOWN;
     return true;
 }
 
@@ -117,6 +133,7 @@ void purrgo_wpt_clear(void)
     app_config.wpt_lon_1e7 = 0;
     app_config.wpt_name[0] = '\0';
     memset(&s_nav, 0, sizeof s_nav);
+    s_arrival = ARRIVAL_UNKNOWN;
 }
 
 
@@ -263,18 +280,44 @@ bool purrgo_wpt_save_to_waypts(int32_t lat_1e7, int32_t lon_1e7,
 /*  Расстояние и направление                                            */
 /* ------------------------------------------------------------------ */
 
+static void arrival_track(bool arrived, uint32_t distance_m)
+{
+    switch (s_arrival) {
+        case ARRIVAL_UNKNOWN:
+            s_arrival = arrived ? ARRIVAL_ANNOUNCED : ARRIVAL_ARMED;
+            break;
+        case ARRIVAL_ARMED:
+            if (arrived) {
+                s_arrival = ARRIVAL_ANNOUNCED;
+                purrgo_sound_play(PURRGO_SOUND_ARRIVED);
+            }
+            break;
+        case ARRIVAL_ANNOUNCED:
+            if (distance_m > PURRGO_WPT_ARRIVAL_REARM_M) {
+                s_arrival = ARRIVAL_ARMED;
+            }
+            break;
+    }
+}
+
 void purrgo_wpt_update(const purrgo_gnss_solution_t *fix)
 {
     const purrgo_waypoint_t *target = purrgo_wpt_target();
 
     memset(&s_nav, 0, sizeof s_nav);
 
-    if (target == NULL || fix == NULL || !fix->valid) {
+    if (target == NULL) {
+        s_arrival = ARRIVAL_UNKNOWN;
+        return;
+    }
+    if (fix == NULL || !fix->valid) {
+        /* Нет фикса: расстояние неизвестно, состояние прибытия сохраняется. */
         return;
     }
 
     purrgo_nav_update(fix, target, PURRGO_WPT_ARRIVAL_RADIUS_M, &s_nav.nav);
     s_nav.valid = true;
+    arrival_track(s_nav.nav.is_arrived, s_nav.nav.distance_to_wp_m);
 }
 
 const purrgo_wpt_nav_t *purrgo_wpt_nav(void)

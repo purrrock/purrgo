@@ -678,4 +678,55 @@
 #endif
 
 
+/*
+ * --------------------------------------------------------------------------
+ * Звуковые сигналы (пьезоизлучатель, purrgo/sound.h)
+ * --------------------------------------------------------------------------
+ *
+ * Пьезоизлучатель включён дифференциально между PA6 (TIM16_CH1) и PB6 (TIM16_CH1N): на нём
+ * +-3,3 В вместо 3,3 В размаха, громкость выше примерно вдвое по напряжению. Громкость
+ * регулируется скважностью: чем уже импульс, тем слабее основная гармоника
+ * (амплитуда пропорциональна sin(pi * D)): 50 % - максимум, 20 % - около -4,5 дБ, 8 % - около -12 дБ.
+ * Все значения ниже подбираются по месту под конкретный излучатель и корпус.
+ */
+
+/* Частота тона, Гц: около резонанса излучателя (пьезодиски 2-4,6 кГц). */
+#ifndef PURRGO_SOUND_FREQ_HZ
+#define PURRGO_SOUND_FREQ_HZ 4000U
+#endif
+
+/* Скважность по уровням громкости, % периода (1..50). */
+#ifndef PURRGO_SOUND_DUTY_LOUD_PCT
+#define PURRGO_SOUND_DUTY_LOUD_PCT 50U
+#endif
+#ifndef PURRGO_SOUND_DUTY_MID_PCT
+#define PURRGO_SOUND_DUTY_MID_PCT 20U
+#endif
+#ifndef PURRGO_SOUND_DUTY_QUIET_PCT
+#define PURRGO_SOUND_DUTY_QUIET_PCT 8U
+#endif
+
+/* Длительности, мс. ERROR - один длинный; ARRIVED - два сигнала с паузой; INFO - короткий; CLICK - щелчок. */
+#ifndef PURRGO_SOUND_ERROR_MS
+#define PURRGO_SOUND_ERROR_MS 1200U
+#endif
+#ifndef PURRGO_SOUND_ARRIVED_MS
+#define PURRGO_SOUND_ARRIVED_MS 200U
+#endif
+#ifndef PURRGO_SOUND_ARRIVED_GAP_MS
+#define PURRGO_SOUND_ARRIVED_GAP_MS 150U
+#endif
+#ifndef PURRGO_SOUND_INFO_MS
+#define PURRGO_SOUND_INFO_MS 100U
+#endif
+#ifndef PURRGO_SOUND_CLICK_MS
+#define PURRGO_SOUND_CLICK_MS 3U
+#endif
+
+/* 1 - короткий сигнал INFO при первом фиксе GNSS после включения (отладка и удобство); 0 - не подавать. */
+#ifndef PURRGO_SOUND_FIX_BEEP
+#define PURRGO_SOUND_FIX_BEEP 1
+#endif
+
+
 #endif /* PURRGO_HARDWARE_CONFIG_H */

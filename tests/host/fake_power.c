@@ -7,6 +7,7 @@
 #include "purrgo/hardware_config.h"
 #include "purrgo/supply.h"
 #include "purrgo/gnss_io.h"
+#include "purrgo/sound.h"
 #include "fake_power.h"
 #include <stddef.h>
 #include <string.h>
@@ -18,6 +19,25 @@ static uint16_t s_battery_pin_mv;
 static bool s_supply_low;
 static int s_gnss_profile_calls, s_gnss_profile_last;
 
+/* Платформенный хук звука: записывает сигналы, которые ядро попросило сыграть. */
+static int s_sound_total, s_sound_count[PURRGO_SOUND_COUNT];
+static purrgo_sound_t s_sound_last;
+void fake_sound_reset(void)
+{
+    s_sound_total = 0;
+    s_sound_last = PURRGO_SOUND_NONE;
+    for (int i = 0; i < (int)PURRGO_SOUND_COUNT; i++) { s_sound_count[i] = 0; }
+}
+int fake_sound_total(void) { return s_sound_total; }
+int fake_sound_count(purrgo_sound_t sound) { return s_sound_count[sound]; }
+purrgo_sound_t fake_sound_last(void) { return s_sound_last; }
+void purrgo_platform_sound_play(purrgo_sound_t sound)
+{
+    s_sound_total++;
+    s_sound_count[sound]++;
+    s_sound_last = sound;
+}
+
 void fake_power_reset(void)
 {
     s_seq = s_unmount_calls = s_standby_calls = s_unmount_seq = s_standby_seq = 0;
@@ -26,6 +46,7 @@ void fake_power_reset(void)
     s_gnss_profile_calls = 0;
     s_gnss_profile_last = (int)PURRGO_GNSS_PROFILE_NAV;
     s_probe = NULL;
+    fake_sound_reset();
     s_battery_pin_mv = 0;
     s_supply_low = false;
     fake_gnss_tx_reset();

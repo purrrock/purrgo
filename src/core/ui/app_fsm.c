@@ -19,6 +19,7 @@
 #include "purrgo/book_reader.h"
 #include "purrgo/battery.h"
 #include "purrgo/waypoint.h"
+#include "purrgo/sound.h"
 
 #define PURRGO_GNSS_MARKER_UPDATE_DISTANCE_M 5
 
@@ -367,6 +368,12 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
     }
 
     /*
+     * Тихий щелчок на каждое принятое событие кнопки: E-Ink обновляется секунды, и звук
+     * подтверждает, что нажатие дошло до прибора (purrgo/sound.h; при выключенном звуке - тишина).
+     */
+    purrgo_sound_play(PURRGO_SOUND_CLICK);
+
+    /*
      * Читалка: кнопки (короткие и длинные) разбирает сама читалка, а не общая
      * схема "кнопка -> действие". Выход из читалки - в меню CONFIG.
      */
@@ -632,6 +639,11 @@ void purrgo_app_tick(uint32_t current_time_ms) {
                     app_config.tz_offset_minutes,
                     &internal_sun_info
                 );
+#if PURRGO_SOUND_FIX_BEEP
+                if (!first_fix_obtained) {
+                    purrgo_sound_play(PURRGO_SOUND_INFO);   /* первый фикс после включения */
+                }
+#endif
                 first_fix_obtained = true;
                 last_sun_update_ms = current_time_ms;
             }
@@ -663,6 +675,8 @@ static void track_logger_service(const purrgo_gnss_solution_t* current_fix) {
          */
         if (logger_state == LOGGER_STATE_ERROR && prev_logger_state == LOGGER_STATE_RECORDING) {
             logger_schedule_retry(now);
+            /* Трек перестал писаться (сбой SD): пользователь должен узнать об этом сразу. */
+            purrgo_sound_play(PURRGO_SOUND_ERROR);
         }
 
         /*
