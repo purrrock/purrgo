@@ -9,9 +9,21 @@
 #include "purrgo/boot_banner.h"
 #include "purrgo/hardware_config.h"
 #include "test_common.h"
+#include "../../src/core/ui/boot_logo.h"   /* размеры логотипа (генерируются) */
 
 #define W PURRGO_HW_DISPLAY_WIDTH_PX
 #define H PURRGO_HW_DISPLAY_HEIGHT_PX
+
+/* Раскладка баннера: должна совпадать с boot_banner.c. */
+#define LOGO_X0     ((W - PURRGO_BOOT_LOGO_W) / 2)
+#define LOGO_Y0     16
+#define LOGO_Y1     (LOGO_Y0 + PURRGO_BOOT_LOGO_H)
+#define VERSION_Y0  (LOGO_Y1 + 12)
+#define VERSION_Y1  (VERSION_Y0 + 16)       /* шрифт 5x7, масштаб 2 */
+#define REV_Y0      (VERSION_Y1 + 8)
+#define REV_Y1      (REV_Y0 + 8)
+#define BAR_Y0      (H - 16 - 16)
+#define BAR_Y1      (BAR_Y0 + 16)
 
 static uint8_t g_fb[W * H];   /* значение: цвет + 1, 0 - пиксель не рисовался */
 
@@ -56,24 +68,25 @@ int main(void)
     int untouched = 0;
     for (int i = 0; i < W * H; i++) { if (g_fb[i] == 0) { untouched++; } }
     CHECK(untouched == 0);
-    CHECK(count_px(0, 0, W, 16, WHITE) == W * 16);          /* поле над логотипом */
+    CHECK(count_px(0, 0, W, LOGO_Y0, WHITE) == W * LOGO_Y0);   /* поле над логотипом */
+    CHECK(count_px(0, LOGO_Y0, LOGO_X0, LOGO_Y1, WHITE) == LOGO_X0 * PURRGO_BOOT_LOGO_H); /* и по бокам */
 
     /* Логотип: много чёрного, есть тёмно-серый и светло-серый. */
-    CHECK(count_px(0, 16, W, 176, BLACK) > 3000);
-    CHECK(count_px(0, 16, W, 176, DARK_GRAY) > 300);
-    CHECK(count_px(0, 16, W, 176, LIGHT_GRAY) > 50);
+    CHECK(count_px(0, LOGO_Y0, W, LOGO_Y1, BLACK) > 2500);
+    CHECK(count_px(0, LOGO_Y0, W, LOGO_Y1, DARK_GRAY) > 300);
+    CHECK(count_px(0, LOGO_Y0, W, LOGO_Y1, LIGHT_GRAY) > 10);   /* пуговица на шапке */
 
     /* Строка версии под логотипом: чёрные пиксели крупного текста. */
-    CHECK(count_px(0, 188, W, 204, BLACK) > 30);
+    CHECK(count_px(0, VERSION_Y0, W, VERSION_Y1, BLACK) > 30);
     /* Ревизия git: тёмно-серый текст. */
-    CHECK(count_px(0, 210, W, 220, DARK_GRAY) > 10);
+    CHECK(count_px(0, REV_Y0, W, REV_Y1 + 2, DARK_GRAY) > 10);
 
     /* Плашка Debug: чёрная заливка с белым текстом внутри; в Release - чисто белое поле. */
-    const int bar_black = count_px(0, 232, W, 248, BLACK);
+    const int bar_black = count_px(0, BAR_Y0, W, BAR_Y1, BLACK);
     if (purrgo_boot_is_debug()) {
         CHECK(bar_black > W * 16 / 2);
-        CHECK(count_px(0, 232, W, 248, WHITE) > 40);        /* буквы */
-        CHECK(count_px(0, 232, 4, 248, BLACK) == 4 * 16);   /* плашка во всю ширину */
+        CHECK(count_px(0, BAR_Y0, W, BAR_Y1, WHITE) > 40);        /* буквы */
+        CHECK(count_px(0, BAR_Y0, 4, BAR_Y1, BLACK) == 4 * 16);   /* плашка во всю ширину */
     } else {
         CHECK(bar_black == 0);
     }
