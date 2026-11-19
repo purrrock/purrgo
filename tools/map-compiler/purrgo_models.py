@@ -59,7 +59,13 @@ class HWConfig:
     PGO_HEADER_SIZE = 32
     DATA_NODE_SIZE = 25      # Data Node size
     NAV_NODE_SIZE = 28       # Nav Node size
-    CHUNK_SIZE = 14          # Maximum number of objects in a cluster
+    CHUNK_SIZE = 14          # Maximum number of objects in a cluster (V3)
+
+    # --- PGO V4 (docs/map-format-v4.md) ---
+    BLOCK_SIZE = 512         # idx block / SQT header sector
+    NAV_FANOUT = 18          # nav nodes per block (18 * 28 = 504)
+    LEAF_FANOUT = 20         # data nodes per block (20 * 25 = 500)
+    LOD_COUNT_V4 = 4
     DBF_HEADER_LEN = 129     # dBase III header
     DBF_RECORD_LEN = 117     # Fixed-length dBase III record
 
@@ -139,6 +145,13 @@ class MapFeature:
             self.bbox[2], self.bbox[3],
             self.code, self.v1, self.v2
         )
+
+
+@dataclass(slots=True)
+class PoiFeature(MapFeature):
+    """POI: добавляет данные для search.idx (docs/map-format-v4.md, раздел 21)."""
+    subtype: int = 0   # подтип поиска (search_categories.csv), 0 = нет
+    flags: int = 0     # POI_NAME_SUBSTITUTED / POI_NAME_EMPTY (purrgo_osmparser)
 
 
 # Распространяем паттерн __slots__ на узлы R-Дерева

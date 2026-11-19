@@ -14,7 +14,8 @@ from lxml import etree as ET
 from functools import lru_cache
 from typing import List, Tuple, Dict, Optional, Set
 
-from purrgo_models import MapFeature, HWConfig, pgo_encode
+from purrgo_models import MapFeature, PoiFeature, HWConfig, pgo_encode
+from purrgo_search import SearchCategories
 from purrgo_geometry import is_clockwise
 from purrgo_lookup import LookupTables
 
@@ -52,8 +53,36 @@ _STOP_WORDS_RX = re.compile(
 )
 
 
+# Режим названий. False - V3 (название сокращается до 22 символов),
+# True - V4 (docs/map-format-v4.md, раздел 10.6: сокращения при компиляции нет,
+# предел поля 100 байт). Переключается set_v4_names().
+_V4_NAMES = False
+
+# Флаги POI (PoiFeature.flags)
+POI_NAME_SUBSTITUTED = 1   # название подставлено из тега правила (правило 5)
+POI_NAME_EMPTY = 2         # безымянный барьер (правило 6)
+
+
+def set_v4_names(enabled: bool) -> None:
+    global _V4_NAMES
+    _V4_NAMES = bool(enabled)
+
+
+def _truncate_name(name: str, v4: bool) -> str:
+    if v4:
+        # V4: поле 100 байт, 1 символ = 1 байт; длиннее - первые 98 + "..".
+        if len(name) > 100:
+            name = name[:98].rstrip('_') + ".."
+    else:
+        if len(name) > 22:
+            name = name[:20].rstrip('_') + ".."
+        if len(name) > 100:
+            name = name[:100].rstrip('_')
+    return name
+
+
 @lru_cache(maxsize=32768)
-def _sanitize_name_cached(name: str) -> str:
+def _sanitize_name_cached(name: str, v4: bool = False) -> str:
     """Cached name sanitization for POI centroid extraction and UI rendering."""
     if not name:
         return ""
@@ -68,16 +97,7 @@ def _sanitize_name_cached(name: str) -> str:
             name = f"{core_name} {word.lower()}"
 
     name = name.replace(" ", "_")
-
-    # Limit for UI (characters)
-    if len(name) > 22:
-        name = name[:20].rstrip('_') + ".."
-
-    # Limit for DB .db (1 символ = 1 байт в PGO-256)
-    if len(name) > 100:
-        name = name[:100].rstrip('_')
-
-    return name
+    return _truncate_name(name, v4)
 
 
 # Приоритет тегов для названия объекта
@@ -87,9 +107,12 @@ _NAME_TAG_PRIORITY = (
 )
 
 
-def _resolve_name(tags: dict, rule=None, is_poi: bool = False) -> str:
+def _resolve_name_ex(tags: dict, rule=None, is_poi: bool = False,
+                     v4: Optional[bool] = None) -> Tuple[str, int]:
     """
-    Название объекта: name:ru > name:be > int_name > short_name:en >
+    Название объекта и флаги POI (POI_NAME_*).
+
+    Название: name:ru > name:be > int_name > short_name:en >
     name:en > short_name > name.
 
     Если у POI названия нет, в качестве названия используется значение
@@ -97,25 +120,26 @@ def _resolve_name(tags: dict, rule=None, is_poi: bool = False) -> str:
     Фолбэк не проходит через стоп-слова (иначе "marketplace" -> "Place market").
 
     Исключение: барьеры (правила с тегом barrier=...) без названия остаются
-    безымянными — тип барьера (gate, bollard, ...) в название не подставляется.
+    безымянными - тип барьера (gate, bollard, ...) в название не подставляется.
     """
+    if v4 is None:
+        v4 = _V4_NAMES
     for key in _NAME_TAG_PRIORITY:
         value = tags.get(key)
         if value and value.strip():
-            return _sanitize_name_cached(value)
+            return _sanitize_name_cached(value, v4), 0
 
-    if (
-        is_poi
-        and rule is not None
-        and rule.osm_tags
-        and not any(k == 'barrier' for k, _ in rule.osm_tags)
-    ):
-        type_name = rule.osm_tags[0][1]
-        if len(type_name) > 22:
-            type_name = type_name[:20].rstrip('_') + ".."
-        return type_name
+    if is_poi and rule is not None and rule.osm_tags:
+        if any(k == 'barrier' for k, _ in rule.osm_tags):
+            return "", POI_NAME_EMPTY
+        return _truncate_name(rule.osm_tags[0][1], v4), POI_NAME_SUBSTITUTED
 
-    return ""
+    return "", 0
+
+
+def _resolve_name(tags: dict, rule=None, is_poi: bool = False,
+                  v4: Optional[bool] = None) -> str:
+    return _resolve_name_ex(tags, rule, is_poi, v4)[0]
 
 
 class OSMParser:
@@ -602,7 +626,8 @@ class OSMParser:
         if not rule:
             return
 
-        name = _resolve_name(tags, rule, is_poi=(rule.layer == 'pois'))
+        is_poi = (rule.layer == 'pois')
+        name, name_flags = _resolve_name_ex(tags, rule, is_poi=is_poi)
 
         try:
             osm_id = elem.get('id')
@@ -623,13 +648,24 @@ class OSMParser:
             node_coord[1]
         )
 
-        feature = MapFeature(
-            osm_id=osm_id,
-            code=rule.code,
-            name=name,
-            points=points_bytes,
-            lod=rule.lod
-        )
+        if is_poi:
+            feature = PoiFeature(
+                osm_id=osm_id,
+                code=rule.code,
+                name=name,
+                points=points_bytes,
+                lod=rule.lod,
+                subtype=SearchCategories.subtype_for(tags),
+                flags=name_flags
+            )
+        else:
+            feature = MapFeature(
+                osm_id=osm_id,
+                code=rule.code,
+                name=name,
+                points=points_bytes,
+                lod=rule.lod
+            )
 
         feature.calculate_bbox()
 
@@ -713,7 +749,9 @@ class OSMParser:
         if not rule:
             return
 
-        name = _resolve_name(tags, rule, is_poi=(rule.layer == 'pois'))
+        name, name_flags = _resolve_name_ex(
+            tags, rule, is_poi=(rule.layer == 'pois')
+        )
 
         is_closed = (
             len(points) >= 4
@@ -743,12 +781,14 @@ class OSMParser:
                     avg_lat
                 )
 
-                poi_feature = MapFeature(
+                poi_feature = PoiFeature(
                     osm_id=f"v{osm_id}",
                     code=rule.code,
                     name=poi_name,
                     points=points_bytes,
-                    lod=rule.lod
+                    lod=rule.lod,
+                    subtype=SearchCategories.subtype_for(tags),
+                    flags=name_flags
                 )
 
                 poi_feature.calculate_bbox()

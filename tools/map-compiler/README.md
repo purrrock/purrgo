@@ -73,6 +73,34 @@ Compilation time and RAM usage depend on the size of the OSM extract.
 
 ---
 
+## 3.1. Map format V4
+
+By default the compiler writes **format V3**. Format V4 (`docs/map-format-v4.md`) is selected with `--format 4`:
+
+```bash
+python purrgo_map_compiler.py belarus.osm --format 4 --search -o out/belarus
+```
+
+| Option | Meaning |
+| ------ | ------- |
+| `--format 3\|4` | map format version (default 3); a package is entirely V3 or entirely V4 |
+| `-o`, `--out-dir` | output folder (default: next to the script, named after the input file) |
+| `--features` | path to `features.csv` (default: next to the script) |
+| `--search` | V4: also write `search.idx` (section 21); subtypes come from `search_categories.csv` |
+| `--search-categories` | V4: path to `search_categories.csv` (default: next to the script) |
+| `--tol-lod2`, `--tol-lod3` | V4: simplification tolerance of the LOD 2 / LOD 3 geometry variants, metres (default 50 / 250) |
+
+V4 differences in the compiler:
+
+- `.idx` is written in the block layout with four LODs (`purrgo_idx_v4.py`); the `LOD` column of `features.csv` may be `0..3`;
+- LOD 2 and LOD 3 objects point to simplified geometry (`purrgo_simplify.py`, Douglas-Peucker in metres);
+- names are not shortened to 22 characters (limit: 100 bytes, section 10.6);
+- `search_categories.csv` (`Group;Subtype;Keywords_RU;Keywords_EN;OSM_Tags`) assigns search subtypes to POIs and defines the category keywords; a keyword is one word of at most 16 bytes. A row with empty `Subtype` and `OSM_Tags` is a group row.
+
+Tests: `python3 -m unittest tests/test_map_compiler_v4.py`.
+
+---
+
 ## 4. Generated Map
 
 A typical result is:
