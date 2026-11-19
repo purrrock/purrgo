@@ -33,7 +33,7 @@ STM32CubeIDE/
 *.tmp
 *.d
 *.o
-*.elf
+#*.elf
 *.hex
 *.bin
 *.map
