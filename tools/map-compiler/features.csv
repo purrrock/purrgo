@@ -1,8 +1,8 @@
 Code;PG_class;STYLE;LOD;Layer;OSM_Tags;Description;Enabled;Icon
 0;NO_CLASS;NO_STYLE;2;roads;;Не отображается;0;
-1;ROAD_MAJOR;DARK_GRAY_THICK_LINE;2;roads;highway=motorway;Автомагистраль;1;
-1;ROAD_MAJOR;DARK_GRAY_THICK_LINE;2;roads;highway=trunk;Магистраль;1;
-2;ROAD_NORMAL;DARK_GRAY_SEMITHICK_LINE;2;roads;highway=primary;Главная дорога;1;
+1;ROAD_MAJOR;DARK_GRAY_THICK_LINE;3;roads;highway=motorway;Автомагистраль;1;
+1;ROAD_MAJOR;DARK_GRAY_THICK_LINE;3;roads;highway=trunk;Магистраль;1;
+2;ROAD_NORMAL;DARK_GRAY_SEMITHICK_LINE;3;roads;highway=primary;Главная дорога;1;
 2;ROAD_NORMAL;DARK_GRAY_SEMITHICK_LINE;2;roads;highway=secondary;Второстепенная дорога;1;
 2;ROAD_NORMAL;DARK_GRAY_SEMITHICK_LINE;1;roads;highway=tertiary;Местная дорога;1;
 3;ROAD_MINOR;DARK_GRAY_LINE;1;roads;highway=unclassified;Дорога неизвестная;1;
@@ -76,8 +76,8 @@ Code;PG_class;STYLE;LOD;Layer;OSM_Tags;Description;Enabled;Icon
 33;WATERWAY_MINOR;WATER_LINE;0;waterways;waterway=stream;Ручей;1;
 33;WATERWAY_MINOR;WATER_LINE;0;waterways;waterway=drain;Водосток;0;
 33;WATERWAY_MINOR;WATER_LINE;0;waterways;waterway=ditch;Канава;0;
-128;POI_BIG;DARK_GRAY_BIG_CIRCLE;2;pois;place=city, capital=yes;Столица;1;большой круг
-128;POI_BIG;DARK_GRAY_BIG_CIRCLE;2;pois;place=city;Город;1;большой круг
+128;POI_BIG;DARK_GRAY_BIG_CIRCLE;3;pois;place=city, capital=yes;Столица;1;большой круг
+128;POI_BIG;DARK_GRAY_BIG_CIRCLE;3;pois;place=city;Город;1;большой круг
 128;POI_BIG;DARK_GRAY_BIG_CIRCLE;2;pois;place=town;Городок;1;большой круг
 128;POI_BIG;DARK_GRAY_CIRCLE;1;pois;place=village;Деревня;1;большой круг
 128;POI_BIG;DARK_GRAY_CIRCLE;1;pois;place=hamlet;Хутор;1;большой круг
