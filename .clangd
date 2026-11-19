@@ -1,2 +1,2 @@
 CompileFlags:
-  CompilationDatabase: out/build/win-mingw-debug
+  CompilationDatabase: out/build/stm32u5-debug
