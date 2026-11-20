@@ -990,6 +990,65 @@ static void test_map_crosshair(void)
     CHECK(fcount(cx - 5, cy - 5, cx + 6, cy + 6) == 0);
 }
 
+/* Разметка XML в <name>: сущности, CDATA, комментарии, переводы строк, атрибуты. */
+static size_t gpx_feed_text(const char *text, size_t step, purrgo_waypoint_t *out, size_t cap)
+{
+    purrgo_gpx_parser_t parser;
+    const size_t n = strlen(text);
+
+    purrgo_gpx_parser_init(&parser, out, cap);
+    for (size_t i = 0; i < n; i += step) {
+        const size_t len = (n - i < step) ? (n - i) : step;
+        purrgo_gpx_parser_feed(&parser, text + i, len);
+    }
+    return parser.current_count;
+}
+
+static void test_gpx_markup(void)
+{
+    purrgo_waypoint_t w[4];
+    static const size_t steps[] = { 1, 3, 1000 };
+
+    for (size_t k = 0; k < sizeof steps / sizeof steps[0]; k++) {
+        const size_t st = steps[k];
+
+        memset(w, 0, sizeof w);
+        CHECK(gpx_feed_text("<wpt lat=\"1\" lon=\"2\"><name>Tom &amp; Jo &lt;3 &gt; &quot;q&quot; &apos;a&apos;</name></wpt>", st, w, 4) == 1);
+        CHECK(strcmp(w[0].name, "Tom & Jo <3 > \"q\" 'a'") == 0);
+
+        memset(w, 0, sizeof w);
+        CHECK(gpx_feed_text("<wpt lat=\"1\" lon=\"2\"><name>A&#65;&#x42;&#x416;&#10;C</name></wpt>", st, w, 4) == 1);
+        CHECK(strcmp(w[0].name, "AAB\xD0\x96 C") == 0);
+
+        /* Неизвестная и оборванная сущности остаются как есть. */
+        memset(w, 0, sizeof w);
+        CHECK(gpx_feed_text("<wpt lat=\"1\" lon=\"2\"><name>a&foo;b &amp c &#xZZ;</name></wpt>", st, w, 4) == 1);
+        CHECK(strcmp(w[0].name, "a&foo;b &amp c &#xZZ;") == 0);
+
+        memset(w, 0, sizeof w);
+        CHECK(gpx_feed_text("<wpt lat=\"1\" lon=\"2\"><name><![CDATA[R&D <x> ]]]></name></wpt>", st, w, 4) == 1);
+        CHECK(strcmp(w[0].name, "R&D <x> ]") == 0);
+
+        /* Комментарий с '<' и '>' внутри не создаёт точек и не портит имя. */
+        memset(w, 0, sizeof w);
+        CHECK(gpx_feed_text("<!-- <wpt lat=\"5\" lon=\"5\"><name>Ghost</name> --->"
+                            "<wpt lat=\"1\" lon=\"2\"><name>Re<!-- <b> -->al</name></wpt>", st, w, 4) == 1);
+        CHECK(w[0].lat_1e7 == 10000000 && strcmp(w[0].name, "Real") == 0);
+
+        /* Перевод строки и отступы - один пробел, края обрезаются. */
+        memset(w, 0, sizeof w);
+        CHECK(gpx_feed_text("<wpt lat=\"1\" lon=\"2\"><name>\n    Line1\r\n    Line2  \n</name></wpt>", st, w, 4) == 1);
+        CHECK(strcmp(w[0].name, "Line1 Line2") == 0);
+
+        /* Атрибуты в <name>/<ele> и пробел в закрывающем теге; <name/> даёт пустое имя. */
+        memset(w, 0, sizeof w);
+        CHECK(gpx_feed_text("<wpt lat=\"1\" lon=\"2\"><name lang=\"ru\">Dom</name ><ele id='1'>7</ele></wpt>"
+                            "<wpt lat=\"3\" lon=\"4\"><name/><ele>9</ele></wpt>", st, w, 4) == 2);
+        CHECK(strcmp(w[0].name, "Dom") == 0 && w[0].ele_m == 7);
+        CHECK(w[1].name[0] == '\0' && w[1].ele_m == 9);
+    }
+}
+
 int main(void)
 {
     test_format_and_cardinal();
@@ -998,6 +1057,7 @@ int main(void)
     test_polar();
     test_gpx_list();
     test_gpx_names_utf8();
+    test_gpx_markup();
     test_gpx_overflow_and_chunks();
     test_target_and_config();
     test_nav_state();

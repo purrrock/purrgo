@@ -82,9 +82,13 @@ static void apply_drafts(void)
  * Пункты меню
  * ------------------------------------------------------------------------- */
 
-/* BOOKS: читалка сама останавливает трек и GNSS и выбирает, куда перейти. */
+/*
+ * BOOKS: читалка сама останавливает трек и GNSS и выбирает, куда перейти.
+ * Выход из меню минуя BACK: сначала применяем и сохраняем черновики.
+ */
 static void books_select(purrgo_state_t* next)
 {
+    apply_drafts();
     *next = purrgo_book_reader_enter();
 }
 
@@ -107,6 +111,8 @@ static void power_src_select(purrgo_state_t* next)
 static void power_off_select(purrgo_state_t* next)
 {
     (void)next;
+    /* purrgo_system_power_off() сохраняет app_config, а не черновики. */
+    apply_drafts();
     purrgo_system_power_off();
 }
 
@@ -118,6 +124,7 @@ static void power_off_select(purrgo_state_t* next)
  */
 static void tracker_select(purrgo_state_t* next)
 {
+    apply_drafts();
     *next = APP_STATE_TRACKER_SCREEN_OFF;
 }
 

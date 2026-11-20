@@ -159,13 +159,11 @@ static bool map_idx_parse_node_impl(
         if (layer_type == MAP_LAYER_POIS) {
             if (params->poi_mode == PURRGO_POI_MODE_NO) return true;
 
-            int32_t poi_x = xmin;
-            int32_t poi_y = ymin;
             int16_t sx, sy;
 
             {
                 PURRGO_PROF_BEGIN(prof_proj);
-                project_to_screen(poi_x, poi_y, cam, vp, &sx, &sy);
+                project_to_screen(xmin, ymin, cam, vp, &sx, &sy);
                 PURRGO_PROF_END(prof_proj, PURRGO_PROF_PROJ);
             }
 
@@ -329,12 +327,10 @@ if (style == PURRGO_STYLE_NONE) {
     uint32_t obj_count = unpack_u32_le(&node_buf[24]);
 
     bool passes = false;
-    int32_t c_xmin = 0;
-    int32_t c_xmax = 0;
 
     if (!(c_ymax < cam->min_y || c_ymin > cam->max_y)) {
-        c_xmin = unpack_i32_le(&node_buf[4]);
-        c_xmax = unpack_i32_le(&node_buf[12]);
+        const int32_t c_xmin = unpack_i32_le(&node_buf[4]);
+        const int32_t c_xmax = unpack_i32_le(&node_buf[12]);
         passes = bbox_intersects_camera(c_xmin, c_ymin, c_xmax, c_ymax, cam);
     }
 

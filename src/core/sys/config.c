@@ -287,6 +287,47 @@ static void config_recover_interrupted_save(void)
     }
 }
 
+/*
+ * Проверка MAP_DIR из PURRGO.CFG. Каталог карты - полный путь (например
+ * "0:/PURRGO/MAPS/name"), поэтому '/' и ':' допустимы, в отличие от имён
+ * ROUTE_FILE и BOOK_FILE. Отбрасываются обратная косая черта, управляющие
+ * символы и компоненты "..". Сам путь к каталогу карт платформы ("../../.."
+ * в PC-эмуляторе) проверке не подлежит, проверяется только остаток после него.
+ */
+static bool map_dir_is_valid(const char* path)
+{
+    if (path[0] == '\0') {
+        return false;
+    }
+
+    const char* maps = purrgo_fs_get_maps_path();
+    const size_t maps_len = strlen(maps);
+    if (maps_len > 0 && strncmp(path, maps, maps_len) == 0 &&
+        (path[maps_len] == '\0' || path[maps_len] == '/')) {
+        path += maps_len;
+    }
+
+    for (const char* p = path; *p != '\0'; p++) {
+        if (*p == '\\' || (unsigned char)*p < 0x20u) {
+            return false;
+        }
+    }
+
+    for (const char* p = path; *p != '\0'; ) {
+        const char* end = strchr(p, '/');
+        const size_t len = (end != NULL) ? (size_t)(end - p) : strlen(p);
+
+        if (len == 2 && p[0] == '.' && p[1] == '.') {
+            return false;
+        }
+        if (end == NULL) {
+            break;
+        }
+        p = end + 1;
+    }
+    return true;
+}
+
 bool purrgo_config_load(void)
 {
     /*
@@ -311,7 +352,7 @@ bool purrgo_config_load(void)
          * Если файла нет, создаём его с дефолтными значениями.
          */
         purrgo_logger_set_mode(app_config.log_mode);
-        PURRGO_LOGE("FILE READ ERROR, SAVING DEFAULTS TO FILE: %s\r\n", purrgo_fs_get_config_path());
+        PURRGO_LOGW("CONFIG FILE NOT FOUND, SAVING DEFAULTS TO FILE: %s\r\n", purrgo_fs_get_config_path());
         purrgo_config_save();
         return false;
     }
@@ -399,13 +440,15 @@ bool purrgo_config_load(void)
              * Каталог карт.
              */
             else if (strcmp(key, "MAP_DIR") == 0) {
-                purrgo_snprintf(
-                    app_config.map_dir,
-                    sizeof(app_config.map_dir),
-                    "%.*s",
-                    (int)(sizeof(app_config.map_dir) - 1),
-                    val
-                );
+                if (map_dir_is_valid(val)) {
+                    purrgo_snprintf(
+                        app_config.map_dir,
+                        sizeof(app_config.map_dir),
+                        "%.*s",
+                        (int)(sizeof(app_config.map_dir) - 1),
+                        val
+                    );
+                }
             }
 
             /*

@@ -48,7 +48,7 @@ endif()
 
 # Уровень логирования PURRGO_LOG_LEVEL (см. include/purrgo/logger.h):
 #   0 NONE, 1 ERROR, 2 WARN, 3 INFO, 4 DEBUG.
-# Пусто - автоматически: Release и MinSizeRel -> 1 (ERROR), остальное -> 3 (INFO).
+# Пусто - автоматически: Release и MinSizeRel -> 1 (ERROR), остальное -> 4 (DEBUG).
 # Пример: cmake --preset stm32u5-release -DPURRGO_LOG_LEVEL=3
 set(PURRGO_LOG_LEVEL "" CACHE STRING "Log level 0..4 (empty = auto by build type)")
 if("${PURRGO_LOG_LEVEL}" STREQUAL "")

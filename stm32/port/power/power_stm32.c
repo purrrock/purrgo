@@ -23,8 +23,7 @@ void purrgo_platform_storage_unmount(void)
 
 /*
  * 1 - POWER OFF через Stop 2 (пробуждение K1 -> сброс). 0 - Standby.
- * Замеры (Release): Standby 5,17 мА, Stop 2 в читалке 2,75 мА на той же плате
- * (GNSS отпаян). Причина лишних ~2,4 мА в Standby не найдена, поэтому пока Stop 2.
+ * Ток в обоих режимах: docs/measurements.
  */
 #ifndef PURRGO_POWEROFF_STOP2
 #define PURRGO_POWEROFF_STOP2 1

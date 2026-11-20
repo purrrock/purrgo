@@ -6,12 +6,12 @@
  * src/core/power/power.c). Order:
  *   1. render the final "POWER OFF" screen into the framebuffer;
  *   2. stop the track logger (flush and close the track file);
- *   3. switch the GNSS receiver off (purrgo_gnss_power_off(), EN low);
+ *   3. switch the GNSS receiver off (purrgo_gnss_power_off());
  *   4. save the configuration;
  *   5. close the persistent map files;
  *   6. purrgo_platform_storage_unmount();
  *   7. push the final screen to the display and put the display to sleep;
- *   8. purrgo_platform_enter_standby().
+ *   8. purrgo_platform_enter_standby() (на STM32 по умолчанию Stop 2, Standby - запасной вариант).
  *
  * On hardware the function does not return (the last step never returns);
  * on the PC the last step exits the process.
@@ -25,7 +25,10 @@ void purrgo_system_power_off(void);
 /* Unmount the storage so all metadata is written and the card is safe to lose power. */
 void purrgo_platform_storage_unmount(void);
 
-/* Enter the hardware low-power state (STM32: STANDBY with wake-up pin; PC: exit). */
+/*
+ * Enter the hardware low-power state, woken by K1 (STM32: Stop 2 by default,
+ * plain STANDBY with wake-up pin as the fallback; PC: exit).
+ */
 void purrgo_platform_enter_standby(void);
 
 #endif /* PURRGO_POWER_H */

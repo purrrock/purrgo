@@ -17,7 +17,8 @@ typedef struct {
     bool in_wpt;
     bool in_name;
     bool in_ele;
-    bool inside_tag_brackets;     // Флаг нахождения внутри скобок < ... >
+    uint8_t mode;                 // Режим разбора (текст, тег, комментарий, CDATA), см. gpx_parser.c
+    uint8_t run;                  // Подряд идущие '-' (комментарий) или ']' (CDATA) перед '>'
 
     purrgo_waypoint_t temp_wp;    // Временный буфер для собираемой точки
     bool temp_ok;                 // У собираемой точки корректные lat и lon
@@ -27,6 +28,9 @@ typedef struct {
 
     char text_buffer[32];         // Буфер для накопления текста (имя, высота)
     uint8_t text_len;
+
+    char esc[10];                 // Накапливаемая XML-сущность: "&amp;", "&#x41;" (без завершающего ';')
+    uint8_t esc_len;
 } purrgo_gpx_parser_t;
 
 // Инициализация парсера

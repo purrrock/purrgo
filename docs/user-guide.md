@@ -293,7 +293,7 @@ CENTER (долгое K3) возвращает автоследование и с
 ```text
 0:/PURRGO/
     PURRGO.CFG          конфигурация (ключ=значение), пишется атомарно
-    MAPS/<имя карты>/   предкомпилированные карты (каталог выбирается пунктом MAP DIR; формат - map-format-v3.md)
+    MAPS/<имя карты>/   предкомпилированные карты (каталог выбирается пунктом MAP DIR; формат - map-format-v3.md или map-format-v4.md)
     TRACKS/             записанные треки (GPX)
     ROUTES/             маршруты (GPX)
     WAYPTS/             путевые точки (GPX)
@@ -304,4 +304,4 @@ CENTER (долгое K3) возвращает автоследование и с
 - Маршруты и путевые точки: GPX, имя файла до 95 символов, расширение `.gpx`. Записанные треки лежат в `TRACKS/` и открываются пунктом OPEN TRACK
   без копирования в `ROUTES/`.
 - Книги: файлы `.PGB`, в списке до 48 книг, имя файла до 95 байт.
-- Как сделать карту: [`tools/map-compiler/README.md`](../tools/map-compiler/README.md); формат: [`map-format-v3.md`](map-format-v3.md).
+- Как сделать карту: [`tools/map-compiler/README.md`](../tools/map-compiler/README.md); формат: [`map-format-v3.md`](map-format-v3.md), [`map-format-v4.md`](map-format-v4.md).

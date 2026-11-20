@@ -528,6 +528,33 @@ static void test_route_menu(void)
     CHECK(fake_fs_open_dirs() == 0);
 }
 
+/* Правки в меню применяются и сохраняются при выходе минуя BACK (TRACKER, BOOKS, POWER OFF). */
+static void test_menu_drafts_on_exit(void)
+{
+    fake_fs_reset();
+    purrgo_config_init();
+    purrgo_menu_controller_init();
+
+    const int16_t tz0 = app_config.tz_offset_minutes;
+
+    purrgo_state_t st = APP_STATE_MENU_MAIN;
+    purrgo_menu_controller_on_enter(APP_STATE_MENU_MAIN);
+    for (int i = 0; i < 4; i++) { st = press(st, PURRGO_ACTION_DOWN); }   /* TZ */
+    st = press(st, PURRGO_ACTION_OK);
+    CHECK(app_config.tz_offset_minutes == tz0);                           /* пока только черновик */
+
+    st = press(st, PURRGO_ACTION_UP);                                     /* TRACKER (SCREEN OFF) */
+    st = press(st, PURRGO_ACTION_OK);
+    CHECK(st == APP_STATE_TRACKER_SCREEN_OFF);
+    CHECK(app_config.tz_offset_minutes == tz0 + 15);
+
+    uint32_t n = 0;
+    const uint8_t *d = fake_fs_data(CFG, &n);
+    char want[32];
+    snprintf(want, sizeof want, "TZ_MIN=%d\n", tz0 + 15);
+    CHECK(d != NULL && strstr((const char *)d, want) != NULL);
+}
+
 int main(void)
 {
     test_parser();
@@ -536,5 +563,6 @@ int main(void)
     test_render();
     test_config_key();
     test_route_menu();
+    test_menu_drafts_on_exit();
     return test_finish("test_route");
 }

@@ -616,9 +616,10 @@ void purrgo_gnss_receiver_configure_ubx_profile(purrgo_gnss_tx_fn tx, purrgo_gns
          * не пропадает, приёмник не уходит в "off", настройка в слое RAM не стирается. Период решений PSMCT
          * задаёт CFG-RATE-MEAS из базового кадра.
          */
-        bool psmct = tracker_ct;
 #if PURRGO_GNSS_PSM_ACTIVE
-        psmct = true;
+        const bool psmct = true;
+#else
+        const bool psmct = tracker_ct;
 #endif
         if (psmct) {
             static const purrgo_ubx_cfg_item_t psm_no_off = { UBX_KEY_PM_DONOTENTEROFF, 1U };

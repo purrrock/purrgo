@@ -52,11 +52,10 @@ cd out/build/macos-release/emulator && ./purrgo_emulator
 
 ### Visual Studio Code
 
-Откройте корень репозитория (или `purrgo.code-workspace`), установите расширение
-CMake Tools и выберите пресет в строке состояния. Для STM32 расширение
-STM32Cube for VS Code предоставляет `cube-cmake` (см. `.vscode/settings.json`).
-Отладка прошивки — конфигурация `Cortex Debug: OpenOCD (PurrGO)`: она берёт `.elf`
-активного пресета.
+Откройте корень репозитория, установите расширение CMake Tools и выберите пресет в
+строке состояния. Для STM32 расширение STM32Cube for VS Code предоставляет `cube-cmake`.
+Каталог `.vscode/` в репозиторий не входит (`.gitignore`), конфигурацию отладки
+(Cortex Debug, OpenOCD) настройте локально: она должна брать `.elf` активного пресета.
 
 ### Командная строка
 
@@ -67,24 +66,32 @@ cmake --build --preset stm32u5-debug
 
 Уровень логирования UART/stderr (`include/purrgo/logger.h`) выбирается кэш-переменной
 `PURRGO_LOG_LEVEL`: 0 NONE, 1 ERROR, 2 WARN, 3 INFO, 4 DEBUG. По умолчанию Release собирается
-с уровнем 1 (только ошибки, светодиод PC13 не мигает), остальные типы сборки - с 3. Пример:
+с уровнем 1 (только ошибки, светодиод PC13 не мигает), остальные типы сборки - с 4 (DEBUG). Пример:
 `cmake --preset stm32u5-release -DPURRGO_LOG_LEVEL=3`.
 
-Другие параметры сборки прошивки:
+Другие параметры сборки прошивки. Есть два способа передачи:
 
-| Параметр | Назначение |
-|---|---|
-| `-DPURRGO_HW_TEST=SD_SPEED\|EINK_4GRAY\|EINK_PARTIAL` | Аппаратный тест вместо навигатора, см. [`docs/hardware.md`](hardware.md) |
-| `-DPURRGO_TRACK_DIAG=ON` | Диагностическая запись трека (каждая эпоха GNSS), см. раздел [«Полевой тест фильтров трека»](#полевой-тест-фильтров-трека) |
-| `-DPURRGO_WERROR=ON` | Предупреждения кода проекта - ошибки (включена в CI: host-тесты и сборка прошивки) |
+- **CMake-опция** - `-D<имя>=<значение>` в команде `cmake --preset ...`;
+- **флаг компилятора** - макрос C, который CMake-опцией не является. Передавайте его через
+  `-DCMAKE_C_FLAGS="-D<имя>=<значение> ..."`, иначе он до компилятора не дойдёт.
 
-| `-DPURRGO_GNSS_TRACKER_MODE=2 -DPURRGO_STOP2=0` | Собрать PSMOO с отключённым Stop 2 и включенным PSMOO |
-| `-D-DPURRGO_STOP_HSI_KERNEL_ON=1` | так HSI16 не гаснет в Stop |
-| `-DPURRGO_GNSS_TIMEPULSE=0 ` | не отключать LED 1PPS|
+| Параметр | Как передать | Назначение |
+|---|---|---|
+| `PURRGO_HW_TEST=SD_SPEED\|SD_POWER\|EINK_4GRAY\|EINK_PARTIAL` | CMake-опция | Аппаратный тест вместо навигатора, см. [`hardware.md`](hardware.md) и раздел «Аппаратные тесты» ниже |
+| `PURRGO_TRACK_DIAG=ON` | CMake-опция | Диагностическая запись трека (каждая эпоха GNSS), см. раздел [«Полевой тест фильтров трека»](#полевой-тест-фильтров-трека) |
+| `PURRGO_WERROR=ON` | CMake-опция | Предупреждения кода проекта - ошибки (включена в CI: host-тесты и сборка прошивки) |
+| `PURRGO_LOG_LEVEL=0..4` | CMake-опция | Уровень логирования, см. выше |
+| `PURRGO_GNSS_TRACKER_MODE=2` | флаг компилятора | Режим приёмника в трекере PSMOO (по умолчанию 1 - PSMCT). Stop 2 при этом не затрагивается. На G10A-F30 PSMOO не работает, это эксперимент, см. `include/purrgo/hardware_config.h` |
+| `PURRGO_STOP2=0` | флаг компилятора | Отключить Stop 2 целиком (по умолчанию 1) |
+| `PURRGO_STOP_HSI_KERNEL_ON=1` | флаг компилятора | HSI16 не гаснет в Stop (по умолчанию 0) |
+| `PURRGO_GNSS_TIMEPULSE=0` | флаг компилятора | Заводской 1PPS модуля, светодиод мигает (по умолчанию 1 - импульс не выдаётся, 2 - вывод отпущен) |
 
-Чтобы параметры точно передались копилятору, пишем так:
-cmake --preset stm32u5-debug -DCMAKE_C_FLAGS="-DPURRGO_GNSS_TRACKER_MODE=2 -DPURRGO_STOP2=1 -DPURRGO_STOP_HSI_KERNEL_ON=0"
+Пример: PSMOO при включённом Stop 2:
+
+```sh
+cmake --preset stm32u5-debug -DCMAKE_C_FLAGS="-DPURRGO_GNSS_TRACKER_MODE=2"
 cmake --build --preset stm32u5-debug
+```
 
 Результат сборки: `out/build/<пресет>/`. Прошивка — `out/build/stm32u5-*/PurrGO_STM32U5.elf`,
 эмулятор — `out/build/<пресет>/emulator/purrgo_emulator`.
@@ -95,8 +102,8 @@ cmake --build --preset stm32u5-debug
 ### STM32CubeMX
 
 CubeMX-проект находится в `stm32/` (`PurrGO_STM32U5.ioc`, `Core/`, `Drivers/`, ...).
-Перегенерация кода обновляет `cmake/stm32cubemx/CMakeLists.txt` и
-`cmake/gcc-arm-none-eabi.cmake` в этой папке — они подхватываются автоматически.
+Перегенерация кода обновляет `stm32/cmake/stm32cubemx/CMakeLists.txt` и
+`stm32/cmake/gcc-arm-none-eabi.cmake` — они подхватываются автоматически.
 `stm32/CMakeLists.txt` (пользовательский, CubeMX его не перезаписывает)
 подключается из корневого `CMakeLists.txt` и самостоятельно не конфигурируется.
 

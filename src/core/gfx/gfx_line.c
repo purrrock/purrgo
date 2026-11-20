@@ -15,7 +15,7 @@ static inline int16_t gfx_abs(int16_t a) {
 }
 
 // Вычисление кода зоны для точки относительно границ экрана
-static uint8_t compute_outcode(gfx_context_t *ctx, int16_t x, int16_t y) {
+static uint8_t compute_outcode(const gfx_context_t *ctx, int16_t x, int16_t y) {
     uint8_t code = INSIDE;
     if (x < ctx->clip_x) {
         code |= LEFT;
@@ -289,7 +289,6 @@ void gfx_draw_dashed_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1
     int16_t sy = y0 < y1 ? 1 : -1;
 
     int16_t err = dx + dy;
-    int16_t e2;
 
     while (true) {
         if (dash_counter < dash_len) {
@@ -305,7 +304,7 @@ void gfx_draw_dashed_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1
             break;
         }
 
-        e2 = err * 2;
+        const int16_t e2 = (int16_t)(err * 2);
 
         if (e2 >= dy) {
             err += dy;
@@ -472,7 +471,6 @@ void gfx_draw_dotted_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1
     int16_t sy = y0 < y1 ? 1 : -1;
 
     int16_t err = dx + dy;
-    int16_t e2;
 
     while (true) {
         // Чередование: 1 пиксель рисуем, 1 пропускаем
@@ -486,7 +484,7 @@ void gfx_draw_dotted_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1
             break;
         }
 
-        e2 = err * 2;
+        const int16_t e2 = (int16_t)(err * 2);
 
         if (e2 >= dy) {
             err += dy;

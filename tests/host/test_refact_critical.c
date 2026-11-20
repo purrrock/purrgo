@@ -271,6 +271,24 @@ static void test_config_size_limits(void) {
     CHECK(strcmp(app_config.map_dir, dir) == 0);
     CHECK(layer(PURRGO_LAYER_TRACK) && layer(PURRGO_LAYER_ROADS));
 
+    /* MAP_DIR из файла: путь с ".." и обратной косой чертой отбрасывается, обычный принимается */
+    fake_fs_reset();
+    purrgo_config_init();
+    const char* const default_dir = "maps";
+    snprintf(app_config.map_dir, sizeof app_config.map_dir, "%s", default_dir);
+    fake_fs_put(CFG, "MAP_DIR=maps/../../etc\n");
+    CHECK(purrgo_config_load());
+    CHECK(strcmp(app_config.map_dir, default_dir) == 0);
+    fake_fs_put(CFG, "MAP_DIR=a\\b\n");
+    CHECK(purrgo_config_load());
+    CHECK(strcmp(app_config.map_dir, default_dir) == 0);
+    fake_fs_put(CFG, "MAP_DIR=maps/belarus..v2\n");
+    CHECK(purrgo_config_load());
+    CHECK(strcmp(app_config.map_dir, "maps/belarus..v2") == 0);
+    fake_fs_put(CFG, "MAP_DIR=0:/PURRGO/MAPS/by\n");
+    CHECK(purrgo_config_load());
+    CHECK(strcmp(app_config.map_dir, "0:/PURRGO/MAPS/by") == 0);
+
     /* файл с комментариями и пустыми строками (~800 байт): слои в конце читаются */
     char txt[1100]; size_t k = 0;
     for (int i = 0; i < 12; i++) {
