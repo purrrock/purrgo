@@ -8,21 +8,20 @@
 #include "purrgo/gnss_ubx.h"
 #include "purrgo/gnss_io.h"
 #include "purrgo/sun.h"
-#include "purrgo/purrgo_time.h"
 #include "purrgo/trip_computer.h"
 #include "purrgo/menu_controller.h"
 #include "purrgo/track_logger.h"
 #include "purrgo/supply.h"
 #include "purrgo/logger.h"
-#include "purrgo/geo.h"
 #include "purrgo/hardware_config.h"
 #include "purrgo/book_reader.h"
 #include "purrgo/battery.h"
 #include "purrgo/waypoint.h"
 #include "purrgo/sound.h"
 #include "purrgo/hw_fault.h"
-
-#define PURRGO_GNSS_MARKER_UPDATE_DISTANCE_M 5
+#include "nav/logger_retry.h"
+#include "ui/app_data_change.h"
+#include "ui/app_keymap.h"
 
 /*
  * Таймаут фикса: если корректная RMC не приходила дольше этого времени,
@@ -35,14 +34,10 @@
 /*
  * Политика перерисовки по данным (GNSS, заряд батареи) - purrgo/ui/ui_dirty.h:
  * нажатия кнопок и смена валидности фикса перерисовывают экран сразу, остальные
- * изменения копятся и выводятся не чаще PURRGO_UI_MIN_DATA_REDRAW_MS. Здесь
- * только пороги, при которых изменение данных GNSS считается заметным.
+ * изменения копятся и выводятся не чаще PURRGO_UI_MIN_DATA_REDRAW_MS. Пороги, при
+ * которых изменение данных считается заметным, и показанные на экране значения -
+ * в ui/app_data_change.h.
  */
-#define PURRGO_UI_SPEED_THRESHOLD_KNOTS_100 100   /* 1 уз ~ 1,85 км/ч */
-#define PURRGO_UI_ALT_THRESHOLD_M           5
-/* Цель навигации на экране Trip computer: заметное изменение расстояния и пеленга. */
-#define PURRGO_UI_WPT_DIST_THRESHOLD_M      5
-#define PURRGO_UI_WPT_BEARING_THRESHOLD_DEG 5
 
 // Текущее состояние конечного автомата
 static purrgo_state_t current_state;
@@ -62,59 +57,24 @@ static purrgo_ubx_parser_t ubx_parser;
 static uint32_t last_rmc_ms = 0;
 static uint32_t last_tick_ms = 0;
 
+/* Диагностические строки приёмника в логе в трекере: раз в минуту (на карте - раз в 5 с). */
+#define TRACKER_DIAG_LOG_INTERVAL_MS 60000U
+
 /*
  * Счётчик принятых решений (PVT или RMC): растёт на каждое новое решение приёмника. В трекере с PSMOO
  * решения приходят раз в период, а устаревший фикс остаётся действующим до таймаута; логгер получает
  * фикс один раз, а не каждую секунду (иначе при PURRGO_TRACK_DIAG он писал бы в GPX "отброшенные" копии).
  */
-/* Диагностические строки приёмника в логе в трекере: раз в минуту (на карте - раз в 5 с). */
-#define TRACKER_DIAG_LOG_INTERVAL_MS 60000U
-
 static uint32_t gnss_fix_seq = 0;
 static uint32_t tracker_logged_seq = 0;
 
 // Политика перерисовки
 static bool render_gate_active = false;
 static uint32_t render_not_before_ms = 0;
-static int32_t shown_speed_knots_100 = 0;
-static int32_t shown_alt_m = 0;
-static uint8_t shown_satellites = 0;
-static bool shown_wpt_valid = false;
-static bool shown_wpt_arrived = false;
-static uint32_t shown_wpt_dist_m = 0;
-static uint16_t shown_wpt_bearing_deg = 0;
-static bool shown_pos_valid = false;
-static int32_t shown_lat_1e7 = 0;
-static int32_t shown_lon_1e7 = 0;
+static purrgo_app_data_change_t data_change = {0};
 
-// Состояние логгера для механизма отката попыток
-static uint32_t next_logger_retry_ms = 0;
-static uint8_t logger_start_failures = 0;
-static track_logger_state_t prev_logger_state = LOGGER_STATE_IDLE;
-static uint32_t logger_recording_since_ms = 0;
-
-// Запись должна идти без сбоев столько времени, чтобы сбросить счётчик неудач.
-#define PURRGO_LOGGER_STABLE_MS 60000U
-
-static bool last_rendered_pos_valid = false;
-static purrgo_gnss_solution_t last_rendered_fix = {0};
-
-// Планирует следующую попытку старта/восстановления логгера: 5 с, 30 с, затем 5 мин.
-static void logger_schedule_retry(uint32_t now_ms) {
-    if (logger_start_failures < 255U) {
-        logger_start_failures++;
-    }
-
-    uint32_t delay_ms;
-    if (logger_start_failures == 1U) {
-        delay_ms = 5000U;
-    } else if (logger_start_failures == 2U) {
-        delay_ms = 30000U;
-    } else {
-        delay_ms = 300000U;
-    }
-    next_logger_retry_ms = now_ms + delay_ms;
-}
+// Политика повторных попыток логгера (nav/logger_retry.h)
+static purrgo_logger_retry_t logger_retry = {0};
 
 static bool is_book_state(purrgo_state_t state) {
     return state == APP_STATE_BOOK_LIST || state == APP_STATE_BOOK_READ ||
@@ -170,8 +130,8 @@ static void gnss_solution_invalidate(void) {
 static void book_mode_entered(void) {
     gnss_solution_invalidate();
     prev_fix = internal_gnss_solution;
-    last_rendered_pos_valid = false;
-    shown_pos_valid = false;
+    purrgo_app_data_change_forget_marker(&data_change);
+    purrgo_app_data_change_forget_pos(&data_change);
     purrgo_ui_dirty_defer_cancel();
 }
 
@@ -231,8 +191,8 @@ static void tracker_mode_left(void) {
     last_rmc_ms = now;
     last_tick_ms = now;
     last_gnss_update_ms = now;
-    last_rendered_pos_valid = false;
-    shown_pos_valid = false;
+    purrgo_app_data_change_forget_marker(&data_change);
+    purrgo_app_data_change_forget_pos(&data_change);
     purrgo_ui_dirty_defer_cancel();
     purrgo_ui_dirty_mark(UI_DIRTY_MAP);
     purrgo_ui_dirty_mark(UI_DIRTY_STATUS);
@@ -275,7 +235,7 @@ static void on_new_track(void) {
 #endif
 
 void purrgo_app_init(void) {
-    next_logger_retry_ms = 0;
+    purrgo_logger_retry_reset(&logger_retry);
     purrgo_gnss_parser_init(&gnss_parser);
 #if PURRGO_GNSS_UBX
     purrgo_ubx_parser_init(&ubx_parser);
@@ -291,9 +251,7 @@ void purrgo_app_init(void) {
     purrgo_battery_monitor_reset();
     purrgo_supply_reset();
     render_gate_active = false;
-    shown_pos_valid = false;
-    logger_start_failures = 0;
-    logger_recording_since_ms = 0;
+    purrgo_app_data_change_reset(&data_change);
     /*
      * First try to load the persistent configuration.
      * purrgo_config_load() initializes default values and creates
@@ -344,10 +302,88 @@ bool purrgo_app_ui_needs_render(uint32_t now_ms) {
     return true;
 }
 
-void purrgo_app_handle_button(purrgo_btn_t button) {
-    bool handled = false;
-    const purrgo_state_t prev_state = current_state;
+/*
+ * Какой таблицей кнопок пользуется экран. false - у экрана нет раскладки "кнопка ->
+ * действие" (читалка и трекер разбирают кнопки сами и сюда не доходят).
+ */
+static bool state_keymap_screen(purrgo_state_t state, app_keymap_screen_t* screen) {
+    if (state == APP_STATE_MAP) {
+        *screen = APP_KEYMAP_MAP;
+    } else if (state == APP_STATE_TRIP_COMPUTER) {
+        *screen = APP_KEYMAP_TRIP;
+    } else if (purrgo_menu_controller_owns_state(state)) {
+        *screen = APP_KEYMAP_MENU;
+    } else {
+        return false;
+    }
+    return true;
+}
+
+/*
+ * Читалка: кнопки (короткие и длинные) разбирает сама читалка, а не общая
+ * схема "кнопка -> действие". Выход из читалки - в меню CONFIG.
+ */
+static void handle_book_button(purrgo_btn_t button, purrgo_state_t prev_state) {
     purrgo_state_t next_state = current_state;
+
+    render_gate_active = false;
+    const bool redraw = purrgo_book_reader_handle_button(current_state, button, &next_state);
+    current_state = next_state;
+    if (!is_book_state(current_state)) {
+        book_mode_left();
+        purrgo_menu_controller_on_enter(APP_STATE_MENU_MAIN);
+    }
+    ui_input_done(prev_state, redraw);
+}
+
+/*
+ * Действие передаётся контроллеру экрана. true - контроллер принял кнопку (состояние
+ * экрана могло измениться). Меню может сменить состояние: вход в читалку или трекер
+ * подготавливает режим.
+ */
+static bool dispatch_action(purrgo_action_t action) {
+    if (purrgo_menu_controller_owns_state(current_state)) {
+        purrgo_state_t next_state = current_state;
+        const bool handled = purrgo_menu_controller_handle_button(current_state, action, &next_state);
+
+        current_state = next_state;
+        if (is_book_state(current_state)) {
+            book_mode_entered();   // пункт BOOKS: читалка уже выключила GNSS и трек
+        } else if (current_state == APP_STATE_TRACKER_SCREEN_OFF) {
+            tracker_mode_entered();   // пункт меню TRACKER: трек как EXPEDITION, экран отключается
+        }
+        return handled;
+    }
+    if (current_state == APP_STATE_MAP) {
+        return purrgo_map_controller_handle_button(action);
+    }
+    if (current_state == APP_STATE_TRIP_COMPUTER) {
+        return purrgo_trip_computer_handle_button(action);
+    }
+    return false;
+}
+
+// Циклическое переключение основных экранов (Garmin eTrex Page Loop): карта -> путевой компьютер -> меню.
+static void page_loop_next(void) {
+    switch (current_state) {
+        case APP_STATE_MAP:
+            current_state = APP_STATE_TRIP_COMPUTER;
+            break;
+
+        case APP_STATE_TRIP_COMPUTER:
+            current_state = APP_STATE_MENU_MAIN;
+            purrgo_menu_controller_on_enter(APP_STATE_MENU_MAIN);
+            break;
+
+        default:
+            current_state = APP_STATE_MAP;
+            purrgo_ui_dirty_mark(UI_DIRTY_MAP);
+            break;
+    }
+}
+
+void purrgo_app_handle_button(purrgo_btn_t button) {
+    const purrgo_state_t prev_state = current_state;
 
     /*
      * Трекер с отключённым дисплеем: единственное действие - выход по
@@ -374,113 +410,36 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
      */
     purrgo_sound_play(PURRGO_SOUND_CLICK);
 
-    /*
-     * Читалка: кнопки (короткие и длинные) разбирает сама читалка, а не общая
-     * схема "кнопка -> действие". Выход из читалки - в меню CONFIG.
-     */
     if (is_book_state(current_state)) {
-        render_gate_active = false;
-        const bool redraw = purrgo_book_reader_handle_button(current_state, button, &next_state);
-        current_state = next_state;
-        if (!is_book_state(current_state)) {
-            book_mode_left();
-            purrgo_menu_controller_on_enter(APP_STATE_MENU_MAIN);
-        }
-        ui_input_done(prev_state, redraw);
+        handle_book_button(button, prev_state);
         return;
     }
 
-    // Map new keys to legacy actions/buttons based on state
-    purrgo_action_t mapped_button = PURRGO_ACTION_NONE;
+    // Кнопка -> действие по таблице текущего экрана (ui/app_keymap.c)
+    purrgo_action_t action = PURRGO_ACTION_NONE;
+    app_keymap_screen_t keymap_screen;
 
-    if (current_state == APP_STATE_MAP) {
-        switch (button) {
-            case PURRGO_BTN_KEY1_SHORT: mapped_button = PURRGO_ACTION_LEFT; break;
-            case PURRGO_BTN_KEY2_SHORT: mapped_button = PURRGO_ACTION_RIGHT; break;
-            case PURRGO_BTN_KEY3_SHORT: mapped_button = PURRGO_ACTION_UP; break;
-            case PURRGO_BTN_KEY4_SHORT: mapped_button = PURRGO_ACTION_DOWN; break;
-            case PURRGO_BTN_KEY1_LONG:  mapped_button = PURRGO_ACTION_MINUS; break;
-            case PURRGO_BTN_KEY2_LONG:  mapped_button = PURRGO_ACTION_PLUS; break;
-            case PURRGO_BTN_KEY3_LONG:  mapped_button = PURRGO_ACTION_OK; break;
-            case PURRGO_BTN_KEY4_LONG:  mapped_button = PURRGO_ACTION_MENU; break;
-            default: break;
-        }
-    } else if (current_state == APP_STATE_TRIP_COMPUTER) {
-        switch (button) {
-            case PURRGO_BTN_KEY4_SHORT:
-            case PURRGO_BTN_KEY4_LONG:
-                mapped_button = PURRGO_ACTION_MENU;
-                break;
-            default: break;
-        }
-    } else if (purrgo_menu_controller_owns_state(current_state)) {
-        switch (button) {
-            case PURRGO_BTN_KEY1_SHORT:
-            case PURRGO_BTN_KEY1_LONG:
-                mapped_button = PURRGO_ACTION_UP;
-                break;
-            case PURRGO_BTN_KEY2_SHORT:
-            case PURRGO_BTN_KEY2_LONG:
-                mapped_button = PURRGO_ACTION_DOWN;
-                break;
-            case PURRGO_BTN_KEY3_SHORT:
-            case PURRGO_BTN_KEY3_LONG:
-                mapped_button = PURRGO_ACTION_OK;
-                break;
-            case PURRGO_BTN_KEY4_SHORT:
-            case PURRGO_BTN_KEY4_LONG:
-                mapped_button = PURRGO_ACTION_MENU;
-                break;
-            default: break;
-        }
+    if (state_keymap_screen(current_state, &keymap_screen)) {
+        action = purrgo_app_keymap_action(keymap_screen, button);
     }
 
     // Нераспознанная кнопка ничего не делает и не вызывает перерисовку.
-    if (mapped_button == PURRGO_ACTION_NONE) {
+    if (action == PURRGO_ACTION_NONE) {
         return;
     }
 
     // Реакция на пользователя не ждёт интервала между обновлениями данных.
     render_gate_active = false;
 
-    // 1 & 2. Dispatch to module based on state
-    if (purrgo_menu_controller_owns_state(current_state)) {
-        handled = purrgo_menu_controller_handle_button(current_state, mapped_button, &next_state);
-        current_state = next_state;
-        if (is_book_state(current_state)) {
-            book_mode_entered();   // пункт BOOKS: читалка уже выключила GNSS и трек
-        } else if (current_state == APP_STATE_TRACKER_SCREEN_OFF) {
-            tracker_mode_entered();   // пункт меню TRACKER: трек как EXPEDITION, экран отключается
-        }
-    } else if (current_state == APP_STATE_MAP) {
-        handled = purrgo_map_controller_handle_button(mapped_button);
-    } else if (current_state == APP_STATE_TRIP_COMPUTER) {
-        handled = purrgo_trip_computer_handle_button(mapped_button);
-    }
-
-    if (handled) {
+    if (dispatch_action(action)) {
         // Контроллер принял кнопку: состояние экрана могло измениться.
         ui_input_done(prev_state, true);
         return;
     }
 
-    // 3. Циклическое переключение основных экранов (Garmin eTrex Page Loop)
-    if (mapped_button == PURRGO_ACTION_MENU) {
-        switch (current_state) {
-            case APP_STATE_MAP:
-                current_state = APP_STATE_TRIP_COMPUTER;
-                break;
-
-            case APP_STATE_TRIP_COMPUTER:
-                current_state = APP_STATE_MENU_MAIN;
-                purrgo_menu_controller_on_enter(APP_STATE_MENU_MAIN);
-                break;
-
-            default:
-                current_state = APP_STATE_MAP;
-                purrgo_ui_dirty_mark(UI_DIRTY_MAP);
-                break;
-        }
+    // Контроллер кнопку не принял: "меню" листает основные экраны.
+    if (action == PURRGO_ACTION_MENU) {
+        page_loop_next();
     }
 
     // Переход между экранами всегда требует перерисовки.
@@ -488,12 +447,7 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
 }
 
 void purrgo_app_notify_marker_rendered(const purrgo_gnss_solution_t* rendered_fix) {
-    if (rendered_fix && rendered_fix->valid) {
-        last_rendered_fix = *rendered_fix;
-        last_rendered_pos_valid = true;
-    } else {
-        last_rendered_pos_valid = false;
-    }
+    purrgo_app_data_change_marker_rendered(&data_change, rendered_fix);
 }
 
 const purrgo_gnss_solution_t* purrgo_app_get_gnss_solution(void) {
@@ -587,6 +541,38 @@ static void gnss_check_fix_timeout(uint32_t now_ms) {
     }
 }
 
+/*
+ * Восход/закат: считаются по первому фиксу и затем раз в минуту. Первый фикс после
+ * включения - ещё и сигнал (PURRGO_SOUND_FIX_BEEP).
+ */
+static void sun_service(uint32_t now_ms) {
+    if (!internal_gnss_solution.valid) {
+        return;
+    }
+    if (first_fix_obtained && (now_ms - last_sun_update_ms < 60000U)) {
+        return;
+    }
+
+    purrgo_sun_calc(
+        internal_gnss_solution.lat_1e7,
+        internal_gnss_solution.lon_1e7,
+        internal_gnss_solution.year % 100U,
+        internal_gnss_solution.month,
+        internal_gnss_solution.day,
+        internal_gnss_solution.hours,
+        internal_gnss_solution.minutes,
+        app_config.tz_offset_minutes,
+        &internal_sun_info
+    );
+#if PURRGO_SOUND_FIX_BEEP
+    if (!first_fix_obtained) {
+        purrgo_sound_play(PURRGO_SOUND_INFO);   /* первый фикс после включения */
+    }
+#endif
+    first_fix_obtained = true;
+    last_sun_update_ms = now_ms;
+}
+
 void purrgo_app_tick(uint32_t current_time_ms) {
     /* Сигнал о сбое железа (SD, GNSS, E-Ink, АЦП...), заказанный purrgo_hw_fault(), в том числе из прерывания. */
     purrgo_hw_fault_service();
@@ -629,29 +615,7 @@ void purrgo_app_tick(uint32_t current_time_ms) {
         last_gnss_update_ms = current_time_ms;
 
         purrgo_app_update(&internal_gnss_solution);
-
-        if (internal_gnss_solution.valid) {
-            if (!first_fix_obtained || (current_time_ms - last_sun_update_ms >= 60000U)) {
-                purrgo_sun_calc(
-                    internal_gnss_solution.lat_1e7,
-                    internal_gnss_solution.lon_1e7,
-                    internal_gnss_solution.year % 100U,
-                    internal_gnss_solution.month,
-                    internal_gnss_solution.day,
-                    internal_gnss_solution.hours,
-                    internal_gnss_solution.minutes,
-                    app_config.tz_offset_minutes,
-                    &internal_sun_info
-                );
-#if PURRGO_SOUND_FIX_BEEP
-                if (!first_fix_obtained) {
-                    purrgo_sound_play(PURRGO_SOUND_INFO);   /* первый фикс после включения */
-                }
-#endif
-                first_fix_obtained = true;
-                last_sun_update_ms = current_time_ms;
-            }
-        }
+        sun_service(current_time_ms);
     }
 }
 
@@ -665,74 +629,101 @@ static void track_logger_service(const purrgo_gnss_solution_t* current_fix) {
      * сессии не стартуем и повторных попыток не планируем.
      */
     if (purrgo_supply_storage_blocked()) {
-        prev_logger_state = purrgo_logger_get_state();
+        purrgo_logger_retry_sync(&logger_retry, purrgo_logger_get_state());
         return;
     }
-    {
-        const uint32_t now = purrgo_system_time_ms();
-        track_logger_state_t logger_state = purrgo_logger_get_state();
-        track_logger_mode_t logger_mode = purrgo_logger_get_mode();
 
-        /*
-         * Сбой записи во время сессии (RECORDING -> ERROR): планируем
-         * повторную попытку с нарастающей паузой.
-         */
-        if (logger_state == LOGGER_STATE_ERROR && prev_logger_state == LOGGER_STATE_RECORDING) {
-            logger_schedule_retry(now);   /* сбой SD: без звука, сигнал только при критическом разряде (supply.c) */
+    const uint32_t now = purrgo_system_time_ms();
+    track_logger_state_t logger_state = purrgo_logger_get_state();
+    const track_logger_mode_t logger_mode = purrgo_logger_get_mode();
+
+    /* Сбой SD во время сессии - без звука, сигнал только при критическом разряде (supply.c). */
+    purrgo_logger_retry_observe(&logger_retry, now, logger_state);
+
+    if (!current_fix->valid) {
+        return;
+    }
+
+    if (logger_mode != LOGGER_MODE_OFF &&
+        (logger_state == LOGGER_STATE_IDLE || logger_state == LOGGER_STATE_ERROR) &&
+        purrgo_logger_retry_start_allowed(&logger_retry, now)) {
+        if (purrgo_logger_start(current_fix)) {
+            PURRGO_LOG("Track logging started\n\r");
+            logger_state = purrgo_logger_get_state();
+            purrgo_logger_retry_on_start_ok(&logger_retry, now, logger_state);
+        } else {
+            purrgo_logger_retry_on_start_failed(&logger_retry, now);
         }
+    }
 
-        /*
-         * Счётчик неудач сбрасывается, только когда запись непрерывно идёт
-         * достаточно долго; иначе "переоткрылся и сразу упал" давал бы
-         * повторные попытки каждую секунду.
-         */
-        if (logger_state == LOGGER_STATE_RECORDING) {
-            if (prev_logger_state != LOGGER_STATE_RECORDING) {
-                logger_recording_since_ms = now;
-            } else if (logger_start_failures != 0 &&
-                       (uint32_t)(now - logger_recording_since_ms) >= PURRGO_LOGGER_STABLE_MS) {
-                logger_start_failures = 0;
-            }
-        }
-        prev_logger_state = logger_state;
-
-        if (current_fix->valid) {
-            if (logger_mode != LOGGER_MODE_OFF &&
-                (logger_state == LOGGER_STATE_IDLE || logger_state == LOGGER_STATE_ERROR)) {
-                if (logger_start_failures == 0 || (int32_t)(now - next_logger_retry_ms) >= 0) {
-                    if (purrgo_logger_start(current_fix)) {
-                        PURRGO_LOG("Track logging started\n\r");
-                        logger_state = purrgo_logger_get_state();
-                        prev_logger_state = logger_state;
-                        logger_recording_since_ms = now;
-                    } else {
-                        logger_schedule_retry(now);
-                    }
-                }
-            }
-
-            if (logger_state == LOGGER_STATE_RECORDING) {
-                // Передаем координаты в фильтр (он сам решит, записывать ли точку)
-                if (purrgo_logger_add_point(current_fix)) {
-                    purrgo_ui_dirty_mark(UI_DIRTY_TRACK);
-                    /*
-                     * Сам флаг TRACK экран не перерисовывает: без этого новые
-                     * отрезки ждали бы, пока маркёр сместится или сменится
-                     * минута. Перерисовка ставится в очередь и выводится не
-                     * чаще PURRGO_UI_MIN_DATA_REDRAW_MS, как остальные данные.
-                     */
-                    if (current_state == APP_STATE_MAP) {
-                        purrgo_ui_dirty_defer();
-                    }
-                }
+    if (logger_state == LOGGER_STATE_RECORDING) {
+        // Передаем координаты в фильтр (он сам решит, записывать ли точку)
+        if (purrgo_logger_add_point(current_fix)) {
+            purrgo_ui_dirty_mark(UI_DIRTY_TRACK);
+            /*
+             * Сам флаг TRACK экран не перерисовывает: без этого новые
+             * отрезки ждали бы, пока маркёр сместится или сменится
+             * минута. Перерисовка ставится в очередь и выводится не
+             * чаще PURRGO_UI_MIN_DATA_REDRAW_MS, как остальные данные.
+             */
+            if (current_state == APP_STATE_MAP) {
+                purrgo_ui_dirty_defer();
             }
         }
     }
 }
 
-void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
-    bool pos_changed_significantly = false;
+/*
+ * Политика перерисовки по данным раз в секунду.
+ *   - смена валидности фикса: сразу (важное событие для пользователя);
+ *   - остальное (время, смещение маркера, скорость/высота/спутники на
+ *     экране Trip computer): откладывается до минимального интервала
+ *     и учитывается только при заметном изменении значения
+ *     (ui/app_data_change.h).
+ * В конце запоминает fix как prev_fix: следующий вызов сравнивает с ним.
+ */
+static void update_redraw_policy(const purrgo_gnss_solution_t* fix, bool trip_info_changed) {
+    const bool valid_changed = fix->valid != prev_fix.valid;
+    const bool clock_changed = fix->minutes != prev_fix.minutes || fix->hours != prev_fix.hours;
 
+    if (valid_changed) {
+        purrgo_ui_dirty_now(purrgo_system_time_ms());
+    }
+
+    // Эталон сравнения позиции: на карте - нарисованный маркер, иначе - уже отправленная на вывод позиция.
+    bool data_changed = clock_changed ||
+                        purrgo_app_data_change_pos_moved(&data_change, current_state == APP_STATE_MAP, fix);
+
+    if (current_state == APP_STATE_TRIP_COMPUTER) {
+        if (trip_info_changed) {
+            data_changed = true;
+        }
+        if (purrgo_app_data_change_trip_changed(&data_change, fix, purrgo_wpt_nav())) {
+            data_changed = true;
+        }
+    }
+
+    if (data_changed) {
+        purrgo_ui_dirty_defer();
+        // Отправленные на экран значения запоминаем в момент постановки в очередь.
+        purrgo_app_data_change_commit(&data_change, fix);
+    }
+
+    if (valid_changed || clock_changed) {
+        purrgo_ui_dirty_mark(UI_DIRTY_STATUS);
+    }
+
+    static track_logger_state_t prev_rec_state = LOGGER_STATE_IDLE;
+    if (purrgo_logger_get_state() != prev_rec_state) {
+        prev_rec_state = purrgo_logger_get_state();
+        purrgo_ui_dirty_mark(UI_DIRTY_SCREEN);
+        purrgo_ui_dirty_mark(UI_DIRTY_STATUS);
+    }
+
+    prev_fix = *fix;
+}
+
+void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
     /*
      * В режиме чтения GNSS выключен, трек не пишется, а экран не зависит от
      * времени и позиции: любая перерисовка здесь только тратит заряд.
@@ -760,13 +751,6 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
         return;
     }
 
-    /*
-     * Эталонная позиция для сравнения: на карте - позиция, на которой реально
-     * нарисован маркер; на остальных экранах маркер не рисуется, поэтому
-     * эталоном служит позиция, уже отправленная в очередь на вывод. Иначе
-     * после ухода с карты расхождение с последним маркером оставалось бы
-     * "значительным" вечно и вызывало перерисовку на каждом интервале.
-     */
     /* Расстояние и пеленг до цели (раз в секунду, вместе с остальными данными). */
     purrgo_wpt_update(current_fix);
 
@@ -777,113 +761,7 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
     purrgo_trip_computer_update(current_fix);
     const bool trip_info_changed = purrgo_trip_computer_take_changed();
 
-    const bool use_marker_ref = (current_state == APP_STATE_MAP);
-    const bool ref_valid = use_marker_ref ? last_rendered_pos_valid : shown_pos_valid;
-    const int32_t ref_lat = use_marker_ref ? last_rendered_fix.lat_1e7 : shown_lat_1e7;
-    const int32_t ref_lon = use_marker_ref ? last_rendered_fix.lon_1e7 : shown_lon_1e7;
-
-    if (current_fix->valid) {
-        if (!ref_valid) {
-            pos_changed_significantly = true;
-        } else {
-            uint32_t dist = purrgo_geo_distance_m(
-                ref_lat, ref_lon,
-                current_fix->lat_1e7, current_fix->lon_1e7
-            );
-            if (dist >= PURRGO_GNSS_MARKER_UPDATE_DISTANCE_M) {
-                pos_changed_significantly = true;
-            }
-        }
-    } else {
-        // Позиция пропала: нужно убрать маркер/обновить статус
-        if (ref_valid) {
-            pos_changed_significantly = true;
-        }
-    }
-
-    /*
-     * Политика перерисовки.
-     *   - смена валидности фикса: сразу (важное событие для пользователя);
-     *   - остальное (время, смещение маркера, скорость/высота/спутники на
-     *     экране Trip computer): откладывается до минимального интервала
-     *     и учитывается только при заметном изменении значения.
-     */
-    if (current_fix->valid != prev_fix.valid) {
-        purrgo_ui_dirty_now(purrgo_system_time_ms());
-    }
-
-    bool data_changed = pos_changed_significantly ||
-                        current_fix->minutes != prev_fix.minutes ||
-                        current_fix->hours != prev_fix.hours;
-
-    if (current_state == APP_STATE_TRIP_COMPUTER) {
-        if (trip_info_changed) {
-            data_changed = true;
-        }
-        int32_t dv = current_fix->speed_knots - shown_speed_knots_100;
-        int32_t da = current_fix->alt_m - shown_alt_m;
-        if (dv < 0) dv = -dv;
-        if (da < 0) da = -da;
-
-        if (dv >= PURRGO_UI_SPEED_THRESHOLD_KNOTS_100 ||
-            da >= PURRGO_UI_ALT_THRESHOLD_M ||
-            current_fix->satellites_tracked != shown_satellites) {
-            data_changed = true;
-        }
-
-        const purrgo_wpt_nav_t* wn = purrgo_wpt_nav();
-        int32_t dd = (int32_t)wn->nav.distance_to_wp_m - (int32_t)shown_wpt_dist_m;
-        int32_t db = (int32_t)wn->nav.bearing_to_wp_deg - (int32_t)shown_wpt_bearing_deg;
-        if (dd < 0) dd = -dd;
-        if (db < 0) db = -db;
-        if (db > 180) db = 360 - db;
-
-        if (wn->valid != shown_wpt_valid ||
-            (wn->valid && (wn->nav.is_arrived != shown_wpt_arrived ||
-                           dd >= PURRGO_UI_WPT_DIST_THRESHOLD_M ||
-                           db >= PURRGO_UI_WPT_BEARING_THRESHOLD_DEG))) {
-            data_changed = true;
-            shown_wpt_valid = wn->valid;
-            shown_wpt_arrived = wn->nav.is_arrived;
-            shown_wpt_dist_m = wn->nav.distance_to_wp_m;
-            shown_wpt_bearing_deg = wn->nav.bearing_to_wp_deg;
-        }
-    }
-
-    if (data_changed) {
-        purrgo_ui_dirty_defer();
-        // Отправленные на экран значения запоминаем в момент постановки в очередь.
-        shown_speed_knots_100 = current_fix->speed_knots;
-        shown_alt_m = current_fix->alt_m;
-        shown_satellites = current_fix->satellites_tracked;
-        shown_pos_valid = current_fix->valid;
-        shown_lat_1e7 = current_fix->lat_1e7;
-        shown_lon_1e7 = current_fix->lon_1e7;
-    }
-
-    if (current_fix->valid != prev_fix.valid ||
-        current_fix->minutes != prev_fix.minutes ||
-        current_fix->hours != prev_fix.hours) {
-
-        purrgo_ui_dirty_mark(UI_DIRTY_STATUS);
-    }
-
-    static track_logger_state_t prev_rec_state = LOGGER_STATE_IDLE;
-    if (purrgo_logger_get_state() != prev_rec_state) {
-        prev_rec_state = purrgo_logger_get_state();
-        purrgo_ui_dirty_mark(UI_DIRTY_SCREEN);
-        purrgo_ui_dirty_mark(UI_DIRTY_STATUS);
-    }
-
-    prev_fix = *current_fix;
-    purrgo_gnss_solution_t display_fix;
-
-    // Пересчет UTC времени в локальное с использованием специализированного модуля purrgo_time
-    if (!purrgo_time_apply_timezone(current_fix, &display_fix, app_config.tz_offset_minutes)) {
-        display_fix = *current_fix; // fallback to UTC if conversion fails (e.g. out of bounds)
-    }
-
-
+    update_redraw_policy(current_fix, trip_info_changed);
     track_logger_service(current_fix);
 
     // Диспетчеризация фоновой логики приложения в зависимости от активного экрана
