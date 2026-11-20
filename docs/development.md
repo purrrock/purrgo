@@ -43,7 +43,7 @@ cmake --build --preset macos-release
 
 ```sh
 mkdir -p tests/data/maps tests/data/books tests/data/routes tests/data/waypts
-# карта: содержимое PURRGO/MAPS/<имя>/ из zip действия Build map -> tests/data/maps/<имя>/
+# карта: содержимое PURRGO/MAPS/<имя>/ из zip действия Build map V3 (или V4) -> tests/data/maps/<имя>/
 cp tests/host/data/sample.pgb tests/data/books/
 cd out/build/macos-release/emulator && ./purrgo_emulator
 ```

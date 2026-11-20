@@ -1,6 +1,6 @@
 name: Build map V4 (Belarus)
 
-# То же, что "Build map", но формат карты V4 (docs/map-format-v4.md) и индекс поиска.
+# То же, что "Build map V3" (build-map-v3.yml), но формат карты V4 (docs/map-format-v4.md) и индекс поиска.
 # Запуск вручную: Actions -> Build map V4 -> Run workflow.
 # Результат: структура PURRGO/MAPS/<имя>/ (с search.idx) - её достаточно распаковать
 # в корень microSD. Два способа забрать:

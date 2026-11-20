@@ -164,7 +164,7 @@ K1 / K2 вверх и вниз, K3 выбор), длинный K4 — выход
 - [ ] Рабочая память поиска: арена режима карты (`purrgo/ram_arena.h`, `purrgo_arena_alloc(PURRGO_ARENA_MAP, ...)`). После кэша секторов (768 секторов, ~400 КБ) остаётся ~115 КБ; больше можно получить, уменьшив `PURRGO_MAP_CACHE_SECTORS` (`map_internal.h`). Трасса `PURRGO_RENDER_PROF` берёт остаток арены целиком, при её включении поиску памяти не остаётся.
 - [ ] **[решение]** Размер карт и число POI (по карте из CI) → 16 или 32 Б на запись, нужен ли каталог диапазонов.
 - [ ] Компилятор: `search_categories.csv`, подтипы, флаги, секции NAME и CAT, запись `search.idx`
-  (`purrgo_bin_writer.py`, `purrgo_models.py`, `purrgo_map_compiler.py`), сборка в CI (`build-map.yml`).
+  (`purrgo_bin_writer.py`, `purrgo_models.py`, `purrgo_map_compiler.py`), сборка в CI (`build-map-v4.yml`).
 - [x] Спецификация: раздел 21 `map-format-v4.md` (черновик): `search.idx`, правила нормализации.
 - [ ] `tests/audit_maps.py`: проверки `search.idx` (раздел 21.10 спецификации).
 - [ ] Ядро: свёртка ключа (таблица + тест на совпадение с компилятором), разбор запроса, бинарный поиск,

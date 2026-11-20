@@ -1,6 +1,7 @@
-name: Build map (Belarus)
+name: Build map V3 (Belarus)
 
-# Запуск вручную: Actions -> Build map -> Run workflow.
+# Формат карты V3 (см. build-map-v4.yml для V4).
+# Запуск вручную: Actions -> Build map V3 -> Run workflow.
 # Результат: готовая структура PURRGO/MAPS/<имя>/ - её достаточно распаковать
 # в корень microSD. Два способа забрать:
 #   * artifact запуска: GitHub сам упаковывает его в один zip (внутри уже
@@ -36,11 +37,11 @@ permissions:
   contents: write   # нужно только для шага Release
 
 concurrency:
-  group: build-map-${{ inputs.map_name }}
+  group: build-map-v3-${{ inputs.map_name }}
   cancel-in-progress: true
 
 jobs:
-  build-map:
+  build-map-v3:
     runs-on: ubuntu-24.04
     timeout-minutes: 240
     env:
@@ -105,7 +106,8 @@ jobs:
       - name: Compile map
         working-directory: tools/map-compiler
         run: |
-          python purrgo_map_compiler.py "$WORK/$MAP_NAME.osm"
+          python purrgo_map_compiler.py "$WORK/$MAP_NAME.osm" \
+            --format 3 -o "$TOOLS/$MAP_NAME"
           ls -lh "$TOOLS/$MAP_NAME"
 
       # Компилятор при ошибке (нет входного файла) завершается с кодом 0,
