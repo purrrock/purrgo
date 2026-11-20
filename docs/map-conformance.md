@@ -1,101 +1,119 @@
-# PurrGO Map Format V3 — Binary Format Conformance
+# Формат карты PurrGO V4 — соответствие бинарному формату
 
-**Status:** Binary Format Conformance Audit
+**Статус:** аудит соответствия бинарному формату
 
-This document defines the conformance requirements for implementations of **PurrGO Map Format V3**.
+Документ определяет требования к реализациям **формата карты PurrGO V4**.
 
-The normative binary format is defined exclusively in:
+Нормативный бинарный формат определён исключительно в:
 
 ```text
-docs/map-format-v3.md
+docs/map-format-v4.md
 ```
 
-This document does **not** duplicate the binary layout.
+Этот документ **не дублирует** бинарную раскладку.
 
 ---
 
-# 1. Conformance Scope
+# 1. Область проверки
 
-A V3 implementation is conformant when the following components agree with the normative specification:
+Реализация V4 соответствует формату, если следующие компоненты согласуются с нормативной спецификацией:
 
 ```text
-                 PurrGO Map Format V3
+                 Формат карты PurrGO V4
                          │
               ┌──────────┴──────────┐
               │                     │
-       Python map compiler      C firmware parser
+     Компилятор карт на Python   Парсер прошивки на C
               │                     │
-           writes V3              reads V3
+          пишет V4               читает V4
 ```
 
-The audit covers:
+Аудит охватывает:
 
-- binary layout;
-- field types and sizes;
-- byte order;
-- offsets;
-- file and section boundaries;
-- field semantics;
-- `.idx` ↔ `.mlp` ↔ `.db` references;
-- geometry invariants;
-- LOD structure;
-- POI representation;
-- malformed input handling;
-- compiler ↔ parser compatibility.
+- бинарную раскладку;
+- типы и размеры полей;
+- порядок байт;
+- смещения и выравнивание;
+- границы файлов, секций и блоков;
+- семантику полей;
+- ссылки `.idx` ↔ `.mlp` ↔ `.db`;
+- инварианты геометрии;
+- структуру четырёх LOD и их состав;
+- упрощённые варианты геометрии в LOD 2 и LOD 3;
+- представление POI;
+- обработку некорректного ввода;
+- совместимость компилятора и парсера.
+
+Спецификация V3 (`map-format-v3.md`) в этот документ не входит: файл `.idx` с magic `SQT\x01` не соответствует V4. На переходный период инструмент аудита проверяет такие файлы по V3 (раздел 10).
 
 ---
 
-# 2. Normative Reference
+# 2. Нормативный источник
 
-All binary-format questions must be resolved against:
+Все вопросы бинарного формата разрешаются по:
 
 ```text
-docs/map-format-v3.md
+docs/map-format-v4.md
 ```
 
-In particular, the following definitions are normative:
+В частности, нормативны следующие определения:
 
-- PGO header;
-- SQT header;
-- Navigation Node;
-- Data Node;
+- заголовок PGO (в том числе четыре смещения LOD);
+- сектор заголовка SQT;
+- блоки, их порядок и ветвление (18 навигационных или 20 листовых узлов);
+- навигационный узел и `child_block`;
+- узел данных;
 - `v1`;
 - `v2`;
-- `v3_jump`;
-- `.mlp` Geometry Record;
-- `.db` structure;
-- coordinate representation;
-- POI representation;
-- `features.csv` semantics.
+- состав LOD (`LOD ≥ n`);
+- варианты геометрии по LOD;
+- запись геометрии `.mlp`;
+- структура `.db` и поле названия;
+- представление координат;
+- представление POI;
+- семантика `features.csv`;
+- `search.idx` (необязательный файл).
 
-If another document or implementation contradicts the specification, the implementation is non-conformant until the discrepancy is resolved.
+Если другой документ или реализация противоречит спецификации, реализация считается несоответствующей, пока расхождение не устранено.
 
 ---
 
-# 3. Required Conformance Checks
+# 3. Обязательные проверки
 
-## 3.1. PGO Containers
+## 3.1. Контейнеры PGO
 
-For every `.idx`, `.mlp` and `.db` file verify:
+Для каждого файла `.idx`, `.mlp`, `.db` и `search.idx` проверить:
 
 ```text
 Magic == "PGO"
-File Type is valid
-Payload Size == File Size - 32
-reserved fields are zero
+Тип файла допустим (1, 2, 3 или 4)
+Размер payload == размер файла - 32
+резервные поля (0x18 и 0x1C) равны нулю
 ```
 
-For `.idx` additionally verify that every LOD offset points to the corresponding SQT header.
+Для `.idx` дополнительно проверить:
+
+```text
+четыре смещения LOD (0x08, 0x0C, 0x10, 0x14)
+LOD 0 == 0x200
+каждое смещение кратно 512
+смещения строго возрастают
+каждое смещение указывает на сектор заголовка SQT
+размер файла кратен 512
+байты 0x20..0x1FF равны нулю
+```
+
+Для `.mlp`, `.db` и `search.idx` все четыре смещения LOD равны нулю.
 
 ---
 
 ## 3.2. `.mlp`
 
-For every Geometry Record verify:
+Для каждой записи геометрии проверить:
 
 ```text
-Local Header size == 8
-Content Length matches actual body size
+Размер локального заголовка == 8
+Content Length совпадает с фактическим размером тела
 
 Content Length =
     24
@@ -103,108 +121,151 @@ Content Length =
     + num_points × 8
 ```
 
-Verify:
+Проверить:
 
 ```text
-parts[] contains point start indices
-parts[0] == 0 when num_parts > 0
+parts[] содержит индексы начальных точек
+parts[0] == 0 при num_parts > 0
 parts[i] < num_points
 ```
 
-Verify that all stored coordinates use the V3 fixed-point representation.
+Проверить, что все координаты хранятся в представлении с фиксированной точкой V4 (`10⁻⁷` градуса).
 
 ---
 
-## 3.3. `.idx`
+## 3.3. `.idx`: секции и блоки
 
-Verify:
-
-```text
-LOD 0, LOD 1 and LOD 2
-```
-
-and that every LOD contains a valid SQT header, including empty LODs.
-
-Verify:
+Проверить, что есть:
 
 ```text
-Navigation Node = 28 bytes
-Data Node       = 25 bytes
+LOD 0, LOD 1, LOD 2 и LOD 3
 ```
 
-Verify that the parser consumes exactly the number of children specified by each Navigation Node.
+и что каждый LOD содержит корректный сектор заголовка SQT, включая пустые LOD.
+
+Для сектора заголовка проверить:
+
+```text
+magic == "SQT\x02"
+топология == 2
+размер блока == 512
+размер секции == расстоянию до следующего смещения LOD (для LOD 3 — до конца файла), кратен 512
+nav_fanout == 18, leaf_fanout == 20
+резервные байты равны нулю
+пустой LOD: depth == 0, root_count == 0, размер секции == 512
+```
+
+Проверить:
+
+```text
+Навигационный узел = 28 байт
+Узел данных        = 25 байт
+Блок               = 512 байт
+```
+
+Для каждого блока проверить:
+
+```text
+число записей: навигационный блок 1..18, листовой блок 1..20
+вид блока и число записей следуют из v1 и v2 ссылающегося узла
+байты после последней записи равны нулю
+BBox каждого потомка лежит внутри BBox родителя
+```
 
 ---
 
-## 3.4. `v1`
+## 3.4. Порядок блоков и `child_block`
 
-For a geometry Data Node:
+Для каждого навигационного узла проверить:
+
+```text
+child_block кратен 512
+child_block лежит внутри блоков секции
+child_block > смещения блока, в котором лежит узел
+```
+
+Проверить порядок блоков по спецификации (раздел 7.3): блоки идут по уровням, первым корневой блок; k-й блок детей по порядку обхода начинается по смещению `начало_секции + 1024 + 512 × k`. Отсюда следует, что блоки детей узлов одного блока идут подряд, на каждый блок ссылается ровно один узел, а блоки заканчиваются ровно на границе секции.
+
+Парсер при отсечении не читает блок поддерева; никакого пропуска «на размер поддерева» (`v3_jump`) в V4 нет.
+
+Это критическое требование соответствия V4.
+
+---
+
+## 3.5. Состав LOD
+
+Секция LOD n содержит объекты с `LOD ≥ n` (раздел 4.2 спецификации). Проверить, что каждый LOD является подмножеством предыдущего: для каждой пары (`Type`, `v2`) число узлов в LOD n не больше, чем в LOD n-1.
+
+---
+
+## 3.6. `v1` и варианты геометрии
+
+Для геометрического узла данных:
 
 ```text
 v1
 ```
 
-must point to the **Geometry Body**, not to the 8-byte Geometry Local Header.
+должен указывать на **тело записи геометрии**, а не на 8-байтный локальный заголовок.
 
-The offset is relative to the beginning of the `.mlp` payload:
+Смещение отсчитывается от начала payload `.mlp`:
 
 ```text
-absolute_mlp_offset = 0x20 + v1
+абсолютное_смещение_mlp = 0x20 + v1
 ```
 
-For a native POI:
+Для нативного POI:
 
 ```text
 v1 = 0
 ```
 
----
-
-## 3.5. `v2`
-
-Verify that `v2` is interpreted as a **DB record index**, not a byte offset.
-
-Standard layers:
+Варианты геометрии (раздел 3.5 спецификации):
 
 ```text
-v2 = 0     → no .db
-v2 = 1     → dummy record
-v2 >= 2    → normal DBF record
+LOD 0 и LOD 1 указывают на полную геометрию: каждый v1 из LOD 1 есть и в LOD 0
+узел LOD 2 или LOD 3 либо разделяет v1 с LOD 0 (ничего не удалено),
+либо указывает на упрощённый вариант
 ```
 
-POI database:
+Упрощённый вариант проверяется относительно полной геометрии объекта с тем же `Type` и той же первой точкой:
 
 ```text
-v2 = 0     → unnamed POI
-v2 >= 1    → physical POI record
+точки варианта — подпоследовательность точек полной геометрии в исходном порядке
+точек и частей не больше, чем в полной геометрии
+BBox варианта лежит внутри BBox полной геометрии
+линия из одной части сохраняет первую и последнюю точки
+BBox узла равен BBox записи, на которую он указывает
 ```
 
----
-
-## 3.6. `v3_jump`
-
-For every Navigation Node:
-
-```text
-v3_jump =
-    exact byte size of the complete child subtree
-```
-
-When a node is culled, the parser must skip exactly:
-
-```text
-current_position_after_nav_node + v3_jump
-```
-
-No prefetch compensation is applied.
-
-This is a critical V3 conformance requirement.
+Вариант, совпадающий с полной геометрией, но с другим `v1`, даёт предупреждение: `v1` должен быть общим.
 
 ---
 
-## 3.7. Cross-file References
+## 3.7. `v2`
 
-For every Data Node verify:
+Проверить, что `v2` интерпретируется как **номер записи DB**, а не как смещение в байтах.
+
+Стандартные слои:
+
+```text
+v2 = 0     → .db нет
+v2 = 1     → фиктивная запись
+v2 >= 2    → обычная запись DBF
+```
+
+База POI:
+
+```text
+v2 >= 1    → физическая запись POI; у каждого POI есть запись
+v2 = 0     → допустимо только если .db слоя нет
+```
+
+---
+
+## 3.8. Перекрёстные ссылки
+
+Для каждого узла данных проверить:
 
 ```text
 Type
@@ -212,184 +273,242 @@ v1
 v2
 ```
 
-against the corresponding files and feature definitions.
+по соответствующим файлам и определениям объектов.
 
-For geometry features:
+Для геометрических объектов:
 
 ```text
-.idx v1 → valid .mlp Geometry Body
+.idx v1 → корректное тело записи в .mlp
 ```
 
-For named features:
+Для именованных объектов:
 
 ```text
-.idx v2 → valid .db record
+.idx v2 → корректная запись .db
 ```
 
-For POIs:
+Для POI:
 
 ```text
-.idx BBox → point
+BBox в .idx → точка
 v1 == 0
 ```
 
-No reference may point outside the corresponding file or payload.
+Ни одна ссылка не должна указывать за пределы соответствующего файла или payload.
 
 ---
 
-# 4. Feature Classification
+## 3.9. `search.idx`
 
-The compiler must implement the `features.csv` rules exactly as specified:
+Файл необязателен (раздел 21 спецификации). Если он есть, его проверка определена разделом 21.10:
 
 ```text
-first matching enabled rule wins
+заголовок PGO, тип файла 4
+magic SRCH, версия 1, размер записи 32
+смещения и порядок секций, выравнивание по 512
+db_records == числу записей pois.db
+порядок записей NAME и CAT, словарь
+каждый db_idx есть в pois.idx с теми же координатами и кодом
+ключ каждой записи пересчитывается по её записи в pois.db
 ```
 
-An object matching multiple rules must therefore produce the feature selected by the first matching enabled rule.
-
-Disabled rules must not produce features.
-
-The binary `.idx` stores the numeric `Code`, not the original OSM tags.
+Состояние инструмента `tests/audit_maps.py`: проверяется только контейнер PGO (тип 4, размер payload, нулевые поля); остальное выводится в предупреждении «не проверяется».
 
 ---
 
-# 5. Geometry and Layer Invariants
+# 4. Классификация объектов
 
-The compiler must produce geometry compatible with the target layer:
+Компилятор должен реализовывать правила `features.csv` в точности как указано в спецификации:
 
-| Layer | Geometry |
+```text
+побеждает первое подходящее включённое правило
+```
+
+Объект, подходящий под несколько правил, поэтому должен давать объект по первому подходящему включённому правилу.
+
+Выключенные правила не должны создавать объекты.
+
+Значение `LOD` правила — число от 0 до 3: наибольший номер LOD, в котором хранится объект. Текущий состав LOD 3:
+
+```text
+roads: highway=motorway, highway=trunk, highway=primary
+pois:  place=city (в том числе столица), place=country, place=state
+```
+
+Остальные дороги, съезды, железные дороги и `place=town` в LOD 3 не входят.
+
+Бинарный `.idx` хранит числовой `Code`, а не исходные теги OSM. Коды POI находятся в диапазоне `128..191`; коды `168` (страна) и `169` (область) назначены после `167`.
+
+---
+
+# 5. Геометрия и инварианты слоёв
+
+Компилятор должен создавать геометрию, совместимую с целевым слоем:
+
+| Слой | Геометрия |
 |---|---|
-| `roads` | line |
-| `landuse` | polygon |
-| `water` | polygon |
-| `waterways` | line (optional layer) |
-| `pois` | point |
+| `roads` | линия |
+| `landuse` | полигон |
+| `water` | полигон |
+| `waterways` | линия (необязательный слой) |
+| `pois` | точка |
 
-POIs must not require `.mlp` geometry.
+POI не должны требовать геометрии `.mlp`.
 
-Polygon rings must satisfy the topology rules defined by the normative specification.
+Кольца полигонов должны удовлетворять правилам топологии из нормативной спецификации.
+
+Упрощённые варианты геометрии для LOD 2 и LOD 3 должны удовлетворять правилам раздела 3.5 спецификации (подмножество точек, сохранение концов частей, замкнутость колец полигонов).
 
 ---
 
-# 6. Map Package
+# 6. Пакет карты
 
-A complete V3 map package must contain:
+Полный пакет карты V4 должен содержать:
 
 ```text
 map.name
 ```
 
-and its generated layer files.
+и сгенерированные файлы слоёв. `search.idx` необязателен.
 
-`map.name` is package metadata, not a PGO binary container.
+`map.name` — метаданные пакета, а не бинарный контейнер PGO.
 
-Its JSON structure is defined by the normative map specification.
+Его структура JSON определена нормативной спецификацией карты.
 
-Conformance must verify:
+Проверка соответствия должна подтвердить:
 
-- valid JSON;
-- required `mapName`;
-- required `centerLat`;
-- required `centerLon`.
+- корректность JSON;
+- наличие `mapName`;
+- наличие `centerLat`;
+- наличие `centerLon`.
 
----
-
-# 7. Malformed Input
-
-The firmware parser must reject or safely terminate parsing of malformed data.
-
-At minimum, test:
-
-- invalid PGO magic;
-- unsupported file type;
-- payload extending beyond the physical file;
-- invalid LOD offset;
-- invalid SQT header;
-- truncated Navigation Node;
-- truncated Data Node;
-- `v3_jump` beyond the valid payload;
-- invalid child count;
-- invalid `.mlp` content length;
-- invalid `num_parts`;
-- invalid `num_points`;
-- invalid `parts[]`;
-- invalid `.db` record reference.
-
-Malformed input must never result in an out-of-bounds file access or memory access.
+Файл `search.idx` не является слоем: инструмент аудита не должен принимать его за слой карты.
 
 ---
 
-# 8. Compiler ↔ Parser Test
+# 7. Некорректный ввод
 
-A V3 conformance test should use a map containing at least:
+Парсер прошивки должен отвергать или безопасно прекращать разбор некорректных данных.
 
-- multiple LODs;
-- empty and non-empty LODs;
-- nested Navigation Nodes;
-- line geometry;
-- polygon geometry;
-- multipart polygon geometry;
-- named and unnamed objects;
-- POIs;
-- objects sharing the same feature area;
-- objects requiring different `features.csv` rules.
+Как минимум, проверить:
 
-The test procedure is:
+- неверный magic PGO;
+- неподдерживаемый тип файла;
+- payload, выходящий за физический файл;
+- неверное смещение LOD (не кратно 512, не по возрастанию, за концом файла);
+- файл с magic `SQT\x01` (V3);
+- неверный сектор заголовка SQT (топология, размер блока, размер секции, ветвление);
+- усечённый блок, навигационный или листовой;
+- `child_block` вне секции, не кратный 512, не после собственного блока;
+- неверное число детей (`v2` равен нулю или больше 18 или 20);
+- неверный уровень узла (`v1`);
+- ненулевые байты после последней записи блока;
+- BBox потомка, не лежащий внутри BBox родителя;
+- неверное содержимое `.mlp`: длина записи, `num_parts`, `num_points`, `parts[]`;
+- неверную ссылку на запись `.db`;
+- неверный `search.idx` (он должен игнорироваться, а не приводить к сбою).
+
+Некорректный ввод никогда не должен приводить к выходу за границы файла или памяти.
+
+---
+
+# 8. Тест «компилятор ↔ парсер»
+
+Тест соответствия V4 должен использовать карту, содержащую как минимум:
+
+- все четыре LOD, пустые и непустые;
+- вложенные навигационные узлы (глубина дерева больше единицы);
+- линейную геометрию, у которой в LOD 2 и LOD 3 есть упрощённые варианты;
+- объекты, у которых вариант совпадает с полной геометрией (общий `v1`);
+- полигональную геометрию;
+- мультиполигональную геометрию из нескольких частей;
+- именованные и безымянные объекты;
+- POI, в том числе страну и область в LOD 3;
+- названия длиннее 22 символов (они не сокращаются при компиляции);
+- объекты, подходящие под разные правила `features.csv`.
+
+Порядок теста:
 
 ```text
-OSM/test data
+Данные OSM / тестовые данные
      │
      ▼
-Python compiler
+Компилятор на Python
      │
      ▼
-.idx + .mlp + .db + map.name
+.idx + .mlp + .db + map.name (+ search.idx)
      │
      ▼
-C parser
+tests/audit_maps.py
      │
      ▼
-decoded features
+Парсер на C
+     │
+     ▼
+декодированные объекты
 ```
 
-The C parser must recover the same feature relationships written by the compiler:
+Парсер на C должен восстановить те же связи объектов, которые записал компилятор:
 
 ```text
 Code
 BBox
-geometry reference
-attribute reference
+ссылка на геометрию
+ссылка на атрибуты
 LOD
-layer
+слой
 ```
 
 ---
 
-# 9. Conformance Result
+# 9. Результат проверки
 
-An implementation is:
+Реализация:
 
-### CONFORMANT
+### СООТВЕТСТВУЕТ
 
-when all mandatory checks pass and compiler output can be consumed by the parser according to the V3 specification.
+когда все обязательные проверки пройдены, а выход компилятора может быть прочитан парсером по спецификации V4.
 
-### NON-CONFORMANT
+### НЕ СООТВЕТСТВУЕТ
 
-when any mandatory binary layout, offset, field-semantic, reference, geometry or traversal rule differs from the normative specification.
+когда любое обязательное правило бинарной раскладки, смещений, семантики полей, ссылок, геометрии или обхода отличается от нормативной спецификации.
 
-Implementation-specific optimizations are permitted provided that they do not change the V3 binary representation or its semantics.
+Оптимизации реализации допустимы, если они не меняют бинарное представление V4 и его семантику.
 
 ---
 
-# 10. Change Control
+# 10. Инструмент аудита
 
-Any change to the V3 binary representation requires simultaneous review of:
+Бинарные проверки раздела 3 выполняет `tests/audit_maps.py` (только стандартная библиотека Python):
 
 ```text
-docs/map-format-v3.md
-tools/map-compiler/
-STM32 map parser
-conformance tests
+python3 tests/audit_maps.py [каталог] [-v]
 ```
 
-The normative specification must be updated before an intentional binary-format change is considered complete.
+По умолчанию каталог — `tests/data/maps`. Инструмент рекурсивно находит каталоги с картами, проверяет каждый слой и `map.name` и возвращает код `0`, если все каталоги прошли проверку, и `1` в противном случае.
+
+Версия `.idx` определяется по magic секции LOD 0: `SQT\x02` — V4, `SQT\x01` — V3. Файл V4 проверяется по разделам 3.1–3.8; файл V3 — по `map-format-v3.md`, без проверок, специфичных для V4 (четвёртый LOD, блоки и `child_block`, варианты геометрии, `v2 ≥ 1` у POI). Остальные файлы (`.mlp`, `.db`, `map.name`) общие для обеих версий. Дополнительно проверяется контейнер `search.idx` (раздел 3.9). В одном файле `.idx` смешивать версии нельзя, такой файл отвергается.
+
+Проверено на картах `purrgo_map_compiler.py` с `--format 3` и `--format 4`.
+
+Что пока не проверяется:
+
+- содержимое `search.idx` после заголовка PGO (раздел 3.9);
+- правила названий (раздел 10.6 спецификации): длина названия не проверяется;
+- принадлежность объекта правилам `features.csv` (инструмент не читает `features.csv`);
+- поведение парсера на C на некорректном вводе (раздел 7) — его проверяют тесты прошивки.
+
+---
+
+# 11. Контроль изменений
+
+Любое изменение бинарного представления V4 требует одновременного пересмотра:
+
+```text
+docs/map-format-v4.md
+tools/map-compiler/
+парсер карты STM32
+тесты соответствия (tests/audit_maps.py)
+```
+
+Нормативная спецификация должна быть обновлена до того, как намеренное изменение бинарного формата будет считаться завершённым.

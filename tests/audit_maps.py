@@ -2,29 +2,33 @@
 # -*- coding: utf-8 -*-
 
 """
-PurrGO Map Format V3 — Binary Fixture Auditor
+PurrGO Map Format V4 — Binary Fixture Auditor
 
 Audits all compiled map fixtures below a directory.
 
-Current V3 format:
+The version of every .idx file is detected by the SQT magic: V4 files
+are audited by map-format-v4.md, legacy V3 files (SQT\\x01) by
+map-format-v3.md. All other files are common to both versions.
+
+Current V4 format (docs/map-format-v4.md):
 
     PGO
       ├── IDX
-      │    ├── LOD 0
-      │    ├── LOD 1
-      │    └── LOD 2
-      │          └── SQT
-      │               ├── Navigation Nodes
-      │               │     └── Navigation/Data children
-      │               └── Data Nodes
+      │    ├── LOD 0 .. LOD 3
+      │    └── SQT section (512-byte header sector + 512-byte blocks)
+      │          ├── root block (Navigation Nodes)
+      │          ├── Navigation blocks, level by level
+      │          └── leaf blocks (Data Nodes)
       │
       ├── MLP
-      │    └── Geometry Records
+      │    └── Geometry Records (full geometry + simplified variants)
       │
-      └── DB
-           └── DBF
+      ├── DB
+      │    └── DBF
+      │
+      └── search.idx (optional; only the PGO header is checked for now)
 
-The auditor intentionally follows the current PurrGO V3 writer
+The auditor intentionally follows the current PurrGO V4 writer
 and binary-format specification.
 
 Important current semantics:
@@ -37,8 +41,20 @@ Important current semantics:
         <IiiiiII>
         28 bytes
 
-    SQT Header:
-        16 bytes
+        child_block:
+            absolute file offset of the block with the children,
+            multiple of 512, greater than the offset of its own block.
+
+    SQT header sector:
+        512 bytes, magic SQT\\x02, topology 2.
+
+    Blocks:
+        512 bytes; at most 18 Navigation Nodes or 20 Data Nodes;
+        stored level by level, child blocks of one block are consecutive.
+
+    LODs:
+        four sections; LOD n holds the objects with features.csv LOD >= n.
+        LOD 2 and LOD 3 may reference simplified geometry variants.
 
     MLP local header:
         >I + <I
@@ -50,18 +66,13 @@ Important current semantics:
 
         absolute_body_offset = 32 + v1
 
-    Navigation v3_jump:
-        exact byte size of the complete child subtree.
-        No legacy -8 compensation is applied.
-
     DB standard layer:
         v2 = 0  -> no DB exists
         v2 = 1  -> dummy record
         v2 >= 2 -> physical named record
 
     DB POI layer:
-        v2 = 0  -> unnamed
-        v2 >= 1 -> physical named record
+        v2 >= 1 -> physical record (every POI has a record)
 
     map.name:
         UTF-8 JSON:
@@ -80,6 +91,7 @@ import argparse
 import json
 import struct
 import sys
+from collections import Counter, deque
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -90,7 +102,15 @@ from typing import Dict, List, Optional, Tuple
 # ============================================================================
 
 PGO_HEADER_SIZE = 32
-SQT_HEADER_SIZE = 16
+SQT_HEADER_SIZE = 512
+SQT_HEADER_SIZE_V3 = 16
+BLOCK_SIZE = 512
+
+LOD_COUNT = 4
+FIRST_LOD_OFFSET = 0x200
+
+NAV_FANOUT = 18
+LEAF_FANOUT = 20
 
 DATA_NODE_SIZE = 25
 NAV_NODE_SIZE = 28
@@ -108,9 +128,12 @@ MAX_UINT32 = 0xFFFFFFFF
 FILE_TYPE_IDX = 1
 FILE_TYPE_MLP = 2
 FILE_TYPE_DB = 3
+FILE_TYPE_SEARCH = 4
 
 PGO_MAGIC = b"PGO"
-SQT_MAGIC = b"SQT\x01"
+SQT_MAGIC = b"SQT\x02"
+SQT_MAGIC_V3 = b"SQT\x01"
+SQT_TOPOLOGY_BLOCK = 2
 
 DBF_MAGIC = 0x03
 DBF_HEADER_TERMINATOR = 0x0D
@@ -151,8 +174,9 @@ class AuditResult:
 class PGOHeader:
     file_type: int
     payload_size: int
-    lod_offsets: Tuple[int, int, int]
-    extension_fields: Tuple[int, int, int]
+    lod_offsets: Tuple[int, ...]
+    extension_fields: Tuple[int, ...]
+    version: int = 4
 
 
 @dataclass
@@ -165,12 +189,12 @@ class DataNode:
     feature_type: int
     v1: int
     v2: int
+    lod: int = -1
 
 
 @dataclass
 class NavNode:
     offset: int
-    v3_jump: int
     xmin: int
     ymin: int
     xmax: int
@@ -178,13 +202,18 @@ class NavNode:
     level: int
     child_count: int
     children: List[object] = field(default_factory=list)
+    lod: int = -1
+    child_block: int = 0
+    v3_jump: int = 0
 
 
 @dataclass
 class SQTInfo:
     offset: int
-    mode: int
+    depth: int
     root_count: int
+    section_size: int = 0
+    block_count: int = 0
     roots: List[object] = field(default_factory=list)
 
 
@@ -230,6 +259,7 @@ class DBInfo:
 
 @dataclass
 class IndexAuditData:
+    version: int = 4
     data_nodes: List[DataNode] = field(default_factory=list)
     nav_nodes: List[NavNode] = field(default_factory=list)
     sqts: List[SQTInfo] = field(default_factory=list)
@@ -379,6 +409,27 @@ def require_range(
 # PGO header
 # ============================================================================
 
+def detect_idx_version(data: bytes) -> int:
+    """
+    The version of an .idx file is identified by the magic of the
+    LOD 0 SQT section: SQT\\x01 is V3, SQT\\x02 is V4
+    (map-format-v4.md, section 0.3). Anything else is checked as V4
+    and reported there.
+    """
+
+    if len(data) >= PGO_HEADER_SIZE:
+        lod0 = u32(data, 8)
+
+        if (
+            PGO_HEADER_SIZE <= lod0
+            and lod0 + 4 <= len(data)
+            and data[lod0:lod0 + 4] == SQT_MAGIC_V3
+        ):
+            return 3
+
+    return 4
+
+
 def parse_pgo_header(
     data: bytes,
     expected_type: int,
@@ -410,6 +461,7 @@ def parse_pgo_header(
         FILE_TYPE_IDX,
         FILE_TYPE_MLP,
         FILE_TYPE_DB,
+        FILE_TYPE_SEARCH,
     ):
         result.fail(
             "PGO header: invalid file type {}".format(
@@ -438,17 +490,36 @@ def parse_pgo_header(
             )
         )
 
-    lod_offsets = (
-        u32(data, 8),
-        u32(data, 12),
-        u32(data, 16),
-    )
+    version = 4
 
-    extension_fields = (
-        u32(data, 20),
-        u32(data, 24),
-        u32(data, 28),
-    )
+    if expected_type == FILE_TYPE_IDX:
+        version = detect_idx_version(data)
+
+    if version == 3:
+        # V3: three LOD offsets, three reserved fields.
+        lod_offsets = (
+            u32(data, 8),
+            u32(data, 12),
+            u32(data, 16),
+        )
+
+        extension_fields = (
+            u32(data, 20),
+            u32(data, 24),
+            u32(data, 28),
+        )
+    else:
+        lod_offsets = (
+            u32(data, 8),
+            u32(data, 12),
+            u32(data, 16),
+            u32(data, 20),
+        )
+
+        extension_fields = (
+            u32(data, 24),
+            u32(data, 28),
+        )
 
     for index, value in enumerate(
         extension_fields,
@@ -456,7 +527,7 @@ def parse_pgo_header(
     ):
         if value != 0:
             result.fail(
-                "PGO header: Future Extension Field {} is {}, "
+                "PGO header: reserved field {} is {}, "
                 "expected 0".format(
                     index,
                     value,
@@ -464,16 +535,23 @@ def parse_pgo_header(
             )
 
     if expected_type == FILE_TYPE_IDX:
-        validate_idx_lod_offsets(
-            data,
-            lod_offsets,
-            result,
-        )
+        if version == 3:
+            validate_idx_lod_offsets_v3(
+                data,
+                lod_offsets,
+                result,
+            )
+        else:
+            validate_idx_lod_offsets(
+                data,
+                lod_offsets,
+                result,
+            )
     else:
-        if lod_offsets != (0, 0, 0):
+        if lod_offsets != (0, 0, 0, 0):
             result.fail(
                 "PGO header: non-IDX file has LOD offsets {}, "
-                "expected (0, 0, 0)".format(
+                "expected (0, 0, 0, 0)".format(
                     lod_offsets
                 )
             )
@@ -483,30 +561,72 @@ def parse_pgo_header(
         payload_size=payload_size,
         lod_offsets=lod_offsets,
         extension_fields=extension_fields,
+        version=version,
     )
 
 
 def validate_idx_lod_offsets(
     data: bytes,
-    lod_offsets: Tuple[int, int, int],
+    lod_offsets: Tuple[int, ...],
     result: AuditResult,
 ) -> None:
     """
     LOD offsets are absolute offsets from the beginning of the file.
 
-    Each offset points to a 16-byte SQT header.
+    V4 rules (map-format-v4.md, sections 1.3 and 4.1):
+
+        - LOD 0 offset is 0x200;
+        - every offset is a multiple of 512;
+        - offsets are strictly increasing, four LODs;
+        - the file size is a multiple of 512;
+        - bytes 0x20..0x1FF are zero.
+
+    Each offset points to a 512-byte SQT header sector.
     """
 
-    payload_start = PGO_HEADER_SIZE
     payload_end = len(data)
 
-    for index, offset in enumerate(lod_offsets):
-        if offset < payload_start:
+    if len(data) % BLOCK_SIZE != 0:
+        result.fail(
+            "IDX: file size {} is not a multiple of {}".format(
+                len(data),
+                BLOCK_SIZE,
+            )
+        )
+
+    if len(data) >= FIRST_LOD_OFFSET:
+        if any(data[PGO_HEADER_SIZE:FIRST_LOD_OFFSET]):
             result.fail(
-                "IDX LOD {}: offset={} is before payload start={}".format(
+                "IDX: padding bytes 0x{:X}..0x{:X} are not zero".format(
+                    PGO_HEADER_SIZE,
+                    FIRST_LOD_OFFSET - 1,
+                )
+            )
+
+    if lod_offsets[0] != FIRST_LOD_OFFSET:
+        result.fail(
+            "IDX LOD 0: offset={}, expected 0x{:X}".format(
+                lod_offsets[0],
+                FIRST_LOD_OFFSET,
+            )
+        )
+
+    for index, offset in enumerate(lod_offsets):
+        if offset % BLOCK_SIZE != 0:
+            result.fail(
+                "IDX LOD {}: offset={} is not a multiple of {}".format(
                     index,
                     offset,
-                    payload_start,
+                    BLOCK_SIZE,
+                )
+            )
+
+        if offset < FIRST_LOD_OFFSET:
+            result.fail(
+                "IDX LOD {}: offset={} is before 0x{:X}".format(
+                    index,
+                    offset,
+                    FIRST_LOD_OFFSET,
                 )
             )
             continue
@@ -522,26 +642,21 @@ def validate_idx_lod_offsets(
 
         if offset + SQT_HEADER_SIZE > payload_end:
             result.fail(
-                "IDX LOD {}: SQT header at offset={} "
+                "IDX LOD {}: SQT header sector at offset={} "
                 "does not fit in file".format(
                     index,
                     offset,
                 )
             )
 
-    if lod_offsets[0] >= lod_offsets[1]:
-        result.fail(
-            "IDX LOD offsets are not strictly increasing: {}".format(
-                lod_offsets
+    for index in range(len(lod_offsets) - 1):
+        if lod_offsets[index] >= lod_offsets[index + 1]:
+            result.fail(
+                "IDX LOD offsets are not strictly increasing: {}".format(
+                    lod_offsets
+                )
             )
-        )
-
-    if lod_offsets[1] >= lod_offsets[2]:
-        result.fail(
-            "IDX LOD offsets are not strictly increasing: {}".format(
-                lod_offsets
-            )
-        )
+            break
 
 
 # ============================================================================
@@ -553,7 +668,7 @@ def parse_idx(
     result: AuditResult,
 ) -> Optional[IndexAuditData]:
     """
-    Parse all three LOD sections.
+    Parse all LOD sections: four in V4, three in V3.
     """
 
     header = parse_pgo_header(
@@ -565,25 +680,40 @@ def parse_idx(
     if header is None:
         return None
 
-    audit = IndexAuditData()
+    audit = IndexAuditData(version=header.version)
 
     lod_offsets = header.lod_offsets
 
-    lod_ends = (
-        lod_offsets[1],
-        lod_offsets[2],
-        len(data),
-    )
+    lod_ends = lod_offsets[1:] + (len(data),)
 
-    for lod_index in range(3):
-        parse_sqt(
-            data=data,
-            offset=lod_offsets[lod_index],
-            section_end=lod_ends[lod_index],
-            lod_index=lod_index,
-            audit=audit,
-            result=result,
-        )
+    for lod_index in range(len(lod_offsets)):
+        if header.version == 3:
+            nav_before = len(audit.nav_nodes)
+            data_before = len(audit.data_nodes)
+
+            parse_sqt_v3(
+                data=data,
+                offset=lod_offsets[lod_index],
+                section_end=lod_ends[lod_index],
+                lod_index=lod_index,
+                audit=audit,
+                result=result,
+            )
+
+            for node in audit.nav_nodes[nav_before:]:
+                node.lod = lod_index
+
+            for node in audit.data_nodes[data_before:]:
+                node.lod = lod_index
+        else:
+            parse_sqt(
+                data=data,
+                offset=lod_offsets[lod_index],
+                section_end=lod_ends[lod_index],
+                lod_index=lod_index,
+                audit=audit,
+                result=result,
+            )
 
     return audit
 
@@ -597,21 +727,32 @@ def parse_sqt(
     result: AuditResult,
 ) -> Optional[SQTInfo]:
     """
-    Parse one complete SQT block.
+    Parse one complete V4 SQT section.
 
-    mode == 0:
-        roots are Data Nodes.
+    Header sector (512 bytes):
 
-    mode > 0:
-        roots are Navigation Nodes.
+        0x00  magic SQT\\x02
+        0x04  topology = 2
+        0x08  depth
+        0x0C  root_count
+        0x10  block size = 512
+        0x14  section size
+        0x18  nav_fanout = 18   (uint16)
+        0x1A  leaf_fanout = 20  (uint16)
+        0x1C  zeros
 
-    For a non-empty tree the root level must be mode - 1.
+    Blocks follow, in level order (map-format-v4.md, section 7.3).
+    The traversal is breadth-first, which is exactly the group order
+    of the specification: the k-th child block must start at
+    section_start + 1024 + 512 * k.
     """
+
+    context = "LOD {}".format(lod_index)
 
     if section_end < offset:
         result.fail(
-            "LOD {}: section end {} before start {}".format(
-                lod_index,
+            "{}: section end {} before start {}".format(
+                context,
                 section_end,
                 offset,
             )
@@ -622,104 +763,395 @@ def parse_sqt(
         data,
         offset,
         SQT_HEADER_SIZE,
-        "LOD {} SQT header".format(lod_index),
+        "{} SQT header sector".format(context),
         result,
     ):
         return None
 
     if offset + SQT_HEADER_SIZE > section_end:
         result.fail(
-            "LOD {}: SQT header crosses LOD boundary".format(
-                lod_index
+            "{}: SQT header sector crosses LOD boundary".format(
+                context
             )
         )
         return None
 
-    header = data[
-        offset:
-        offset + SQT_HEADER_SIZE
-    ]
+    header = data[offset:offset + SQT_HEADER_SIZE]
+
+    if header[0:4] == SQT_MAGIC_V3:
+        result.fail(
+            "{}: SQT magic is V3 (SQT\\x01) in a V4 file "
+            "(mixed versions in one .idx)".format(context)
+        )
+        return None
 
     if header[0:4] != SQT_MAGIC:
         result.fail(
-            "LOD {}: invalid SQT magic {!r}".format(
-                lod_index,
+            "{}: invalid SQT magic {!r}".format(
+                context,
                 header[0:4],
             )
         )
         return None
 
     topology = u32(header, 4)
-    mode = u32(header, 8)
+    depth = u32(header, 8)
     root_count = u32(header, 12)
+    block_size = u32(header, 16)
+    section_size = u32(header, 20)
+    nav_fanout = u16(header, 24)
+    leaf_fanout = u16(header, 26)
 
-    if topology != 1:
+    if topology != SQT_TOPOLOGY_BLOCK:
         result.fail(
-            "LOD {}: unsupported SQT topology={}, expected 1".format(
-                lod_index,
+            "{}: unsupported SQT topology={}, expected {}".format(
+                context,
                 topology,
+                SQT_TOPOLOGY_BLOCK,
+            )
+        )
+
+    if block_size != BLOCK_SIZE:
+        result.fail(
+            "{}: block size={}, expected {}".format(
+                context,
+                block_size,
+                BLOCK_SIZE,
+            )
+        )
+
+    if section_size != section_end - offset:
+        result.fail(
+            "{}: section size={}, but LOD boundary gives {}".format(
+                context,
+                section_size,
+                section_end - offset,
+            )
+        )
+
+    if section_size % BLOCK_SIZE != 0:
+        result.fail(
+            "{}: section size={} is not a multiple of {}".format(
+                context,
+                section_size,
+                BLOCK_SIZE,
+            )
+        )
+
+    if nav_fanout != NAV_FANOUT:
+        result.fail(
+            "{}: nav_fanout={}, expected {}".format(
+                context,
+                nav_fanout,
+                NAV_FANOUT,
+            )
+        )
+
+    if leaf_fanout != LEAF_FANOUT:
+        result.fail(
+            "{}: leaf_fanout={}, expected {}".format(
+                context,
+                leaf_fanout,
+                LEAF_FANOUT,
+            )
+        )
+
+    if any(header[28:]):
+        result.fail(
+            "{}: reserved bytes of the SQT header sector are not zero".format(
+                context
             )
         )
 
     sqt = SQTInfo(
         offset=offset,
-        mode=mode,
+        depth=depth,
         root_count=root_count,
+        section_size=section_size,
     )
 
     audit.sqts.append(sqt)
 
-    current = offset + SQT_HEADER_SIZE
-
-    for root_index in range(root_count):
-        if mode == 0:
-            node, new_current = parse_data_node(
-                data=data,
-                offset=current,
-                section_end=section_end,
-                context=(
-                    "LOD {} root DATA[{}]".format(
-                        lod_index,
-                        root_index,
-                    )
-                ),
-                audit=audit,
-                result=result,
-            )
-        else:
-            node, new_current = parse_nav_node(
-                data=data,
-                offset=current,
-                section_end=section_end,
-                context=(
-                    "LOD {} root NAV[{}]".format(
-                        lod_index,
-                        root_index,
-                    )
-                ),
-                audit=audit,
-                result=result,
-                expected_level=mode - 1,
+    if depth == 0:
+        if root_count != 0:
+            result.fail(
+                "{}: depth=0 but root_count={}".format(
+                    context,
+                    root_count,
+                )
             )
 
-        if node is None:
-            return sqt
+        if section_end - offset != SQT_HEADER_SIZE:
+            result.fail(
+                "{}: empty LOD must consist of the header sector only, "
+                "section size={}".format(
+                    context,
+                    section_end - offset,
+                )
+            )
 
-        sqt.roots.append(node)
-        current = new_current
+        return sqt
 
-    if current != section_end:
+    if root_count < 1 or root_count > NAV_FANOUT:
         result.fail(
-            "LOD {}: parsed section ends at {}, "
-            "but LOD boundary is {}; unparsed bytes={}".format(
-                lod_index,
-                current,
+            "{}: root_count={} is outside 1..{}".format(
+                context,
+                root_count,
+                NAV_FANOUT,
+            )
+        )
+        return sqt
+
+    if section_end - offset < SQT_HEADER_SIZE + BLOCK_SIZE:
+        result.fail(
+            "{}: section has no root block".format(context)
+        )
+        return sqt
+
+    # (block offset, level of the entries, entry count, is Navigation,
+    #  parent Navigation Node or None for the root block)
+    queue = deque()
+
+    queue.append(
+        (
+            offset + SQT_HEADER_SIZE,
+            depth - 1,
+            root_count,
+            True,
+            None,
+        )
+    )
+
+    next_block = offset + SQT_HEADER_SIZE + BLOCK_SIZE
+    block_count = 0
+    broken = False
+
+    while queue and not broken:
+        (
+            block_offset,
+            level,
+            count,
+            is_nav,
+            parent,
+        ) = queue.popleft()
+
+        block_count += 1
+
+        block_end = block_offset + BLOCK_SIZE
+
+        if block_end > section_end or not require_range(
+            data,
+            block_offset,
+            BLOCK_SIZE,
+            "{} block @{}".format(context, block_offset),
+            result,
+        ):
+            result.fail(
+                "{}: block @{} is outside the section".format(
+                    context,
+                    block_offset,
+                )
+            )
+            break
+
+        entry_size = NAV_NODE_SIZE if is_nav else DATA_NODE_SIZE
+
+        used = count * entry_size
+
+        if any(data[block_offset + used:block_end]):
+            result.fail(
+                "{}: block @{}: bytes after the last entry "
+                "are not zero".format(
+                    context,
+                    block_offset,
+                )
+            )
+
+        for entry_index in range(count):
+            entry_offset = block_offset + entry_index * entry_size
+
+            entry_context = "{} block @{} {}[{}]".format(
+                context,
+                block_offset,
+                "NAV" if is_nav else "DATA",
+                entry_index,
+            )
+
+            if is_nav:
+                node = parse_nav_node(
+                    data=data,
+                    offset=entry_offset,
+                    block_end=block_end,
+                    context=entry_context,
+                    audit=audit,
+                    result=result,
+                    expected_level=level,
+                )
+
+                if node is None:
+                    broken = True
+                    break
+
+                node.lod = lod_index
+
+                register_child(
+                    parent,
+                    node,
+                    sqt,
+                    entry_context,
+                    result,
+                )
+
+                limit = LEAF_FANOUT if node.level == 0 else NAV_FANOUT
+
+                if node.child_count < 1 or node.child_count > limit:
+                    result.fail(
+                        "{}: child_count={} is outside 1..{}".format(
+                            entry_context,
+                            node.child_count,
+                            limit,
+                        )
+                    )
+                    broken = True
+                    break
+
+                child = node.child_block
+
+                if child % BLOCK_SIZE != 0:
+                    result.fail(
+                        "{}: child_block={} is not a multiple "
+                        "of {}".format(
+                            entry_context,
+                            child,
+                            BLOCK_SIZE,
+                        )
+                    )
+                    broken = True
+                    break
+
+                if (
+                    child < offset + SQT_HEADER_SIZE + BLOCK_SIZE
+                    or child + BLOCK_SIZE > section_end
+                ):
+                    result.fail(
+                        "{}: child_block={} is outside the blocks of "
+                        "the section [{}, {})".format(
+                            entry_context,
+                            child,
+                            offset + SQT_HEADER_SIZE + BLOCK_SIZE,
+                            section_end,
+                        )
+                    )
+                    broken = True
+                    break
+
+                if child <= block_offset:
+                    result.fail(
+                        "{}: child_block={} is not after its own "
+                        "block @{}".format(
+                            entry_context,
+                            child,
+                            block_offset,
+                        )
+                    )
+                    broken = True
+                    break
+
+                if child != next_block:
+                    result.fail(
+                        "{}: child_block={}, expected {} "
+                        "(level order of blocks, section 7.3)".format(
+                            entry_context,
+                            child,
+                            next_block,
+                        )
+                    )
+                    broken = True
+                    break
+
+                next_block += BLOCK_SIZE
+
+                queue.append(
+                    (
+                        child,
+                        level - 1 if level > 0 else -1,
+                        node.child_count,
+                        level > 0,
+                        node,
+                    )
+                )
+
+            else:
+                node, _ = parse_data_node(
+                    data=data,
+                    offset=entry_offset,
+                    section_end=block_end,
+                    context=entry_context,
+                    audit=audit,
+                    result=result,
+                )
+
+                if node is None:
+                    broken = True
+                    break
+
+                node.lod = lod_index
+
+                register_child(
+                    parent,
+                    node,
+                    sqt,
+                    entry_context,
+                    result,
+                )
+
+    sqt.block_count = block_count
+
+    if not broken and next_block != section_end:
+        result.fail(
+            "{}: blocks end at {}, but the section ends at {}; "
+            "unreferenced bytes={}".format(
+                context,
+                next_block,
                 section_end,
-                section_end - current,
+                section_end - next_block,
             )
         )
 
     return sqt
+
+
+def register_child(
+    parent: Optional[NavNode],
+    node: object,
+    sqt: SQTInfo,
+    context: str,
+    result: AuditResult,
+) -> None:
+    """
+    Attach a node to its parent and check that the parent BBox
+    encloses it (map-format-v4.md, section 14).
+    """
+
+    if parent is None:
+        sqt.roots.append(node)
+        return
+
+    parent.children.append(node)
+
+    if (
+        node.xmin < parent.xmin
+        or node.ymin < parent.ymin
+        or node.xmax > parent.xmax
+        or node.ymax > parent.ymax
+    ):
+        result.fail(
+            "{}: BBox {} is not enclosed by the parent BBox {}".format(
+                context,
+                (node.xmin, node.ymin, node.xmax, node.ymax),
+                (parent.xmin, parent.ymin, parent.xmax, parent.ymax),
+            )
+        )
 
 
 def parse_data_node(
@@ -731,7 +1163,7 @@ def parse_data_node(
     result: AuditResult,
 ) -> Tuple[Optional[DataNode], int]:
     """
-    Current V3 Data Node:
+    Current V4 Data Node:
 
         <iiiiBII>
 
@@ -804,6 +1236,296 @@ def parse_data_node(
 
 
 def parse_nav_node(
+    data: bytes,
+    offset: int,
+    block_end: int,
+    context: str,
+    audit: IndexAuditData,
+    result: AuditResult,
+    expected_level: Optional[int] = None,
+) -> Optional[NavNode]:
+    """
+    Current V4 Navigation Node:
+
+        <IiiiiII>
+
+    28 bytes.
+
+    child_block is the absolute file offset of the block with the
+    children; its constraints are checked by the caller.
+    """
+
+    if offset + NAV_NODE_SIZE > block_end:
+        result.fail(
+            "{}: Navigation Node out of bounds "
+            "(offset={}, size={}, block_end={})".format(
+                context,
+                offset,
+                NAV_NODE_SIZE,
+                block_end,
+            )
+        )
+        return None
+
+    if not require_range(
+        data,
+        offset,
+        NAV_NODE_SIZE,
+        context,
+        result,
+    ):
+        return None
+
+    child_block = u32(data, offset)
+
+    xmin = i32(data, offset + 4)
+    ymin = i32(data, offset + 8)
+    xmax = i32(data, offset + 12)
+    ymax = i32(data, offset + 16)
+
+    level = u32(data, offset + 20)
+    child_count = u32(data, offset + 24)
+
+    if xmin > xmax:
+        result.fail(
+            "{}: invalid BBox xmin={} > xmax={}".format(
+                context,
+                xmin,
+                xmax,
+            )
+        )
+
+    if ymin > ymax:
+        result.fail(
+            "{}: invalid BBox ymin={} > ymax={}".format(
+                context,
+                ymin,
+                ymax,
+            )
+        )
+
+    if expected_level is not None and level != expected_level:
+        result.fail(
+            "{}: level={}, expected={}".format(
+                context,
+                level,
+                expected_level,
+            )
+        )
+
+    node = NavNode(
+        offset=offset,
+        child_block=child_block,
+        xmin=xmin,
+        ymin=ymin,
+        xmax=xmax,
+        ymax=ymax,
+        level=level,
+        child_count=child_count,
+    )
+
+    audit.nav_nodes.append(node)
+
+    return node
+
+
+# ============================================================================
+# IDX / SQT, legacy V3 layout (map-format-v3.md)
+# ============================================================================
+
+def validate_idx_lod_offsets_v3(
+    data: bytes,
+    lod_offsets: Tuple[int, int, int],
+    result: AuditResult,
+) -> None:
+    """
+    LOD offsets are absolute offsets from the beginning of the file.
+
+    Each offset points to a 16-byte SQT header.
+    """
+
+    payload_start = PGO_HEADER_SIZE
+    payload_end = len(data)
+
+    for index, offset in enumerate(lod_offsets):
+        if offset < payload_start:
+            result.fail(
+                "IDX LOD {}: offset={} is before payload start={}".format(
+                    index,
+                    offset,
+                    payload_start,
+                )
+            )
+            continue
+
+        if offset >= payload_end:
+            result.fail(
+                "IDX LOD {}: offset={} is outside file".format(
+                    index,
+                    offset,
+                )
+            )
+            continue
+
+        if offset + SQT_HEADER_SIZE_V3 > payload_end:
+            result.fail(
+                "IDX LOD {}: SQT header at offset={} "
+                "does not fit in file".format(
+                    index,
+                    offset,
+                )
+            )
+
+    if lod_offsets[0] >= lod_offsets[1]:
+        result.fail(
+            "IDX LOD offsets are not strictly increasing: {}".format(
+                lod_offsets
+            )
+        )
+
+    if lod_offsets[1] >= lod_offsets[2]:
+        result.fail(
+            "IDX LOD offsets are not strictly increasing: {}".format(
+                lod_offsets
+            )
+        )
+
+
+def parse_sqt_v3(
+    data: bytes,
+    offset: int,
+    section_end: int,
+    lod_index: int,
+    audit: IndexAuditData,
+    result: AuditResult,
+) -> Optional[SQTInfo]:
+    """
+    Parse one complete SQT block.
+
+    mode == 0:
+        roots are Data Nodes.
+
+    mode > 0:
+        roots are Navigation Nodes.
+
+    For a non-empty tree the root level must be mode - 1.
+    """
+
+    if section_end < offset:
+        result.fail(
+            "LOD {}: section end {} before start {}".format(
+                lod_index,
+                section_end,
+                offset,
+            )
+        )
+        return None
+
+    if not require_range(
+        data,
+        offset,
+        SQT_HEADER_SIZE_V3,
+        "LOD {} SQT header".format(lod_index),
+        result,
+    ):
+        return None
+
+    if offset + SQT_HEADER_SIZE_V3 > section_end:
+        result.fail(
+            "LOD {}: SQT header crosses LOD boundary".format(
+                lod_index
+            )
+        )
+        return None
+
+    header = data[
+        offset:
+        offset + SQT_HEADER_SIZE_V3
+    ]
+
+    if header[0:4] != SQT_MAGIC_V3:
+        result.fail(
+            "LOD {}: invalid SQT magic {!r}".format(
+                lod_index,
+                header[0:4],
+            )
+        )
+        return None
+
+    topology = u32(header, 4)
+    mode = u32(header, 8)
+    root_count = u32(header, 12)
+
+    if topology != 1:
+        result.fail(
+            "LOD {}: unsupported SQT topology={}, expected 1".format(
+                lod_index,
+                topology,
+            )
+        )
+
+    sqt = SQTInfo(
+        offset=offset,
+        depth=mode,
+        root_count=root_count,
+    )
+
+    audit.sqts.append(sqt)
+
+    current = offset + SQT_HEADER_SIZE_V3
+
+    for root_index in range(root_count):
+        if mode == 0:
+            node, new_current = parse_data_node(
+                data=data,
+                offset=current,
+                section_end=section_end,
+                context=(
+                    "LOD {} root DATA[{}]".format(
+                        lod_index,
+                        root_index,
+                    )
+                ),
+                audit=audit,
+                result=result,
+            )
+        else:
+            node, new_current = parse_nav_node_v3(
+                data=data,
+                offset=current,
+                section_end=section_end,
+                context=(
+                    "LOD {} root NAV[{}]".format(
+                        lod_index,
+                        root_index,
+                    )
+                ),
+                audit=audit,
+                result=result,
+                expected_level=mode - 1,
+            )
+
+        if node is None:
+            return sqt
+
+        sqt.roots.append(node)
+        current = new_current
+
+    if current != section_end:
+        result.fail(
+            "LOD {}: parsed section ends at {}, "
+            "but LOD boundary is {}; unparsed bytes={}".format(
+                lod_index,
+                current,
+                section_end,
+                section_end - current,
+            )
+        )
+
+    return sqt
+
+
+def parse_nav_node_v3(
     data: bytes,
     offset: int,
     section_end: int,
@@ -932,7 +1654,7 @@ def parse_nav_node(
 
     for child_index in range(child_count):
         if child_is_nav:
-            child, new_current = parse_nav_node(
+            child, new_current = parse_nav_node_v3(
                 data=data,
                 offset=current,
                 section_end=subtree_end,
@@ -1239,7 +1961,7 @@ def validate_parts(
     result: AuditResult,
 ) -> None:
     """
-    Current V3 parts semantics:
+    Current V4 parts semantics:
 
         parts[0] == 0
 
@@ -1302,7 +2024,7 @@ def audit_geometry_semantics(
     is_poi: bool,
 ) -> None:
     """
-    Checks that follow directly from the current V3 format contract.
+    Checks that follow directly from the current V4 format contract.
     """
 
     if is_poi:
@@ -1375,7 +2097,7 @@ def audit_polygon_closure(
     """
     Polygon layers must have closed rings.
 
-    Current V3 specification:
+    Current V4 specification:
         outer rings = CW
         holes        = CCW
 
@@ -1834,6 +2556,221 @@ def audit_idx_mlp(
 
 
 # ============================================================================
+# LOD structure (V4)
+# ============================================================================
+
+MAX_REPORTED_PER_CHECK = 10
+
+
+def audit_lod_membership(
+    idx: IndexAuditData,
+    result: AuditResult,
+) -> None:
+    """
+    LOD n contains the objects whose features.csv LOD is >= n
+    (map-format-v4.md, section 4.2). Therefore every LOD is a subset
+    of the previous one.
+
+    Objects are compared as a multiset of (Type, v2): a variant of the
+    geometry may have another v1, but Type and the DB record are the
+    same in all LODs of one object.
+    """
+
+    lod_count = len(idx.sqts)
+
+    per_lod: List[Counter] = [Counter() for _ in range(lod_count)]
+
+    for node in idx.data_nodes:
+        if 0 <= node.lod < lod_count:
+            per_lod[node.lod][(node.feature_type, node.v2)] += 1
+
+    reported = 0
+
+    for lod_index in range(1, lod_count):
+        for key, count in per_lod[lod_index].items():
+            previous = per_lod[lod_index - 1][key]
+
+            if count <= previous:
+                continue
+
+            reported += 1
+
+            if reported > MAX_REPORTED_PER_CHECK:
+                result.fail(
+                    "LOD membership: further violations not shown"
+                )
+                return
+
+            result.fail(
+                "LOD {}: object Type={} v2={} occurs {} times, "
+                "but LOD {} contains it {} times "
+                "(LOD n must be a subset of LOD n-1)".format(
+                    lod_index,
+                    key[0],
+                    key[1],
+                    count,
+                    lod_index - 1,
+                    previous,
+                )
+            )
+
+
+def is_subsequence(
+    short: List[Tuple[int, int]],
+    full: List[Tuple[int, int]],
+) -> bool:
+    iterator = iter(full)
+
+    return all(point in iterator for point in short)
+
+
+def audit_lod_geometry_variants(
+    idx: IndexAuditData,
+    mlp_records: List[GeometryRecord],
+    result: AuditResult,
+) -> None:
+    """
+    Geometry variants (map-format-v4.md, section 3.5):
+
+      1. LOD 0 and LOD 1 reference full geometry: every v1 of LOD 1
+         also occurs in LOD 0.
+      2. A node of LOD 2 or LOD 3 either shares v1 with LOD 0
+         (nothing was removed) or references a simplified variant:
+         a record that has the same Type and the same first point as
+         a full record, whose points are a subsequence of the full
+         points in the original order, with no more points or parts
+         and with a BBox inside the full BBox. A single-part line
+         keeps its first and last point.
+      3. A variant that equals the full geometry should have shared
+         its v1 (warning).
+    """
+
+    by_v1: Dict[int, GeometryRecord] = {}
+
+    for record in mlp_records:
+        by_v1[record.body_offset - PGO_HEADER_SIZE] = record
+
+    v1_by_lod: List[Dict[int, int]] = [dict() for _ in range(LOD_COUNT)]
+
+    for node in idx.data_nodes:
+        if 0 <= node.lod < LOD_COUNT and node.v1 != 0:
+            v1_by_lod[node.lod][node.v1] = node.feature_type
+
+    full = v1_by_lod[0]
+
+    reported = 0
+
+    def report(message: str) -> bool:
+        nonlocal reported
+
+        reported += 1
+
+        if reported > MAX_REPORTED_PER_CHECK:
+            if reported == MAX_REPORTED_PER_CHECK + 1:
+                result.fail(
+                    "LOD geometry variants: further violations not shown"
+                )
+            return False
+
+        result.fail(message)
+        return True
+
+    for v1 in v1_by_lod[1]:
+        if v1 not in full:
+            report(
+                "LOD 1: v1={} is not a full geometry of LOD 0 "
+                "(LOD 0 and LOD 1 must share geometry)".format(v1)
+            )
+
+    candidates: Dict[Tuple[int, Tuple[int, int]], List[GeometryRecord]] = {}
+
+    for v1, feature_type in full.items():
+        record = by_v1.get(v1)
+
+        if record is None or not record.points:
+            continue
+
+        candidates.setdefault(
+            (feature_type, record.points[0]),
+            [],
+        ).append(record)
+
+    for lod_index in (2, 3):
+        for v1, feature_type in v1_by_lod[lod_index].items():
+            if v1 in full:
+                continue
+
+            variant = by_v1.get(v1)
+
+            if variant is None or not variant.points:
+                continue
+
+            originals = candidates.get(
+                (feature_type, variant.points[0]),
+                [],
+            )
+
+            matched = False
+            identical = False
+
+            for original in originals:
+                if (
+                    variant.num_points > original.num_points
+                    or variant.num_parts > original.num_parts
+                ):
+                    continue
+
+                if (
+                    variant.xmin < original.xmin
+                    or variant.ymin < original.ymin
+                    or variant.xmax > original.xmax
+                    or variant.ymax > original.ymax
+                ):
+                    continue
+
+                if (
+                    variant.num_parts == 1
+                    and original.num_parts == 1
+                    and variant.points[-1] != original.points[-1]
+                ):
+                    continue
+
+                if not is_subsequence(
+                    variant.points,
+                    original.points,
+                ):
+                    continue
+
+                matched = True
+
+                if variant.points == original.points:
+                    identical = True
+
+                break
+
+            if not matched:
+                report(
+                    "LOD {}: v1={} (MLP record #{}) is not a valid "
+                    "simplified variant of any full geometry "
+                    "(Type={})".format(
+                        lod_index,
+                        v1,
+                        variant.sequence,
+                        feature_type,
+                    )
+                )
+            elif identical:
+                result.warn(
+                    "LOD {}: v1={} (MLP record #{}) equals the full "
+                    "geometry; v1 should be shared".format(
+                        lod_index,
+                        v1,
+                        variant.sequence,
+                    )
+                )
+
+
+# ============================================================================
 # Cross-file IDX <-> DB
 # ============================================================================
 
@@ -1862,7 +2799,18 @@ def audit_idx_db(
         v2 = node.v2
 
         if is_poi:
+            # V4 (map-format-v4.md, section 10.5): every POI has a
+            # physical record, v2 >= 1. The V3 text allowed v2 = 0.
+            if v2 == 0 and idx.version == 3:
+                continue
+
             if v2 == 0:
+                result.fail(
+                    "POI Data Node at offset={}: v2=0 while .db exists "
+                    "(every POI must have a DB record)".format(
+                        node.offset
+                    )
+                )
                 continue
 
             if v2 > db_info.record_count:
@@ -1872,6 +2820,16 @@ def audit_idx_db(
                         node.offset,
                         v2,
                         db_info.record_count,
+                    )
+                )
+                continue
+
+            if v2 not in db_info.records:
+                result.fail(
+                    "POI Data Node at offset={}: "
+                    "v2={} has no DB record".format(
+                        node.offset,
+                        v2,
                     )
                 )
             continue
@@ -2107,11 +3065,15 @@ def print_verbose_layer_info(
         for lod_index, sqt in enumerate(idx_audit.sqts):
             print(
                 "      INFO  LOD {}:"
-                " mode={}"
-                " roots={}".format(
+                " depth={}"
+                " roots={}"
+                " blocks={}"
+                " size={} B".format(
                     lod_index,
-                    sqt.mode,
+                    sqt.depth,
                     sqt.root_count,
+                    sqt.block_count,
+                    sqt.section_size,
                 )
             )
 
@@ -2185,7 +3147,11 @@ def audit_fixture(
     result = AuditResult()
     stats = LayerStats()
 
-    idx_files = sorted(directory.glob("*.idx"))
+    idx_files = [
+        path
+        for path in sorted(directory.glob("*.idx"))
+        if path.name != "search.idx"
+    ]
 
     if not idx_files:
         result.warn(
@@ -2199,6 +3165,19 @@ def audit_fixture(
             result=result,
             stats=stats,
             verbose=verbose,
+        )
+
+    # ------------------------------------------------------------------
+    # search.idx (optional)
+    # ------------------------------------------------------------------
+
+    search_path = directory / "search.idx"
+
+    if search_path.exists():
+        audit_search_idx_header(
+            search_path,
+            result,
+            verbose,
         )
 
     # ------------------------------------------------------------------
@@ -2233,6 +3212,52 @@ def audit_fixture(
         )
 
     return result
+
+
+def audit_search_idx_header(
+    path: Path,
+    result: AuditResult,
+    verbose: bool,
+) -> None:
+    """
+    search.idx (map-format-v4.md, section 21).
+
+    Only the PGO container is checked here: type 4, payload size and
+    zero LOD/reserved fields. The SRCH header, the sections and the
+    dictionary are not audited yet.
+    """
+
+    try:
+        data = path.read_bytes()
+    except OSError as exc:
+        result.fail(
+            "{}: cannot read file: {}".format(
+                path.name,
+                exc,
+            )
+        )
+        return
+
+    parse_pgo_header(
+        data,
+        FILE_TYPE_SEARCH,
+        result,
+    )
+
+    result.warn(
+        "{}: only the PGO header is checked; "
+        "SRCH header and sections are not audited yet".format(
+            path.name
+        )
+    )
+
+    if verbose:
+        print(
+            "      INFO  {}: {} B, PGO header checked".format(
+                path.name,
+                len(data),
+            )
+        )
 
 
 def audit_single_layer(
@@ -2276,6 +3301,11 @@ def audit_single_layer(
 
     if idx_audit is None:
         return
+
+    audit_lod_membership(
+        idx=idx_audit,
+        result=result,
+    )
 
     if verbose:
         print(
@@ -2331,6 +3361,13 @@ def audit_single_layer(
             result=result,
             is_poi=is_poi,
         )
+
+        if not is_poi and idx_audit.version == 4:
+            audit_lod_geometry_variants(
+                idx=idx_audit,
+                mlp_records=mlp_records,
+                result=result,
+            )
 
         if (
             not is_poi
@@ -2491,7 +3528,7 @@ def print_layer_summary(
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=(
-            "Audit all PurrGO V3 binary map fixtures recursively."
+            "Audit all PurrGO V4 binary map fixtures recursively."
         )
     )
 

@@ -59,16 +59,18 @@
 
 **Как.**
 
-- [ ] Формат: заголовок PGO (LOD 3), состав LOD, варианты геометрии — написано в `map-format-v4.md`.
-- [ ] `tools/map-compiler/features.csv` (колонка `LOD`):
-  - `highway=motorway`, `highway=trunk`, `highway=primary` → 3 (коды 1 и 2); `highway=secondary`, `*_link`, `railway=rail` остаются 2;
+- [x] Формат: заголовок PGO (LOD 3), состав LOD, варианты геометрии — написано в `map-format-v4.md`.
+- [x] `tools/map-compiler/features.csv` (колонка `LOD`):
+  - `highway=motorway`, `highway=trunk`, `highway=primary` → 3 (коды 1 и 2); `highway=secondary`, `*_link` и `railway=rail` остаются 2 (железная дорога в LOD 3 не входит — решено);
   - `place=city, capital=yes` и `place=city` → 3; `place=town` остаётся 2;
-  - новые POI-классы «страна» (`place=country`) и «область» (`place=state`, возможно `place=region`) с `LOD = 3`; по правилам нумерации (раздел 8.1.1) это следующие свободные коды 168 и 169; значки в `src/core/map/purrgo_poi_icons.c` (индекс значка = код).
-- [ ] **[проверить]** Есть ли в выгрузке OSM для Беларуси узлы `place=country` и `place=state`. Если подписи стран и областей лежат только в отношениях `boundary=administrative` (`admin_level` 2 и 4), парсеру нужно брать точку подписи (`label`, `admin_centre`) из отношения.
-- [ ] **[решение]** Включать ли 168 и 169 в категорию «Населённые пункты» простого поиска (`design/poi-search.md`) или оставить их вне категорий.
+  - новые POI-классы «страна» (`place=country`, код 168) и «область» (`place=state`, код 169) с `LOD = 3`, по правилам нумерации (раздел 8.1.1) следующие свободные коды; сделано в `features.csv` (`POI_SMALL`, `DARK_GRAY_CIRCLE`).
+- [ ] Прошивка, значки POI: значки 168 и 169 в `src/core/map/purrgo_poi_icons.c` (индекс значка = код; сейчас таблица заканчивается кодом 167, и код без стиля не рисуется), решить, рисовать ли их большим кружком, как `POI_BIG`; в `map_idx.c` большим кругом рисуется только код 128.
+- [x] Узлы `place=country` и `place=state` в данных OSM есть (подтверждено), парсеру точки из отношений брать не нужно.
+- [x] Коды 168 и 169 в категории простого поиска (`design/poi-search.md`) не включаются — решено.
 - [ ] Компилятор: `purrgo_bin_writer.py` (`compile_idx`: четыре фильтра LOD, четыре смещения, запись в `0x14`), новый шаг упрощения (Дуглас–Пекер в метрах, варианты LOD 2 и 3, собственный `v1` у варианта, дубликаты не писать), `purrgo_models.py` (варианты геометрии у объекта).
 - [ ] Прошивка: `src/core/map/map.c` (`lod_offset[4]`, `map_parse_pgo_header`, `lod_end` для LOD 3, `get_target_lod`). Предложение по порогам: LOD 3 при обычной детализации с масштаба 50 км (`scale > PURRGO_MAP_SCALE_20KM`), при низкой с 20 км (`scale > PURRGO_MAP_SCALE_10KM`); уточнить замером.
-- [ ] Тесты: `tests/host/test_map.c` (четыре LOD, повреждённый LOD 3, варианты геометрии), `tests/audit_maps.py` (состав `LOD ≥ n`, подмножество точек, BBox узла равен BBox записи), `docs/map-conformance.md`.
+- [x] `tests/audit_maps.py` (четыре LOD, блоки и `child_block`, состав `LOD ≥ n`, варианты геометрии, POI `v2 ≥ 1`, `search.idx` только заголовок PGO) и `docs/map-conformance.md` под V4. Аудитор определяет версию `.idx` по magic: V4 проверяется по новой спецификации, V3 по прежней; проверено на картах `purrgo_map_compiler.py` с `--format 3` и `--format 4`.
+- [ ] Тесты: `tests/host/test_map.c` (четыре LOD, повреждённый LOD 3, варианты геометрии), проверка `search.idx` в `tests/audit_maps.py` (раздел 21.10).
 - [ ] `sim_map_io.py`: четвёртый LOD и сравнение числа проецируемых вершин на 50, 100 и 200 км до и после.
 - [ ] **[HW]** Время кадра на масштабах 50, 100 и 200 км до и после.
 

@@ -156,7 +156,7 @@ ctest --preset linux-gcc-test
 | Хранилище и ошибки | `test_sd_spi`, `test_refact_critical` |
 
 Python-проверки в CI: `tests/check_pgo_text_table.py` (таблица PurrGO-256 в прошивке и компиляторе совпадает) и
-`python3 -m unittest tests/test_book_compiler.py` (конвертер книг). `tests/audit_maps.py` (аудит бинарных файлов карты)
+`python3 -m unittest tests/test_book_compiler.py` (конвертер книг). `tests/audit_maps.py` (аудит бинарных файлов карты, версии V3 и V4 определяются по magic)
 запускается вручную и рекурсивно проверяет все карты в каталоге: `python3 tests/audit_maps.py <каталог с картами>`.
 
 Тесты на железе (SD, дисплей, ток, время кадра) в этот набор не входят.
