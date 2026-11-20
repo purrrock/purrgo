@@ -55,3 +55,6 @@ Thumbs.db
 # Карты (OSM-исходники и тестовые данные карт)
 *.osm
 tests/data
+*.db
+*.mlp
+*.idx
