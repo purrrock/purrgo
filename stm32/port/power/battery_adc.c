@@ -21,6 +21,7 @@
 #include "purrgo/battery.h"
 #include "purrgo/hardware_config.h"
 #include "purrgo/logger.h"
+#include "purrgo/hw_fault.h"
 #include "adc.h"
 #include "main.h"
 
@@ -87,7 +88,7 @@ static uint16_t measure_pin_mv_adc_on(void)
 
     if (!adc_read_average(ADC_CHANNEL_VREFINT, &vref_raw) || vref_raw == 0u ||
         !adc_read_average(ADC_CHANNEL_16, &bat_raw)) {
-        PURRGO_LOGE("BATT: ADC read failed\r\n");
+        purrgo_hw_fault(PURRGO_HWF_BATTERY, "ADC read failed");
         return 0;
     }
 
@@ -96,7 +97,7 @@ static uint16_t measure_pin_mv_adc_on(void)
         __HAL_ADC_CALC_VREFANALOG_VOLTAGE(hadc1.Instance, vref_raw, ADC_RESOLUTION_14B);
 
     if (vdda_mv < BATT_VDDA_MIN_MV || vdda_mv > BATT_VDDA_MAX_MV) {
-        PURRGO_LOGE("BATT: VDDA out of range: %u mV\r\n", (unsigned)vdda_mv);
+        purrgo_hw_fault(PURRGO_HWF_BATTERY, "VDDA out of range: %u mV", (unsigned)vdda_mv);
         return 0;
     }
 
@@ -124,12 +125,15 @@ static uint16_t measure_pin_mv(void)
     uint16_t mv = 0;
 
     if (HAL_ADC_Init(&hadc1) != HAL_OK) {
-        PURRGO_LOGE("BATT: ADC init failed\r\n");
+        purrgo_hw_fault(PURRGO_HWF_BATTERY, "ADC init failed");
     } else if (HAL_ADCEx_Calibration_Start(&hadc1, ADC_CALIB_OFFSET_LINEARITY,
                                            ADC_SINGLE_ENDED) != HAL_OK) {
-        PURRGO_LOGE("BATT: ADC calibration failed\r\n");
+        purrgo_hw_fault(PURRGO_HWF_BATTERY, "ADC calibration failed");
     } else {
         mv = measure_pin_mv_adc_on();
+        if (mv != 0u) {
+            purrgo_hw_fault_clear(PURRGO_HWF_BATTERY);   /* измерение удалось: эпизод сбоя закончен */
+        }
     }
 
     (void)HAL_ADC_DeInit(&hadc1);

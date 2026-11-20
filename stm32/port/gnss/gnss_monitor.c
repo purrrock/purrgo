@@ -10,6 +10,7 @@
 #include "main.h"
 #include "purrgo/gnss_ubx.h"
 #include "purrgo/hardware_config.h"
+#include "purrgo/hw_fault.h"
 #include "purrgo/logger.h"
 #include "purrgo/system_time.h"
 
@@ -33,6 +34,9 @@ static uint32_t s_ubx_ack_reported = 0U;
 static uint32_t s_ubx_nak_reported = 0U;
 static bool s_last_reported_fix;
 static bool s_expect_gaps;   /* приёмник в PSMOO: между фиксами тишина - штатно */
+static uint8_t s_bad_reports;   /* подряд отчётов "нет данных" / "не NMEA": сбой железа с 2-го (холодный старт не в счёт) */
+
+#define MONITOR_BAD_REPORTS_FAULT 2U
 
 /* Связь с модулем (gnss_link): скорость UART и признак "поиск скорости закончен". */
 static uint32_t s_baud = PURRGO_GNSS_BAUD_DEFAULT;
@@ -48,6 +52,7 @@ void purrgo_gnss_monitor_init(void)
     s_last_reported_fix = false;
     s_ubx_ack_reported = 0U;
     s_ubx_nak_reported = 0U;
+    s_bad_reports = 0U;
     s_started = true;
 }
 
@@ -72,6 +77,7 @@ void purrgo_gnss_monitor_link(uint32_t baud, bool ready)
     s_last_reported_fix = false;
     s_ubx_ack_reported = 0U;
     s_ubx_nak_reported = 0U;
+    s_bad_reports = 0U;
     s_t_next = HAL_GetTick() + MONITOR_FIRST_REPORT_MS;
 }
 
@@ -207,7 +213,15 @@ void purrgo_gnss_monitor_process(void)
     if (s_expect_gaps)
     {
         s_last_state = state;
+        s_bad_reports = 0U;
         return;
+    }
+
+    /* Данные пошли (NMEA/UBX, решение есть или ещё нет): модуль жив, эпизод сбоя связи закончен. */
+    if ((state == GNSS_DIAG_FIX) || (state == GNSS_DIAG_NMEA_NO_FIX))
+    {
+        s_bad_reports = 0U;
+        purrgo_hw_fault_clear(PURRGO_HWF_GNSS);
     }
 
     /* Решение получено: сообщить один раз и дальше молчать, пока оно не пропадёт. */
@@ -239,6 +253,10 @@ void purrgo_gnss_monitor_process(void)
                    "module RX -> PA2, VCC/GND, module powered\r\n",
                    up_s, (unsigned long)s_diag.err_fe, (unsigned long)s_diag.err_ne,
                    (unsigned long)s_diag.err_ore);
+        if ((++s_bad_reports >= MONITOR_BAD_REPORTS_FAULT) && !purrgo_hw_fault_active(PURRGO_HWF_GNSS))
+        {
+            purrgo_hw_fault(PURRGO_HWF_GNSS, "module sends no data for %lu s (check wiring and power)", up_s);
+        }
         break;
 
     case GNSS_DIAG_NOT_NMEA:
@@ -252,6 +270,10 @@ void purrgo_gnss_monitor_process(void)
                    (unsigned long)s_diag.sentences_bad, (unsigned long)s_diag.err_fe,
                    (unsigned long)s_diag.err_ne, (unsigned long)s_diag.err_ore,
                    (unsigned long)s_baud);
+        if ((++s_bad_reports >= MONITOR_BAD_REPORTS_FAULT) && !purrgo_hw_fault_active(PURRGO_HWF_GNSS))
+        {
+            purrgo_hw_fault(PURRGO_HWF_GNSS, "module data is not valid NMEA/UBX (%lu s): wrong baud, noise or wiring", up_s);
+        }
         break;
     }
 

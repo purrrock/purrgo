@@ -20,6 +20,7 @@
 #include "epd4g.h"
 #include "epd4g_bw.h"
 #include "purrgo/logger.h"
+#include "purrgo/hw_fault.h"
 
 /* ---------------------------- настройки ---------------------------------- */
 
@@ -122,7 +123,7 @@ static void op_done(int rc, uint32_t now)
     s_idle_since = now;
 
     if (rc != EPD4G_OK) {
-        PURRGO_LOGE("E-Ink: op %d failed, rc=%d, panel will be re-initialised\n\r", (int)op, rc);
+        purrgo_hw_fault(PURRGO_HWF_DISPLAY, "E-Ink op %d failed, rc=%d, panel will be re-initialised", (int)op, rc);
         epd4g_abort();
         invalidate_panel();
         if (op == OP_FULL || op == OP_PARTIAL) {
@@ -133,6 +134,7 @@ static void op_done(int rc, uint32_t now)
         s_have_retry = true;
         return;
     }
+    purrgo_hw_fault_clear(PURRGO_HWF_DISPLAY);   /* операция панели прошла: эпизод сбоя закончен */
 
     switch (op) {
         case OP_INIT:
@@ -407,7 +409,7 @@ void display_eink_wait(void)
 
     while (display_eink_is_busy()) {
         if (HAL_GetTick() - start > EINK_WAIT_LIMIT_MS) {
-            PURRGO_LOGE("E-Ink: wait timeout, dropping pending update\n\r");
+            purrgo_hw_fault(PURRGO_HWF_DISPLAY, "E-Ink wait timeout, dropping pending update");
             epd4g_abort();
             s_op = OP_NONE;
             s_req_full = false;

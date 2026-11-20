@@ -20,6 +20,7 @@
 #include "purrgo/battery.h"
 #include "purrgo/waypoint.h"
 #include "purrgo/sound.h"
+#include "purrgo/hw_fault.h"
 
 #define PURRGO_GNSS_MARKER_UPDATE_DISTANCE_M 5
 
@@ -587,6 +588,9 @@ static void gnss_check_fix_timeout(uint32_t now_ms) {
 }
 
 void purrgo_app_tick(uint32_t current_time_ms) {
+    /* Сигнал о сбое железа (SD, GNSS, E-Ink, АЦП...), заказанный purrgo_hw_fault(), в том числе из прерывания. */
+    purrgo_hw_fault_service();
+
     /*
      * Напряжение питания: при просадке ниже порога безопасной записи на SD
      * закрываем трек (supply.c). Первым в такте: чем раньше остановим запись,

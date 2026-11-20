@@ -224,8 +224,11 @@ void purrgo_platform_sound_play(purrgo_sound_t sound, purrgo_sound_level_t level
     if (!s_snd.ready || sound <= PURRGO_SOUND_NONE || sound >= PURRGO_SOUND_COUNT) {
         return;
     }
-    /* Приоритет = порядок в purrgo_sound_t: менее важный сигнал не прерывает более важный. */
-    if (s_snd.sound != PURRGO_SOUND_NONE && sound < s_snd.sound) {
+    /*
+     * Приоритет = порядок в purrgo_sound_t: менее важный сигнал не прерывает более важный, а тот же
+     * самый, уже звучащий, не запускается заново (несколько сбоев подряд - один сигнал, не растянутый).
+     */
+    if (s_snd.sound != PURRGO_SOUND_NONE && sound <= s_snd.sound) {
         return;
     }
 

@@ -11,6 +11,7 @@
 
 #include "purrgo/supply.h"
 #include "purrgo/logger.h"
+#include "purrgo/hw_fault.h"
 #include "main.h"
 
 #include <stdbool.h>
@@ -32,7 +33,7 @@ void purrgo_supply_stm32_init(void)
 
     if (HAL_PWR_ConfigPVD(&cfg) != HAL_OK)
     {
-        PURRGO_LOGE("Supply: PVD config failed\r\n");
+        purrgo_hw_fault(PURRGO_HWF_SYSTEM, "PVD config failed (supply monitor unavailable)");
         return;
     }
     HAL_PWR_EnablePVD();

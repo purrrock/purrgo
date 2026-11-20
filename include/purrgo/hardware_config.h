@@ -18,7 +18,7 @@
  */
 
 // #define PURRGO_GNSS_MOCK             1
-// #define PURRGO_HW_GNSS PURRGO_GNSS_MOCK
+// #define PURRGO_HWF_GNSS PURRGO_GNSS_MOCK
 
 /*
  * Модель приёмника: определяет, какие настроечные команды ему отправляются при
@@ -698,7 +698,8 @@
 /*
  * Скважность, % периода (1..50), по классам сигнала (LOUD - ERROR и ARRIVED, MID - INFO,
  * QUIET - щелчок) и по настройке SOUND меню: HIGH - значения без суффикса, LOW - с суффиксом _LOW.
- * LOW примерно на 6-7 дБ тише HIGH при том же классе (50 % -> 15 %, 20 % -> 8 %, 8 % -> 4 %).
+ * LOW на 12-16 дБ тише HIGH при том же классе (50 % -> 6 %, 20 % -> 3 %, 8 % -> 2 %): тихий режим для
+ * помещения и ночи, в кармане может быть не слышен.
  */
 #ifndef PURRGO_SOUND_DUTY_LOUD_PCT
 #define PURRGO_SOUND_DUTY_LOUD_PCT 50U
@@ -710,13 +711,13 @@
 #define PURRGO_SOUND_DUTY_QUIET_PCT 8U
 #endif
 #ifndef PURRGO_SOUND_DUTY_LOUD_LOW_PCT
-#define PURRGO_SOUND_DUTY_LOUD_LOW_PCT 15U
+#define PURRGO_SOUND_DUTY_LOUD_LOW_PCT 6U
 #endif
 #ifndef PURRGO_SOUND_DUTY_MID_LOW_PCT
-#define PURRGO_SOUND_DUTY_MID_LOW_PCT 8U
+#define PURRGO_SOUND_DUTY_MID_LOW_PCT 3U
 #endif
 #ifndef PURRGO_SOUND_DUTY_QUIET_LOW_PCT
-#define PURRGO_SOUND_DUTY_QUIET_LOW_PCT 4U
+#define PURRGO_SOUND_DUTY_QUIET_LOW_PCT 2U
 #endif
 
 /* Длительности, мс. ERROR - один длинный; ARRIVED - два сигнала с паузой; INFO - короткий; CLICK - щелчок. */

@@ -9,6 +9,9 @@
  *     проверочный сигнал INFO, при выборе OFF звук обрывается;
  *   - ERROR при критическом разряде (supply.c): один раз за остановку;
  *   - остановка записи трека (сбой SD, переход в читалку, выключение) звука не даёт;
+ *   - сбои железа (hw_fault.h): строка HW FAULT в лог и один сигнал ERROR за эпизод сбоя узла;
+ *     OFF - молча; повтор того же узла - без сигнала до purrgo_hw_fault_clear(); просадка питания
+ *     (сигнал разряда уже был) - без второго сигнала;
  *   - выключение обрывает звучащий сигнал (purrgo_sound_stop() до остановки логгера и до сна);
  *   - ARRIVED при входе в радиус цели (waypoint.c): один раз, повторный только после отхода
  *     дальше PURRGO_WPT_ARRIVAL_REARM_M; цель, заданная уже внутри радиуса, молчит;
@@ -22,6 +25,7 @@
 #include "purrgo/app_fsm.h"
 #include "purrgo/config.h"
 #include "purrgo/gnss_types.h"
+#include "purrgo/hw_fault.h"
 #include "purrgo/menu_controller.h"
 #include "purrgo/power.h"
 #include "purrgo/sound.h"
@@ -79,6 +83,7 @@ static void fresh(void)
 {
     fake_fs_reset();
     fake_power_reset();
+    purrgo_hw_fault_reset();
     purrgo_config_init();
     purrgo_supply_reset();
     purrgo_wpt_clear();
@@ -493,6 +498,105 @@ static void test_power_off_stops_sound(void)
     CHECK(fake_power_standby_calls() == 1);
 }
 
+/* Сбои железа: один сигнал ERROR за эпизод сбоя узла (hw_fault.h). */
+static void test_hw_fault(void)
+{
+    fresh();
+    g_now = 3000000;
+
+    /* OFF: сбой фиксируется (лог, эпизод), но не звучит. */
+    purrgo_hw_fault(PURRGO_HWF_SD, "I/O error %d", 5);
+    CHECK(purrgo_hw_fault_active(PURRGO_HWF_SD));
+    purrgo_hw_fault_service();
+    CHECK(fake_sound_total() == 0);
+    purrgo_hw_fault_clear(PURRGO_HWF_SD);
+    CHECK(!purrgo_hw_fault_active(PURRGO_HWF_SD));
+
+    /* LOW и HIGH: сообщение само не звучит, звук играет главный цикл (purrgo_hw_fault_service). */
+    app_config.sound_level = PURRGO_SOUND_LEVEL_LOW;
+    purrgo_hw_fault(PURRGO_HWF_SD, "mount error %d", 13);
+    CHECK(fake_sound_total() == 0);
+    purrgo_hw_fault_service();
+    CHECK(fake_sound_count(PURRGO_SOUND_ERROR) == 1);
+    CHECK(fake_sound_total() == 1);
+    CHECK(fake_sound_last_level() == PURRGO_SOUND_LEVEL_LOW);
+
+    /* Тот же узел продолжает сбоить (повторные попытки монтирования): без новых сигналов. */
+    for (int i = 0; i < 10; i++) {
+        purrgo_hw_fault(PURRGO_HWF_SD, "mount error %d", 13);
+        purrgo_hw_fault_service();
+    }
+    CHECK(fake_sound_total() == 1);
+
+    /* Новый сбой другого узла - свой эпизод и свой сигнал. */
+    purrgo_hw_fault(PURRGO_HWF_GNSS, "link failed");
+    purrgo_hw_fault_service();
+    CHECK(fake_sound_total() == 2);
+
+    /* Два узла сбойнули до главного цикла: один сигнал на всех. */
+    fake_sound_reset();
+    purrgo_hw_fault(PURRGO_HWF_DISPLAY, "op failed");
+    purrgo_hw_fault(PURRGO_HWF_BATTERY, "ADC read failed");
+    purrgo_hw_fault_service();
+    purrgo_hw_fault_service();
+    CHECK(fake_sound_count(PURRGO_SOUND_ERROR) == 1);
+
+    /* Узел починился: следующий сбой звучит заново. */
+    fake_sound_reset();
+    purrgo_hw_fault_clear(PURRGO_HWF_SD);
+    CHECK(!purrgo_hw_fault_active(PURRGO_HWF_SD));
+    purrgo_hw_fault(PURRGO_HWF_SD, "I/O error %d", 1);
+    purrgo_hw_fault_service();
+    CHECK(fake_sound_count(PURRGO_SOUND_ERROR) == 1);
+
+    /* Сигнал играет purrgo_app_tick(): не нужно звать сервис отдельно. */
+    fake_sound_reset();
+    purrgo_hw_fault_clear(PURRGO_HWF_SYSTEM);
+    purrgo_hw_fault(PURRGO_HWF_SYSTEM, "LPTIM1 timebase is not running");
+    g_now += 100;
+    purrgo_app_tick(g_now);
+    CHECK(fake_sound_count(PURRGO_SOUND_ERROR) == 1);
+
+    /* OFF в момент сбоя: молча, и сигнал не копится "на потом". */
+    fake_sound_reset();
+    purrgo_hw_fault_reset();
+    app_config.sound_level = PURRGO_SOUND_LEVEL_OFF;
+    purrgo_hw_fault(PURRGO_HWF_GNSS, "no data");
+    purrgo_hw_fault_service();
+    app_config.sound_level = PURRGO_SOUND_LEVEL_HIGH;
+    purrgo_hw_fault_service();
+    CHECK(fake_sound_total() == 0);
+
+    /* Неверный узел: в лог пишется, в учёт не попадает, ничего не ломается. */
+    purrgo_hw_fault((purrgo_hw_t)77, "bad node");
+    purrgo_hw_fault_clear((purrgo_hw_t)77);
+    CHECK(!purrgo_hw_fault_active((purrgo_hw_t)77));
+    CHECK(strcmp(purrgo_hw_name(PURRGO_HWF_SD), "SD") == 0);
+    CHECK(strcmp(purrgo_hw_name(PURRGO_HWF_GNSS), "GNSS") == 0);
+    CHECK(strcmp(purrgo_hw_name((purrgo_hw_t)77), "?") == 0);
+}
+
+/* Критический разряд уже просигналил: сбои железа от просадки питания второго сигнала не дают. */
+static void test_hw_fault_during_supply_low(void)
+{
+    fresh();
+    g_now = 4000000;
+    app_config.sound_level = PURRGO_SOUND_LEVEL_HIGH;
+
+    fake_power_set_supply_low(true);
+    (void)purrgo_supply_tick(g_now);
+    g_now += PURRGO_SUPPLY_LOW_CONFIRM_MS;
+    (void)purrgo_supply_tick(g_now);
+    CHECK(purrgo_supply_storage_blocked());
+    CHECK(fake_sound_count(PURRGO_SOUND_ERROR) == 1);
+
+    purrgo_hw_fault(PURRGO_HWF_SD, "I/O error %d", 3);
+    purrgo_hw_fault_service();
+    CHECK(fake_sound_count(PURRGO_SOUND_ERROR) == 1);   /* только сигнал разряда */
+    CHECK(purrgo_hw_fault_active(PURRGO_HWF_SD));       /* но в учёте и в логе сбой есть */
+    fake_power_set_supply_low(false);
+}
+
 int main(void)
 {
     test_policy();
@@ -503,5 +607,7 @@ int main(void)
     test_first_fix_and_click();
     test_logger_stop_silent();
     test_power_off_stops_sound();
+    test_hw_fault();
+    test_hw_fault_during_supply_low();
     return test_finish("test_sound");
 }

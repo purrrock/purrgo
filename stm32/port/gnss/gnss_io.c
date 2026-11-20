@@ -13,6 +13,7 @@
 #include <string.h>
 
 #include "purrgo/logger.h"
+#include "purrgo/hw_fault.h"
 #include "gnss_monitor.h"
 #include "gnss_link.h"
 #include "gnss_stop.h"
@@ -227,8 +228,8 @@ static bool gnss_tx_raw(const uint8_t *data, size_t len)
 
     if (st != HAL_OK)
     {
-        PURRGO_LOGE("GNSS: TX FAILED (HAL status %d, uart err 0x%lX)\r\n",
-                   (int)st, (unsigned long)hlpuart1.ErrorCode);
+        purrgo_hw_fault(PURRGO_HWF_GNSS, "TX failed (HAL status %d, uart err 0x%lX)",
+                        (int)st, (unsigned long)hlpuart1.ErrorCode);
     }
     return (st == HAL_OK);
 }
@@ -296,7 +297,7 @@ static void gnss_uart_stop_cfg(void)
 {
     if (HAL_UARTEx_EnableStopMode(&hlpuart1) != HAL_OK)
     {
-        PURRGO_LOGE("GNSS: LPUART1 Stop mode config FAILED\r\n");
+        purrgo_hw_fault(PURRGO_HWF_GNSS, "LPUART1 Stop mode config failed");
     }
 }
 
@@ -313,7 +314,7 @@ void purrgo_gnss_init(void)
 
     if (!gnss_dma_setup())
     {
-        PURRGO_LOGE("GNSS DMA SETUP ERROR!\r\n");
+        purrgo_hw_fault(PURRGO_HWF_GNSS, "DMA setup error");
         return;
     }
 
@@ -329,7 +330,7 @@ void purrgo_gnss_init(void)
             gnss_rx_buffer,
             GNSS_RX_BUFFER_SIZE) != HAL_OK)
     {
-        PURRGO_LOGE("GNSS INIT ERROR!\r\n");
+        purrgo_hw_fault(PURRGO_HWF_GNSS, "RX DMA start failed (init error)");
     }
 
     /*
@@ -519,7 +520,7 @@ static bool link_set_baud(uint32_t baud, void *ctx)
     hlpuart1.Init.BaudRate = baud;
     if (HAL_UART_Init(&hlpuart1) != HAL_OK)
     {
-        PURRGO_LOGE("GNSS: LPUART1 reinit at %lu baud FAILED\r\n", (unsigned long)baud);
+        purrgo_hw_fault(PURRGO_HWF_GNSS, "LPUART1 reinit at %lu baud failed", (unsigned long)baud);
         return false;
     }
     gnss_uart_stop_cfg();
@@ -530,7 +531,7 @@ static bool link_set_baud(uint32_t baud, void *ctx)
 
     if (!gnss_rx_restart())
     {
-        PURRGO_LOGE("GNSS: RX restart at %lu baud FAILED\r\n", (unsigned long)baud);
+        purrgo_hw_fault(PURRGO_HWF_GNSS, "RX restart at %lu baud failed", (unsigned long)baud);
         return false;
     }
     return true;
@@ -596,9 +597,9 @@ static void link_on_state(gnss_link_state_t state, uint32_t baud, void *ctx)
         break;
 
     case GNSS_LINK_FAILED:
-        PURRGO_LOGE("GNSS: no NMEA at %lu and %lu baud, link FAILED (UART left at %lu baud)\r\n",
-                   (unsigned long)PURRGO_GNSS_BAUD_DEFAULT, (unsigned long)PURRGO_GNSS_BAUD_TARGET,
-                   (unsigned long)PURRGO_GNSS_BAUD_DEFAULT);
+        purrgo_hw_fault(PURRGO_HWF_GNSS, "no NMEA at %lu and %lu baud, link failed (UART left at %lu baud)",
+                        (unsigned long)PURRGO_GNSS_BAUD_DEFAULT, (unsigned long)PURRGO_GNSS_BAUD_TARGET,
+                        (unsigned long)PURRGO_GNSS_BAUD_DEFAULT);
         /* Монитор объяснит причину (нет данных / не NMEA / неверное подключение). */
         purrgo_gnss_monitor_link(gnss_link_baud(&gnss_link), true);
         break;
@@ -748,7 +749,7 @@ static void gnss_recover_link(uint32_t now)
     {
         const purrgo_gnss_profile_t keep = gnss_profile;
 
-        PURRGO_LOGW("GNSS: RX error storm again, power cycling the module (EN)\r\n");
+        purrgo_hw_fault(PURRGO_HWF_GNSS, "RX error storm again after link restart, power cycling the module (EN)");
         gnss_profile = PURRGO_GNSS_PROFILE_NAV;   /* без отката настройки трекера перед выключением */
         purrgo_gnss_power_off();
         HAL_Delay(GNSS_EN_LOW_MS);
@@ -923,10 +924,10 @@ bool purrgo_gnss_read_byte(uint8_t *byte)
 
         if (!gnss_rx_restart())
         {
-            PURRGO_LOGE("GNSS RX RESTART ERROR! (uart err 0x%lX, dma err 0x%lX, dma state %d)\r\n",
-                       (unsigned long)hlpuart1.ErrorCode,
-                       (unsigned long)handle_LPDMA1_Channel0.ErrorCode,
-                       (int)handle_LPDMA1_Channel0.State);
+            purrgo_hw_fault(PURRGO_HWF_GNSS, "RX restart error (uart err 0x%lX, dma err 0x%lX, dma state %d)",
+                            (unsigned long)hlpuart1.ErrorCode,
+                            (unsigned long)handle_LPDMA1_Channel0.ErrorCode,
+                            (int)handle_LPDMA1_Channel0.State);
         }
         return false;
     }

@@ -21,6 +21,7 @@
 #include "sd_spi.h"
 #include "sd_power.h"
 #include "purrgo/logger.h"
+#include "purrgo/hw_fault.h"
 #include "purrgo/supply.h"
 #include "purrgo/render_prof.h"
 
@@ -204,7 +205,7 @@ static void spi_set_prescaler(uint32_t prescaler)
     hspi2.Init.BaudRatePrescaler = prescaler;
     if (HAL_SPI_Init(&hspi2) != HAL_OK)
     {
-        PURRGO_LOGE("SD: SPI2 reinit failed\r\n");
+        purrgo_hw_fault(PURRGO_HWF_SD, "SPI2 reinit failed");
     }
 }
 
@@ -550,15 +551,20 @@ static const sd_spi_port_t s_port = {
 /* Реакция на сбой обмена: извлечённая или зависшая карта объявляется потерянной. */
 static DRESULT io_failed(sd_spi_res_t res)
 {
-    PURRGO_LOGE("SD: I/O error %d\r\n", (int)res);
-
     if (!card_inserted())
     {
+        /* Карту вынули во время обмена: действие пользователя, не сбой железа. */
+        PURRGO_LOGE("SD: I/O error %d\r\n", (int)res);
         card_lost("removed during transfer");
     }
-    else if ((res == SD_SPI_ERR_TIMEOUT) || (res == SD_SPI_ERR_NOCARD))
+    else
     {
-        card_lost("no response");
+        /* Карта на месте, а обмен не удался: сбой карты, контакта или шины SPI. */
+        purrgo_hw_fault(PURRGO_HWF_SD, "I/O error %d", (int)res);
+        if ((res == SD_SPI_ERR_TIMEOUT) || (res == SD_SPI_ERR_NOCARD))
+        {
+            card_lost("no response");
+        }
     }
     return RES_ERROR;
 }
@@ -776,7 +782,7 @@ static bool mount_card(void)
 
     if (res != FR_OK)
     {
-        PURRGO_LOGE("SD: mount ERROR: %d (FatFs FRESULT)\r\n", (int)res);
+        purrgo_hw_fault(PURRGO_HWF_SD, "mount error %d (FatFs FRESULT)", (int)res);
         unmount();
         s_state = PURRGO_SD_MOUNT_ERROR;
         return false;
@@ -793,6 +799,7 @@ static bool mount_card(void)
     make_dir("0:/PURRGO/ROUTES");
     make_dir("0:/PURRGO/LOGS");
     s_state = PURRGO_SD_READY;
+    purrgo_hw_fault_clear(PURRGO_HWF_SD);   /* карта снова работает: следующий сбой прозвучит заново */
     PURRGO_LOG("SD: mount OK, tree verified\r\n");
     return true;
 }
@@ -825,6 +832,7 @@ static bool power_up_and_mount(void)
 
     if (!sd_power_up(&s_pwr))
     {
+        purrgo_hw_fault(PURRGO_HWF_SD, "card power-up failed");
         s_state = PURRGO_SD_MOUNT_ERROR;
         return false;
     }
@@ -965,11 +973,12 @@ void purrgo_sd_poll(uint32_t now_ms)
         if (!s_present_stable)
         {
             PURRGO_LOGW("SD: card removed\r\n");
+            purrgo_hw_fault_clear(PURRGO_HWF_SD);   /* вынули карту: эпизод сбоя закончен */
             unmount();
         }
         else if (s_card_lost)
         {
-            PURRGO_LOGE("SD: I/O failure, remounting later\r\n");
+            purrgo_hw_fault(PURRGO_HWF_SD, "I/O failure, remounting later");
             unmount();
             s_state = PURRGO_SD_MOUNT_ERROR;
             s_retry_armed = true;
@@ -1013,7 +1022,7 @@ void purrgo_sd_poll(uint32_t now_ms)
     {
         if (s_card_lost)
         {
-            PURRGO_LOGE("SD: I/O failure, remounting later\r\n");
+            purrgo_hw_fault(PURRGO_HWF_SD, "I/O failure, remounting later");
             unmount();
             s_state = PURRGO_SD_MOUNT_ERROR;
             s_retry_armed = true;

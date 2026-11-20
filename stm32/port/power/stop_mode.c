@@ -12,6 +12,7 @@
 #include "gnss_stop.h"
 #include "eink_wake.h"
 #include "purrgo/logger.h"
+#include "purrgo/hw_fault.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -66,7 +67,7 @@ bool purrgo_stop2_init(void)
     /* Будильник и время HAL - LPTIM1 (HAL_InitTick() в timebase.c). */
     if (!purrgo_timebase_ready())
     {
-        PURRGO_LOGE("Stop2: LPTIM1 timebase is not running\r\n");
+        purrgo_hw_fault(PURRGO_HWF_SYSTEM, "LPTIM1 timebase is not running (Stop 2 unavailable)");
         return false;
     }
 
