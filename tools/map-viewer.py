@@ -2,9 +2,22 @@
 # -*- coding: utf-8 -*-
 
 """
-PurrGO MAP FORMAT V3 — PC MAP VIEWER / VALIDATOR
+PurrGO MAP FORMAT V3 / V4 — PC MAP VIEWER / VALIDATOR
 
-Strict validator and viewer for PurrGO MAP FORMAT V3.
+Strict validator and viewer for PurrGO MAP FORMAT V3 and V4
+(docs/map-format-v4.md). The format of a layer is detected from the
+SQT signature of its .idx file (SQT\x01 = V3, SQT\x02 = V4).
+
+V4 usage:
+
+    python map-viewer.py roads.idx roads.mlp [map.name] [roads.db]
+        [--lod N] [--size-km X] [--screenshot out.png]
+    python map-viewer.py pois.idx - map.name          (layer without .mlp)
+    python map-viewer.py search.idx [pois.db]          (validation only)
+
+In the window keys 0..3 switch the displayed LOD of a V4 layer. All four LOD
+sections are validated structurally; geometry records that fall into the
+camera are validated for every LOD.
 
 Supported files:
 
@@ -37,6 +50,8 @@ This parser is intentionally strict. Structural inconsistencies
 are reported as format errors instead of being silently accepted.
 """
 
+import argparse
+import contextlib
 import json
 import math
 import os
@@ -61,6 +76,16 @@ NAV_NODE_SIZE = 28
 
 SQT_HEADER_SIZE = 16
 SQT_MAGIC = b"SQT\x01"
+
+# --- V4 (docs/map-format-v4.md) ---
+SQT_MAGIC_V4 = b"SQT\x02"
+V4_BLOCK_SIZE = 512
+V4_NAV_FANOUT = 18
+V4_LEAF_FANOUT = 20
+V4_LOD_COUNT = 4
+V4_FIRST_SECTION = 0x200
+
+PGO_FILE_TYPE_SEARCH = 4
 
 MLP_RECORD_HEADER_SIZE = 8
 MLP_BODY_HEADER_SIZE = 24
@@ -104,6 +129,8 @@ def create_stats():
         "pois_drawn": 0,
 
         "bytes_skipped": 0,
+
+        "geometry_checked": 0,
     }
 
 
@@ -807,6 +834,11 @@ def parse_geometry_mlp(
             )
         )
 
+    if screen_surface is None:
+        # Validation only (V4 non-displayed LODs).
+        stats["geometry_checked"] += 1
+        return (minx, miny, maxx, maxy)
+
     stats["geometry_drawn"] += 1
 
     # --------------------------------------------------------
@@ -861,6 +893,8 @@ def parse_geometry_mlp(
 
             stats["lines_drawn"] += 1
 
+    return (minx, miny, maxx, maxy)
+
 
 # ============================================================
 # IDX Data Node
@@ -871,9 +905,13 @@ def parse_data_node(
     mlp_file,
     camera_bbox,
     screen_surface,
+    strict_bbox=False,
 ):
     """
-    Parse one V3 Data Node.
+    Parse one V3/V4 Data Node.
+
+    screen_surface=None validates without drawing; strict_bbox=True (V4)
+    requires the node BBox to be equal to the BBox of its geometry record.
 
     Exact size: 25 bytes.
 
@@ -940,6 +978,9 @@ def parse_data_node(
 
     if xmin == xmax and ymin == ymax:
 
+        if screen_surface is None:
+            return
+
         stats["pois_drawn"] += 1
 
         sx, sy = world_to_screen(
@@ -967,12 +1008,23 @@ def parse_data_node(
             f"non-POI feature has v1=0"
         )
 
-    parse_geometry_mlp(
+    record_bbox = parse_geometry_mlp(
         mlp_file,
         v1,
         camera_bbox,
         screen_surface,
     )
+
+    if (
+        strict_bbox
+        and record_bbox is not None
+        and record_bbox != (xmin, ymin, xmax, ymax)
+    ):
+        fail(
+            f"Data Node code={code}: BBox "
+            f"{(xmin, ymin, xmax, ymax)} differs from the BBox "
+            f"of MLP record v1={v1}: {record_bbox}"
+        )
 
 
 # ============================================================
@@ -1450,6 +1502,565 @@ def validate_db_header(
     )
 
 
+
+# ============================================================
+# V4: PGO header, block SQT sections (docs/map-format-v4.md)
+# ============================================================
+
+def detect_idx_v4(idx_file):
+    """True if the .idx file is format V4 (SQT\\x02 at the LOD 0 offset)."""
+
+    position = idx_file.tell()
+
+    try:
+        idx_file.seek(0)
+        head = idx_file.read(PGO_HEADER_SIZE)
+
+        if len(head) < PGO_HEADER_SIZE or head[0:3] != b"PGO":
+            return False
+
+        lod0 = struct.unpack_from("<I", head, 8)[0]
+
+        idx_file.seek(lod0)
+        return idx_file.read(4) == SQT_MAGIC_V4
+
+    finally:
+        idx_file.seek(position)
+
+
+def read_pgo_header_v4(file, path):
+    """Read and strictly validate the V4 .idx PGO header (four LOD offsets)."""
+
+    header = read_exact(file, PGO_HEADER_SIZE, "PGO V4 header")
+
+    if header[0:3] != b"PGO":
+        fail(f"{path}: invalid PGO magic: {header[0:3]!r}")
+
+    file_type = header[3]
+
+    if file_type != PGO_FILE_TYPE_IDX:
+        fail(f"{path}: PGO file type {file_type}, expected 1 (IDX)")
+
+    (
+        payload_size,
+        lod0,
+        lod1,
+        lod2,
+        lod3,
+        reserved1,
+        reserved2,
+    ) = struct.unpack("<IIIIIII", header[4:32])
+
+    actual_size = file_size(file)
+
+    if payload_size != actual_size - PGO_HEADER_SIZE:
+        fail(
+            f"{path}: payload size mismatch: header={payload_size}, "
+            f"actual={actual_size - PGO_HEADER_SIZE}"
+        )
+
+    if reserved1 != 0 or reserved2 != 0:
+        fail(f"{path}: reserved PGO header fields must be zero")
+
+    offsets = (lod0, lod1, lod2, lod3)
+
+    if lod0 != V4_FIRST_SECTION:
+        fail(f"{path}: LOD 0 offset {lod0}, expected {V4_FIRST_SECTION}")
+
+    if not lod0 < lod1 < lod2 < lod3:
+        fail(f"{path}: LOD offsets are not strictly increasing: {offsets}")
+
+    if actual_size % V4_BLOCK_SIZE != 0:
+        fail(f"{path}: file size {actual_size} is not a multiple of 512")
+
+    for lod_index, offset in enumerate(offsets):
+
+        if offset % V4_BLOCK_SIZE != 0 or offset >= actual_size:
+            fail(f"{path}: invalid LOD {lod_index} offset {offset}")
+
+        file.seek(offset)
+
+        if read_exact(file, 4, f"LOD {lod_index} SQT magic") != SQT_MAGIC_V4:
+            fail(f"{path}: LOD {lod_index} offset {offset} does not point to SQT\\x02")
+
+    file.seek(PGO_HEADER_SIZE)
+    padding = read_exact(
+        file,
+        V4_FIRST_SECTION - PGO_HEADER_SIZE,
+        "padding before LOD 0",
+    )
+
+    if any(padding):
+        fail(f"{path}: bytes 0x20..0x1FF must be zero")
+
+    print(
+        f"[INFO] PGO V4 header: type=1 (IDX), payload={payload_size}"
+    )
+    print(
+        "[INFO] LOD offsets: "
+        + ", ".join(f"LOD{i}={o}" for i, o in enumerate(offsets))
+    )
+
+    return {
+        "file_type": file_type,
+        "payload_size": payload_size,
+        "lod_offsets": offsets,
+        "reserved": (reserved1, reserved2),
+        "file_size": actual_size,
+    }
+
+
+def _section_range_v4(header, lod_index):
+    offsets = header["lod_offsets"]
+    start = offsets[lod_index]
+
+    if lod_index + 1 < V4_LOD_COUNT:
+        end = offsets[lod_index + 1]
+    else:
+        end = header["file_size"]
+
+    return start, end
+
+
+def _bbox_inside(inner, outer):
+    return (
+        outer[0] <= inner[0]
+        and outer[1] <= inner[1]
+        and inner[2] <= outer[2]
+        and inner[3] <= outer[3]
+    )
+
+
+def validate_sqt_v4(
+    idx_file,
+    mlp_file,
+    header,
+    lod_index,
+    camera_bbox,
+):
+    """
+    Validate one V4 LOD section.
+
+    Blocks are stored level by level (breadth first), so the section is
+    read sequentially. Every block is checked; geometry records of data
+    nodes that fall into the camera are read and checked as well.
+    """
+
+    start, end = _section_range_v4(header, lod_index)
+    name = f"LOD {lod_index}"
+
+    idx_file.seek(start)
+    block = read_exact(idx_file, V4_BLOCK_SIZE, f"{name} SQT header")
+
+    (
+        magic,
+        topology,
+        depth,
+        root_count,
+        block_size,
+        section_size,
+        nav_fanout,
+        leaf_fanout,
+    ) = struct.unpack_from("<4sIIIIIHH", block)
+
+    if magic != SQT_MAGIC_V4:
+        fail(f"{name}: invalid SQT magic {magic!r}")
+
+    if topology != 2 or block_size != V4_BLOCK_SIZE:
+        fail(f"{name}: topology={topology}, block_size={block_size}")
+
+    if (nav_fanout, leaf_fanout) != (V4_NAV_FANOUT, V4_LEAF_FANOUT):
+        fail(f"{name}: fan-out {nav_fanout}/{leaf_fanout}, expected 18/20")
+
+    if section_size != end - start:
+        fail(
+            f"{name}: section_size={section_size}, "
+            f"expected {end - start}"
+        )
+
+    if any(block[28:]):
+        fail(f"{name}: SQT header reserved bytes must be zero")
+
+    stats["sqt_sections"] += 1
+
+    print(
+        f"[INFO] SQT #{lod_index}: offset={start}, depth={depth}, "
+        f"roots={root_count}, size={section_size}"
+    )
+
+    if depth == 0:
+
+        if root_count != 0 or section_size != V4_BLOCK_SIZE:
+            fail(f"{name}: empty section must have no roots and no blocks")
+
+        return
+
+    if not 1 <= root_count <= V4_NAV_FANOUT:
+        fail(f"{name}: root_count={root_count} outside 1..18")
+
+    # expected[i] = (level, entries, parent_bbox); level -1 = data block
+    expected = [(depth - 1, root_count, None)]
+    index = 0
+
+    while index < len(expected):
+
+        level, count, parent_bbox = expected[index]
+        offset = start + V4_BLOCK_SIZE * (1 + index)
+
+        if offset + V4_BLOCK_SIZE > end:
+            fail(f"{name}: block #{index} is outside the section")
+
+        block = read_exact(idx_file, V4_BLOCK_SIZE, f"{name} block #{index}")
+
+        if level == -1:
+
+            used = count * DATA_NODE_SIZE
+
+            for k in range(count):
+                node = block[k * DATA_NODE_SIZE:(k + 1) * DATA_NODE_SIZE]
+                bbox = struct.unpack_from("<iiii", node)
+
+                if parent_bbox is not None and not _bbox_inside(bbox, parent_bbox):
+                    fail(f"{name}: data node in block #{index} is outside its parent BBox")
+
+                parse_data_node(
+                    node,
+                    mlp_file,
+                    camera_bbox,
+                    None,
+                    strict_bbox=True,
+                )
+
+        else:
+
+            used = count * NAV_NODE_SIZE
+
+            for k in range(count):
+                (
+                    child,
+                    xmin,
+                    ymin,
+                    xmax,
+                    ymax,
+                    node_level,
+                    child_count,
+                ) = struct.unpack_from("<IiiiiII", block, k * NAV_NODE_SIZE)
+
+                bbox = (xmin, ymin, xmax, ymax)
+
+                if xmin > xmax or ymin > ymax:
+                    fail(f"{name}: navigation node with invalid BBox")
+
+                if parent_bbox is not None and not _bbox_inside(bbox, parent_bbox):
+                    fail(f"{name}: navigation node in block #{index} is outside its parent BBox")
+
+                if node_level != level:
+                    fail(
+                        f"{name}: block #{index} node level {node_level}, "
+                        f"expected {level}"
+                    )
+
+                expected_child = start + V4_BLOCK_SIZE * (1 + len(expected))
+
+                if child != expected_child:
+                    fail(
+                        f"{name}: block #{index} child_block={child}, "
+                        f"expected {expected_child}"
+                    )
+
+                limit = V4_LEAF_FANOUT if level == 0 else V4_NAV_FANOUT
+
+                if not 1 <= child_count <= limit:
+                    fail(f"{name}: child count {child_count} outside 1..{limit}")
+
+                expected.append((level - 1, child_count, bbox))
+                stats["nav_visited"] += 1
+
+        if any(block[used:]):
+            fail(f"{name}: block #{index} has non-zero bytes after its entries")
+
+        index += 1
+
+    if V4_BLOCK_SIZE * (1 + len(expected)) != section_size:
+        fail(
+            f"{name}: {len(expected)} blocks do not fill "
+            f"section_size={section_size}"
+        )
+
+
+def validate_idx_v4(idx_file, mlp_file, header, camera_bbox):
+    """Validate all four V4 LOD sections."""
+
+    for lod_index in range(V4_LOD_COUNT):
+        validate_sqt_v4(idx_file, mlp_file, header, lod_index, camera_bbox)
+
+    print("[INFO] All four V4 IDX LOD sections validated successfully.")
+
+
+def draw_sqt_v4(idx_file, mlp_file, header, lod_index, camera_bbox, surface):
+    """Draw one V4 LOD; navigation nodes outside the camera are skipped."""
+
+    start, end = _section_range_v4(header, lod_index)
+
+    idx_file.seek(start)
+    sqt = read_exact(idx_file, V4_BLOCK_SIZE, "SQT header")
+    _, _, depth, root_count = struct.unpack_from("<4sIII", sqt)
+
+    if depth == 0:
+        return
+
+    def visit(offset, level, count):
+
+        idx_file.seek(offset)
+        block = read_exact(idx_file, V4_BLOCK_SIZE, "block")
+
+        if level == -1:
+
+            for k in range(count):
+                parse_data_node(
+                    block[k * DATA_NODE_SIZE:(k + 1) * DATA_NODE_SIZE],
+                    mlp_file,
+                    camera_bbox,
+                    surface,
+                )
+
+            return
+
+        for k in range(count):
+            (
+                child,
+                xmin,
+                ymin,
+                xmax,
+                ymax,
+                node_level,
+                child_count,
+            ) = struct.unpack_from("<IiiiiII", block, k * NAV_NODE_SIZE)
+
+            stats["nav_visited"] += 1
+
+            if not is_in_screen(
+                xmin / COORD_SCALE,
+                ymin / COORD_SCALE,
+                xmax / COORD_SCALE,
+                ymax / COORD_SCALE,
+                camera_bbox,
+            ):
+                stats["nav_culled"] += 1
+                continue
+
+            visit(child, node_level - 1, child_count)
+
+    visit(start + V4_BLOCK_SIZE, depth - 1, root_count)
+
+
+# ============================================================
+# V4: search.idx validation (section 21)
+# ============================================================
+
+def _is_key_byte(b):
+    """Byte of a normalized (folded) search word."""
+
+    return (
+        0x30 <= b <= 0x39
+        or 0x61 <= b <= 0x7A
+        or 0xA0 <= b <= 0xBF
+        or 0xD0 <= b <= 0xDF
+        or 0xE0 <= b <= 0xEF
+    )
+
+
+def _morton(lon, lat):
+    def spread(v):
+        v &= 0xFFFFFFFF
+        v = (v | (v << 16)) & 0x0000FFFF0000FFFF
+        v = (v | (v << 8)) & 0x00FF00FF00FF00FF
+        v = (v | (v << 4)) & 0x0F0F0F0F0F0F0F0F
+        v = (v | (v << 2)) & 0x3333333333333333
+        v = (v | (v << 1)) & 0x5555555555555555
+        return v
+
+    return spread(lon + 1_800_000_000) | (spread(lat + 900_000_000) << 1)
+
+
+def _align512(n):
+    return (n + 511) // 512 * 512
+
+
+def validate_search_idx(path, db_path=None):
+    """Strict validation of search.idx (file type 4). Returns True/False."""
+
+    print()
+    print("============================================")
+    print(" PurrGO V4 — search.idx VALIDATOR")
+    print("============================================")
+
+    try:
+        with open(path, "rb") as f:
+            data = f.read()
+
+        if len(data) < 0x60 or data[0:3] != b"PGO" or data[3] != PGO_FILE_TYPE_SEARCH:
+            fail(f"{path}: not a PGO file of type 4 (search)")
+
+        payload = struct.unpack_from("<I", data, 4)[0]
+
+        if payload != len(data) - PGO_HEADER_SIZE:
+            fail(f"{path}: payload size mismatch")
+
+        if any(data[8:32]):
+            fail(f"{path}: LOD offsets and reserved fields must be zero")
+
+        if len(data) % 512 != 0:
+            fail(f"{path}: size {len(data)} is not a multiple of 512")
+
+        (
+            magic, version, record_size, flags, db_records,
+            name_off, name_cnt, cat_off, cat_cnt,
+            dict_off, dict_size, range_off, range_cnt,
+        ) = struct.unpack_from("<4sHHIIIIIIIIII", data, 0x20)
+
+        if magic != b"SRCH" or version != 1 or record_size != 32 or flags != 0:
+            fail("SRCH header: bad magic/version/record size/flags")
+
+        if any(data[0x20 + 48:0x60]):
+            fail("SRCH header: reserved bytes must be zero")
+
+        if dict_off != 0x60 or range_off != 0 or range_cnt != 0:
+            fail("SRCH header: dict_offset must be 0x60, range section absent")
+
+        if dict_off + dict_size > len(data):
+            fail("dictionary is outside the file")
+
+        word_count, entry_size, dict_reserved = struct.unpack_from("<HHI", data, dict_off)
+
+        if entry_size != 48 or dict_reserved != 0 or dict_size != 8 + 48 * word_count:
+            fail("dictionary header is inconsistent")
+
+        previous = None
+
+        for i in range(word_count):
+            e = dict_off + 8 + i * 48
+            key = data[e:e + 16]
+            mask = int.from_bytes(data[e + 16:e + 48], "little")
+            length = len(key.rstrip(b"\0"))
+
+            if length == 0 or not all(_is_key_byte(b) for b in key[:length]):
+                fail(f"dictionary word #{i} is not a normalized key")
+
+            if previous is not None and key <= previous:
+                fail(f"dictionary word #{i} is not sorted/unique")
+
+            if mask & 1 or mask == 0:
+                fail(f"dictionary word #{i}: bad subtype mask")
+
+            previous = key
+
+        if name_off != _align512(dict_off + dict_size):
+            fail(f"name_offset {name_off} is not the aligned end of the dictionary")
+
+        if cat_off != name_off + _align512(32 * name_cnt):
+            fail("cat_offset does not follow the NAME section")
+
+        if len(data) != cat_off + _align512(32 * cat_cnt):
+            fail("file size does not match the section sizes")
+
+        def entries(offset, count, what):
+            out = []
+            for i in range(count):
+                lon, lat, db_idx, code, subtype, fl, klen, key = struct.unpack_from(
+                    "<iiIBBBB16s", data, offset + i * 32
+                )
+
+                if not -1_800_000_000 <= lon <= 1_800_000_000 or not -900_000_000 <= lat <= 900_000_000:
+                    fail(f"{what} #{i}: coordinates out of range")
+
+                if not 1 <= db_idx <= db_records:
+                    fail(f"{what} #{i}: db_idx {db_idx} outside 1..{db_records}")
+
+                if klen > 16 or key[klen:] != bytes(16 - klen) or fl & ~7:
+                    fail(f"{what} #{i}: bad key_len/key padding/flags")
+
+                if not all(_is_key_byte(b) for b in key[:klen]):
+                    fail(f"{what} #{i}: key is not normalized")
+
+                out.append((lon, lat, db_idx, code, subtype, fl, klen, key))
+
+            for pad in (data[offset + 32 * count:offset + _align512(32 * count)],):
+                if any(pad):
+                    fail(f"{what}: non-zero padding after the last entry")
+
+            return out
+
+        names = entries(name_off, name_cnt, "NAME")
+        cats = entries(cat_off, cat_cnt, "CAT")
+
+        order = [(e[7], e[2], e[5] & 1) for e in names]
+
+        if order != sorted(order):
+            fail("NAME section is not sorted by (key, db_idx, primary first)")
+
+        primary = {}
+        secondary = {}
+
+        for e in names:
+            table = secondary if e[5] & 1 else primary
+            table[e[2]] = table.get(e[2], 0) + 1
+
+            if e[6] == 0:
+                fail("NAME entry with empty key")
+
+        if any(v != 1 for v in primary.values()):
+            fail("a POI has more than one primary NAME entry")
+
+        if any(v > 3 or k not in primary for k, v in secondary.items()):
+            fail("secondary NAME entries without primary or more than 3")
+
+        cat_order = [(e[4], _morton(e[0], e[1]), e[2]) for e in cats]
+
+        if cat_order != sorted(cat_order):
+            fail("CAT section is not sorted by (subtype, morton, db_idx)")
+
+        for e in cats:
+            if e[4] == 0 or e[5] & 1:
+                fail("CAT entry with subtype 0 or SECONDARY flag")
+
+            if (e[5] & 2) != 0 and e[6] != 0:
+                fail("UNNAMED CAT entry with a key")
+
+        seen = {}
+
+        for e in names + cats:
+            ref = (e[0], e[1], e[3], e[4])
+            if seen.setdefault(e[2], ref) != ref:
+                fail(f"entries of db_idx {e[2]} disagree on position/code/subtype")
+
+        if db_path is not None:
+            with open(db_path, "rb") as f:
+                db = f.read(0x28)
+
+            if len(db) < 0x28 or db[0:3] != b"PGO" or db[3] != PGO_FILE_TYPE_DB:
+                fail(f"{db_path}: not a PGO .db file")
+
+            if struct.unpack_from("<I", db, 0x24)[0] != db_records:
+                fail("db_records differs from the record count of the .db file")
+
+        print(f"[INFO] dictionary words: {word_count}")
+        print(f"[INFO] NAME entries:     {name_cnt} "
+              f"({len(primary)} POIs, {sum(secondary.values())} secondary)")
+        print(f"[INFO] CAT entries:      {cat_cnt}")
+        print(f"[INFO] db_records:       {db_records}")
+        print("[OK] search.idx validation successful.")
+        return True
+
+    except MapFormatError as error:
+        print(f"[FORMAT ERROR] {error}")
+        return False
+
+    except (OSError, struct.error) as error:
+        print(f"[ERROR] Parser failure: {error}")
+        return False
+
+
 # ============================================================
 # Full map renderer / validator
 # ============================================================
@@ -1459,14 +2070,20 @@ def render_map(
     mlp_path,
     map_name_path,
     db_path=None,
+    lod=0,
+    size_km=5.0,
+    screenshot=None,
 ):
     """
-    Validate and render a PurrGO V3 map layer.
+    Validate and render a PurrGO V3 or V4 map layer.
+
+    V4: all four LODs are validated; `lod` selects the displayed one
+    (keys 0..3 switch it). `screenshot` saves a PNG and exits.
 
     Required:
 
         .idx
-        .mlp
+        .mlp  (mlp_path None: layer without geometry, e.g. pois.idx)
 
     Optional:
 
@@ -1481,12 +2098,12 @@ def render_map(
 
     print()
     print("============================================")
-    print(" PurrGO MAP FORMAT V3 — PC MAP VALIDATOR")
+    print(" PurrGO MAP FORMAT V3 / V4 — PC MAP VALIDATOR")
     print("============================================")
 
     camera_bbox = load_camera_bbox(
         map_name_path,
-        size_km=5.0,
+        size_km=size_km,
     )
 
     pygame.init()
@@ -1496,7 +2113,7 @@ def render_map(
     )
 
     pygame.display.set_caption(
-        "PurrGO Map Viewer V3"
+        "PurrGO Map Viewer"
     )
 
     screen.fill(
@@ -1512,7 +2129,7 @@ def render_map(
         pygame.quit()
         return False
 
-    if not os.path.exists(mlp_path):
+    if mlp_path is not None and not os.path.exists(mlp_path):
 
         print(
             f"[ERROR] MLP file not found: {mlp_path}"
@@ -1532,19 +2149,33 @@ def render_map(
 
     try:
 
+        mlp_context = (
+            open(mlp_path, "rb")
+            if mlp_path is not None
+            else contextlib.nullcontext(None)
+        )
+
         with (
             open(idx_path, "rb") as idx_file,
-            open(mlp_path, "rb") as mlp_file,
+            mlp_context as mlp_file,
         ):
 
             print(
                 f"[INFO] Opening IDX: {idx_path}"
             )
 
-            idx_header = read_pgo_header(
-                idx_file,
-                idx_path,
-            )
+            is_v4 = detect_idx_v4(idx_file)
+
+            if is_v4:
+                idx_header = read_pgo_header_v4(
+                    idx_file,
+                    idx_path,
+                )
+            else:
+                idx_header = read_pgo_header(
+                    idx_file,
+                    idx_path,
+                )
 
             if idx_header["file_type"] != PGO_FILE_TYPE_IDX:
                 fail(
@@ -1552,19 +2183,21 @@ def render_map(
                     "PGO File Type 1"
                 )
 
-            print(
-                f"[INFO] Opening MLP: {mlp_path}"
-            )
+            if mlp_file is not None:
 
-            mlp_header = read_pgo_header(
-                mlp_file,
-                mlp_path,
-            )
+                print(
+                    f"[INFO] Opening MLP: {mlp_path}"
+                )
 
-            validate_mlp_header(
-                mlp_file,
-                mlp_header,
-            )
+                mlp_header = read_pgo_header(
+                    mlp_file,
+                    mlp_path,
+                )
+
+                validate_mlp_header(
+                    mlp_file,
+                    mlp_header,
+                )
 
             # ------------------------------------------------
             # Optional DB.
@@ -1595,17 +2228,27 @@ def render_map(
             # Validate all IDX LOD sections.
             # ------------------------------------------------
 
-            validate_idx(
-                idx_file,
-                mlp_file,
-                idx_header,
-                camera_bbox,
-                screen,
-            )
+            if is_v4:
+                validate_idx_v4(
+                    idx_file,
+                    mlp_file,
+                    idx_header,
+                    camera_bbox,
+                )
+            else:
+                validate_idx(
+                    idx_file,
+                    mlp_file,
+                    idx_header,
+                    camera_bbox,
+                    screen,
+                )
+
+        version = 4 if is_v4 else 3
 
         print()
         print("============================================")
-        print(" V3 MAP VALIDATION / RENDER STATISTICS")
+        print(f" V{version} MAP VALIDATION / RENDER STATISTICS")
         print("============================================")
 
         print(
@@ -1658,12 +2301,74 @@ def render_map(
             f"{stats['bytes_skipped']}"
         )
 
+        if is_v4:
+            print(
+                f" Geometry validated:  "
+                f"{stats['geometry_checked']}"
+            )
+
         print("============================================")
-        print("[OK] PurrGO V3 map validation successful.")
+        print(f"[OK] PurrGO V{version} map validation successful.")
+
+        def show_v4_lod(lod_index):
+            """Draw one V4 LOD (files are reopened: validation closed them)."""
+
+            global stats
+
+            stats = create_stats()
+            screen.fill((20, 20, 20))
+
+            with (
+                open(idx_path, "rb") as idx_file,
+                (
+                    open(mlp_path, "rb")
+                    if mlp_path is not None
+                    else contextlib.nullcontext(None)
+                ) as mlp_file,
+            ):
+                draw_sqt_v4(
+                    idx_file,
+                    mlp_file,
+                    idx_header,
+                    lod_index,
+                    camera_bbox,
+                    screen,
+                )
+
+            pygame.display.set_caption(
+                f"PurrGO Map Viewer V4 - LOD {lod_index} "
+                f"(keys 0..3)"
+            )
+
+            print(
+                f"[INFO] LOD {lod_index}: "
+                f"nav visited={stats['nav_visited']}, "
+                f"culled={stats['nav_culled']}, "
+                f"data visible={stats['data_drawn']}, "
+                f"lines={stats['lines_drawn']}, "
+                f"polygons={stats['polygons_drawn']}, "
+                f"pois={stats['pois_drawn']}"
+            )
+
+        if is_v4:
+            show_v4_lod(lod)
 
         pygame.display.flip()
 
+        if screenshot is not None:
+            pygame.image.save(screen, screenshot)
+            print(f"[INFO] Screenshot saved: {screenshot}")
+            pygame.quit()
+            return True
+
         running = True
+
+        lod_keys = {
+            pygame.K_0: 0,
+            pygame.K_1: 1,
+            pygame.K_2: 2,
+            pygame.K_3: 3,
+        }
 
         while running:
 
@@ -1671,6 +2376,14 @@ def render_map(
 
                 if event.type == pygame.QUIT:
                     running = False
+
+                elif (
+                    event.type == pygame.KEYDOWN
+                    and is_v4
+                    and event.key in lod_keys
+                ):
+                    show_v4_lod(lod_keys[event.key])
+                    pygame.display.flip()
 
         pygame.quit()
 
@@ -1710,35 +2423,44 @@ def render_map(
 
 if __name__ == "__main__":
 
-    if len(sys.argv) not in (3, 4, 5):
+    cli = argparse.ArgumentParser(
+        description="PurrGO map viewer / validator (formats V3 and V4)"
+    )
+    cli.add_argument("idx", help="layer .idx file, or search.idx (V4)")
+    cli.add_argument("mlp", nargs="?", default=None,
+                     help='layer .mlp file, "-" for a layer without geometry')
+    cli.add_argument("map_name", nargs="?", default="map.name")
+    cli.add_argument("db", nargs="?", default=None,
+                     help="layer .db (header check); for search.idx: pois.db")
+    cli.add_argument("--lod", type=int, choices=range(V4_LOD_COUNT), default=0,
+                     help="V4: displayed LOD (default 0)")
+    cli.add_argument("--size-km", type=float, default=5.0,
+                     help="camera size in km (default 5)")
+    cli.add_argument("--screenshot", default=None,
+                     help="save a PNG and exit")
+    options = cli.parse_args()
 
-        print("Usage:")
-        print(
-            "  python map-viewer.py "
-            "<layer.idx> <layer.mlp> "
-            "[map.name] [layer.db]"
+    if os.path.basename(options.idx).lower() == "search.idx":
+
+        # search.idx [pois.db]
+        ok = validate_search_idx(
+            options.idx,
+            options.mlp if options.mlp not in (None, "-") else None,
         )
 
-        sys.exit(2)
+        sys.exit(0 if ok else 1)
 
-    IDX_FILE = sys.argv[1]
-    MLP_FILE = sys.argv[2]
-
-    if len(sys.argv) >= 4:
-        MAP_NAME = sys.argv[3]
-    else:
-        MAP_NAME = "map.name"
-
-    if len(sys.argv) == 5:
-        DB_FILE = sys.argv[4]
-    else:
-        DB_FILE = None
+    if options.mlp is None:
+        cli.error("mlp is required (use \"-\" for a layer without .mlp)")
 
     success = render_map(
-        IDX_FILE,
-        MLP_FILE,
-        MAP_NAME,
-        DB_FILE,
+        options.idx,
+        None if options.mlp == "-" else options.mlp,
+        options.map_name,
+        options.db or None,
+        lod=options.lod,
+        size_km=options.size_km,
+        screenshot=options.screenshot,
     )
 
     sys.exit(
