@@ -1,0 +1,216 @@
+name: Build map V4 (Belarus)
+
+# То же, что "Build map", но формат карты V4 (docs/map-format-v4.md) и индекс поиска.
+# Запуск вручную: Actions -> Build map V4 -> Run workflow.
+# Результат: структура PURRGO/MAPS/<имя>/ (с search.idx) - её достаточно распаковать
+# в корень microSD. Два способа забрать:
+#   * artifact запуска: GitHub сам упаковывает его в один zip (внутри уже
+#     PURRGO/MAPS/<имя>/..., без вложенного архива);
+#   * GitHub Release "maps-<имя>-v4" (опционально): zip. Релиз V3 ("maps-<имя>") не трогается.
+# Перед публикацией карта проверяется валидатором tools/map-viewer.py (все слои,
+# все 4 LOD, search.idx); скриншоты слоёв - в artifact viewer-<имя>.
+# sim_map_io.py (оценка времени загрузки) читает только V3, поэтому здесь не запускается.
+on:
+  workflow_dispatch:
+    inputs:
+      pbf_url:
+        description: "URL .osm.pbf (Geofabrik)"
+        required: true
+        default: "https://download.geofabrik.de/europe/belarus-latest.osm.pbf"
+      map_name:
+        description: "Имя карты = имя папки на SD (латиница, строчные, без пробелов)"
+        required: true
+        default: "belarus"
+      publish_release:
+        description: "Выложить zip в GitHub Release (публичная ссылка без входа в GitHub)"
+        type: boolean
+        default: true
+      run_validate:
+        description: "Проверить готовую карту валидатором map-viewer.py перед публикацией"
+        type: boolean
+        default: true
+      tol_lod2:
+        description: "Допуск упрощения геометрии для LOD 2, метры"
+        required: false
+        default: "50"
+      tol_lod3:
+        description: "Допуск упрощения геометрии для LOD 3, метры"
+        required: false
+        default: "250"
+
+permissions:
+  contents: write   # нужно только для шага Release
+
+concurrency:
+  group: build-map-v4-${{ inputs.map_name }}
+  cancel-in-progress: true
+
+jobs:
+  build-map-v4:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    env:
+      MAP_NAME: ${{ inputs.map_name }}
+      PBF_URL: ${{ inputs.pbf_url }}
+      TOL_LOD2: ${{ inputs.tol_lod2 }}
+      TOL_LOD3: ${{ inputs.tol_lod3 }}
+      WORK: ${{ github.workspace }}/work
+      TOOLS: ${{ github.workspace }}/tools/map-compiler
+      OUT: ${{ github.workspace }}/work/out/${{ inputs.map_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Validate inputs
+        run: |
+          if ! [[ "$MAP_NAME" =~ ^[a-z0-9_-]{1,32}$ ]]; then
+            echo "::error::map_name must match ^[a-z0-9_-]{1,32}$ (got '$MAP_NAME')"
+            exit 1
+          fi
+          for v in "$TOL_LOD2" "$TOL_LOD3"; do
+            if ! [[ "$v" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+              echo "::error::tolerance must be a number of metres (got '$v')"
+              exit 1
+            fi
+          done
+
+      # .osm (XML) из PBF весит в ~10-15 раз больше самого PBF, место на
+      # раннере ограничено - освобождаем то, что нам не нужно.
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      - name: Install osmium-tool
+        run: sudo apt-get update && sudo apt-get install -y osmium-tool
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: tools/map-compiler/requirements.txt
+
+      - name: Install Python dependencies
+        run: pip install -r tools/map-compiler/requirements.txt
+
+      - name: Download PBF
+        run: |
+          mkdir -p "$WORK"
+          curl -fL --retry 5 --retry-delay 10 -o "$WORK/source.osm.pbf" "$PBF_URL"
+          ls -lh "$WORK/source.osm.pbf"
+
+      - name: PBF -> OSM XML
+        run: |
+          osmium cat "$WORK/source.osm.pbf" -o "$WORK/raw.osm" --overwrite
+          rm -f "$WORK/source.osm.pbf"
+          ls -lh "$WORK/raw.osm"
+          df -h /
+
+      # Выход оптимизатора называем <map_name>.osm: компилятор берёт имя карты
+      # (mapName в map.name) из имени входного файла.
+      - name: Optimize OSM
+        working-directory: tools/map-compiler
+        run: |
+          python purrgo_osm_optimizer.py "$WORK/raw.osm" "$WORK/$MAP_NAME.osm"
+          rm -f "$WORK/raw.osm"
+          ls -lh "$WORK/$MAP_NAME.osm"
+          df -h /
+
+      - name: Compile map V4 (with search index)
+        working-directory: tools/map-compiler
+        run: |
+          python purrgo_map_compiler.py "$WORK/$MAP_NAME.osm" \
+            --format 4 --search -o "$OUT" \
+            --tol-lod2 "$TOL_LOD2" --tol-lod3 "$TOL_LOD3"
+          ls -lh "$OUT"
+
+      # Компилятор при ошибке (нет входного файла) завершается с кодом 0,
+      # поэтому результат проверяем явно.
+      - name: Verify output
+        run: |
+          for f in map.name roads.idx roads.mlp roads.db pois.idx pois.db search.idx; do
+            [ -s "$OUT/$f" ] || { echo "::error::missing or empty $f"; exit 1; }
+          done
+          cat "$OUT/map.name"; echo
+          {
+            echo "## Файлы карты V4"
+            echo
+            echo '```'
+            ls -l "$OUT" | awk 'NR>1 {printf "%12d  %s\n", $5, $9}'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Строгая проверка формата: все слои, все 4 LOD, search.idx. Выполняется до
+      # упаковки и публикации - битая карта в artifact/Release не попадёт.
+      - name: Validate map (map-viewer.py)
+        if: ${{ inputs.run_validate }}
+        timeout-minutes: 60
+        env:
+          SDL_VIDEODRIVER: dummy
+          SDL_AUDIODRIVER: dummy
+        run: |
+          pip install pygame
+          mkdir -p "$WORK/shots"
+          viewer="$GITHUB_WORKSPACE/tools/map-viewer.py"
+          for layer in landuse water waterways roads; do
+            [ -f "$OUT/$layer.idx" ] || continue
+            db=""; [ -f "$OUT/$layer.db" ] && db="$OUT/$layer.db"
+            echo "::group::$layer"
+            python "$viewer" "$OUT/$layer.idx" "$OUT/$layer.mlp" "$OUT/map.name" $db \
+              --size-km 10 --screenshot "$WORK/shots/$layer.png"
+            echo "::endgroup::"
+          done
+          echo "::group::pois"
+          python "$viewer" "$OUT/pois.idx" - "$OUT/map.name" "$OUT/pois.db" \
+            --size-km 10 --screenshot "$WORK/shots/pois.png"
+          echo "::endgroup::"
+          echo "::group::search.idx"
+          python "$viewer" "$OUT/search.idx" "$OUT/pois.db"
+          echo "::endgroup::"
+          echo "### map-viewer.py: все слои и search.idx проверены" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload viewer screenshots
+        if: ${{ always() && inputs.run_validate }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: viewer-${{ env.MAP_NAME }}
+          path: ${{ env.WORK }}/shots
+          retention-days: 30
+          if-no-files-found: ignore
+
+      # Каталог stage/PURRGO/MAPS/<имя> - то, что распаковывается в корень SD.
+      # Artifact ниже грузится из каталога (GitHub упакует его один раз),
+      # а отдельный zip нужен только для Release.
+      - name: Stage files and make ZIP
+        run: |
+          build_date="$(date -u +%Y-%m-%d)"
+          zip_name="purrgo-map-v4-$MAP_NAME-$build_date.zip"
+          mkdir -p "$WORK/stage/PURRGO/MAPS"
+          cp -r "$OUT" "$WORK/stage/PURRGO/MAPS/$MAP_NAME"
+          (cd "$WORK/stage" && zip -r -9 -q "$WORK/$zip_name" PURRGO)
+          echo "BUILD_DATE=$build_date" >> "$GITHUB_ENV"
+          echo "ZIP_NAME=$zip_name" >> "$GITHUB_ENV"
+          ls -lh "$WORK/$zip_name"
+          unzip -l "$WORK/$zip_name"
+
+      - name: Upload map (artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: purrgo-map-v4-${{ env.MAP_NAME }}-${{ env.BUILD_DATE }}
+          path: ${{ env.WORK }}/stage
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Publish to Release
+        if: ${{ inputs.publish_release }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="maps-$MAP_NAME-v4"
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" --title "Map V4: $MAP_NAME" \
+              --notes "Карта в формате V4 с индексом поиска. Распаковать архив в корень microSD (создаст PURRGO/MAPS/$MAP_NAME)."
+          fi
+          gh release upload "$tag" "$WORK/$ZIP_NAME" --clobber
+          echo "### Скачать: ${{ github.server_url }}/${{ github.repository }}/releases/tag/$tag" >> "$GITHUB_STEP_SUMMARY"
