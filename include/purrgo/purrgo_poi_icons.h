@@ -12,7 +12,7 @@
  *
  * Icon numbers:
  *   128..191  POI icons; the number is the PurrGO feature code of the POI
- *             class (see include/purrgo/map_style.h, docs/map-format-v3.md 8.1.1).
+ *             class (see include/purrgo/map_style.h, docs/map-format-v4.md 8.1.1).
  *   192..223  UI icons (target, waypoint, crosshair, later battery, antenna...).
  *             Not feature codes: map files never contain them.
  *   other     unused. Do not put a new POI icon outside 128..191 or a new

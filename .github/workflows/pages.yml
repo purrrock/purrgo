@@ -113,7 +113,7 @@ jobs:
           rm -f "$WORK/source.osm.pbf"
           cd tools/map-compiler
           python purrgo_osm_optimizer.py "$WORK/raw.osm" "$WORK/$MAP_NAME.osm"
-          python purrgo_map_compiler.py "$WORK/$MAP_NAME.osm"
+          python purrgo_map_compiler.py "$WORK/$MAP_NAME.osm" --format 4
           for f in map.name roads.idx roads.mlp; do
             [ -s "$MAP_NAME/$f" ] || { echo "::error::missing or empty $f"; exit 1; }
           done

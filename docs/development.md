@@ -43,7 +43,7 @@ cmake --build --preset macos-release
 
 ```sh
 mkdir -p tests/data/maps tests/data/books tests/data/routes tests/data/waypts
-# карта: содержимое PURRGO/MAPS/<имя>/ из zip действия Build map V3 (или V4) -> tests/data/maps/<имя>/
+# карта: содержимое PURRGO/MAPS/<имя>/ из zip действия Build map V4 -> tests/data/maps/<имя>/
 cp tests/host/data/sample.pgb tests/data/books/
 cd out/build/macos-release/emulator && ./purrgo_emulator
 ```
@@ -154,7 +154,7 @@ ctest --preset linux-gcc-test
 | Подсистема | Тесты |
 |---|---|
 | GNSS | `test_gnss` (кольцевой буфер, разбор NMEA на записанном логе), `test_gnss_receiver` (UBX-кадры, UBX-CFG-VALSET), `test_gnss_ubx` (UBX-расширения M10: PVT, ODO, hAcc, SEC-SIG, MON-RF/VER, [`docs/gnss-ubx.md`](gnss-ubx.md)), `test_gnss_link` (поиск скорости и её смена), `test_gnss_diag` |
-| Карта и графика | `test_map` (парсер Map Format V3, фаззинг), `test_map_mlp_stream`, `test_geometry_clip`, `test_gfx_fast_paths` |
+| Карта и графика | `test_map` (парсер Map Format V4, фаззинг), `test_map_mlp_stream`, `test_geometry_clip`, `test_gfx_fast_paths` |
 | Экран и интерфейс | `test_marker_pan_battery`, `test_ui_refresh_fixes`, `test_display_eink` (очередь E-Ink поверх `epd4g`, нужен сабмодуль), `test_keyboard`, `test_pgo_text` |
 | Трек и время | `test_time_logger`, `test_track_filter`, `test_track_diag`, `test_tracker_mode`, `test_negative_altitude` |
 | Навигация | `test_navigation`, `test_waypoint`, `test_wpt_layer`, `test_route` |

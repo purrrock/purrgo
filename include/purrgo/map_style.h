@@ -32,7 +32,7 @@
  * OSM -> PurrGO feature code выполняется компилятором карт.
  * Навигатор работает только с уже скомпилированным feature code.
  *
- * Диапазоны кодов (docs/map-format-v3.md, раздел 8.1):
+ * Диапазоны кодов (docs/map-format-v4.md, раздел 8.1):
  *
  *       0..31   ROADS
  *      32..63   WATERWAYS

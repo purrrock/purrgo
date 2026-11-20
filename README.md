@@ -177,7 +177,7 @@ cmake --preset stm32u5-release && cmake --build --preset stm32u5-release        
 | [`docs/architecture.md`](docs/architecture.md) | Архитектура программного обеспечения, в том числе порядок отрисовки слоёв карты |
 | [`docs/development.md`](docs/development.md) | Сборка, тесты, CI, аппаратные тесты, эмуляторы, полевой тест трека |
 | [`docs/eink.md`](docs/eink.md) | Драйвер E-Ink (epd4g) |
-| [`docs/map-format-v4.md`](docs/map-format-v3.md), [`docs/map-conformance.md`](docs/map-conformance.md) | Формат карт V4, проверка соответствия |
+| [`docs/map-format-v4.md`](docs/map-format-v4.md), [`docs/map-conformance.md`](docs/map-conformance.md) | Формат карт V4, проверка соответствия |
 | [`tools/map-compiler/README.md`](tools/map-compiler/README.md) | Создание карт |
 | [`tools/book-compiler/README.md`](tools/book-compiler/README.md), [`PGB-format.md`](tools/book-compiler/PGB-format.md) | Конвертер книг и формат PGB |
 | [`docs/font-encoding.md`](docs/font-encoding.md) | Кодировка PurrGO-256 |

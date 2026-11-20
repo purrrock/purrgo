@@ -1,8 +1,10 @@
 /*
- * Host-тесты парсера и рендерера карты (патчи 0004, 0009, 0013):
- *   - корректная карта Map Format V3 в памяти рисуется;
- *   - повреждённые заголовки PGO/SQT, геометрия MLP, узлы навигации (глубина
- *     рекурсии, v3_jump) отвергаются без падений и без выхода за границы;
+ * Host-тесты парсера и рендерера карты (формат PurrGO V4, docs/map-format-v4.md):
+ *   - корректная карта V4 в памяти рисуется; выбор LOD по масштабу и детализации;
+ *   - блочное дерево: многоуровневые деревья, пропуск поддеревьев без чтения их блоков;
+ *   - повреждённые заголовки PGO/SQT, узлы навигации (раздел 7.1), геометрия MLP
+ *     отвергаются без падений и без выхода за границы; карта V3 отвергается;
+ *   - подписи: сокращение до 22 символов, "_" -> пробел (раздел 10.6.1);
  *   - «фаззинг»: усечение файла в каждой точке и подмена каждого байта .idx/.mlp/.db
  *     (проверяется ASan/UBSan: любое чтение за границей - ошибка теста).
  */
@@ -15,6 +17,7 @@
 #include "purrgo/purrgo_poi_icons.h"
 #include "map/map_internal.h"
 #include "map/map_culling.h"
+#include "map/map_idx.h"
 #include "fake_fs.h"
 #include "test_common.h"
 
@@ -26,6 +29,7 @@ uint32_t purrgo_system_time_ms(void) { return 0; }
 #define SCR_H 64
 static uint8_t g_fb[SCR_W * SCR_H];
 static long g_pixels;
+static bool g_ok;      /* результат последнего purrgo_map_render_layer() */
 
 static void cb_draw(void *fb, int16_t x, int16_t y, gfx_color_t c)
 {
@@ -52,7 +56,7 @@ static void gfx_reset(void)
     gfx_set_color(&g_gfx, 1, 3);
 }
 
-/* ------------------------------------------- построитель карты V3 в RAM --- */
+/* ------------------------------------------- построитель карты V4 в RAM --- */
 
 static void put_u32(uint8_t *p, uint32_t v)
 {
@@ -62,11 +66,15 @@ static void put_u32(uint8_t *p, uint32_t v)
 #define MAXF 32768
 typedef struct { uint8_t d[MAXF]; uint32_t n; } blob_t;
 
-static void pgo_header(uint8_t *h, uint8_t type, uint32_t payload, uint32_t l0, uint32_t l1, uint32_t l2)
+#define BLK 512u
+
+/* Заголовок PGO; l[4] - смещения LOD (для .idx), l == NULL - нули. */
+static void pgo_header(uint8_t *h, uint8_t type, uint32_t payload, const uint32_t *l)
 {
     memset(h, 0, 32);
     h[0] = 'P'; h[1] = 'G'; h[2] = 'O'; h[3] = type;
-    put_u32(h + 4, payload); put_u32(h + 8, l0); put_u32(h + 12, l1); put_u32(h + 16, l2);
+    put_u32(h + 4, payload);
+    for (int i = 0; l && i < 4; i++) { put_u32(h + 8 + 4 * i, l[i]); }
 }
 
 /* Узел данных (25 байт): bbox, тип объекта, v1 (смещение геометрии), v2 (индекс в .db). */
@@ -78,29 +86,150 @@ static void data_node(uint8_t *p, int32_t xmin, int32_t ymin, int32_t xmax, int3
     p[16] = type; put_u32(p + 17, v1); put_u32(p + 21, v2);
 }
 
-/* Навигационный узел (28 байт): jump, bbox, уровень, число потомков. */
-static void nav_node(uint8_t *p, uint32_t jump, int32_t xmin, int32_t ymin, int32_t xmax, int32_t ymax,
-                     uint32_t level, uint32_t count)
+/* Навигационный узел (28 байт): child_block, bbox, уровень (v1), число детей (v2). */
+static void nav_node(uint8_t *p, uint32_t child_block, const int32_t *bb, uint32_t level, uint32_t count)
 {
-    put_u32(p, jump);
-    put_u32(p + 4, (uint32_t)xmin); put_u32(p + 8, (uint32_t)ymin);
-    put_u32(p + 12, (uint32_t)xmax); put_u32(p + 16, (uint32_t)ymax);
+    put_u32(p, child_block);
+    for (int i = 0; i < 4; i++) { put_u32(p + 4 + 4 * i, (uint32_t)bb[i]); }
     put_u32(p + 20, level); put_u32(p + 24, count);
 }
 
-/* IDX из трёх одинаковых LOD: [SQT-заголовок 16][узлы]. mode > 0 - корень навигационный. */
-static void build_idx(blob_t *o, const uint8_t *nodes, uint32_t nodes_len, uint32_t mode, uint32_t count)
+/* Построитель .idx: секции LOD добавляются подряд, ib_end пишет заголовок PGO. */
+typedef struct {
+    blob_t *o;
+    uint32_t pos;          /* конец записанного */
+    uint32_t lod[4];
+    uint32_t lods;
+} ib_t;
+
+static void ib_begin(ib_t *b, blob_t *o)
 {
-    uint32_t lod = 16u + nodes_len;
     memset(o, 0, sizeof *o);
-    pgo_header(o->d, 1, 3u * lod, 32u, 32u + lod, 32u + 2u * lod);
-    for (int i = 0; i < 3; i++) {
-        uint8_t *p = o->d + 32u + (uint32_t)i * lod;
-        p[0] = 'S'; p[1] = 'Q'; p[2] = 'T'; p[3] = 1;
-        put_u32(p + 8, mode); put_u32(p + 12, count);
-        memcpy(p + 16, nodes, nodes_len);
+    b->o = o; b->pos = 0x200u; b->lods = 0;
+}
+
+/* Заголовок секции SQT (раздел 5.1) и начало секции; blocks - число блоков после заголовка. */
+static uint32_t ib_section(ib_t *b, uint32_t depth, uint32_t roots, uint32_t blocks)
+{
+    uint32_t s = b->pos;
+    uint8_t *h = b->o->d + s;
+    b->lod[b->lods++] = s;
+    h[0] = 'S'; h[1] = 'Q'; h[2] = 'T'; h[3] = 2;
+    put_u32(h + 4, 2); put_u32(h + 8, depth); put_u32(h + 12, roots);
+    put_u32(h + 16, BLK); put_u32(h + 20, BLK * (1u + blocks));
+    h[24] = 18; h[26] = 20;
+    b->pos = s + BLK * (1u + blocks);
+    return s;
+}
+
+static void ib_empty(ib_t *b) { (void)ib_section(b, 0, 0, 0); }
+
+static void ib_end(ib_t *b)
+{
+    pgo_header(b->o->d, 1, b->pos - 32u, b->lod);
+    b->o->n = b->pos;
+}
+
+static void bb_union(int32_t *u, const int32_t *x, int first)
+{
+    if (first || x[0] < u[0]) { u[0] = x[0]; }
+    if (first || x[1] < u[1]) { u[1] = x[1]; }
+    if (first || x[2] > u[2]) { u[2] = x[2]; }
+    if (first || x[3] > u[3]) { u[3] = x[3]; }
+}
+
+#define TN_MAX 512
+typedef struct { int32_t bb[4]; uint32_t first, count, child; } tn_t;
+
+/*
+ * Секция LOD из n узлов данных (по 25 байт) в заданном порядке: листовые блоки по leaf_fan узлов,
+ * затем навигационные уровни по nav_fan узлов, пока в корне не станет не больше nav_fan.
+ * Блоки расположены по порядку раздела 7.3 (обход в ширину), как делает компилятор.
+ */
+static void ib_tree(ib_t *b, const uint8_t *leaves, uint32_t n, uint32_t leaf_fan, uint32_t nav_fan)
+{
+    static tn_t layer[8][TN_MAX];
+    uint32_t cnt[8];
+    uint32_t k = 0;
+
+    if (n == 0) { ib_empty(b); return; }
+
+    cnt[0] = (n + leaf_fan - 1u) / leaf_fan;
+    for (uint32_t i = 0; i < cnt[0]; i++) {
+        tn_t *t = &layer[0][i];
+        t->first = i * leaf_fan;
+        t->count = (n - t->first < leaf_fan) ? n - t->first : leaf_fan;
+        for (uint32_t j = 0; j < t->count; j++) {
+            const uint8_t *nd = leaves + (t->first + j) * 25u;
+            int32_t bb[4];
+            for (int q = 0; q < 4; q++) { bb[q] = (int32_t)(nd[4*q] | nd[4*q+1] << 8 | nd[4*q+2] << 16 | (uint32_t)nd[4*q+3] << 24); }
+            bb_union(t->bb, bb, j == 0);
+        }
     }
-    o->n = 32u + 3u * lod;
+    while (cnt[k] > nav_fan) {
+        uint32_t m = (cnt[k] + nav_fan - 1u) / nav_fan;
+        for (uint32_t i = 0; i < m; i++) {
+            tn_t *t = &layer[k + 1][i];
+            t->first = i * nav_fan;
+            t->count = (cnt[k] - t->first < nav_fan) ? cnt[k] - t->first : nav_fan;
+            for (uint32_t j = 0; j < t->count; j++) { bb_union(t->bb, layer[k][t->first + j].bb, j == 0); }
+        }
+        cnt[++k] = m;
+    }
+
+    /* Очередь блоков в порядке 7.3: {слой (k + 1 - лист), первая запись, число записей}. */
+    struct { int layer; uint32_t first, count; } q[TN_MAX + 8];
+    uint32_t qn = 0;
+    q[qn].layer = (int)k; q[qn].first = 0; q[qn].count = cnt[k]; qn++;
+    /* Сначала считаем число блоков и назначаем child_block. */
+    for (uint32_t i = 0; i < qn; i++) {
+        if (q[i].layer < 0) { continue; }
+        for (uint32_t j = 0; j < q[i].count; j++) {
+            tn_t *t = &layer[q[i].layer][q[i].first + j];
+            q[qn].layer = q[i].layer - 1; q[qn].first = t->first; q[qn].count = t->count;
+            t->child = b->pos + BLK * (1u + qn);
+            qn++;
+        }
+    }
+    uint32_t s = ib_section(b, k + 1u, cnt[k], qn);
+    for (uint32_t i = 0; i < qn; i++) {
+        uint8_t *blk = b->o->d + s + BLK * (1u + i);
+        if (q[i].layer < 0) {
+            memcpy(blk, leaves + q[i].first * 25u, q[i].count * 25u);
+        } else {
+            for (uint32_t j = 0; j < q[i].count; j++) {
+                const tn_t *t = &layer[q[i].layer][q[i].first + j];
+                nav_node(blk + 28u * j, t->child, t->bb, (uint32_t)q[i].layer, t->count);
+            }
+        }
+    }
+}
+
+/* Цепочка из depth навигационных узлов по одному на блок; в конце один узел данных. */
+static void ib_chain(ib_t *b, uint32_t depth, const uint8_t *leaf)
+{
+    uint32_t s = ib_section(b, depth, 1, depth + 1u);   /* depth навигационных блоков и лист */
+    static const int32_t bb[4] = { 0, 0, 1000, 1000 };
+    for (uint32_t k = 0; k < depth; k++) {
+        nav_node(b->o->d + s + BLK * (1u + k), s + BLK * (2u + k), bb, depth - 1u - k, 1);
+    }
+    memcpy(b->o->d + s + BLK * (1u + depth), leaf, 25);
+}
+
+/* IDX с одним набором узлов данных (не больше 20) во всех четырёх LOD. */
+static void build_idx(blob_t *o, const uint8_t *nodes, uint32_t count)
+{
+    ib_t b;
+    ib_begin(&b, o);
+    for (int i = 0; i < 4; i++) { ib_tree(&b, nodes, count, 20, 18); }
+    ib_end(&b);
+}
+
+/* Смещение секции LOD lod в собранном .idx. */
+static uint32_t lod_at(const blob_t *o, int lod)
+{
+    const uint8_t *h = o->d + 8 + 4 * lod;
+    return (uint32_t)(h[0] | h[1] << 8 | h[2] << 16 | (uint32_t)h[3] << 24);
 }
 
 #define GEOM_V1 8u   /* смещение тела геометрии относительно 32 */
@@ -118,7 +247,7 @@ static void build_mlp_ex(blob_t *o, int32_t num_parts, const uint32_t *parts, in
     for (int32_t i = 0; i < xy_avail && xy; i++) {
         put_u32(o->d + pos, (uint32_t)xy[2 * i]); put_u32(o->d + pos + 4, (uint32_t)xy[2 * i + 1]); pos += 8u;
     }
-    pgo_header(o->d, 2, pos - 32u, 0, 0, 0);
+    pgo_header(o->d, 2, pos - 32u, NULL);
     o->n = pos;
 }
 
@@ -134,7 +263,7 @@ static void simple_map(blob_t *idx, blob_t *mlp, uint8_t type)
 {
     uint8_t node[25];
     data_node(node, 100, 100, 900, 900, type, GEOM_V1, 0);
-    build_idx(idx, node, sizeof node, 0, 1);
+    build_idx(idx, node, 1);
     uint32_t parts[1] = { 0 };
     int32_t xy[4] = { 100, 100, 900, 900 };
     build_mlp(mlp, 1, parts, 2, xy);
@@ -151,7 +280,7 @@ static long render(const blob_t *idx, const blob_t *mlp, const blob_t *db, purrg
     purrgo_file_t *mfs = mlp ? purrgo_fs_open("l.mlp", FS_READ) : NULL;
     purrgo_file_t *dfs = db ? purrgo_fs_open("l.db", FS_READ) : NULL;
     gfx_reset();
-    purrgo_map_render_layer(ifs, mfs, dfs, &g_gfx, &CAM, &VP, &g_params, layer);
+    g_ok = purrgo_map_render_layer(ifs, mfs, dfs, &g_gfx, &CAM, &VP, &g_params, layer);
     if (ifs) { (void)purrgo_fs_close(ifs); }
     if (mfs) { (void)purrgo_fs_close(mfs); }
     if (dfs) { (void)purrgo_fs_close(dfs); }
@@ -186,7 +315,7 @@ static void test_valid_polygon(void)
     static blob_t idx, mlp;
     uint8_t node[25];
     data_node(node, 100, 100, 900, 900, PURRGO_FEATURE_WATER, GEOM_V1, 0);
-    build_idx(&idx, node, sizeof node, 0, 1);
+    build_idx(&idx, node, 1);
     uint32_t parts[1] = { 0 };
     int32_t xy[8] = { 100, 100, 900, 100, 900, 900, 100, 900 };
     build_mlp(&mlp, 1, parts, 4, xy);
@@ -198,7 +327,7 @@ static void test_outside_camera_not_drawn(void)
     static blob_t idx, mlp;
     uint8_t node[25];
     data_node(node, 5000, 5000, 6000, 6000, 1, GEOM_V1, 0);
-    build_idx(&idx, node, sizeof node, 0, 1);
+    build_idx(&idx, node, 1);
     uint32_t parts[1] = { 0 };
     int32_t xy[4] = { 5000, 5000, 6000, 6000 };
     build_mlp(&mlp, 1, parts, 2, xy);
@@ -210,36 +339,96 @@ static void test_bad_pgo_header(void)
     static blob_t idx, mlp, bad;
     simple_map(&idx, &mlp, 1);
     long ok = render(&idx, &mlp, NULL, MAP_LAYER_LINES);
-    CHECK(ok > 0);
+    CHECK(ok > 0 && g_ok);
 
     bad = idx; bad.d[0] = 'X';                       /* магия */
-    CHECK(render(&bad, &mlp, NULL, MAP_LAYER_LINES) == 0);
+    CHECK(render(&bad, &mlp, NULL, MAP_LAYER_LINES) == 0 && !g_ok);
     bad = idx; bad.d[3] = 2;                         /* тип файла: ожидается IDX */
-    CHECK(render(&bad, &mlp, NULL, MAP_LAYER_LINES) == 0);
+    CHECK(render(&bad, &mlp, NULL, MAP_LAYER_LINES) == 0 && !g_ok);
     bad = idx; bad.d[3] = 0;
-    CHECK(render(&bad, &mlp, NULL, MAP_LAYER_LINES) == 0);
+    CHECK(render(&bad, &mlp, NULL, MAP_LAYER_LINES) == 0 && !g_ok);
     bad = idx; put_u32(bad.d + 4, 0xFFFFFFFFu);      /* размер payload: переполнение */
-    CHECK(render(&bad, &mlp, NULL, MAP_LAYER_LINES) == 0);
-    bad = idx; put_u32(bad.d + 4, idx.n);            /* payload больше файла */
+    CHECK(render(&bad, &mlp, NULL, MAP_LAYER_LINES) == 0 && !g_ok);
+    bad = idx; put_u32(bad.d + 4, idx.n);            /* payload больше файла: размер не кратен 512 */
+    CHECK(render(&bad, &mlp, NULL, MAP_LAYER_LINES) == 0 && !g_ok);
+    bad = idx; put_u32(bad.d + 4, idx.n - 32u + BLK);/* payload больше файла, размер кратен 512 */
     (void)render(&bad, &mlp, NULL, MAP_LAYER_LINES);
-    bad = idx; put_u32(bad.d + 8, 0);                /* LOD0 раньше payload */
-    CHECK(render(&bad, &mlp, NULL, MAP_LAYER_LINES) == 0);
-    bad = idx; put_u32(bad.d + 12, 32);              /* LOD1 == LOD0 (не по возрастанию) */
-    CHECK(render(&bad, &mlp, NULL, MAP_LAYER_LINES) == 0);
-    bad = idx; put_u32(bad.d + 16, 0xFFFFFFF0u);     /* LOD2 за пределами */
-    CHECK(render(&bad, &mlp, NULL, MAP_LAYER_LINES) == 0);
+
+    /* Смещения LOD (раздел 1.5). */
+    for (int lod = 0; lod < 4; lod++) {
+        bad = idx; put_u32(bad.d + 8 + 4 * lod, lod_at(&idx, lod) + 4u);     /* не кратно 512 */
+        CHECK(render(&bad, &mlp, NULL, MAP_LAYER_LINES) == 0 && !g_ok);
+        bad = idx; put_u32(bad.d + 8 + 4 * lod, 0xFFFFFE00u);                /* за пределами файла */
+        CHECK(render(&bad, &mlp, NULL, MAP_LAYER_LINES) == 0 && !g_ok);
+        bad = idx; put_u32(bad.d + 8 + 4 * lod, 0);
+        CHECK(render(&bad, &mlp, NULL, MAP_LAYER_LINES) == 0 && !g_ok);
+    }
+    bad = idx; put_u32(bad.d + 8, 0x400u);           /* LOD 0 не 0x200 */
+    CHECK(render(&bad, &mlp, NULL, MAP_LAYER_LINES) == 0 && !g_ok);
+    bad = idx; put_u32(bad.d + 12, lod_at(&idx, 0)); /* LOD1 == LOD0 */
+    CHECK(render(&bad, &mlp, NULL, MAP_LAYER_LINES) == 0 && !g_ok);
+    bad = idx; put_u32(bad.d + 20, lod_at(&idx, 2)); /* LOD3 == LOD2 */
+    CHECK(render(&bad, &mlp, NULL, MAP_LAYER_LINES) == 0 && !g_ok);
+    bad = idx; put_u32(bad.d + 20, idx.n);           /* LOD3 == конец файла: секции нет */
+    CHECK(render(&bad, &mlp, NULL, MAP_LAYER_LINES) == 0 && !g_ok);
+
+    /* Зарезервированные поля 0x18..0x1F прошивка не интерпретирует. */
+    bad = idx; put_u32(bad.d + 0x18, 0xDEADBEEFu); put_u32(bad.d + 0x1C, 0x12345678u);
+    CHECK(render(&bad, &mlp, NULL, MAP_LAYER_LINES) > 0 && g_ok);
 
     bad = mlp; bad.d[1] = 'Z';                       /* MLP: плохая магия */
     CHECK(render(&idx, &bad, NULL, MAP_LAYER_LINES) == 0);
     bad = mlp; bad.d[3] = 1;                         /* MLP: тип IDX вместо MLP */
     CHECK(render(&idx, &bad, NULL, MAP_LAYER_LINES) == 0);
+}
 
-    bad = idx; bad.d[32] = 'Q';                      /* SQT: плохая магия */
-    CHECK(render(&bad, &mlp, NULL, MAP_LAYER_LINES) == 0);
-    bad = idx; bad.d[35] = 2;                        /* SQT: версия */
-    CHECK(render(&bad, &mlp, NULL, MAP_LAYER_LINES) == 0);
-    bad = idx; put_u32(bad.d + 32 + 12, 1000000u);   /* count больше реального числа узлов */
-    (void)render(&bad, &mlp, NULL, MAP_LAYER_LINES);
+/* Заголовок секции SQT (раздел 5.1) и пустые LOD. */
+static void test_bad_sqt_header(void)
+{
+    static blob_t idx, mlp, bad;
+    simple_map(&idx, &mlp, 1);
+    const uint32_t s0 = lod_at(&idx, 0);
+    CHECK(render(&idx, &mlp, NULL, MAP_LAYER_LINES) > 0);
+
+    bad = idx; bad.d[s0] = 'Q';                      /* плохая магия */
+    CHECK(render(&bad, &mlp, NULL, MAP_LAYER_LINES) == 0 && !g_ok);
+    bad = idx; bad.d[s0 + 3] = 1;                    /* SQT\x01: карта формата V3 не поддерживается */
+    CHECK(render(&bad, &mlp, NULL, MAP_LAYER_LINES) == 0 && !g_ok);
+    bad = idx; bad.d[s0 + 3] = 3;
+    CHECK(render(&bad, &mlp, NULL, MAP_LAYER_LINES) == 0 && !g_ok);
+    bad = idx; put_u32(bad.d + s0 + 4, 1);           /* топология */
+    CHECK(render(&bad, &mlp, NULL, MAP_LAYER_LINES) == 0 && !g_ok);
+    bad = idx; put_u32(bad.d + s0 + 16, 256);        /* размер блока */
+    CHECK(render(&bad, &mlp, NULL, MAP_LAYER_LINES) == 0 && !g_ok);
+    bad = idx; put_u32(bad.d + s0 + 20, 2 * BLK);    /* размер секции не равен расстоянию до LOD 1 */
+    CHECK(render(&bad, &mlp, NULL, MAP_LAYER_LINES) == 0 && !g_ok);
+    bad = idx; bad.d[s0 + 24] = 19;                  /* nav_fanout > 18 */
+    CHECK(render(&bad, &mlp, NULL, MAP_LAYER_LINES) == 0 && !g_ok);
+    bad = idx; bad.d[s0 + 24] = 0;
+    CHECK(render(&bad, &mlp, NULL, MAP_LAYER_LINES) == 0 && !g_ok);
+    bad = idx; bad.d[s0 + 26] = 21;                  /* leaf_fanout > 20 */
+    CHECK(render(&bad, &mlp, NULL, MAP_LAYER_LINES) == 0 && !g_ok);
+    bad = idx; put_u32(bad.d + s0 + 12, 0);          /* корневых узлов нет при depth 1 */
+    CHECK(render(&bad, &mlp, NULL, MAP_LAYER_LINES) == 0 && !g_ok);
+    bad = idx; put_u32(bad.d + s0 + 12, 19);         /* root_count > nav_fanout */
+    CHECK(render(&bad, &mlp, NULL, MAP_LAYER_LINES) == 0 && !g_ok);
+    bad = idx; put_u32(bad.d + s0 + 8, 2);           /* depth не соответствует размеру секции */
+    CHECK(render(&bad, &mlp, NULL, MAP_LAYER_LINES) == 0 && !g_ok);
+    bad = idx; put_u32(bad.d + s0 + 8, 0);           /* depth 0, но секция не пуста */
+    CHECK(render(&bad, &mlp, NULL, MAP_LAYER_LINES) == 0 && !g_ok);
+
+    /* Пустой LOD (depth 0, root_count 0, секция 512 Б) корректен: рисовать нечего, но кадр не ошибка. */
+    {
+        static blob_t e;
+        ib_t b;
+        ib_begin(&b, &e);
+        for (int i = 0; i < 4; i++) { ib_empty(&b); }
+        ib_end(&b);
+        CHECK(e.n == 0x200u + 4u * BLK);
+        CHECK(render(&e, &mlp, NULL, MAP_LAYER_LINES) == 0 && g_ok);
+        bad = e; put_u32(bad.d + lod_at(&e, 0) + 12, 1);   /* root_count у пустого LOD */
+        CHECK(render(&bad, &mlp, NULL, MAP_LAYER_LINES) == 0 && !g_ok);
+    }
 }
 
 static void test_bad_mlp_geometry(void)
@@ -247,7 +436,7 @@ static void test_bad_mlp_geometry(void)
     static blob_t idx, mlp, tmp;
     uint8_t node[25];
     data_node(node, 100, 100, 900, 900, 1, GEOM_V1, 0);
-    build_idx(&idx, node, sizeof node, 0, 1);
+    build_idx(&idx, node, 1);
 
     uint32_t p1[1] = { 0 };
     int32_t xy[8] = { 100, 100, 900, 900, 100, 900, 900, 100 };
@@ -280,34 +469,30 @@ static void test_bad_mlp_geometry(void)
 
     /* v1 указывает за конец MLP / переполняет 32 + v1 */
     data_node(node, 100, 100, 900, 900, 1, 0x00FFFFFF, 0);
-    build_idx(&idx, node, sizeof node, 0, 1);
+    build_idx(&idx, node, 1);
     CHECK(render(&idx, &mlp, NULL, MAP_LAYER_LINES) == 0);
     data_node(node, 100, 100, 900, 900, 1, 0xFFFFFFF0u, 0);
-    build_idx(&idx, node, sizeof node, 0, 1);
+    build_idx(&idx, node, 1);
     CHECK(render(&idx, &mlp, NULL, MAP_LAYER_LINES) == 0);
 
     /* Усечённая геометрия: точек заявлено больше, чем есть в файле */
     build_mlp(&tmp, 1, p1, 4, xy);
     tmp.n -= 12;
     data_node(node, 100, 100, 900, 900, 1, GEOM_V1, 0);
-    build_idx(&idx, node, sizeof node, 0, 1);
+    build_idx(&idx, node, 1);
     (void)render(&idx, &tmp, NULL, MAP_LAYER_LINES);
 }
 
-/* Цепочка навигационных узлов глубины depth, в конце - один узел данных. */
-static void build_nav_chain(blob_t *idx, blob_t *mlp, int depth)
+/* Один отрезок (100,100)-(900,900) в цепочке навигационных узлов глубины depth (LOD 0). */
+static void build_nav_chain(blob_t *idx, blob_t *mlp, uint32_t depth)
 {
-    static uint8_t nodes[MAXF];
-    uint32_t n = 0;
-    for (int level = depth - 1; level >= 0; level--) {
-        /* jump = размер всего поддерева за этим узлом */
-        uint32_t below = (uint32_t)level * 28u + 25u;
-        nav_node(nodes + n, below, 0, 0, 1000, 1000, (uint32_t)level, 1);
-        n += 28;
-    }
-    data_node(nodes + n, 100, 100, 900, 900, 1, GEOM_V1, 0);
-    n += 25;
-    build_idx(idx, nodes, n, 1, 1);
+    uint8_t leaf[25];
+    data_node(leaf, 100, 100, 900, 900, 1, GEOM_V1, 0);
+    ib_t b;
+    ib_begin(&b, idx);
+    ib_chain(&b, depth, leaf);
+    ib_empty(&b); ib_empty(&b); ib_empty(&b);
+    ib_end(&b);
     uint32_t parts[1] = { 0 };
     int32_t xy[4] = { 100, 100, 900, 900 };
     build_mlp(mlp, 1, parts, 2, xy);
@@ -317,44 +502,310 @@ static void test_nav_tree_depth_limit(void)
 {
     static blob_t idx, mlp;
 
-    build_nav_chain(&idx, &mlp, 5);                  /* нормальная глубина */
-    CHECK(render(&idx, &mlp, NULL, MAP_LAYER_LINES) > 0);
-    build_nav_chain(&idx, &mlp, 31);
-    CHECK(render(&idx, &mlp, NULL, MAP_LAYER_LINES) > 0);
-    build_nav_chain(&idx, &mlp, 200);                /* патч 0004: глубже PURRGO_MAP_MAX_TREE_DEPTH (32) */
-    CHECK(render(&idx, &mlp, NULL, MAP_LAYER_LINES) == 0);
-    build_nav_chain(&idx, &mlp, 280);                /* максимум для MAXF */
-    CHECK(render(&idx, &mlp, NULL, MAP_LAYER_LINES) == 0);
+    for (uint32_t depth = 1; depth <= PURRGO_MAP_MAX_TREE_DEPTH; depth++) {
+        build_nav_chain(&idx, &mlp, depth);
+        CHECK(render(&idx, &mlp, NULL, MAP_LAYER_LINES) > 0 && g_ok);
+    }
+    /* Глубже предела читателя: отвергается по заголовку секции, не рекурсией. */
+    for (uint32_t depth = PURRGO_MAP_MAX_TREE_DEPTH + 1u; depth <= 40u; depth += 9u) {
+        build_nav_chain(&idx, &mlp, depth);
+        CHECK(render(&idx, &mlp, NULL, MAP_LAYER_LINES) == 0 && !g_ok);
+    }
 }
 
-static void test_v3_jump_bounds(void)
+/* Нарушения раздела 7.1 и 6.3: узел отвергается, ничего не рисуется и ничего не читается за секцией. */
+static void test_index_node_validation(void)
 {
-    static blob_t idx, mlp;
-    uint8_t nodes[28 + 25];
-
-    /* Навигационный узел ВНЕ камеры с огромным jump: должен быть отвергнут, а не выполнен. */
-    nav_node(nodes, 0xFFFFFFF0u, 5000, 5000, 6000, 6000, 0, 1);
-    data_node(nodes + 28, 100, 100, 900, 900, 1, GEOM_V1, 0);
-    build_idx(&idx, nodes, sizeof nodes, 1, 1);
+    static blob_t idx, mlp, bad;
+    uint8_t leaf[25];
+    data_node(leaf, 100, 100, 900, 900, 1, GEOM_V1, 0);
+    build_idx(&idx, leaf, 1);
     uint32_t parts[1] = { 0 };
     int32_t xy[4] = { 100, 100, 900, 900 };
     build_mlp(&mlp, 1, parts, 2, xy);
-    CHECK(render(&idx, &mlp, NULL, MAP_LAYER_LINES) == 0);
+    CHECK(render(&idx, &mlp, NULL, MAP_LAYER_LINES) > 0 && g_ok);
 
-    /* jump выходит за границу LOD */
-    nav_node(nodes, 100000u, 5000, 5000, 6000, 6000, 0, 1);
-    build_idx(&idx, nodes, sizeof nodes, 1, 1);
-    CHECK(render(&idx, &mlp, NULL, MAP_LAYER_LINES) == 0);
+    /* Корневой блок LOD 0 по смещению 0x400, единственный узел: child_block, bbox, v1, v2. */
+    const uint32_t root = lod_at(&idx, 0) + BLK;
+    const uint32_t sec_end = lod_at(&idx, 1);
+    const uint32_t child_ok = root + BLK;
 
-    /* Корректный jump пропускает поддерево ровно на его размер: следующий узел виден. */
-    uint8_t two[28 + 25 + 25];
-    nav_node(two, 25u, 5000, 5000, 6000, 6000, 0, 1);        /* вне камеры, поддерево = 1 узел данных */
-    data_node(two + 28, 100, 100, 900, 900, 1, GEOM_V1, 0);  /* пропускается */
-    data_node(two + 53, 100, 900, 900, 100 + 800, 1, GEOM_V1, 0);
-    build_idx(&idx, two, sizeof two, 1, 2);
-    /* root в режиме nav: оба элемента трактуются как nav-узлы - структура намеренно
-       нетипична, достаточно, чтобы обход завершился без выхода за границы */
-    (void)render(&idx, &mlp, NULL, MAP_LAYER_LINES);
+    uint32_t child_bad[] = {
+        child_ok + 4u,           /* не кратно 512 */
+        child_ok + 0x100u,
+        root,                    /* указывает на собственный блок: child_block <= B */
+        root - BLK,              /* до корневого блока (и в заголовок секции) */
+        lod_at(&idx, 0),         /* сектор заголовка секции */
+        sec_end,                 /* первый блок следующей секции */
+        0xFFFFFE00u,             /* огромное смещение */
+        0xFFFFFFF0u,
+        0u,
+    };
+    for (size_t i = 0; i < sizeof child_bad / sizeof child_bad[0]; i++) {
+        bad = idx; put_u32(bad.d + root, child_bad[i]);
+        CHECK(render(&bad, &mlp, NULL, MAP_LAYER_LINES) == 0 && !g_ok);
+    }
+
+    /* v1 (уровень) должен быть равен ожидаемому: у корня depth - 1 = 0. */
+    uint32_t v1_bad[] = { 1, 2, 0xFFFFFFFFu };
+    for (size_t i = 0; i < sizeof v1_bad / sizeof v1_bad[0]; i++) {
+        bad = idx; put_u32(bad.d + root + 20, v1_bad[i]);
+        CHECK(render(&bad, &mlp, NULL, MAP_LAYER_LINES) == 0 && !g_ok);
+    }
+
+    /* v2: 1..20 для листового блока. */
+    uint32_t v2_bad[] = { 0, 21, 255, 256, 0xFFFFFFFFu };
+    for (size_t i = 0; i < sizeof v2_bad / sizeof v2_bad[0]; i++) {
+        bad = idx; put_u32(bad.d + root + 24, v2_bad[i]);
+        CHECK(render(&bad, &mlp, NULL, MAP_LAYER_LINES) == 0 && !g_ok);
+    }
+    bad = idx; put_u32(bad.d + root + 24, 20);       /* 20 записей: остальные нули, не рисуются */
+    CHECK(render(&bad, &mlp, NULL, MAP_LAYER_LINES) > 0 && g_ok);
+
+    /* Узел вне камеры тоже проверяется: ошибка в нём останавливает обход до рисования соседей. */
+    {
+        uint8_t leaves[2 * 25];
+        static const int32_t far_bb[4] = { 5000, 5000, 6000, 6000 };
+        data_node(leaves, 100, 100, 900, 900, 1, GEOM_V1, 0);
+        data_node(leaves + 25, 5000, 5000, 6000, 6000, 1, GEOM_V1, 0);
+        /* Два листовых блока под одним корнем: узел 0 в камере, узел 1 вне камеры. */
+        ib_t b;
+        ib_begin(&b, &bad);
+        uint32_t s = ib_section(&b, 1, 2, 3);   /* корневой блок и два листовых */
+        static const int32_t near_bb[4] = { 100, 100, 900, 900 };
+        nav_node(bad.d + s + BLK, s + 2u * BLK, near_bb, 0, 1);
+        nav_node(bad.d + s + BLK + 28, s + 3u * BLK, far_bb, 0, 1);
+        memcpy(bad.d + s + 2u * BLK, leaves, 25);
+        memcpy(bad.d + s + 3u * BLK, leaves + 25, 25);
+        ib_empty(&b); ib_empty(&b); ib_empty(&b);
+        ib_end(&b);
+        CHECK(render(&bad, &mlp, NULL, MAP_LAYER_LINES) > 0 && g_ok);   /* целое дерево */
+        put_u32(bad.d + s + BLK + 28, s + 3u * BLK + 4u);               /* у дальнего узла не кратно 512 */
+        CHECK(render(&bad, &mlp, NULL, MAP_LAYER_LINES) == 0 && !g_ok);
+    }
+}
+
+/*
+ * Блочное дерево: многоуровневые деревья с полным ветвлением 20/18 и малым 2/2 дают тот же
+ * кадр, что и плоские списки; поддеревья вне камеры не читаются.
+ */
+static void test_block_tree(void)
+{
+    static blob_t idx, flat, mlp;
+    static uint8_t leaves[1000 * 25];
+    static uint8_t chunk[20 * 25];
+    static uint8_t ref_fb[SCR_W * SCR_H];
+
+    /* Сетка POI 30 x 30 с шагом 100 по обе стороны от камеры (0..1000): в кадр попадает около 100. */
+    uint32_t n = 0;
+    for (int gy = -10; gy < 20; gy++) {
+        for (int gx = -10; gx < 20; gx++) {
+            data_node(leaves + 25u * n, gx * 100 + 50, gy * 100 + 50, gx * 100 + 50, gy * 100 + 50,
+                      PURRGO_FEATURE_POI_SMALL, 0, 0);
+            n++;
+        }
+    }
+    defaults();
+
+    /* Эталон: те же узлы плоскими блоками по 20, кадры складываются. */
+    memset(ref_fb, 0, sizeof ref_fb);
+    for (uint32_t i = 0; i < n; i += 20) {
+        uint32_t c = (n - i < 20) ? n - i : 20;
+        memcpy(chunk, leaves + 25u * i, 25u * c);
+        build_idx(&flat, chunk, c);
+        (void)render(&flat, NULL, NULL, MAP_LAYER_POIS);
+        for (int j = 0; j < SCR_W * SCR_H; j++) { if (g_fb[j]) { ref_fb[j] = g_fb[j]; } }
+    }
+    int ref_px = 0;
+    for (int j = 0; j < SCR_W * SCR_H; j++) { ref_px += ref_fb[j] != 0; }
+    CHECK(ref_px > 200);
+
+    static const struct { uint32_t leaf_fan, nav_fan, count; } shapes[] = {
+        { 20, 18, 900 },    /* 45 листовых блока, 3 корня уровня 1 -> depth 2 */
+        { 20, 18, 361 },    /* 19 узлов уровня 0 не помещаются в корень -> depth 2 */
+        { 20, 18, 360 },    /* ровно 18 корневых узлов -> depth 1 */
+        { 2, 2, 17 },       /* малое ветвление: depth 5 */
+        { 1, 2, 16 },       /* по одному узлу данных: depth 4 */
+    };
+    for (size_t k = 0; k < sizeof shapes / sizeof shapes[0]; k++) {
+        const uint32_t cnt = shapes[k].count;
+        ib_t b;
+        ib_begin(&b, &idx);
+        ib_tree(&b, leaves, cnt, shapes[k].leaf_fan, shapes[k].nav_fan);
+        ib_empty(&b); ib_empty(&b); ib_empty(&b);
+        ib_end(&b);
+        CHECK(idx.n <= MAXF);
+
+        (void)render(&idx, NULL, NULL, MAP_LAYER_POIS);
+        CHECK(g_ok);
+
+        /* Эталон для первых cnt узлов. */
+        static uint8_t exp_fb[SCR_W * SCR_H];
+        memset(exp_fb, 0, sizeof exp_fb);
+        for (uint32_t i = 0; i < cnt; i += 20) {
+            uint32_t c = (cnt - i < 20) ? cnt - i : 20;
+            memcpy(chunk, leaves + 25u * i, 25u * c);
+            build_idx(&flat, chunk, c);
+            (void)render(&flat, NULL, NULL, MAP_LAYER_POIS);
+            for (int j = 0; j < SCR_W * SCR_H; j++) { if (g_fb[j]) { exp_fb[j] = g_fb[j]; } }
+        }
+        (void)render(&idx, NULL, NULL, MAP_LAYER_POIS);
+        CHECK(memcmp(g_fb, exp_fb, sizeof g_fb) == 0);
+    }
+    (void)mlp;
+
+    /* Все 900 узлов: тот же кадр, что у эталона. */
+    {
+        ib_t b;
+        ib_begin(&b, &idx);
+        ib_tree(&b, leaves, n, 20, 18);
+        ib_empty(&b); ib_empty(&b); ib_empty(&b);
+        ib_end(&b);
+        (void)render(&idx, NULL, NULL, MAP_LAYER_POIS);
+        CHECK(g_ok && memcmp(g_fb, ref_fb, sizeof g_fb) == 0);
+    }
+}
+
+/* Поддерево вне камеры пропускается без чтения его блока (раздел 7.2). */
+static void test_block_skipped_without_read(void)
+{
+    static blob_t idx;
+    uint8_t leaves[2 * 25];
+    data_node(leaves, 500, 500, 500, 500, PURRGO_FEATURE_POI_BIG, 0, 0);
+    data_node(leaves + 25, 5000, 5000, 5000, 5000, PURRGO_FEATURE_POI_BIG, 0, 0);
+
+    /* Два корневых узла, каждый со своим листовым блоком: ближний в камере, дальний нет. */
+    ib_t b;
+    ib_begin(&b, &idx);
+    uint32_t s = ib_section(&b, 1, 2, 3);   /* корневой блок и два листовых */
+    static const int32_t near_bb[4] = { 500, 500, 500, 500 };
+    static const int32_t far_bb[4] = { 5000, 5000, 5000, 5000 };
+    nav_node(idx.d + s + BLK, s + 2u * BLK, near_bb, 0, 1);
+    nav_node(idx.d + s + BLK + 28, s + 3u * BLK, far_bb, 0, 1);
+    memcpy(idx.d + s + 2u * BLK, leaves, 25);
+    memcpy(idx.d + s + 3u * BLK, leaves + 25, 25);
+    ib_empty(&b); ib_empty(&b); ib_empty(&b);
+    ib_end(&b);
+
+    defaults();
+    fake_fs_reset();
+    fake_fs_put_bin("l.idx", idx.d, idx.n);
+    purrgo_file_t *f = purrgo_fs_open("l.idx", FS_READ);
+    gfx_reset();
+    fake_fs_reset_read_stats();
+    CHECK(purrgo_map_render_layer(f, NULL, NULL, &g_gfx, &CAM, &VP, &g_params, MAP_LAYER_POIS));
+    /* Чтения: заголовок PGO, заголовок секции, корневой блок, один листовой блок. */
+    CHECK(fake_fs_read_calls() == 4);
+    CHECK(fake_fs_max_read_end() == s + 3u * BLK);   /* дальний блок (s + 3 * 512 .. +512) не читался */
+    CHECK(g_pixels > 5);
+    (void)purrgo_fs_close(f);
+}
+
+/*
+ * Выбор LOD по масштабу и детализации. В секции каждого LOD один узел данных со своим bbox
+ * (100..xe[lod] по x), геометрия общая. Камера, начинающаяся правее конца узла LOD k - 1 и
+ * внутри узла LOD k, видит узел только если выбран LOD >= k; камера правее конца узла
+ * выбранного LOD ничего не рисует. Так проверяется выбор в обе стороны.
+ */
+static void test_lod_selection(void)
+{
+    static blob_t idx, mlp;
+    uint8_t leaf[25];
+    static const int32_t xe[4] = { 200, 400, 700, 900 };   /* конец узла по x */
+    ib_t b;
+    ib_begin(&b, &idx);
+    for (int lod = 0; lod < 4; lod++) {
+        data_node(leaf, 100, 500, xe[lod], 500, 1, GEOM_V1, 0);
+        ib_tree(&b, leaf, 1, 20, 18);
+    }
+    ib_end(&b);
+    uint32_t parts[1] = { 0 };
+    int32_t xy[4] = { 100, 500, 900, 500 };
+    build_mlp(&mlp, 1, parts, 2, xy);
+
+    static const struct { purrgo_map_scale_t scale; purrgo_map_details_t det; int lod; } t[] = {
+        { PURRGO_MAP_SCALE_10M,     PURRGO_MAP_DETAILS_LOW,  0 },
+        { PURRGO_MAP_SCALE_100M,    PURRGO_MAP_DETAILS_LOW,  0 },
+        { PURRGO_MAP_SCALE_200M,    PURRGO_MAP_DETAILS_LOW,  1 },
+        { PURRGO_MAP_SCALE_2KM,     PURRGO_MAP_DETAILS_LOW,  1 },
+        { PURRGO_MAP_SCALE_5KM,     PURRGO_MAP_DETAILS_LOW,  2 },
+        { PURRGO_MAP_SCALE_10KM,    PURRGO_MAP_DETAILS_LOW,  2 },
+        { PURRGO_MAP_SCALE_20KM,    PURRGO_MAP_DETAILS_LOW,  3 },
+        { PURRGO_MAP_SCALE_10000KM, PURRGO_MAP_DETAILS_LOW,  3 },
+        { PURRGO_MAP_SCALE_10M,     PURRGO_MAP_DETAILS_HIGH, 0 },
+        { PURRGO_MAP_SCALE_500M,    PURRGO_MAP_DETAILS_HIGH, 0 },
+        { PURRGO_MAP_SCALE_1KM,     PURRGO_MAP_DETAILS_HIGH, 1 },
+        { PURRGO_MAP_SCALE_5KM,     PURRGO_MAP_DETAILS_HIGH, 1 },
+        { PURRGO_MAP_SCALE_10KM,    PURRGO_MAP_DETAILS_HIGH, 2 },
+        { PURRGO_MAP_SCALE_20KM,    PURRGO_MAP_DETAILS_HIGH, 2 },
+        { PURRGO_MAP_SCALE_50KM,    PURRGO_MAP_DETAILS_HIGH, 3 },
+        { PURRGO_MAP_SCALE_10000KM, PURRGO_MAP_DETAILS_HIGH, 3 },
+    };
+    fake_fs_reset();
+    fake_fs_put_bin("l.idx", idx.d, idx.n);
+    fake_fs_put_bin("l.mlp", mlp.d, mlp.n);
+
+    for (size_t i = 0; i < sizeof t / sizeof t[0]; i++) {
+        const int lod = t[i].lod;
+        defaults();
+        g_params.scale = t[i].scale;
+        g_params.details = t[i].det;
+
+        /* Камера внутри узла выбранного LOD: виден. */
+        purrgo_bbox_t cam = { xe[lod] - 50, 0, 1000, 1000 };
+        purrgo_file_t *fi = purrgo_fs_open("l.idx", FS_READ);
+        purrgo_file_t *fm = purrgo_fs_open("l.mlp", FS_READ);
+        gfx_reset();
+        g_ok = purrgo_map_render_layer(fi, fm, NULL, &g_gfx, &cam, &VP, &g_params, MAP_LAYER_LINES);
+        CHECK(g_ok && g_pixels > 0);
+        (void)purrgo_fs_close(fi); (void)purrgo_fs_close(fm);
+
+        /* Камера правее конца узла выбранного LOD, но внутри узла следующего: не виден. */
+        if (lod < 3) {
+            cam.min_x = xe[lod + 1] - 50;
+            fi = purrgo_fs_open("l.idx", FS_READ);
+            fm = purrgo_fs_open("l.mlp", FS_READ);
+            gfx_reset();
+            g_ok = purrgo_map_render_layer(fi, fm, NULL, &g_gfx, &cam, &VP, &g_params, MAP_LAYER_LINES);
+            CHECK(g_ok && g_pixels == 0);
+            (void)purrgo_fs_close(fi); (void)purrgo_fs_close(fm);
+        }
+    }
+}
+
+/* Подпись на карте из поля названия (раздел 10.6.1). */
+static void test_label_format(void)
+{
+    char out[PURRGO_MAP_LABEL_MAX + 1];
+    uint8_t f[PURRGO_MAP_LABEL_MAX + 1];
+
+    /* Короткое название: как есть, "_" - пробел. */
+    memset(f, 0, sizeof f); memcpy(f, "Minsk_Arena", 11);
+    CHECK(map_label_format(f, 11, out) == 11 && strcmp(out, "Minsk Arena") == 0);
+
+    /* Ровно 22 символа не сокращается, 23 - сокращается до 20 и "..". */
+    memset(f, 'a', sizeof f); f[22] = 0;
+    CHECK(map_label_format(f, 22, out) == 22 && strlen(out) == 22 && out[21] == 'a');
+    memset(f, 'a', sizeof f);                          /* 23 байта без завершающего нуля */
+    CHECK(map_label_format(f, 23, out) == 22);
+    CHECK(strncmp(out, "aaaaaaaaaaaaaaaaaaaa..", 22) == 0 && out[22] == '\0');
+
+    /* Хвостовые "_" перед многоточием убираются, как в компиляторе V3. */
+    memcpy(f, "Great_Lake_Of_Minsk_X_Y", 23);
+    CHECK(map_label_format(f, 23, out) == 21);          /* первые 20 символов кончаются на "_": он убирается */
+    CHECK(strcmp(out, "Great Lake Of Minsk..") == 0);
+    memcpy(f, "abcdefghijklmnopqr___xyz", 23);
+    CHECK(map_label_format(f, 23, out) > 0 && strcmp(out, "abcdefghijklmnopqr..") == 0);
+
+    /* Пустое поле и поле из нулей: подписи нет. */
+    memset(f, 0, sizeof f);
+    CHECK(map_label_format(f, 5, out) == 0 && out[0] == '\0');
+    CHECK(map_label_format(f, 0, out) == 0 && out[0] == '\0');
+
+    /* Байты PurrGO-256 выше 0x7F сохраняются без изменений. */
+    memset(f, 0, sizeof f); f[0] = 0xC0; f[1] = '_'; f[2] = 0xFF;
+    CHECK(map_label_format(f, 3, out) == 3);
+    CHECK((uint8_t)out[0] == 0xC0 && out[1] == ' ' && (uint8_t)out[2] == 0xFF);
 }
 
 static void test_poi_layer(void)
@@ -362,7 +813,7 @@ static void test_poi_layer(void)
     static blob_t idx;
     uint8_t node[25];
     data_node(node, 500, 500, 500, 500, PURRGO_FEATURE_POI_BIG, 0, 0);
-    build_idx(&idx, node, sizeof node, 0, 1);
+    build_idx(&idx, node, 1);
 
     defaults();
     g_params.poi_mode = PURRGO_POI_MODE_NO;
@@ -379,7 +830,7 @@ static void test_fuzz_truncate_and_flip(void)
 
     /* .db с двумя записями (129 + 117 * n байт заголовка/записей после 32-байтного PGO). */
     memset(&db, 0, sizeof db);
-    pgo_header(db.d, 3, 129u + 117u * 3u, 0, 0, 0);
+    pgo_header(db.d, 3, 129u + 117u * 3u, NULL);
     memcpy(db.d + 32u + 129u + 117u * 1u + 17u, "Lake", 5);
     memcpy(db.d + 32u + 129u + 117u * 2u + 17u, "Forest", 7);
     db.n = 32u + 129u + 117u * 3u;
@@ -399,16 +850,21 @@ static void test_fuzz_truncate_and_flip(void)
         CHECK(render(&idx, &m, &db, MAP_LAYER_LINES) <= base);
     }
 
-    /* Подмена каждого байта несколькими значениями. */
+    /* Подмена каждого байта несколькими значениями; LOD 0 (масштаб 10 м) и LOD 3 (10000 км). */
     static const uint8_t vals[] = { 0x00, 0x01, 0x7F, 0x80, 0xFF };
-    for (uint32_t i = 0; i < idx.n; i++) {
-        for (size_t v = 0; v < sizeof vals; v++) {
-            m = idx; m.d[i] = vals[v];
-            (void)render(&m, &mlp, &db, MAP_LAYER_LINES);
-            (void)render(&m, &mlp, &db, MAP_LAYER_POLYGONS);
-            (void)render(&m, NULL, &db, MAP_LAYER_POIS);
+    static const purrgo_map_scale_t scales[] = { PURRGO_MAP_SCALE_10M, PURRGO_MAP_SCALE_10000KM };
+    for (size_t sc = 0; sc < sizeof scales / sizeof scales[0]; sc++) {
+        g_params.scale = scales[sc];
+        for (uint32_t i = 0; i < idx.n; i++) {
+            for (size_t v = 0; v < sizeof vals; v++) {
+                m = idx; m.d[i] = vals[v];
+                (void)render(&m, &mlp, &db, MAP_LAYER_LINES);
+                (void)render(&m, &mlp, &db, MAP_LAYER_POLYGONS);
+                (void)render(&m, NULL, &db, MAP_LAYER_POIS);
+            }
         }
     }
+    g_params.scale = PURRGO_MAP_SCALE_10M;
     for (uint32_t i = 0; i < mlp.n; i++) {
         for (size_t v = 0; v < sizeof vals; v++) {
             m = mlp; m.d[i] = vals[v];
@@ -436,7 +892,7 @@ static void test_water_polygon_style(void)
     static blob_t idx, mlp;
     uint8_t node[25];
     data_node(node, 100, 100, 900, 900, PURRGO_FEATURE_WATER, GEOM_V1, 0);
-    build_idx(&idx, node, sizeof node, 0, 1);
+    build_idx(&idx, node, 1);
     uint32_t parts[1] = { 0 };
     int32_t xy[10] = { 100, 100, 900, 100, 900, 900, 100, 900, 100, 100 };
     build_mlp(&mlp, 1, parts, 5, xy);
@@ -452,7 +908,7 @@ static void waterway_line(blob_t *idx, blob_t *mlp, uint8_t type)
 {
     uint8_t node[25];
     data_node(node, 100, 500, 900, 500, type, GEOM_V1, 0);
-    build_idx(idx, node, sizeof node, 0, 1);
+    build_idx(idx, node, 1);
     uint32_t parts[1] = { 0 };
     int32_t xy[6] = { 100, 500, 500, 500, 900, 500 };
     build_mlp(mlp, 1, parts, 3, xy);
@@ -481,7 +937,7 @@ static void test_waterway_line_style(void)
     /* Излом: оба звена чёрные, вершина без разрыва. */
     uint8_t node[25];
     data_node(node, 100, 100, 900, 900, PURRGO_FEATURE_WATERWAY_MINOR, GEOM_V1, 0);
-    build_idx(&idx, node, sizeof node, 0, 1);
+    build_idx(&idx, node, 1);
     uint32_t parts[1] = { 0 };
     int32_t xy[6] = { 100, 500, 500, 500, 500, 900 };
     build_mlp(&mlp, 1, parts, 3, xy);
@@ -499,7 +955,7 @@ static void test_long_geometry(void)
 
     uint8_t node[25];
     data_node(node, 100, 500, 900, 500, PURRGO_FEATURE_WATERWAY_MAJOR, GEOM_V1, 0);
-    build_idx(&idx, node, sizeof node, 0, 1);
+    build_idx(&idx, node, 1);
     uint32_t parts[1] = { 0 };
 
     /* Река 1500 точек вдоль y = 500. */
@@ -517,7 +973,7 @@ static void test_long_geometry(void)
 
     /* Полигон воды из 1000 точек (окружность): заливка и контур на месте. */
     data_node(node, 100, 100, 900, 900, PURRGO_FEATURE_WATER, GEOM_V1, 0);
-    build_idx(&idx, node, sizeof node, 0, 1);
+    build_idx(&idx, node, 1);
     for (int i = 0; i < 1000; i++) {
         double a = 6.283185307179586 * i / 999.0;
         xy[2 * i] = 500 + (int32_t)(400.0 * cos(a));
@@ -535,7 +991,7 @@ static void test_water_layers_viewport(void)
     static blob_t widx, wmlp, lidx, lmlp;
     uint8_t node[25];
     data_node(node, 100, 100, 900, 900, PURRGO_FEATURE_WATER, GEOM_V1, 0);
-    build_idx(&widx, node, sizeof node, 0, 1);
+    build_idx(&widx, node, 1);
     uint32_t parts[1] = { 0 };
     int32_t xy[10] = { 100, 100, 900, 100, 900, 900, 100, 900, 100, 100 };
     build_mlp(&wmlp, 1, parts, 5, xy);
@@ -660,26 +1116,26 @@ static void test_small_features_skipped(void)
     uint8_t node[25];
     int32_t tiny_line[4] = { 500, 500, 505, 505 };
     data_node(node, 500, 500, 505, 505, 1, GEOM_V1, 0);
-    build_idx(&idx, node, sizeof node, 0, 1);
+    build_idx(&idx, node, 1);
     build_mlp(&mlp, 1, parts, 2, tiny_line);
     CHECK(render(&idx, &mlp, NULL, MAP_LAYER_LINES) == 0);
 
     int32_t line[4] = { 500, 500, 540, 540 };
     data_node(node, 500, 500, 540, 540, 1, GEOM_V1, 0);
-    build_idx(&idx, node, sizeof node, 0, 1);
+    build_idx(&idx, node, 1);
     build_mlp(&mlp, 1, parts, 2, line);
     CHECK(render(&idx, &mlp, NULL, MAP_LAYER_LINES) > 0);
 
     /* Полигон 2.6 px (< 3) пропускается, 3.8 px рисуется. */
     int32_t small_poly[8] = { 500, 500, 540, 500, 540, 540, 500, 540 };
     data_node(node, 500, 500, 540, 540, PURRGO_FEATURE_WATER, GEOM_V1, 0);
-    build_idx(&idx, node, sizeof node, 0, 1);
+    build_idx(&idx, node, 1);
     build_mlp(&mlp, 1, parts, 4, small_poly);
     CHECK(render(&idx, &mlp, NULL, MAP_LAYER_POLYGONS) == 0);
 
     int32_t poly[8] = { 500, 500, 560, 500, 560, 560, 500, 560 };
     data_node(node, 500, 500, 560, 560, PURRGO_FEATURE_WATER, GEOM_V1, 0);
-    build_idx(&idx, node, sizeof node, 0, 1);
+    build_idx(&idx, node, 1);
     build_mlp(&mlp, 1, parts, 4, poly);
     CHECK(render(&idx, &mlp, NULL, MAP_LAYER_POLYGONS) > 0);
 }
@@ -712,7 +1168,7 @@ static void test_viewport_read_ahead_and_poi_skip(void)
 
     uint8_t node[25];
     data_node(node, 500, 500, 500, 500, PURRGO_FEATURE_POI_BIG, 0, 0);
-    build_idx(&poi, node, sizeof node, 0, 1);
+    build_idx(&poi, node, 1);
 
     fake_fs_reset();
     defaults();
@@ -839,7 +1295,7 @@ static void test_viewport_failures(void)
 }
 
 /*
- * Диапазоны feature code по слоям (docs/map-format-v3.md, 8.1) и таблица иконок:
+ * Диапазоны feature code по слоям (docs/map-format-v4.md, 8.1) и таблица иконок:
  * номер иконки POI равен feature code, UI-иконки лежат в 192..223, остальные иконки пусты.
  */
 static int in_range(uint32_t code, uint32_t first, uint32_t last)
@@ -910,9 +1366,14 @@ int main(void)
     test_valid_polygon();
     test_outside_camera_not_drawn();
     test_bad_pgo_header();
+    test_bad_sqt_header();
     test_bad_mlp_geometry();
     test_nav_tree_depth_limit();
-    test_v3_jump_bounds();
+    test_index_node_validation();
+    test_block_tree();
+    test_block_skipped_without_read();
+    test_lod_selection();
+    test_label_format();
     test_poi_layer();
     test_fuzz_truncate_and_flip();
     test_water_polygon_style();

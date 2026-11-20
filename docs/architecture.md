@@ -375,7 +375,7 @@ The map subsystem performs:
 The binary map format is defined exclusively in:
 
 ```text
-docs/map-format-v3.md
+docs/map-format-v4.md
 ```
 
 Map compiler usage is documented in:
@@ -662,4 +662,4 @@ The following are architectural invariants of PurrGO:
 9. Resource usage is bounded where practical.
 10. Production map/navigation code does not depend on floating-point arithmetic.
 11. Display and storage activity are independently controllable.
-12. Binary map-format details are defined only by the V3 map specification.
+12. Binary map-format details are defined only by the V4 map specification.

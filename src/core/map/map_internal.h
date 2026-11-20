@@ -47,7 +47,7 @@
 
 /*
  * Кэш секторов SD в арене режима карты (purrgo_fs_cache_attach): записей по 512 Б. Хватает на
- * весь индекс кадра на мелких масштабах (~470 секторов) с запасом, так что повторный рисунок
+ * весь индекс кадра на мелких масштабах (~470 секторов, замер для V3; для V4 перемерить) с запасом, так что повторный рисунок
  * того же вида и перекрывающиеся виды читаются из RAM. Требует purrgo_fs_cache_bytes(N)
  * байт арены (~400 КБ при 768); остаток арены отдаётся диагностике (purrgo/render_prof.h).
  */
@@ -67,11 +67,50 @@
 #define PURRGO_MAP_MIN_PX_LINE    1
 #define PURRGO_MAP_MIN_PX_POLYGON 3
 
+/*
+ * Формат карты PurrGO V4 (docs/map-format-v4.md). Формат V3 не поддерживается.
+ */
+#define PURRGO_MAP_LOD_COUNT        4u
+/* Блок индекса и сектор заголовка SQT: ровно один сектор SD. */
+#define PURRGO_MAP_BLOCK_SIZE       512u
+#define PURRGO_MAP_NAV_NODE_SIZE    28u
+#define PURRGO_MAP_DATA_NODE_SIZE   25u
+#define PURRGO_MAP_NAV_FANOUT       18u   /* навигационных узлов в блоке (18 * 28 = 504 Б) */
+#define PURRGO_MAP_LEAF_FANOUT      20u   /* узлов данных в блоке (20 * 25 = 500 Б) */
+/* Первая секция LOD в .idx: за заголовком PGO идёт заполнение до границы сектора. */
+#define PURRGO_MAP_FIRST_LOD_OFFSET 0x200u
+#define PURRGO_MAP_SQT_TOPOLOGY     2u
+
+/*
+ * Предел глубины дерева индекса (число уровней навигационных узлов). Задаёт читатель,
+ * не формат: при ветвлении 18/20 восемь уровней вмещают более 10^10 объектов, а реальная
+ * карта Беларуси имеет глубину 4. Дерево читается с SD-карты, то есть из недоверенных
+ * данных: предел ограничивает рекурсию обхода (кадр стека на уровень ~200 Б) и память.
+ */
+#define PURRGO_MAP_MAX_TREE_DEPTH   8u
+
+/* Поле названия в записи .db (раздел 10): 100 байт, PurrGO-256, добито нулями. */
+#define PURRGO_MAP_NAME_FIELD_SIZE  100u
+/* Подпись на карте (раздел 10.6.1): до 22 символов, длиннее - 20 символов и "..". */
+#define PURRGO_MAP_LABEL_MAX        22u
+#define PURRGO_MAP_LABEL_CUT        20u
+
 typedef struct {
     uint8_t  file_type;
     uint32_t payload_size;
-    uint32_t lod_offset[3];
+    uint32_t file_end;                        /* 32 + payload_size */
+    uint32_t lod_offset[PURRGO_MAP_LOD_COUNT];/* только для .idx */
 } pgo_header_info_t;
+
+/* Секция LOD индекса: разобранный сектор заголовка SQT (раздел 5). */
+typedef struct {
+    uint32_t start;        /* смещение секции в файле */
+    uint32_t size;         /* размер секции в байтах */
+    uint32_t depth;        /* число уровней навигационных узлов; 0 - пустой LOD */
+    uint32_t root_count;   /* навигационных узлов в корневом блоке */
+    uint32_t nav_fanout;
+    uint32_t leaf_fanout;
+} map_section_t;
 
 /* Little-endian helpers */
 static inline int32_t unpack_i32_le(const uint8_t *buf)

@@ -107,6 +107,12 @@ typedef struct {
 
 static map_context_t s_map_context = {0};
 
+/*
+ * Версия формата уже сообщена в лог для текущего каталога карты: проверка выполняется на
+ * каждом слое каждого кадра, а сообщение нужно одно. Сбрасывается при смене каталога.
+ */
+static bool s_unsupported_logged = false;
+
 static bool map_param_flag(const purrgo_map_render_params_t* params, size_t offset)
 {
     return *(const bool*)((const char*)params + offset);
@@ -134,6 +140,7 @@ static void map_close_all_files(void)
     }
     s_map_context.dir_invalid = false;
     s_map_context.current_map_dir[0] = '\0';
+    s_unsupported_logged = false;
 }
 
 /* Открыть <map_dir>/<name>. NULL - файла нет или путь не поместился в буфер. */
@@ -270,25 +277,29 @@ void purrgo_map_shutdown(void)
     PURRGO_LOG("Map files closed\r\n");
 }
 
-static int get_target_lod(purrgo_map_scale_t scale, purrgo_map_details_t details)
+/*
+ * Выбор LOD по масштабу (docs/design/pgo-v4.md, "LOD 3"). Секция LOD n содержит объекты с
+ * LOD >= n, поэтому чем крупнее масштаб (шире окно карты), тем больший номер LOD.
+ * Для каждой детализации - наибольший масштаб (включительно), на котором ещё используется
+ * LOD 0, 1 и 2; выше - LOD 3. Пороги LOD 3 (50 км и 20 км) - предложение проекта, уточнить
+ * замером времени кадра на железе.
+ */
+static const purrgo_map_scale_t k_lod_max_scale[2][PURRGO_MAP_LOD_COUNT - 1u] = {
+    /* PURRGO_MAP_DETAILS_LOW  */ { PURRGO_MAP_SCALE_100M, PURRGO_MAP_SCALE_2KM, PURRGO_MAP_SCALE_10KM },
+    /* PURRGO_MAP_DETAILS_HIGH */ { PURRGO_MAP_SCALE_500M, PURRGO_MAP_SCALE_5KM, PURRGO_MAP_SCALE_20KM },
+};
+
+static uint32_t get_target_lod(purrgo_map_scale_t scale, purrgo_map_details_t details)
 {
-    if (details == PURRGO_MAP_DETAILS_LOW) {
-        if (scale <= PURRGO_MAP_SCALE_100M) {
-            return 0;
-        } else if (scale <= PURRGO_MAP_SCALE_2KM) {
-            return 1;
-        } else {
-            return 2;
-        }
-    } else {
-        if (scale <= PURRGO_MAP_SCALE_500M) {
-            return 0;
-        } else if (scale <= PURRGO_MAP_SCALE_5KM) {
-            return 1;
-        } else {
-            return 2;
+    const purrgo_map_scale_t *max_scale =
+        k_lod_max_scale[(details == PURRGO_MAP_DETAILS_LOW) ? 0 : 1];
+
+    for (uint32_t lod = 0; lod < PURRGO_MAP_LOD_COUNT - 1u; lod++) {
+        if (scale <= max_scale[lod]) {
+            return lod;
         }
     }
+    return PURRGO_MAP_LOD_COUNT - 1u;
 }
 
 static bool map_parse_pgo_header(purrgo_file_t *file, pgo_header_info_t *info)
@@ -316,43 +327,104 @@ static bool map_parse_pgo_header(purrgo_file_t *file, pgo_header_info_t *info)
 
     info->file_type = pgo_header[3];
     info->payload_size = unpack_u32_le(&pgo_header[4]);
-    info->lod_offset[0] = unpack_u32_le(&pgo_header[8]);
-    info->lod_offset[1] = unpack_u32_le(&pgo_header[12]);
-    info->lod_offset[2] = unpack_u32_le(&pgo_header[16]);
+    for (uint32_t i = 0; i < PURRGO_MAP_LOD_COUNT; i++) {
+        info->lod_offset[i] = unpack_u32_le(&pgo_header[8 + 4 * i]);
+    }
 
-    uint32_t payload_start = 32;
+    const uint32_t payload_start = 32;
 
     if (UINT32_MAX - payload_start < info->payload_size) {
         return false;
     }
 
-    uint32_t payload_end = payload_start + info->payload_size;
+    info->file_end = payload_start + info->payload_size;
 
     if (info->file_type == 1) {
-        if (info->lod_offset[0] < payload_start ||
-            info->lod_offset[0] >= payload_end) {
+        /*
+         * Раздел 1.5: файл и смещения LOD кратны 512, первое смещение - 0x200, смещения
+         * строго возрастают и лежат внутри файла (каждая секция - не меньше сектора).
+         */
+        if ((info->file_end % PURRGO_MAP_BLOCK_SIZE) != 0u ||
+            info->lod_offset[0] != PURRGO_MAP_FIRST_LOD_OFFSET) {
             return false;
         }
 
-        if (info->lod_offset[1] < payload_start ||
-            info->lod_offset[1] >= payload_end) {
+        for (uint32_t i = 0; i < PURRGO_MAP_LOD_COUNT; i++) {
+            const uint32_t next = (i + 1u < PURRGO_MAP_LOD_COUNT) ? info->lod_offset[i + 1u]
+                                                                   : info->file_end;
+            if ((info->lod_offset[i] % PURRGO_MAP_BLOCK_SIZE) != 0u ||
+                info->lod_offset[i] + PURRGO_MAP_BLOCK_SIZE > next ||
+                next > info->file_end) {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+/*
+ * Разобрать и проверить сектор заголовка SQT секции LOD (раздел 5.1) по смещению start;
+ * size - расстояние до следующего смещения LOD или до конца файла.
+ */
+static bool map_read_section(purrgo_file_t *idx_file, uint32_t start, uint32_t size,
+                             map_section_t *sec)
+{
+    uint8_t hdr[32];   /* значащие поля заголовка занимают первые 0x1C байт сектора */
+
+    if (!purrgo_fs_seek(idx_file, start) ||
+        purrgo_fs_read(idx_file, hdr, sizeof hdr) != sizeof hdr) {
+        return false;
+    }
+
+    if (hdr[0] != 'S' || hdr[1] != 'Q' || hdr[2] != 'T') {
+        return false;
+    }
+    if (hdr[3] != 0x02) {
+        if (!s_unsupported_logged) {
+            s_unsupported_logged = true;
+            PURRGO_LOGE("MAP: unsupported index version %u (V4 needed, recompile the map)\n\r",
+                        (unsigned)hdr[3]);
+        }
+        return false;
+    }
+
+    const uint32_t topology    = unpack_u32_le(&hdr[4]);
+    const uint32_t depth       = unpack_u32_le(&hdr[8]);
+    const uint32_t root_count  = unpack_u32_le(&hdr[12]);
+    const uint32_t block_size  = unpack_u32_le(&hdr[16]);
+    const uint32_t section_size = unpack_u32_le(&hdr[20]);
+    const uint32_t nav_fanout  = (uint32_t)hdr[24] | ((uint32_t)hdr[25] << 8);
+    const uint32_t leaf_fanout = (uint32_t)hdr[26] | ((uint32_t)hdr[27] << 8);
+
+    if (topology != PURRGO_MAP_SQT_TOPOLOGY ||
+        block_size != PURRGO_MAP_BLOCK_SIZE ||
+        section_size != size ||
+        nav_fanout < 1u || nav_fanout > PURRGO_MAP_NAV_FANOUT ||
+        leaf_fanout < 1u || leaf_fanout > PURRGO_MAP_LEAF_FANOUT) {
+        return false;
+    }
+
+    if (depth == 0u) {
+        /* Пустой LOD: только сектор заголовка (раздел 5.2). */
+        if (root_count != 0u || size != PURRGO_MAP_BLOCK_SIZE) {
             return false;
         }
-
-        if (info->lod_offset[2] < payload_start ||
-            info->lod_offset[2] >= payload_end) {
-            return false;
-        }
-
-        if (info->lod_offset[0] >= info->lod_offset[1]) {
-            return false;
-        }
-
-        if (info->lod_offset[1] >= info->lod_offset[2]) {
+    } else {
+        /* В секции есть заголовок, корневой блок, по блоку на каждый нижний уровень и листья. */
+        if (depth > PURRGO_MAP_MAX_TREE_DEPTH ||
+            root_count < 1u || root_count > nav_fanout ||
+            size < (depth + 2u) * PURRGO_MAP_BLOCK_SIZE) {
             return false;
         }
     }
 
+    sec->start = start;
+    sec->size = size;
+    sec->depth = depth;
+    sec->root_count = root_count;
+    sec->nav_fanout = nav_fanout;
+    sec->leaf_fanout = leaf_fanout;
     return true;
 }
 
@@ -374,8 +446,6 @@ bool purrgo_map_render_layer(
         viewport == NULL) {
         return false;
     }
-
-    uint32_t current_idx_offset = 0;
 
     pgo_header_info_t idx_header = {0};
 
@@ -403,69 +473,20 @@ bool purrgo_map_render_layer(
         }
     }
 
-    int target_lod = get_target_lod(params->scale, params->details);
+    const uint32_t target_lod = get_target_lod(params->scale, params->details);
 
-    uint32_t target_lod_offset = idx_header.lod_offset[target_lod];
-    uint32_t lod_end = 0;
+    const uint32_t sec_start = idx_header.lod_offset[target_lod];
+    const uint32_t sec_end = (target_lod + 1u < PURRGO_MAP_LOD_COUNT)
+                                 ? idx_header.lod_offset[target_lod + 1u]
+                                 : idx_header.file_end;
 
-    if (target_lod == 0) {
-        lod_end = idx_header.lod_offset[1];
-    } else if (target_lod == 1) {
-        lod_end = idx_header.lod_offset[2];
-    } else {
-        lod_end = 32 + idx_header.payload_size;
-    }
-
-    if (!purrgo_fs_seek(idx_file, target_lod_offset)) {
+    map_section_t section;
+    if (!map_read_section(idx_file, sec_start, sec_end - sec_start, &section)) {
         return false;
     }
 
-    current_idx_offset = target_lod_offset;
-
-    if (current_idx_offset + 16 > lod_end) {
-        return false;
-    }
-
-    uint8_t sqt_header[16];
-
-    if (purrgo_fs_read(idx_file, sqt_header, sizeof(sqt_header)) != sizeof(sqt_header)) {
-        return false;
-    }
-
-    current_idx_offset += 16;
-
-    if (sqt_header[0] != 'S' ||
-        sqt_header[1] != 'Q' ||
-        sqt_header[2] != 'T' ||
-        sqt_header[3] != 0x01) {
-        return false;
-    }
-
-    uint32_t mode = unpack_u32_le(&sqt_header[8]);
-    uint32_t count = unpack_u32_le(&sqt_header[12]);
-
-    if (count > 0) {
-        bool is_nav = (mode > 0);
-
-        for (uint32_t i = 0; i < count; i++) {
-            if (!map_idx_parse_node(
-                    idx_file,
-                    &current_idx_offset,
-                    mlp_file,
-                    db_file,
-                    is_nav,
-                    camera,
-                    viewport,
-                    gfx,
-                    layer_type,
-                    params,
-                    lod_end)) {
-                return false;
-            }
-        }
-    }
-
-    return true;
+    return map_idx_walk_section(idx_file, mlp_file, db_file, &section,
+                                camera, viewport, gfx, layer_type, params);
 }
 
 bool purrgo_map_render_viewport(
