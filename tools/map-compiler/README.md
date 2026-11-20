@@ -234,3 +234,26 @@ PurrGO
 ```
 
 The compiler is a build-time tool. Map rendering and map navigation are performed by PurrGO firmware.
+
+---
+
+## 5. Comparing V3 and V4 (load estimate)
+
+`sim_map_io.py` models the SD-card load of one map frame (sectors read, random vs sequential transfers, projected vertices, time). It detects the map format (V3 or V4) automatically.
+
+```bash
+# the same OSM, two formats, two folders (features.csv is shared)
+python purrgo_map_compiler.py belarus.osm --format 3 -o out/belarus-v3
+python purrgo_map_compiler.py belarus.osm --format 4 -o out/belarus-v4
+
+# one map
+python sim_map_io.py out/belarus-v4 53.9 27.56 --scales 100,500,2000,10000,50000,200000 --breakdown
+
+# V3 (A) against V4 (B) on identical frames
+python sim_map_io.py out/belarus-v3 53.9 27.56 --compare out/belarus-v4
+```
+
+In the `--compare` table `B/A < 1` means V4 is better. Useful keys (they apply to both maps): `--max-lod 2` (V4 selects LOD like V3: isolates the index layout from LOD 3 and geometry simplification), `--line-idx N` (read-ahead for `.idx`; V4 child blocks are consecutive), `--pan 0.3` (second frame after a pan, warm cache), `--cpu 84|160`, `--spi-mhz`.
+
+Read the columns this way: `xfers`/`sect` — SD transfers and sectors (index layout), `idx xf` — transfers for `.idx` only, `verts` — projected vertices (effect of LOD 3 and simplification, mostly at 10 km and above), `total s` — mid estimate of the model. The numbers are a model, not a hardware measurement.
+

@@ -11,12 +11,20 @@ sim_map_io.py - оценка нагрузки на SD-карту при отри
   - сколько дорогих f_lseek "от начала файла" (FatFs без CLMT).
 По этим числам по простой модели считается время.
 
+Формат карты (V3 или V4) определяется автоматически по сигнатуре SQT в roads.idx.
+V3: обход в глубину с прыжками v3_jump (как сейчас в прошивке).
+V4: обход по блокам 512 Б по child_block (docs/map-format-v4.md, раздел 7.2),
+    четыре LOD; LOD 3 выбирается по масштабу (см. target_lod).
+
 Использование:
     python sim_map_io.py <папка_карты> <lat> <lon> [--scales 500,2000,...]
                          [--poi-mode no|icons] [--labels 0|1]
                          [--bus spi] [--spi-mhz MHZ] [--fastseek] [--cache N] [--line L]
                          [--min-px P] [--min-px-poly P] [--pan FRAC]
-Это ОЦЕНКА по модели, а не замер на железе. Параметры модели - в блоке MODEL.
+                         [--max-lod N] [--compare <папка_карты_2>]
+--compare считает те же кадры на второй карте (обычно V4 против V3) и печатает
+таблицу сравнения. Это ОЦЕНКА по модели, а не замер на железе. Параметры
+модели - в блоке MODEL.
 """
 
 import argparse
@@ -44,6 +52,9 @@ STYLED_CODES = frozenset(
     [96, 97, 98])            # LANDUSE_NATURAL/HUMAN, SAND
 NAME_OFF = 32 + 129 + 17              # смещение имени в .db
 REC = 117
+
+V4_BLOCK = 512                        # блок индекса V4 = один сектор SD
+V4_MAGIC = b"SQT\x02"
 
 SCALES = [10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000,
           100000, 200000, 500000, 1000000]
@@ -233,6 +244,29 @@ def cos10k(lat_1e7):
     return int(math.cos(math.radians(lat_1e7 / 1e7)) * 10000)
 
 
+def is_v4_file(idx):
+    """V4 по сигнатуре SQT\\x02 по смещению LOD 0 (без учёта в статистике ввода-вывода)."""
+    d = idx.data
+    if len(d) < 36 or d[:3] != b"PGO":
+        return False
+    lod0 = u32(d, 8)
+    return d[lod0:lod0 + 4] == V4_MAGIC
+
+
+def map_format(map_dir):
+    """'V3' / 'V4' по первому найденному .idx; None, если слоёв нет."""
+    for layer in ("roads", "landuse", "pois"):
+        p = os.path.join(map_dir, layer + ".idx")
+        if os.path.exists(p):
+            with open(p, "rb") as f:
+                head = f.read(32)
+                if len(head) < 32 or head[:3] != b"PGO":
+                    return None
+                f.seek(u32(head, 8))
+                return "V4" if f.read(4) == V4_MAGIC else "V3"
+    return None
+
+
 def make_camera(lat_deg, lon_deg, width_m):
     lat = int(lat_deg * 1e7)
     lon = int(lon_deg * 1e7)
@@ -252,10 +286,19 @@ def bbox_hit(xmin, ymin, xmax, ymax, cam):
     return xmax >= cam["min_x"] and xmin <= cam["max_x"]
 
 
-def target_lod(scale_m, details_high=True):
+def target_lod(scale_m, details_high=True, lods=3):
+    """LOD по масштабу. lods=3: как в прошивке сейчас (0..2).
+    lods=4 (V4): LOD 3 по предложению docs/design/pgo-v4.md: при обычной
+    детализации с масштаба > 20 км, при низкой > 10 км (пороги уточнить замером)."""
     if details_high:
-        return 0 if scale_m <= 500 else (1 if scale_m <= 5000 else 2)
-    return 0 if scale_m <= 100 else (1 if scale_m <= 2000 else 2)
+        lod = 0 if scale_m <= 500 else (1 if scale_m <= 5000 else 2)
+        if lods >= 4 and scale_m > 20000:
+            lod = 3
+    else:
+        lod = 0 if scale_m <= 100 else (1 if scale_m <= 2000 else 2)
+        if lods >= 4 and scale_m > 10000:
+            lod = 3
+    return lod
 
 
 class Renderer:
@@ -303,6 +346,30 @@ class Renderer:
         sy = max(1, cam["max_y"] - cam["min_y"])
         return max((xmax - xmin) * VP_W / sx, (ymax - ymin) * VP_H / sy) < mp
 
+    def data_node(self, buf, mlp, db, cam, layer):
+        """Узел данных (25 Б), общий для V3 и V4."""
+        ymin, ymax = i32(buf, 4), i32(buf, 12)
+        xmin, xmax = i32(buf, 0), i32(buf, 8)
+        if not bbox_hit(xmin, ymin, xmax, ymax, cam):
+            return
+        obj_type = buf[16]
+        v1, v2 = u32(buf, 17), u32(buf, 21)
+        if layer == "pois":
+            if self.p["poi_mode"] == "no":
+                return
+            if self.p["labels"] and v2 > 0 and db is not None:
+                self.read_name(db, v2, True)
+            return
+        if obj_type not in STYLED_CODES:
+            return
+        if v1 > 0:
+            if self.too_small(xmin, ymin, xmax, ymax, cam, layer):
+                self.st.skipped_small += 1
+                return
+            self.render_feature(mlp, v1)
+            if layer == "landuse" and self.p["labels"] and v2 >= 2 and db is not None:
+                self.read_name(db, v2, False)
+
     def parse_node(self, idx, state, mlp, db, is_nav, cam, layer, lod_end, depth):
         size = 28 if is_nav else 25
         if state["off"] + size > lod_end:
@@ -312,27 +379,7 @@ class Renderer:
             return False
         state["off"] += size
         if not is_nav:
-            ymin, ymax = i32(buf, 4), i32(buf, 12)
-            xmin, xmax = i32(buf, 0), i32(buf, 8)
-            if not bbox_hit(xmin, ymin, xmax, ymax, cam):
-                return True
-            obj_type = buf[16]
-            v1, v2 = u32(buf, 17), u32(buf, 21)
-            if layer == "pois":
-                if self.p["poi_mode"] == "no":
-                    return True
-                if self.p["labels"] and v2 > 0 and db is not None:
-                    self.read_name(db, v2, True)
-                return True
-            if obj_type not in STYLED_CODES:
-                return True
-            if v1 > 0:
-                if self.too_small(xmin, ymin, xmax, ymax, cam, layer):
-                    self.st.skipped_small += 1
-                    return True
-                self.render_feature(mlp, v1)
-                if layer == "landuse" and self.p["labels"] and v2 >= 2 and db is not None:
-                    self.read_name(db, v2, False)
+            self.data_node(buf, mlp, db, cam, layer)
             return True
         jump = u32(buf, 0)
         cymin, cymax = i32(buf, 8), i32(buf, 16)
@@ -355,7 +402,55 @@ class Renderer:
                 return False
         return True
 
+    def visit_block(self, idx, mlp, db, off, level, count, cam, layer, end, depth):
+        """V4: чтение одного блока 512 Б и переход в детей (раздел 7.2).
+        level: уровень записей блока, -1 = листовой блок (узлы данных)."""
+        if off % V4_BLOCK or off + V4_BLOCK > end or depth >= MAX_DEPTH:
+            return False
+        idx.seek(off)
+        blk = idx.read(V4_BLOCK)
+        if len(blk) != V4_BLOCK:
+            return False
+        if level == -1:
+            for k in range(count):
+                self.data_node(blk[k * 25:(k + 1) * 25], mlp, db, cam, layer)
+            return True
+        for k in range(count):
+            child, xmin, ymin, xmax, ymax, lv, cnt = struct.unpack_from("<IiiiiII", blk, k * 28)
+            if not bbox_hit(xmin, ymin, xmax, ymax, cam):
+                continue
+            if child <= off:                       # ограничение 3 раздела 7.1
+                return False
+            self.st.pass_nav += 1
+            if not self.visit_block(idx, mlp, db, child, lv - 1, cnt, cam, layer, end,
+                                    depth + 1):
+                return False
+        return True
+
+    def render_layer_v4(self, idx, mlp, db, cam, layer, scale_m):
+        idx.seek(0)
+        b = idx.read(32)
+        lods = [u32(b, 8 + 4 * i) for i in range(4)]
+        if mlp is not None:
+            mlp.seek(0)
+            mlp.read(32)
+        lod = target_lod(scale_m, True, 4)
+        lod = min(lod, self.p.get("max_lod", 3))
+        start = lods[lod]
+        end = lods[lod + 1] if lod < 3 else idx.size
+        idx.seek(start)
+        sq = idx.read(28)
+        depth, roots = u32(sq, 8), u32(sq, 12)
+        self.st.depth[layer] = depth
+        if depth > 0:
+            self.visit_block(idx, mlp, db, start + V4_BLOCK, depth - 1, roots, cam, layer,
+                             end, 0)
+        return lod
+
     def render_layer(self, idx, mlp, db, cam, layer, scale_m):
+        if is_v4_file(idx):
+            return self.render_layer_v4(idx, mlp, db, cam, layer, scale_m)
+
         def header(f):
             f.seek(0)
             b = f.read(32)
@@ -363,7 +458,7 @@ class Renderer:
         payload, lods = header(idx)
         if mlp is not None:
             header(mlp)
-        lod = target_lod(scale_m)
+        lod = min(target_lod(scale_m), self.p.get("max_lod", 3))
         end = lods[1] if lod == 0 else (lods[2] if lod == 1 else 32 + payload)
         idx.seek(lods[lod])
         sq = idx.read(16)
@@ -412,6 +507,44 @@ def time_ms(st, i, bus="spi", fastseek=False, kscale=1.0, f=1.0, extra_levels=0)
     return io, cpu
 
 
+def frame(map_dir, a, params, line, sc):
+    """Кадр на масштабе sc (с --pan: второй кадр после сдвига). -> (stats, lod, io, cpu)."""
+    w = World(map_dir, a.cache, line, MODEL["cluster_kb"][1] * 1024)
+    st, lod = run_frame(w, a.lat, a.lon, sc, params)
+    if a.pan:
+        cam = make_camera(a.lat, a.lon, sc)
+        dlon = a.pan * (cam["max_x"] - cam["min_x"]) / 1e7
+        st, lod = run_frame(w, a.lat, a.lon + dlon, sc, params)
+    res = [time_ms(st, i, a.bus, a.fastseek) for i in range(3)]
+    return st, lod, [r[0] for r in res], [r[1] for r in res]
+
+
+def ratio(x, y):
+    return "   -" if not x else f"{y / x:4.2f}"
+
+
+def compare(a, params, line):
+    """Сравнение двух карт (A = map_dir, B = --compare) на одних и тех же кадрах."""
+    fa, fb = map_format(a.map_dir), map_format(a.compare)
+    print(f"A={a.map_dir} [{fa}]   B={a.compare} [{fb}]   center=({a.lat},{a.lon}) "
+          f"cpu={a.cpu}MHz spi_mhz={a.spi_mhz or 'модель'} cache={a.cache} line={line} "
+          f"max_lod={a.max_lod} pan={a.pan}")
+    print("Время - середина диапазона low/mid/high модели; B/A < 1 означает, что B лучше.")
+    print(f"{'scale':>8} {'LOD A/B':>7} | {'xfers A':>7} {'B':>6} {'B/A':>5} | "
+          f"{'sect A':>6} {'B':>6} {'B/A':>5} | {'idx xf A':>8} {'B':>6} | "
+          f"{'verts A':>7} {'B':>7} {'B/A':>5} | {'total s A':>9} {'B':>6} {'B/A':>5}")
+    for sc in [int(x) for x in a.scales.split(",")]:
+        sa, la, ioa, cpua = frame(a.map_dir, a, params, line, sc)
+        sb, lb, iob, cpub = frame(a.compare, a, params, line, sc)
+        xa, xb = sa.x_seq + sa.x_rand, sb.x_seq + sb.x_rand
+        ta, tb = (ioa[1] + cpua[1]) / 1000, (iob[1] + cpub[1]) / 1000
+        print(f"{sc:>8} {la:>3}/{lb:<3} | {xa:>7} {xb:>6} {ratio(xa, xb):>5} | "
+              f"{sa.sectors:>6} {sb.sectors:>6} {ratio(sa.sectors, sb.sectors):>5} | "
+              f"{sa.by_kind.get('idx', 0):>8} {sb.by_kind.get('idx', 0):>6} | "
+              f"{sa.vertices:>7} {sb.vertices:>7} {ratio(sa.vertices, sb.vertices):>5} | "
+              f"{ta:>9.3f} {tb:>6.3f} {ratio(ta, tb):>5}")
+
+
 def main():
     global CPU
     ap = argparse.ArgumentParser()
@@ -439,6 +572,12 @@ def main():
     ap.add_argument("--min-px", type=float, default=0, help="не рисовать объекты мельче P пикселей")
     ap.add_argument("--min-px-poly", type=float, default=None,
                     help="порог пропуска для полигонов (landuse), по умолчанию как --min-px")
+    ap.add_argument("--max-lod", type=int, default=3, choices=range(4),
+                    help="не выбирать LOD выше N (например 2: V4-карта выбирает LOD как V3, "
+                         "сравнение раскладки индекса без LOD 3)")
+    ap.add_argument("--compare", metavar="DIR2", default=None,
+                    help="вторая папка карты (обычно V4 против V3): те же кадры, таблица "
+                         "сравнения; ключи --max-lod и остальные действуют на обе карты")
     ap.add_argument("--pan", type=float, default=0,
                     help="после кадра сдвинуть камеру на долю ширины и считать второй кадр")
     a = ap.parse_args()
@@ -448,12 +587,15 @@ def main():
         mid = 4.096 / a.spi_mhz + 0.04
         MODEL["xfer_spi_ms"] = (mid * 0.85, mid, mid * 1.8)
     params = {"poi_mode": a.poi_mode, "labels": bool(a.labels), "min_px": a.min_px,
-              "min_px_poly": a.min_px_poly}
+              "min_px_poly": a.min_px_poly, "max_lod": a.max_lod}
     line = a.line
     if a.line_idx or a.line_mlp or a.line_db:
         line = {"idx": a.line_idx or a.line, "mlp": a.line_mlp or a.line, "db": a.line_db or a.line}
 
-    print(f"map={a.map_dir} center=({a.lat},{a.lon}) bus={a.bus} cpu={a.cpu}MHz "
+    if a.compare:
+        compare(a, params, line)
+        return
+    print(f"map={a.map_dir} [{map_format(a.map_dir)}] center=({a.lat},{a.lon}) bus={a.bus} cpu={a.cpu}MHz "
           f"spi_mhz={a.spi_mhz or 'модель'} fastseek={a.fastseek} cache={a.cache} line={line} min_px={a.min_px} pan={a.pan}")
     print(f"{'scale':>8} {'LOD':>3} {'xfers':>6} {'sect':>5} {'KB':>6} {'verts':>7} "
           f"{'skip':>5} {'bk-seek':>7} | {'I/O ms lo/mid/hi':>20} | {'CPU ms lo/mid/hi':>20} | "

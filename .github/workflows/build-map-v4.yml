@@ -9,7 +9,9 @@ name: Build map V4 (Belarus)
 #   * GitHub Release "maps-<имя>-v4" (опционально): zip. Релиз V3 ("maps-<имя>") не трогается.
 # Перед публикацией карта проверяется валидатором tools/map-viewer.py (все слои,
 # все 4 LOD, search.idx); скриншоты слоёв - в artifact viewer-<имя>.
-# sim_map_io.py (оценка времени загрузки) читает только V3, поэтому здесь не запускается.
+# Дополнительно (run_sim) прогоняется sim_map_io.py: оценка V4 и, если включено
+# sim_compare_v3, сравнение с той же картой в формате V3 (собирается из того же OSM) -
+# отчёт в Summary запуска и в artifact sim-report-<имя>; в Release кладётся sim_report.txt.
 on:
   workflow_dispatch:
     inputs:
@@ -37,6 +39,18 @@ on:
         description: "Допуск упрощения геометрии для LOD 3, метры"
         required: false
         default: "250"
+      run_sim:
+        description: "После сборки прогнать sim_map_io.py (оценка времени загрузки экрана карты)"
+        type: boolean
+        default: true
+      sim_compare_v3:
+        description: "Собрать ту же карту в V3 и сравнить V3 и V4 (--compare); добавляет несколько минут"
+        type: boolean
+        default: true
+      sim_points:
+        description: "Точки для анализа: имя:lat:lon через запятую (должны лежать внутри карты)"
+        required: false
+        default: "Minsk:53.9006:27.5590,Gomel:52.4345:30.9754,Brest:52.0976:23.7341"
 
 permissions:
   contents: write   # нужно только для шага Release
@@ -202,6 +216,100 @@ jobs:
           retention-days: 30
           if-no-files-found: error
 
+      # V3-вариант той же карты (тот же OSM и features.csv) - только для сравнения в
+      # sim_map_io.py. Не должен ронять сборку: V4 уже собрана и выложена выше.
+      - name: Compile map V3 for comparison
+        id: v3
+        if: ${{ inputs.run_sim && inputs.sim_compare_v3 }}
+        continue-on-error: true
+        timeout-minutes: 90
+        working-directory: tools/map-compiler
+        run: |
+          python purrgo_map_compiler.py "$WORK/$MAP_NAME.osm" \
+            --format 3 -o "$WORK/out-v3/$MAP_NAME"
+          [ -s "$WORK/out-v3/$MAP_NAME/roads.idx" ] || { echo "::error::V3 map was not built"; exit 1; }
+          ls -lh "$WORK/out-v3/$MAP_NAME"
+
+      # Анализ не должен ронять сборку: карта уже готова и выложена выше.
+      - name: Analyze load time (sim_map_io.py)
+        id: sim
+        if: ${{ inputs.run_sim }}
+        continue-on-error: true
+        timeout-minutes: 60
+        working-directory: tools/map-compiler
+        env:
+          SIM_POINTS: ${{ inputs.sim_points }}
+        run: |
+          set -uo pipefail
+          out="$WORK/sim_report.txt"
+          v4="$OUT"
+          v3="$WORK/out-v3/$MAP_NAME"
+          have_v3=0
+          [ -s "$v3/roads.idx" ] && have_v3=1
+          : > "$out"
+          [ "$have_v3" = 1 ] || echo "V3-карта для сравнения не собрана: только отчёты V4." >> "$out"
+
+          # run <заголовок> <lat> <lon> <аргументы sim_map_io.py...>   - только V4
+          run() {
+            local title="$1" lat="$2" lon="$3"; shift 3
+            { echo; echo "### $title"
+              python sim_map_io.py "$v4" "$lat" "$lon" "$@"; } >> "$out"
+          }
+          # cmp <заголовок> <lat> <lon> <аргументы...>   - A = V3, B = V4 (B/A < 1: V4 лучше)
+          cmp() {
+            local title="$1" lat="$2" lon="$3"; shift 3
+            [ "$have_v3" = 1 ] || return 0
+            { echo; echo "### $title"
+              python sim_map_io.py "$v3" "$lat" "$lon" "$@" --compare "$v4"; } >> "$out"
+          }
+
+          S_MAIN="100,500,2000,5000,20000"
+          S_JUMP="500,2000,5000"
+          S_FAR="50000,100000,200000,500000"
+          NOW="--spi-mhz 10 --cpu 84"
+          FW="--fastseek --min-px 2 --min-px-poly 3 --cache 64 --line-mlp 4"
+          first=1
+          IFS=',' read -ra PTS <<< "$SIM_POINTS"
+          for pt in "${PTS[@]}"; do
+            IFS=':' read -r name lat lon <<< "$pt"
+            echo "## $name ($lat, $lon)" >> "$out"
+            # V4 сама по себе (с разбивкой idx/mlp/db)
+            run "V4: U585 СЕЙЧАС (SPI 10 МГц, 80 МГц), без правок прошивки"  "$lat" "$lon" --scales "$S_MAIN" $NOW --breakdown
+            run "V4: U585 СЕЙЧАС, с правками прошивки"                      "$lat" "$lon" --scales "$S_MAIN" $NOW $FW
+            run "V4: U585 после SPI /4 (20 МГц), с правками прошивки"       "$lat" "$lon" --scales "$S_MAIN" --spi-mhz 20 --cpu 84 $FW
+            # V3 против V4 на одних и тех же кадрах
+            cmp "V3 -> V4: U585 СЕЙЧАС, без правок прошивки"                "$lat" "$lon" --scales "$S_MAIN" $NOW
+            cmp "V3 -> V4: только раскладка индекса (V4 с LOD как у V3, --max-lod 2)" "$lat" "$lon" --scales "$S_MAIN" $NOW --max-lod 2
+            cmp "V3 -> V4: с правками прошивки"                             "$lat" "$lon" --scales "$S_MAIN" $NOW $FW
+            cmp "V3 -> V4: read-ahead idx 4 (блоки детей V4 идут подряд)"   "$lat" "$lon" --scales "$S_MAIN" $NOW $FW --line-idx 4
+            cmp "V3 -> V4: Follow-прыжок (кэш 64)"                          "$lat" "$lon" --scales "$S_JUMP" $NOW $FW --pan 0.81
+            # дальние масштабы (LOD 3 и упрощение геометрии) - один раз, по первой точке
+            if [ "$first" = 1 ]; then
+              first=0
+              cmp "V3 -> V4: дальние масштабы (LOD 3, упрощение)"           "$lat" "$lon" --scales "$S_FAR" $NOW $FW
+              cmp "V3 -> V4: дальние масштабы без LOD 3 (--max-lod 2)"      "$lat" "$lon" --scales "$S_FAR" $NOW $FW --max-lod 2
+            fi
+          done
+
+          {
+            echo "## Оценка времени загрузки экрана карты V4 (sim_map_io.py)"
+            echo
+            echo "Модель, а не замер на железе. Время: I/O и CPU, секунды, low/mid/high; в таблицах"
+            echo "сравнения A = V3, B = V4, B/A < 1 - V4 лучше."
+            echo '```'
+            cat "$out"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload sim report
+        if: ${{ always() && inputs.run_sim }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: sim-report-${{ env.MAP_NAME }}
+          path: ${{ env.WORK }}/sim_report.txt
+          retention-days: 30
+          if-no-files-found: ignore
+
       - name: Publish to Release
         if: ${{ inputs.publish_release }}
         env:
@@ -213,4 +321,7 @@ jobs:
               --notes "Карта в формате V4 с индексом поиска. Распаковать архив в корень microSD (создаст PURRGO/MAPS/$MAP_NAME)."
           fi
           gh release upload "$tag" "$WORK/$ZIP_NAME" --clobber
+          if [ -s "$WORK/sim_report.txt" ]; then
+            gh release upload "$tag" "$WORK/sim_report.txt" --clobber
+          fi
           echo "### Скачать: ${{ github.server_url }}/${{ github.repository }}/releases/tag/$tag" >> "$GITHUB_STEP_SUMMARY"
