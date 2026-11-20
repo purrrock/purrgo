@@ -20,22 +20,32 @@ static bool s_supply_low;
 static int s_gnss_profile_calls, s_gnss_profile_last;
 
 /* Платформенный хук звука: записывает сигналы, которые ядро попросило сыграть. */
-static int s_sound_total, s_sound_count[PURRGO_SOUND_COUNT];
+static int s_sound_total, s_sound_count[PURRGO_SOUND_COUNT], s_sound_stops;
 static purrgo_sound_t s_sound_last;
+static purrgo_sound_level_t s_sound_last_level;
 void fake_sound_reset(void)
 {
     s_sound_total = 0;
     s_sound_last = PURRGO_SOUND_NONE;
+    s_sound_last_level = PURRGO_SOUND_LEVEL_OFF;
+    s_sound_stops = 0;
     for (int i = 0; i < (int)PURRGO_SOUND_COUNT; i++) { s_sound_count[i] = 0; }
 }
 int fake_sound_total(void) { return s_sound_total; }
 int fake_sound_count(purrgo_sound_t sound) { return s_sound_count[sound]; }
 purrgo_sound_t fake_sound_last(void) { return s_sound_last; }
-void purrgo_platform_sound_play(purrgo_sound_t sound)
+purrgo_sound_level_t fake_sound_last_level(void) { return s_sound_last_level; }
+int fake_sound_stops(void) { return s_sound_stops; }
+void purrgo_platform_sound_play(purrgo_sound_t sound, purrgo_sound_level_t level)
 {
     s_sound_total++;
     s_sound_count[sound]++;
     s_sound_last = sound;
+    s_sound_last_level = level;
+}
+void purrgo_platform_sound_stop(void)
+{
+    s_sound_stops++;
 }
 
 void fake_power_reset(void)

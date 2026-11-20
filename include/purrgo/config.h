@@ -7,6 +7,7 @@
 #include "purrgo/map_types.h"
 #include "purrgo/battery.h"
 #include "purrgo/navigation.h"
+#include "purrgo/sound.h"
 
 
 /* purrgo_poi_mode_t и purrgo_map_details_t определены в map_types.h */
@@ -126,10 +127,11 @@ typedef struct {
     bool sd_log;
 
     /*
-     * Звуковые сигналы (пьезоизлучатель): пункт SOUND главного меню, ключ SOUND в
-     * PURRGO.CFG (0 или 1; нет ключа - 0). По умолчанию выключены. См. purrgo/sound.h.
+     * Громкость звуковых сигналов (пьезоизлучатель): пункт SOUND главного меню, ключ SOUND в
+     * PURRGO.CFG (0 - OFF, 1 - LOW, 2 - HIGH; нет ключа или другое значение - OFF).
+     * При OFF прибор полностью беззвучный. См. purrgo/sound.h.
      */
-    bool sound_on;
+    purrgo_sound_level_t sound_level;
 
     /*
      * Позиция чтения: последняя открытая книга (имя файла без пути, пустая

@@ -39,21 +39,36 @@
 #  endif
 #endif
 
+/* Класс громкости шага; скважность по классу и настройке SOUND - в k_duty[]. */
+typedef enum {
+    VOL_PAUSE = 0,
+    VOL_LOUD,
+    VOL_MID,
+    VOL_QUIET,
+    VOL_COUNT
+} sound_vol_t;
+
 typedef struct {
     uint16_t ms;     /* длительность шага */
-    uint8_t  duty;   /* скважность, %; 0 - пауза */
+    uint8_t  vol;    /* sound_vol_t; VOL_PAUSE - пауза */
 } sound_step_t;
 
-#define STEP(ms_, duty_) { (uint16_t)(ms_), (uint8_t)(duty_) }
+#define STEP(ms_, vol_) { (uint16_t)(ms_), (uint8_t)(vol_) }
 
-static const sound_step_t k_error[]   = { STEP(PURRGO_SOUND_ERROR_MS, PURRGO_SOUND_DUTY_LOUD_PCT) };
+static const sound_step_t k_error[]   = { STEP(PURRGO_SOUND_ERROR_MS, VOL_LOUD) };
 static const sound_step_t k_arrived[] = {
-    STEP(PURRGO_SOUND_ARRIVED_MS,     PURRGO_SOUND_DUTY_LOUD_PCT),
-    STEP(PURRGO_SOUND_ARRIVED_GAP_MS, 0),
-    STEP(PURRGO_SOUND_ARRIVED_MS,     PURRGO_SOUND_DUTY_LOUD_PCT),
+    STEP(PURRGO_SOUND_ARRIVED_MS,     VOL_LOUD),
+    STEP(PURRGO_SOUND_ARRIVED_GAP_MS, VOL_PAUSE),
+    STEP(PURRGO_SOUND_ARRIVED_MS,     VOL_LOUD),
 };
-static const sound_step_t k_info[]    = { STEP(PURRGO_SOUND_INFO_MS,  PURRGO_SOUND_DUTY_MID_PCT) };
-static const sound_step_t k_click[]   = { STEP(PURRGO_SOUND_CLICK_MS, PURRGO_SOUND_DUTY_QUIET_PCT) };
+static const sound_step_t k_info[]    = { STEP(PURRGO_SOUND_INFO_MS,  VOL_MID) };
+static const sound_step_t k_click[]   = { STEP(PURRGO_SOUND_CLICK_MS, VOL_QUIET) };
+
+/* Скважность, %: [уровень SOUND - 1][класс - 1]; уровни LOW и HIGH (OFF сюда не доходит). */
+static const uint8_t k_duty[2][3] = {
+    { PURRGO_SOUND_DUTY_LOUD_LOW_PCT, PURRGO_SOUND_DUTY_MID_LOW_PCT, PURRGO_SOUND_DUTY_QUIET_LOW_PCT },
+    { PURRGO_SOUND_DUTY_LOUD_PCT,     PURRGO_SOUND_DUTY_MID_PCT,     PURRGO_SOUND_DUTY_QUIET_PCT     },
+};
 
 typedef struct {
     const sound_step_t* steps;
@@ -71,6 +86,7 @@ static const sound_pattern_t k_patterns[PURRGO_SOUND_COUNT] = {
 
 static struct {
     purrgo_sound_t sound;      /* PURRGO_SOUND_NONE - ничего не звучит */
+    purrgo_sound_level_t level;   /* громкость звучащего сигнала (LOW или HIGH) */
     uint8_t        step;
     uint32_t       step_end_ms;
     bool           pwm_on;
@@ -169,8 +185,8 @@ static void sound_begin_step(uint32_t now_ms)
     const sound_step_t* step = &pat->steps[s_snd.step];
 
     s_snd.step_end_ms = now_ms + step->ms;
-    if (step->duty != 0U) {
-        pwm_start(step->duty);
+    if (step->vol != VOL_PAUSE) {
+        pwm_start(k_duty[(unsigned)s_snd.level - 1U][(unsigned)step->vol - 1U]);
     } else {
         pwm_stop();
     }
@@ -199,8 +215,12 @@ void purrgo_sound_stm32_init(void)
     s_snd.pwm_on = false;
 }
 
-void purrgo_platform_sound_play(purrgo_sound_t sound)
+void purrgo_platform_sound_play(purrgo_sound_t sound, purrgo_sound_level_t level)
 {
+    /* OFF - полная тишина: ядро сюда с OFF не зовёт, но драйвер подстраховывается сам. */
+    if (level != PURRGO_SOUND_LEVEL_LOW && level != PURRGO_SOUND_LEVEL_HIGH) {
+        return;
+    }
     if (!s_snd.ready || sound <= PURRGO_SOUND_NONE || sound >= PURRGO_SOUND_COUNT) {
         return;
     }
@@ -209,13 +229,34 @@ void purrgo_platform_sound_play(purrgo_sound_t sound)
         return;
     }
 
-    PURRGO_LOG("Sound: %s\r\n", purrgo_sound_name(sound));
+    PURRGO_LOG("Sound: %s (%s)\r\n", purrgo_sound_name(sound), purrgo_sound_level_name(level));
 #if !PURRGO_SOUND_HW
     return;   /* заглушка: только лог */
 #else
     s_snd.sound = sound;
+    s_snd.level = level;
     s_snd.step = 0U;
     sound_begin_step(HAL_GetTick());
+
+    /*
+     * Щелчок играется синхронно: после нажатия кнопки часто идёт долгая блокирующая работа (читалка
+     * открывает книгу, выключение, перерисовка карты), главный цикл в это время не крутится и
+     * не остановил бы ШИМ. Тогда щелчок в 3 мс тянулся бы на всё время операции. Ожидание
+     * по таймбейзу HAL (LPTIM1, 1 кГц): щелчок длится 3-4 мс.
+     */
+    if (sound == PURRGO_SOUND_CLICK) {
+        HAL_Delay(PURRGO_SOUND_CLICK_MS);
+        sound_finish();
+    }
+#endif
+}
+
+void purrgo_platform_sound_stop(void)
+{
+    /* Выводы излучателя в Low, даже если ничего не звучало: в сон они должны уйти тихими. */
+    sound_finish();
+#if PURRGO_SOUND_HW
+    pins_low();
 #endif
 }
 

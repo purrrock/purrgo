@@ -5,7 +5,12 @@
 #include "purrgo/sound.h"
 #include "purrgo/logger.h"
 
-void purrgo_platform_sound_play(purrgo_sound_t sound)
+void purrgo_platform_sound_play(purrgo_sound_t sound, purrgo_sound_level_t level)
 {
-    PURRGO_LOG("SOUND: %s\n", purrgo_sound_name(sound));
+    PURRGO_LOG("SOUND: %s (%s)\n", purrgo_sound_name(sound), purrgo_sound_level_name(level));
+}
+
+void purrgo_platform_sound_stop(void)
+{
+    PURRGO_LOG("SOUND: stop\n");
 }

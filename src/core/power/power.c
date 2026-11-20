@@ -5,6 +5,7 @@
 #include "purrgo/gnss_io.h"
 #include "purrgo/logger.h"
 #include "purrgo/map.h"
+#include "purrgo/sound.h"
 #include "purrgo/track_logger.h"
 
 #include <stdbool.h>
@@ -12,6 +13,12 @@
 void purrgo_system_power_off(void)
 {
     PURRGO_LOG("Powering off...\n\r");
+
+    /*
+     * 0. Оборвать звучащий сигнал. Дальше идут секунды блокирующей работы (SD, e-ink), главный
+     * цикл не крутится и сам звук не остановит: излучатель пищал бы до самого сна.
+     */
+    purrgo_sound_stop();
 
     /*
      * 1. Финальный экран: последняя карта с треком и маркером и инверсные
@@ -57,6 +64,8 @@ void purrgo_system_power_off(void)
     display_sleep();
     PURRGO_LOG("Display off\r\n");
 
-    /* 8. Низкое энергопотребление (платформа). На железе не возвращается. */
+    /* 8. Низкое энергопотребление (платформа). На железе не возвращается. Звук ещё раз
+     * останавливаем явно: в сон нельзя уходить с запущенным ШИМ излучателя. */
+    purrgo_sound_stop();
     purrgo_platform_enter_standby();
 }

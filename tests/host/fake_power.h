@@ -42,6 +42,8 @@ void fake_sound_reset(void);
 int fake_sound_total(void);
 int fake_sound_count(purrgo_sound_t sound);
 purrgo_sound_t fake_sound_last(void);
+purrgo_sound_level_t fake_sound_last_level(void);   /* громкость последнего сигнала */
+int fake_sound_stops(void);                          /* число purrgo_platform_sound_stop() */
 
 /* Вызовы purrgo_gnss_set_profile(): число вызовов и последний профиль (purrgo_gnss_profile_t). */
 int fake_gnss_profile_calls(void);

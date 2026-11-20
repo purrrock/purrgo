@@ -369,7 +369,7 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
 
     /*
      * Тихий щелчок на каждое принятое событие кнопки: E-Ink обновляется секунды, и звук
-     * подтверждает, что нажатие дошло до прибора (purrgo/sound.h; при выключенном звуке - тишина).
+     * подтверждает, что нажатие дошло до прибора (purrgo/sound.h; при SOUND = OFF - тишина).
      */
     purrgo_sound_play(PURRGO_SOUND_CLICK);
 
@@ -674,9 +674,7 @@ static void track_logger_service(const purrgo_gnss_solution_t* current_fix) {
          * повторную попытку с нарастающей паузой.
          */
         if (logger_state == LOGGER_STATE_ERROR && prev_logger_state == LOGGER_STATE_RECORDING) {
-            logger_schedule_retry(now);
-            /* Трек перестал писаться (сбой SD): пользователь должен узнать об этом сразу. */
-            purrgo_sound_play(PURRGO_SOUND_ERROR);
+            logger_schedule_retry(now);   /* сбой SD: без звука, сигнал только при критическом разряде (supply.c) */
         }
 
         /*

@@ -188,7 +188,7 @@ void purrgo_config_init(void)
     app_config.sd_log = false;
 
     /* Звуковые сигналы по умолчанию выключены. */
-    app_config.sound_on = false;
+    app_config.sound_level = PURRGO_SOUND_LEVEL_OFF;
 
     /*
      * Отображение текущего трека по умолчанию включено.
@@ -588,10 +588,11 @@ bool purrgo_config_load(void)
              * Звуковые сигналы.
              */
             else if (strcmp(key, "SOUND") == 0) {
-                const int32_t on = parse_int32(val);
+                /* 0 - OFF, 1 - LOW, 2 - HIGH. Старый файл с SOUND=1 (было ON) читается как LOW. */
+                const int32_t level = parse_int32(val);
 
-                if (on == 0 || on == 1) {
-                    app_config.sound_on = (on == 1);
+                if (level >= (int32_t)PURRGO_SOUND_LEVEL_OFF && level < (int32_t)PURRGO_SOUND_LEVEL_COUNT) {
+                    app_config.sound_level = (purrgo_sound_level_t)level;
                 }
             }
 
@@ -740,7 +741,7 @@ bool purrgo_config_save(void)
 
         app_config.sd_log ? 1 : 0,
 
-        app_config.sound_on ? 1 : 0,
+        (int)app_config.sound_level,
 
         (int)(sizeof(app_config.book_file) - 1),
         app_config.book_file,

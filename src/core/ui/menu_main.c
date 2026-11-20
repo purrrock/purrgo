@@ -49,7 +49,7 @@ static track_logger_mode_t   draft_log_mode;
 static purrgo_map_details_t  draft_map_details;
 static purrgo_power_source_t draft_power_source;
 static bool                  draft_sd_log;
-static bool                  draft_sound_on;
+static purrgo_sound_level_t   draft_sound_level;
 
 static void reset_drafts(void)
 {
@@ -59,7 +59,7 @@ static void reset_drafts(void)
     draft_map_details       = app_config.map_details;
     draft_power_source      = app_config.power_source;
     draft_sd_log            = app_config.sd_log;
-    draft_sound_on          = app_config.sound_on;
+    draft_sound_level       = app_config.sound_level;
 }
 
 static void apply_drafts(void)
@@ -70,7 +70,7 @@ static void apply_drafts(void)
     app_config.map_details       = draft_map_details;
     app_config.power_source      = draft_power_source;
     app_config.sd_log            = draft_sd_log;
-    app_config.sound_on          = draft_sound_on;
+    app_config.sound_level       = draft_sound_level;
 
     purrgo_logger_set_mode(app_config.log_mode);
     purrgo_logger_sd_set_enabled(app_config.sd_log);
@@ -265,22 +265,27 @@ static void sd_log_select(purrgo_state_t* next)
 
 
 /*
- * SOUND: звуковые сигналы (пьезоизлучатель, purrgo/sound.h). Применяется по BACK, как остальные
- * настройки, но при включении пользователь сразу слышит короткий сигнал: так проверяется, что
- * излучатель подключён и громкость подходит.
+ * SOUND: громкость звуковых сигналов OFF -> LOW -> HIGH (пьезоизлучатель, purrgo/sound.h).
+ * В файл PURRGO.CFG сохраняется по BACK, как остальные настройки, но действует сразу, в
+ * отличие от них: иначе после выбора OFF кнопки продолжали бы щёлкать до выхода из меню.
+ * При выборе LOW/HIGH звучит короткий проверочный сигнал этой громкости, при выборе OFF
+ * звук обрывается.
  */
 static void sound_format(char* buf, size_t size)
 {
-    purrgo_snprintf(buf, size, "SOUND: %s", draft_sound_on ? "ON" : "OFF");
+    purrgo_snprintf(buf, size, "SOUND: %s", purrgo_sound_level_name(draft_sound_level));
 }
 
 static void sound_select(purrgo_state_t* next)
 {
     (void)next;
-    draft_sound_on = !draft_sound_on;
-    if (draft_sound_on) {
-        /* app_config.sound_on до BACK не меняется, поэтому проверочный сигнал играется напрямую. */
-        purrgo_platform_sound_play(PURRGO_SOUND_INFO);
+    draft_sound_level = (purrgo_sound_level_t)(((unsigned)draft_sound_level + 1u) %
+                                               (unsigned)PURRGO_SOUND_LEVEL_COUNT);
+    app_config.sound_level = draft_sound_level;
+    if (draft_sound_level == PURRGO_SOUND_LEVEL_OFF) {
+        purrgo_sound_stop();   /* щелчок этого же нажатия, если он ещё звучит */
+    } else {
+        purrgo_sound_play(PURRGO_SOUND_INFO);
     }
 }
 
@@ -425,7 +430,7 @@ bool menu_app_get_draft_sd_log(void)
     return draft_sd_log;
 }
 
-bool menu_app_get_draft_sound(void)
+purrgo_sound_level_t menu_app_get_draft_sound_level(void)
 {
-    return draft_sound_on;
+    return draft_sound_level;
 }

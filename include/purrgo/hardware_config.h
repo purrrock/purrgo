@@ -695,7 +695,11 @@
 #define PURRGO_SOUND_FREQ_HZ 4000U
 #endif
 
-/* Скважность по уровням громкости, % периода (1..50). */
+/*
+ * Скважность, % периода (1..50), по классам сигнала (LOUD - ERROR и ARRIVED, MID - INFO,
+ * QUIET - щелчок) и по настройке SOUND меню: HIGH - значения без суффикса, LOW - с суффиксом _LOW.
+ * LOW примерно на 6-7 дБ тише HIGH при том же классе (50 % -> 15 %, 20 % -> 8 %, 8 % -> 4 %).
+ */
 #ifndef PURRGO_SOUND_DUTY_LOUD_PCT
 #define PURRGO_SOUND_DUTY_LOUD_PCT 50U
 #endif
@@ -704,6 +708,15 @@
 #endif
 #ifndef PURRGO_SOUND_DUTY_QUIET_PCT
 #define PURRGO_SOUND_DUTY_QUIET_PCT 8U
+#endif
+#ifndef PURRGO_SOUND_DUTY_LOUD_LOW_PCT
+#define PURRGO_SOUND_DUTY_LOUD_LOW_PCT 15U
+#endif
+#ifndef PURRGO_SOUND_DUTY_MID_LOW_PCT
+#define PURRGO_SOUND_DUTY_MID_LOW_PCT 8U
+#endif
+#ifndef PURRGO_SOUND_DUTY_QUIET_LOW_PCT
+#define PURRGO_SOUND_DUTY_QUIET_LOW_PCT 4U
 #endif
 
 /* Длительности, мс. ERROR - один длинный; ARRIVED - два сигнала с паузой; INFO - короткий; CLICK - щелчок. */

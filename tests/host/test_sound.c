@@ -1,10 +1,15 @@
 /*
  * Host-тесты звуковых сигналов (purrgo/sound.h, sound.c и места вызова в ядре):
- *   - настройка SOUND: по умолчанию выключено, ключ SOUND в PURRGO.CFG (чтение, мусор, запись);
- *   - пока звук выключен, платформе ничего не передаётся, в том числе ERROR;
- *   - пункт SOUND главного меню: OK переключает черновик, конфиг меняется по BACK и сохраняется;
- *     при включении играется проверочный сигнал INFO сразу (до BACK);
- *   - ERROR при остановке записи по питанию (supply.c): один раз за остановку;
+ *   - настройка SOUND: OFF / LOW / HIGH, по умолчанию OFF, ключ SOUND=0|1|2 в PURRGO.CFG
+ *     (чтение, мусор, запись);
+ *   - при OFF платформе ничего не передаётся, в том числе ERROR и щелчок кнопок; при LOW и HIGH
+ *     платформа получает выбранную громкость;
+ *   - пункт SOUND главного меню: OK переключает OFF -> LOW -> HIGH, громкость действует сразу
+ *     (щелчки при OFF молчат уже до BACK), в файл сохраняется по BACK; при выборе LOW/HIGH играется
+ *     проверочный сигнал INFO, при выборе OFF звук обрывается;
+ *   - ERROR при критическом разряде (supply.c): один раз за остановку;
+ *   - остановка записи трека (сбой SD, переход в читалку, выключение) звука не даёт;
+ *   - выключение обрывает звучащий сигнал (purrgo_sound_stop() до остановки логгера и до сна);
  *   - ARRIVED при входе в радиус цели (waypoint.c): один раз, повторный только после отхода
  *     дальше PURRGO_WPT_ARRIVAL_REARM_M; цель, заданная уже внутри радиуса, молчит;
  *   - INFO при первом фиксе GNSS после включения (app_fsm.c);
@@ -18,6 +23,7 @@
 #include "purrgo/config.h"
 #include "purrgo/gnss_types.h"
 #include "purrgo/menu_controller.h"
+#include "purrgo/power.h"
 #include "purrgo/sound.h"
 #include "purrgo/supply.h"
 #include "purrgo/track_logger.h"
@@ -82,23 +88,46 @@ static void fresh(void)
 static void test_policy(void)
 {
     fresh();
-    CHECK(!app_config.sound_on);   /* по умолчанию выключено */
+    CHECK(app_config.sound_level == PURRGO_SOUND_LEVEL_OFF);   /* по умолчанию выключено */
 
-    /* Выключено: платформа не получает ничего, даже ERROR. */
-    purrgo_sound_play(PURRGO_SOUND_ERROR);
-    purrgo_sound_play(PURRGO_SOUND_CLICK);
+    /* OFF: платформа не получает ничего - ни ERROR, ни щелчок, ни остальные. */
+    for (int snd = (int)PURRGO_SOUND_CLICK; snd < (int)PURRGO_SOUND_COUNT; snd++) {
+        purrgo_sound_play((purrgo_sound_t)snd);
+    }
     CHECK(fake_sound_total() == 0);
 
-    app_config.sound_on = true;
+    /* Недопустимое значение громкости тоже молчит. */
+    app_config.sound_level = (purrgo_sound_level_t)77;
+    purrgo_sound_play(PURRGO_SOUND_ERROR);
+    CHECK(fake_sound_total() == 0);
+
+    app_config.sound_level = PURRGO_SOUND_LEVEL_LOW;
     purrgo_sound_play(PURRGO_SOUND_ARRIVED);
     CHECK(fake_sound_total() == 1);
     CHECK(fake_sound_last() == PURRGO_SOUND_ARRIVED);
+    CHECK(fake_sound_last_level() == PURRGO_SOUND_LEVEL_LOW);
+
+    app_config.sound_level = PURRGO_SOUND_LEVEL_HIGH;
+    purrgo_sound_play(PURRGO_SOUND_ARRIVED);
+    CHECK(fake_sound_total() == 2);
+    CHECK(fake_sound_last_level() == PURRGO_SOUND_LEVEL_HIGH);
+
+    /* Остановка доходит до платформы при любой громкости. */
+    purrgo_sound_stop();
+    CHECK(fake_sound_stops() == 1);
+
+    CHECK(strcmp(purrgo_sound_level_name(PURRGO_SOUND_LEVEL_OFF), "OFF") == 0);
+    CHECK(strcmp(purrgo_sound_level_name(PURRGO_SOUND_LEVEL_LOW), "LOW") == 0);
+    CHECK(strcmp(purrgo_sound_level_name(PURRGO_SOUND_LEVEL_HIGH), "HIGH") == 0);
+    CHECK(strcmp(purrgo_sound_level_name((purrgo_sound_level_t)9), "?") == 0);
+    fake_sound_reset();
 
     /* Недопустимые значения отбрасываются. */
+    app_config.sound_level = PURRGO_SOUND_LEVEL_HIGH;
     purrgo_sound_play(PURRGO_SOUND_NONE);
     purrgo_sound_play(PURRGO_SOUND_COUNT);
     purrgo_sound_play((purrgo_sound_t)99);
-    CHECK(fake_sound_total() == 1);
+    CHECK(fake_sound_total() == 0);
 
     CHECK(strcmp(purrgo_sound_name(PURRGO_SOUND_ERROR), "ERROR") == 0);
     CHECK(strcmp(purrgo_sound_name((purrgo_sound_t)99), "?") == 0);
@@ -116,47 +145,54 @@ static void test_config_key(void)
     const uint8_t* d;
 
     fresh();
-    CHECK(!app_config.sound_on);
+    CHECK(app_config.sound_level == PURRGO_SOUND_LEVEL_OFF);
 
     /* Старый файл без ключа: выключено. */
     fake_fs_put(CFG, "TZ_MIN=60\n");
     CHECK(purrgo_config_load());
-    CHECK(!app_config.sound_on);
+    CHECK(app_config.sound_level == PURRGO_SOUND_LEVEL_OFF);
 
     fake_fs_reset();
     fake_fs_put(CFG, "SOUND=1\n");
     CHECK(purrgo_config_load());
-    CHECK(app_config.sound_on);
+    CHECK(app_config.sound_level == PURRGO_SOUND_LEVEL_LOW);
+
+    fake_fs_reset();
+    fake_fs_put(CFG, "SOUND=2\n");
+    CHECK(purrgo_config_load());
+    CHECK(app_config.sound_level == PURRGO_SOUND_LEVEL_HIGH);
 
     fake_fs_reset();
     fake_fs_put(CFG, "SOUND=0\n");
-    app_config.sound_on = true;
+    app_config.sound_level = PURRGO_SOUND_LEVEL_HIGH;
     CHECK(purrgo_config_load());
-    CHECK(!app_config.sound_on);
+    CHECK(app_config.sound_level == PURRGO_SOUND_LEVEL_OFF);
 
     /* Мусор и недопустимые значения: остаётся значение по умолчанию (выключено). */
     fake_fs_reset();
     fake_fs_put(CFG, "SOUND=7\n");
     CHECK(purrgo_config_load());
-    CHECK(!app_config.sound_on);
+    CHECK(app_config.sound_level == PURRGO_SOUND_LEVEL_OFF);
+    fake_fs_reset();
+    fake_fs_put(CFG, "SOUND=-1\n");
+    CHECK(purrgo_config_load());
+    CHECK(app_config.sound_level == PURRGO_SOUND_LEVEL_OFF);
     fake_fs_reset();
     fake_fs_put(CFG, "SOUND=abc\n");
     CHECK(purrgo_config_load());
-    CHECK(!app_config.sound_on);
+    CHECK(app_config.sound_level == PURRGO_SOUND_LEVEL_OFF);
 
-    /* Сохранение и повторное чтение. */
-    app_config.sound_on = true;
-    CHECK(purrgo_config_save());
-    d = fake_fs_data(CFG, &n);
-    CHECK(d != NULL && strstr((const char*)d, "SOUND=1\n") != NULL);
-    app_config.sound_on = false;
-    CHECK(purrgo_config_load());
-    CHECK(app_config.sound_on);
-
-    app_config.sound_on = false;
-    CHECK(purrgo_config_save());
-    d = fake_fs_data(CFG, &n);
-    CHECK(d != NULL && strstr((const char*)d, "SOUND=0\n") != NULL);
+    /* Сохранение и повторное чтение всех трёх значений. */
+    static const char* const keys[3] = { "SOUND=0\n", "SOUND=1\n", "SOUND=2\n" };
+    for (int lvl = 0; lvl < 3; lvl++) {
+        app_config.sound_level = (purrgo_sound_level_t)lvl;
+        CHECK(purrgo_config_save());
+        d = fake_fs_data(CFG, &n);
+        CHECK(d != NULL && strstr((const char*)d, keys[lvl]) != NULL);
+        app_config.sound_level = (purrgo_sound_level_t)((lvl + 1) % 3);
+        CHECK(purrgo_config_load());
+        CHECK(app_config.sound_level == (purrgo_sound_level_t)lvl);
+    }
 }
 
 static void test_menu(void)
@@ -166,7 +202,7 @@ static void test_menu(void)
     fresh();
     purrgo_menu_controller_on_enter(APP_STATE_MENU_MAIN);
     purrgo_state_t st = APP_STATE_MENU_MAIN;
-    CHECK(!menu_app_get_draft_sound());
+    CHECK(menu_app_get_draft_sound_level() == PURRGO_SOUND_LEVEL_OFF);
 
     for (int i = 0; i < SOUND_ITEM_INDEX; i++) {
         st = press(st, PURRGO_ACTION_DOWN);
@@ -175,47 +211,73 @@ static void test_menu(void)
     menu_app_get_main_item_text(SOUND_ITEM_INDEX, text, sizeof text);
     CHECK(strcmp(text, "SOUND: OFF") == 0);
 
-    /* OK включает черновик и играет проверочный сигнал; конфиг до BACK не тронут. */
+    /* OK: OFF -> LOW. Громкость действует сразу, играется проверочный сигнал на LOW. */
     st = press(st, PURRGO_ACTION_OK);
     CHECK(st == APP_STATE_MENU_MAIN);
-    CHECK(menu_app_get_draft_sound());
+    CHECK(menu_app_get_draft_sound_level() == PURRGO_SOUND_LEVEL_LOW);
     menu_app_get_main_item_text(SOUND_ITEM_INDEX, text, sizeof text);
-    CHECK(strcmp(text, "SOUND: ON") == 0);
-    CHECK(!app_config.sound_on);
-    CHECK(fake_sound_total() == 1);
-    CHECK(fake_sound_last() == PURRGO_SOUND_INFO);
+    CHECK(strcmp(text, "SOUND: LOW") == 0);
+    CHECK(app_config.sound_level == PURRGO_SOUND_LEVEL_LOW);
+    CHECK(fake_sound_count(PURRGO_SOUND_INFO) == 1);
+    CHECK(fake_sound_last_level() == PURRGO_SOUND_LEVEL_LOW);
 
-    /* BACK применяет и сохраняет. */
+    /* OK: LOW -> HIGH, проверочный сигнал на HIGH. */
+    st = press(st, PURRGO_ACTION_OK);
+    CHECK(menu_app_get_draft_sound_level() == PURRGO_SOUND_LEVEL_HIGH);
+    menu_app_get_main_item_text(SOUND_ITEM_INDEX, text, sizeof text);
+    CHECK(strcmp(text, "SOUND: HIGH") == 0);
+    CHECK(app_config.sound_level == PURRGO_SOUND_LEVEL_HIGH);
+    CHECK(fake_sound_count(PURRGO_SOUND_INFO) == 2);
+    CHECK(fake_sound_last_level() == PURRGO_SOUND_LEVEL_HIGH);
+
+    /* BACK сохраняет в файл. */
     st = press(st, PURRGO_ACTION_MENU);
     CHECK(st == APP_STATE_MAP);
-    CHECK(app_config.sound_on);
+    CHECK(app_config.sound_level == PURRGO_SOUND_LEVEL_HIGH);
     {
         uint32_t n;
         const uint8_t* d = fake_fs_data(CFG, &n);
-        CHECK(d != NULL && strstr((const char*)d, "SOUND=1\n") != NULL);
+        CHECK(d != NULL && strstr((const char*)d, "SOUND=2\n") != NULL);
     }
 
-    /* Повторный вход: черновик из конфига; выключение молчит и применяется по BACK. */
+    /* Повторный вход: черновик из конфига. OK: HIGH -> OFF, звук обрывается и молчит сразу. */
     fake_sound_reset();
     purrgo_menu_controller_on_enter(APP_STATE_MENU_MAIN);
     st = APP_STATE_MENU_MAIN;
-    CHECK(menu_app_get_draft_sound());
+    CHECK(menu_app_get_draft_sound_level() == PURRGO_SOUND_LEVEL_HIGH);
     for (int i = 0; i < SOUND_ITEM_INDEX; i++) {
         st = press(st, PURRGO_ACTION_DOWN);
     }
+    fake_sound_reset();
     st = press(st, PURRGO_ACTION_OK);
-    CHECK(!menu_app_get_draft_sound());
-    CHECK(app_config.sound_on);          /* до BACK без изменений */
-    CHECK(fake_sound_total() == 0);      /* при выключении сигнала нет */
+    CHECK(menu_app_get_draft_sound_level() == PURRGO_SOUND_LEVEL_OFF);
+    menu_app_get_main_item_text(SOUND_ITEM_INDEX, text, sizeof text);
+    CHECK(strcmp(text, "SOUND: OFF") == 0);
+    CHECK(app_config.sound_level == PURRGO_SOUND_LEVEL_OFF);   /* до BACK, а уже тихо */
+    CHECK(fake_sound_total() - fake_sound_count(PURRGO_SOUND_CLICK) == 0);   /* проверочного сигнала нет */
+    CHECK(fake_sound_stops() == 1);
+
+    /* Пока в меню, кнопки молчат (раньше щёлкали до BACK, включая сам BACK). */
+    fake_sound_reset();
+    st = press(st, PURRGO_ACTION_DOWN);
+    purrgo_app_handle_button(PURRGO_BTN_KEY1_SHORT);
+    CHECK(fake_sound_total() == 0);
+
     st = press(st, PURRGO_ACTION_MENU);
-    CHECK(!app_config.sound_on);
+    CHECK(app_config.sound_level == PURRGO_SOUND_LEVEL_OFF);
+    {
+        uint32_t n;
+        const uint8_t* d = fake_fs_data(CFG, &n);
+        CHECK(d != NULL && strstr((const char*)d, "SOUND=0\n") != NULL);
+    }
+    CHECK(fake_sound_total() == 0);
 }
 
 static void test_supply_error(void)
 {
     fresh();
     g_now = 500000;
-    app_config.sound_on = true;
+    app_config.sound_level = PURRGO_SOUND_LEVEL_HIGH;
 
     /* Короткая просадка короче PURRGO_SUPPLY_LOW_CONFIRM_MS: ни остановки, ни сигнала. */
     fake_power_set_supply_low(true);
@@ -231,6 +293,7 @@ static void test_supply_error(void)
     CHECK(purrgo_supply_storage_blocked());
     CHECK(fake_sound_count(PURRGO_SOUND_ERROR) == 1);
     CHECK(fake_sound_total() == 1);
+    CHECK(fake_sound_last_level() == PURRGO_SOUND_LEVEL_HIGH);
 
     /* Пока блокировка держится, сигнал не повторяется. */
     for (int i = 0; i < 20; i++) {
@@ -239,7 +302,7 @@ static void test_supply_error(void)
     }
     CHECK(fake_sound_count(PURRGO_SOUND_ERROR) == 1);
 
-    /* Звук выключен: остановка записи происходит, но молча. */
+    /* OFF: остановка записи происходит, но молча. */
     fresh();
     g_now += 100000;
     fake_power_set_supply_low(true);
@@ -265,7 +328,7 @@ static void test_arrival(void)
     purrgo_gnss_solution_t fix;
 
     fresh();
-    app_config.sound_on = true;
+    app_config.sound_level = PURRGO_SOUND_LEVEL_HIGH;
     CHECK(purrgo_wpt_set(539000000, 275590000, "T"));
 
     /* Далеко (около 110 м): сигнала нет. */
@@ -336,7 +399,7 @@ static void test_arrival(void)
 
     /* Звук выключен: прибытие молча. */
     fake_sound_reset();
-    app_config.sound_on = false;
+    app_config.sound_level = PURRGO_SOUND_LEVEL_OFF;
     purrgo_wpt_clear();
     CHECK(purrgo_wpt_set(539000000, 275590000, "Q"));
     wpt_fix(&fix, 10000);
@@ -354,7 +417,7 @@ static void test_first_fix_and_click(void)
     fresh();
     g_now = 800000;
     purrgo_app_init();
-    app_config.sound_on = true;       /* после init: он загружает конфиг */
+    app_config.sound_level = PURRGO_SOUND_LEVEL_LOW;   /* после init: он загружает конфиг */
     fake_sound_reset();
 
     /* Нет фикса - нет сигнала (тики без подачи данных GNSS). */
@@ -386,11 +449,48 @@ static void test_first_fix_and_click(void)
     CHECK(fake_sound_count(PURRGO_SOUND_CLICK) == 2);
     CHECK(fake_sound_total() == 2);
 
-    /* Звук выключен: кнопки молча. */
+    /* OFF: кнопки молча. */
     fake_sound_reset();
-    app_config.sound_on = false;
+    app_config.sound_level = PURRGO_SOUND_LEVEL_OFF;
     purrgo_app_handle_button(PURRGO_BTN_KEY1_SHORT);
+    purrgo_app_handle_button(PURRGO_BTN_KEY2_LONG);
     CHECK(fake_sound_total() == 0);
+}
+
+/* Остановка записи трека (читалка, выключение, смена режима) звука не даёт. */
+static void test_logger_stop_silent(void)
+{
+    fresh();
+    g_now = 1200000;
+    purrgo_app_init();
+    app_config.sound_level = PURRGO_SOUND_LEVEL_HIGH;
+    feed_epoch();
+    run_ms(5000);
+    CHECK(purrgo_logger_get_state() == LOGGER_STATE_RECORDING);
+    fake_sound_reset();
+
+    /* Обычная остановка записи, как при переходе в читалку или выключении. */
+    purrgo_logger_stop();
+    run_ms(3000);
+    CHECK(fake_sound_count(PURRGO_SOUND_ERROR) == 0);
+
+    /* Запись снова пошла: тоже тихо (новый трек не сигналит). */
+    run_ms(5000);
+    CHECK(purrgo_logger_get_state() == LOGGER_STATE_RECORDING);
+    CHECK(fake_sound_count(PURRGO_SOUND_ERROR) == 0);
+}
+
+/* Выключение: звучащий сигнал обрывается до остановки логгера и ещё раз перед сном. */
+static void test_power_off_stops_sound(void)
+{
+    fresh();
+    g_now = 2000000;
+    app_config.sound_level = PURRGO_SOUND_LEVEL_HIGH;
+    purrgo_sound_play(PURRGO_SOUND_ERROR);
+    CHECK(fake_sound_stops() == 0);
+    purrgo_system_power_off();
+    CHECK(fake_sound_stops() >= 2);
+    CHECK(fake_power_standby_calls() == 1);
 }
 
 int main(void)
@@ -401,5 +501,7 @@ int main(void)
     test_supply_error();
     test_arrival();
     test_first_fix_and_click();
+    test_logger_stop_silent();
+    test_power_off_stops_sound();
     return test_finish("test_sound");
 }
