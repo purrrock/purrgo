@@ -1,0 +1,58 @@
+Сборка без Stop 2
+cmake --preset stm32u5-debug -DCMAKE_C_FLAGS="-DPURRGO_GNSS_TRACKER_MODE=2 -DPURRGO_STOP2=0 -DPURRGO_STOP_HSI_KERNEL_ON=0"
+Лог трекера  запись каждых 15 секунд:
+
+[208.164] GNSS: profile TRACKER (PSMOO, fix every 15 s)
+[208.169] GNSS: TX NMEA/rate VALSET[RAM+BBR] RATE-MEAS=1000 RATE-NAV=1 MSGOUT-GGA=1 MSGOUT-RMC=1 MSGOUT-GSA=1 MSGOUT-GLL=0 MSGOUT-GSV=0 MSGOUT-VTG=0 (54 B)
+[208.188] GNSS: TX Signals VALSET[RAM+BBR] SIGNAL-SBAS=0 SIGNAL-GLO=0 SIGNAL-BDS-B1C=0 SIGNAL-BDS-B1I=1 SIGNAL-BDS=1 (37 B)
+[208.202] GNSS: TX NAV-PVT VALSET[RAM+BBR] MSGOUT-NAV-PVT=1 (17 B)
+[208.210] GNSS: TX NAV-ODO VALSET[RAM+BBR] MSGOUT-NAV-ODO=1 (17 B)
+[208.217] GNSS: TX MON-RF VALSET[RAM+BBR] MSGOUT-MON-RF=1 (17 B)
+[208.225] GNSS: TX NAV-DOP VALSET[RAM+BBR] MSGOUT-NAV-DOP=1 (17 B)
+[208.232] GNSS: TX NAV-STATUS VALSET[RAM+BBR] MSGOUT-NAV-STATUS=1 (17 B)
+[208.240] GNSS: TX ITFM VALSET[RAM+BBR] ITFM-ENABLE=1 (17 B)
+[208.247] GNSS: TX ODO enable/profile VALSET[RAM+BBR] ODO-USE=1 ODO-PROFILE=1 (22 B)
+[208.257] GNSS: TX DYNMODEL VALSET[RAM+BBR] DYNMODEL=0 (17 B)
+[208.264] GNSS: TX TIMEPULSE quiet VALSET[RAM+BBR] TP1-ENA=1 TP-LEN=0 TP-LEN-LOCK=0 (33 B)
+[208.275] GNSS: TX UART baud VALSET[RAM+BBR] UART1-BAUDRATE=115200 (20 B)
+[208.284] GNSS: TX NMEA off VALSET[RAM+BBR] UART1OUTPROT-NMEA=0 (17 B)
+[208.292] GNSS: TX PSMOO params VALSET[RAM+BBR] PM-POSUPDATEPERIOD=15 PM-ACQPERIOD=15 PM-ONTIME=2 PM-DONOTENTEROFF=0 (39 B)
+[208.306] GNSS: TX PSMOO mode VALSET[RAM+BBR] PM-OPERATEMODE=PSMOO (17 B)
+[208.314] GNSS: TX poll UBX-MON-VER (8 B)
+[208.341] GNSS: u-blox SW "ROM SPG 5.10 (7b202e)" HW "000A0000"
+[208.347] GNSS:   FWVER=SPG 5.10
+[208.350] GNSS:   PROTVER=34.10
+[208.353] GNSS:   GPS;GLO;GAL;BDS
+[208.356] GNSS:   SBAS;QZSS
+[210.336] GNSS: config confirmed by module (15/15 replies), retry skipped
+[213.979] GNSS: UBX replies: ACK=30 NAK=0 (last: ACK class 0x06 id 0x8A)
+[223.323] GNSS: tracker #1: FIX sv=5 hAcc=8148 mm (PVT 15, with fix 15) psm=3 bytes=+3528 err=+0
+[238.332] GNSS: tracker #2: FIX sv=6 hAcc=4256 mm (PVT 15, with fix 15) psm=3 bytes=+3210 err=+0
+[253.326] GNSS: tracker #3: FIX sv=7 hAcc=1926 mm (PVT 15, with fix 15) psm=3 bytes=+3210 err=+0
+[263.476] GNSS: RF jam=1 ant=1/2 noise=97 agc=4092 cw=6
+[264.388] GNSS: PVT fixType=3 fixOK=1 sv=7 validTime=1 hAcc=1587 mm pDOP=202
+[264.396] GNSS: STATUS gpsFix=3 flags=0xDD psm=1 spoof=1
+[268.339] GNSS: tracker #4: FIX sv=7 hAcc=1555 mm (PVT 15, with fix 15) psm=3 bytes=+3210 err=+0
+[283.326] GNSS: tracker #5: FIX sv=7 hAcc=1341 mm (PVT 16, with fix 16) psm=3 bytes=+3388 err=+0
+[298.320] GNSS: tracker #6: FIX sv=7 hAcc=1289 mm (PVT 15, with fix 15) psm=3 bytes=+3246 err=+0
+[313.335] GNSS: tracker #7: FIX sv=7 hAcc=1300 mm (PVT 15, with fix 15) psm=3 bytes=+3210 err=+0
+[324.135] GNSS: RF jam=1 ant=1/2 noise=88 agc=4092 cw=6
+[325.074] GNSS: PVT fixType=3 fixOK=1 sv=7 validTime=1 hAcc=1360 mm pDOP=201
+[325.081] GNSS: STATUS gpsFix=3 flags=0xDD psm=1 spoof=1
+[328.332] GNSS: tracker #8: FIX sv=7 hAcc=1373 mm (PVT 15, with fix 15) psm=3 bytes=+3210 err=+0
+[343.333] GNSS: tracker #9: FIX sv=7 hAcc=1424 mm (PVT 15, with fix 15) psm=3 bytes=+3210 err=+0
+[358.099] GNSS: RF jam=0 ant=1/2 noise=92 agc=4092 cw=5
+[358.335] GNSS: tracker #10: FIX sv=5 hAcc=123750 mm (PVT 10, with fix 8) psm=2 bytes=+2116 err=+0
+[373.333] GNSS: tracker #11: FIX sv=7 hAcc=9273 mm (PVT 10, with fix 7) psm=3 bytes=+2116 err=+0
+[385.244] GNSS: RF jam=0 ant=1/2 noise=96 agc=4092 cw=4
+[385.291] GNSS: PVT fixType=2 fixOK=0 sv=3 validTime=1 hAcc=310990 mm pDOP=448
+[385.299] GNSS: STATUS gpsFix=2 flags=0x5C psm=0 spoof=1
+[388.331] GNSS: tracker #12: FIX sv=7 hAcc=12083 mm (PVT 11, with fix 7) psm=3 bytes=+2294 err=+0
+[403.319] GNSS: tracker #13: FIX sv=7 hAcc=9262 mm (PVT 11, with fix 7) psm=3 bytes=+2294 err=+0
+[418.336] GNSS: tracker #14: FIX sv=7 hAcc=10993 mm (PVT 11, with fix 7) psm=3 bytes=+2258 err=+0
+[430.419] GNSS: RF jam=0 ant=1/2 noise=95 agc=4092 cw=6
+[433.328] GNSS: tracker #15: FIX sv=7 hAcc=11736 mm (PVT 9, with fix 7) psm=2 bytes=+1938 err=+0
+[445.455] GNSS: PVT fixType=2 fixOK=0 sv=5 validTime=1 hAcc=138511 mm pDOP=178
+[445.462] GNSS: STATUS gpsFix=2 flags=0x5C psm=0 spoof=1
+[445.468] GNSS: RF jam=0 ant=1/2 noise=89 agc=4092 cw=4
+[448.334] GNSS: tracker #16: FIX sv=7 hAcc=12707 mm (PVT 9, with fix 7) psm=3 bytes=+1938 err=+0

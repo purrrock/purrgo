@@ -1,4 +1,7 @@
-Похоже что в этом случае не идёт время, в логе всего 60 секунд, а прошло времени гораздо больше
+Сборка PSMOO без изменений энергосбережения STM32
+cmake --preset stm32u5-debug -DCMAKE_C_FLAGS="-DPURRGO_GNSS_TRACKER_MODE=2 -DPURRGO_STOP2=1 -DPURRGO_STOP_HSI_KERNEL_ON=0"
+В этом случае не идёт лог каждых 15 секунд, в логе всего 60 секунд, а прошло времени гораздо больше и есть ошибки RX:
+
 [45.809] GNSS: profile TRACKER (PSMOO, fix every 15 s)
 [45.814] GNSS: TX NMEA/rate VALSET[RAM+BBR] RATE-MEAS=1000 RATE-NAV=1 MSGOUT-GGA=1 MSGOUT-RMC=1 MSGOUT-GSA=1 MSGOUT-GLL=0 MSGOUT-GSV=0 MSGOUT-VTG=0 (54 B)
 [45.833] GNSS: TX Signals VALSET[RAM+BBR] SIGNAL-SBAS=0 SIGNAL-GLO=0 SIGNAL-BDS-B1C=0 SIGNAL-BDS-B1I=1 SIGNAL-BDS=1 (37 B)
