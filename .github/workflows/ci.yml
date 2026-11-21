@@ -29,7 +29,10 @@ jobs:
         run: ctest --preset linux-gcc-test
       - name: Python-инструменты (таблица PurrGO-256, конвертер книг)
         run: |
-          sudo apt-get install -y python3-pil   # обложка и иллюстрации: без Pillow тесты картинок пропускаются
+          # python3-pil: обложка и иллюстрации (без Pillow тесты картинок пропускаются);
+          # python3-lxml, python3-numpy: нужны компилятору карт (purrgo_osmparser, purrgo_simplify),
+          # без них test_map_compiler_v4 и test_sim_map_io падают в setUpClass.
+          sudo apt-get install -y python3-pil python3-lxml python3-numpy
           python3 tests/check_pgo_text_table.py
           python3 -m unittest tests/test_book_compiler.py
           python3 -m unittest tests/test_map_compiler_v4.py tests/test_sim_map_io.py tests/test_map_viewer_v4.py
