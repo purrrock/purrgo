@@ -132,16 +132,7 @@
  *   PURRGO_GNSS_TRACKER_MODE_OO  (2) - PSMOO (ON/OFF): приёмник просыпается раз в период, ищет фикс и засыпает.
  *                                     НЕ РАБОТАЕТ на G10A-F30: см. ниже.
  *
- * Почему по умолчанию PSMCT, а не PSMOO. Проверка на железе (два лога с SD, 17.11.2026): в PSMOO приёмник за 48 с
- * четыре раза возвращался к заводскому состоянию - 38400 бод, NMEA, мигающий PPS (в логе "GNSS RX error" -> "RX error
- * storm" -> "listening for NMEA at 38400 baud"), в том числе на улице при хорошем фиксе (9 спутников, hAcc 5 м).
- * Один цикл "off" -> пробуждение настройку сохранил (после пробуждения пришёл UBX на 115200), следующий сброс случился
- * примерно через 1,4 с после начала поиска, так что "в off всегда пропадает BBR" лог НЕ доказывает. Причина не
- * установлена; версии: слой BBR не удерживается без питания backup-домена (на 6-контактном разъёме вывода V_BCKP нет),
- * внутренний сброс приёмника, просадка питания при пробуждении. Поэтому в трекере по умолчанию PSMCT (приёмник не
- * уходит в "off"); MODE_OO оставлен как эксперимент и описан ниже. Восстановление связи после сброса модуля
- * (мягкий перезапуск и EN, gnss_io.c) работает и там, и при любом другом сбросе приёмника.
- *
+ * По умолчанию PSMOO.
  *   PURRGO_GNSS_TRACKER_PERIOD_S  период решений, с. MODE_CT: 1..10 (по умолчанию 10); MODE_OO: 5..3600 (по
  *                                 умолчанию 15; по manual PSMOO - для периодов дольше 10 с). Время ядра в трекере:
  *                                 фикс считается устаревшим по PURRGO_GNSS_TRACKER_FIX_TIMEOUT_MS.
@@ -157,7 +148,7 @@
 #define PURRGO_GNSS_TRACKER_MODE_OO  2
 
 #ifndef PURRGO_GNSS_TRACKER_MODE
-#define PURRGO_GNSS_TRACKER_MODE PURRGO_GNSS_TRACKER_MODE_CT
+#define PURRGO_GNSS_TRACKER_MODE PURRGO_GNSS_TRACKER_MODE_OO
 #endif
 #if (PURRGO_GNSS_TRACKER_MODE != PURRGO_GNSS_TRACKER_MODE_OFF) && \
     (PURRGO_GNSS_TRACKER_MODE != PURRGO_GNSS_TRACKER_MODE_CT) && \
@@ -266,7 +257,7 @@
 #define PURRGO_GNSS_SIG_GPS_GAL_BDS 2
 
 #ifndef PURRGO_GNSS_SIGNALS
-#define PURRGO_GNSS_SIGNALS PURRGO_GNSS_SIG_FACTORY
+#define PURRGO_GNSS_SIGNALS PURRGO_GNSS_SIG_GPS_GAL_BDS
 #endif
 #if (PURRGO_GNSS_SIGNALS != PURRGO_GNSS_SIG_FACTORY) && (PURRGO_GNSS_SIGNALS != PURRGO_GNSS_SIG_GPS_GAL) && \
     (PURRGO_GNSS_SIGNALS != PURRGO_GNSS_SIG_GPS_GAL_BDS)
