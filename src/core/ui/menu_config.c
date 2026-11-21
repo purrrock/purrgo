@@ -234,15 +234,15 @@ static void map_layers_select(purrgo_state_t* next)
  * ------------------------------------------------------------------------- */
 
 static const menu_item_t config_items[] = {
-    { .format = power_src_format, .on_select = power_src_select },
-    { .format = tz_format, .on_select = tz_select },
     { .format = sound_format, .on_select = sound_select },
     { .format = log_format, .on_select = log_select },
-    { .format = sd_log_format, .on_select = sd_log_select },
-    { .format = map_dir_format, .on_select = map_dir_select },
+    { .title = "MAP LAYERS", .on_select = map_layers_select },
     { .format = map_details_format, .on_select = map_details_select },
     { .format = poi_format, .on_select = poi_select },
-    { .title = "MAP LAYERS", .on_select = map_layers_select },
+    { .format = map_dir_format, .on_select = map_dir_select },
+    { .format = power_src_format, .on_select = power_src_select },
+    { .format = sd_log_format, .on_select = sd_log_select },
+    { .format = tz_format, .on_select = tz_select },
 };
 
 #define CONFIG_ITEM_COUNT ((int)(sizeof(config_items) / sizeof(config_items[0])))

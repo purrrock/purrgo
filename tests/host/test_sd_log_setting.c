@@ -19,8 +19,8 @@ uint32_t purrgo_system_time_ms(void) { return 0; }
 
 static const char* CFG = "PURRGO.CFG";
 
-/* Позиция пункта SD LOG в подменю CONFIG (после LOG, перед MAP DIR). */
-#define SD_LOG_ITEM_INDEX 4
+/* Позиция пункта SD LOG в подменю CONFIG (после POWER, перед TZ). */
+#define SD_LOG_ITEM_INDEX 7
 
 static purrgo_state_t press(purrgo_state_t st, purrgo_action_t a)
 {
@@ -29,15 +29,12 @@ static purrgo_state_t press(purrgo_state_t st, purrgo_action_t a)
     return next;
 }
 
-/* Из главного меню в подменю CONFIG (последний пункт главного меню). */
+/* Из главного меню в подменю CONFIG (первый пункт главного меню). */
 static purrgo_state_t enter_config(void)
 {
     purrgo_state_t st = APP_STATE_MENU_MAIN;
 
-    purrgo_menu_controller_on_enter(APP_STATE_MENU_MAIN);
-    for (int i = 0; i < menu_app_get_main_count() - 1; i++) {
-        st = press(st, PURRGO_ACTION_DOWN);
-    }
+    purrgo_menu_controller_on_enter(APP_STATE_MENU_MAIN);   /* курсор на первом пункте - CONFIG */
     st = press(st, PURRGO_ACTION_OK);
     CHECK(st == APP_STATE_MENU_CONFIG);
     return st;

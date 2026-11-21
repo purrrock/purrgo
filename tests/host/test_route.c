@@ -520,8 +520,7 @@ static void test_route_menu(void)
     /* Выбор каталога карт (MAP DIR в CONFIG) после маршрутов снова показывает каталоги, а не файлы. */
     st = APP_STATE_MENU_MAIN;
     purrgo_menu_controller_on_enter(APP_STATE_MENU_MAIN);
-    for (int k = 0; k < 6; k++) { st = press(st, PURRGO_ACTION_DOWN); }   /* CONFIG */
-    st = press(st, PURRGO_ACTION_OK);
+    st = press(st, PURRGO_ACTION_OK);                                     /* CONFIG - первый пункт */
     CHECK(st == APP_STATE_MENU_CONFIG);
     for (int k = 0; k < 5; k++) { st = press(st, PURRGO_ACTION_DOWN); }   /* MAP DIR */
     st = press(st, PURRGO_ACTION_OK);
@@ -543,10 +542,9 @@ static void test_menu_drafts_on_exit(void)
 
     purrgo_state_t st = APP_STATE_MENU_MAIN;
     purrgo_menu_controller_on_enter(APP_STATE_MENU_MAIN);
-    for (int i = 0; i < 6; i++) { st = press(st, PURRGO_ACTION_DOWN); }   /* CONFIG */
-    st = press(st, PURRGO_ACTION_OK);
+    st = press(st, PURRGO_ACTION_OK);                                     /* CONFIG - первый пункт */
     CHECK(st == APP_STATE_MENU_CONFIG);
-    st = press(st, PURRGO_ACTION_DOWN);                                   /* TZ */
+    for (int i = 0; i < 8; i++) { st = press(st, PURRGO_ACTION_DOWN); }   /* TZ - последний */
     st = press(st, PURRGO_ACTION_OK);
     CHECK(app_config.tz_offset_minutes == tz0);                           /* пока только черновик */
 
@@ -554,7 +552,7 @@ static void test_menu_drafts_on_exit(void)
     CHECK(st == APP_STATE_MENU_MAIN);
     CHECK(app_config.tz_offset_minutes == tz0 + 15);
 
-    for (int i = 0; i < 4; i++) { st = press(st, PURRGO_ACTION_UP); }     /* TRACKER (SCREEN OFF) */
+    for (int i = 0; i < 2; i++) { st = press(st, PURRGO_ACTION_DOWN); }   /* TRACKER (SCREEN OFF); курсор главного меню остался на CONFIG */
     CHECK(menu_app_get_main_cursor() == 2);
     st = press(st, PURRGO_ACTION_OK);
     CHECK(st == APP_STATE_TRACKER_SCREEN_OFF);

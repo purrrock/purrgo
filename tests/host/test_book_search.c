@@ -14,6 +14,7 @@
 #include <string.h>
 
 #include "purrgo/app_fsm.h"
+#include "purrgo/menu_controller.h"
 #include "purrgo/app_ui.h"
 #include "purrgo/book_reader.h"
 #include "purrgo/book_search.h"
@@ -692,6 +693,8 @@ static void test_screen(void)
 
     purrgo_app_handle_button(PURRGO_BTN_KEY4_LONG);          /* карта -> trip */
     purrgo_app_handle_button(PURRGO_BTN_KEY4_SHORT);         /* CONFIG */
+    /* BOOKS - последний пункт главного меню. */
+    for (int i = 0; i < menu_app_get_main_count() - 1; i++) { purrgo_app_handle_button(PURRGO_BTN_KEY2_SHORT); }
     purrgo_app_handle_button(PURRGO_BTN_KEY3_SHORT);         /* BOOKS: последняя книга */
     CHECK(purrgo_app_get_state() == APP_STATE_BOOK_READ);
     render(&g);

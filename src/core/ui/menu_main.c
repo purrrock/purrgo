@@ -109,13 +109,13 @@ static void config_select(purrgo_state_t* next)
  * ------------------------------------------------------------------------- */
 
 static const menu_item_t main_items[] = {
-    { .title = "BOOKS", .on_select = books_select },
+    { .title = "CONFIG", .on_select = config_select },
     { .title = "POWER OFF", .on_select = power_off_select },
     { .title = "TRACKER (SCREEN OFF)", .on_select = tracker_select },
     { .format = route_format, .on_select = route_select },
     { .title = "OPEN TRACK", .on_select = track_open_select },
     { .format = wpt_format, .on_select = wpt_select },
-    { .title = "CONFIG", .on_select = config_select },
+    { .title = "BOOKS", .on_select = books_select },
 };
 
 #define MAIN_ITEM_COUNT ((int)(sizeof(main_items) / sizeof(main_items[0])))

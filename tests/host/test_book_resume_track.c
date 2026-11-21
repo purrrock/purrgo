@@ -77,6 +77,8 @@ static void scenario(bool with_gsa)
     purrgo_app_handle_button(PURRGO_BTN_KEY4_LONG);
     purrgo_app_handle_button(PURRGO_BTN_KEY4_SHORT);
     CHECK(purrgo_app_get_state() == APP_STATE_MENU_MAIN);
+    /* BOOKS - последний пункт главного меню. */
+    for (int i = 0; i < menu_app_get_main_count() - 1; i++) { purrgo_app_handle_button(PURRGO_BTN_KEY2_SHORT); }
     purrgo_app_handle_button(PURRGO_BTN_KEY3_SHORT);     /* BOOKS */
     printf("in books: state=%d logger=%d\n", purrgo_app_get_state(), purrgo_logger_get_state());
     CHECK(purrgo_logger_get_state() == LOGGER_STATE_IDLE);

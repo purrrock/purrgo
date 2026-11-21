@@ -720,13 +720,15 @@ static void test_fsm_and_screen(void)
     run_ticks(1000);
     CHECK(purrgo_app_get_state() == APP_STATE_MAP);
 
-    /* Карта -> Trip -> CONFIG; первый пункт - BOOKS. */
+    /* Карта -> Trip -> главное меню; курсор на первом пункте (CONFIG), BOOKS - последний. */
     purrgo_app_handle_button(PURRGO_BTN_KEY4_LONG);
     purrgo_app_handle_button(PURRGO_BTN_KEY4_SHORT);
     CHECK(purrgo_app_get_state() == APP_STATE_MENU_MAIN);
     CHECK(menu_app_get_main_cursor() == 0);
     render(&g);
 
+    /* BOOKS - последний пункт главного меню. */
+    for (int i = 0; i < menu_app_get_main_count() - 1; i++) { purrgo_app_handle_button(PURRGO_BTN_KEY2_SHORT); }
     /* BOOKS: книги в конфиге нет - список; GNSS выключен. */
     purrgo_app_handle_button(PURRGO_BTN_KEY3_SHORT);
     CHECK(purrgo_app_get_state() == APP_STATE_BOOK_LIST);
@@ -799,7 +801,7 @@ static void test_fsm_and_screen(void)
     purrgo_app_handle_button(PURRGO_BTN_KEY4_SHORT);            /* отмена */
     render(&g);
 
-    /* Выход: CONFIG, GNSS включён, позиция записана, курсор меню на BOOKS. */
+    /* Выход: главное меню, GNSS включён, позиция записана, курсор меню в начале списка. */
     purrgo_app_handle_button(PURRGO_BTN_KEY2_SHORT);
     purrgo_app_handle_button(PURRGO_BTN_KEY4_SHORT);
     CHECK(purrgo_app_get_state() == APP_STATE_MENU_MAIN);
@@ -810,6 +812,8 @@ static void test_fsm_and_screen(void)
     render(&g);
     CHECK(pc_display_stats_get().fulls == 1);
 
+    /* BOOKS - последний пункт главного меню. */
+    for (int i = 0; i < menu_app_get_main_count() - 1; i++) { purrgo_app_handle_button(PURRGO_BTN_KEY2_SHORT); }
     /* Повторный вход в BOOKS возвращает на последнюю книгу и страницу. */
     purrgo_app_handle_button(PURRGO_BTN_KEY3_SHORT);
     CHECK(purrgo_app_get_state() == APP_STATE_BOOK_READ);
@@ -864,6 +868,8 @@ static void test_status_battery_and_idle_refresh(void)
     purrgo_app_handle_button(PURRGO_BTN_KEY4_LONG);
     purrgo_app_handle_button(PURRGO_BTN_KEY4_SHORT);
     render(&g);
+    /* BOOKS - последний пункт главного меню. */
+    for (int i = 0; i < menu_app_get_main_count() - 1; i++) { purrgo_app_handle_button(PURRGO_BTN_KEY2_SHORT); }
     purrgo_app_handle_button(PURRGO_BTN_KEY3_SHORT);           /* BOOKS: список */
     render(&g);
     purrgo_app_handle_button(PURRGO_BTN_KEY3_SHORT);           /* открыть книгу */

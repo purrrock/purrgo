@@ -86,25 +86,31 @@ static void test_menu(void)
     purrgo_menu_controller_on_enter(APP_STATE_MENU_MAIN);
 
     /*
-     * Главное меню - только действия: 0 BOOKS (режим чтения, см. test_book_reader.c),
-     * 1 POWER OFF, 2 TRACKER (SCREEN OFF), 3 ROUTE, 4 OPEN TRACK, 5 WAYPOINT, 6 CONFIG.
+     * Главное меню - только действия: 0 CONFIG, 1 POWER OFF, 2 TRACKER (SCREEN OFF),
+     * 3 ROUTE, 4 OPEN TRACK, 5 WAYPOINT, 6 BOOKS (режим чтения, см. test_book_reader.c).
      */
     CHECK(menu_app_get_main_cursor() == 0);
     CHECK(menu_app_get_main_count() == 7);
-    purrgo_state_t st = APP_STATE_MENU_MAIN;
-    for (int i = 0; i < 10; i++) {   /* с запасом: курсор упирается в последний пункт */
-        st = press(st, PURRGO_ACTION_DOWN);
-    }
-    CHECK(menu_app_get_main_cursor() == menu_app_get_main_count() - 1);
     char text[64];
-    menu_app_get_main_item_text(menu_app_get_main_count() - 1, text, sizeof text);
+    menu_app_get_main_item_text(0, text, sizeof text);
     CHECK(strcmp(text, "CONFIG") == 0);
+    menu_app_get_main_item_text(6, text, sizeof text);
+    CHECK(strcmp(text, "BOOKS") == 0);
+    purrgo_state_t st = APP_STATE_MENU_MAIN;
 
-    /* OK на CONFIG: вход в подменю, черновик из конфига, курсор на первом пункте (POWER). */
+    /* OK на CONFIG: вход в подменю, черновик из конфига, курсор на первом пункте. */
     st = press(st, PURRGO_ACTION_OK);
     CHECK(st == APP_STATE_MENU_CONFIG);
     CHECK(menu_app_get_config_cursor() == 0);
+    CHECK(menu_app_get_config_count() == 9);
     CHECK(menu_app_get_draft_power_source() == PURRGO_POWER_SRC_LIION_AA);
+
+    /*
+     * Порядок пунктов CONFIG: 0 SOUND, 1 LOG, 2 MAP LAYERS, 3 MAP DETAILS, 4 POI,
+     * 5 MAP DIR, 6 POWER, 7 SD LOG, 8 TZ - последний.
+     */
+    for (int i = 0; i < 6; i++) { st = press(st, PURRGO_ACTION_DOWN); }
+    CHECK(menu_app_get_config_cursor() == 6);
 
     /* OK перебирает источники по кругу: LI-ION AA -> LITHIUM -> 5V -> ZINC -> ALKALINE -> NIMH */
     st = press(st, PURRGO_ACTION_OK);
@@ -122,23 +128,21 @@ static void test_menu(void)
     /* До BACK конфиг не меняется. */
     CHECK(app_config.power_source == PURRGO_POWER_SRC_LIION_AA);
 
-    /*
-     * Порядок остальных пунктов CONFIG: 1 TZ, 2 SOUND, 3 LOG, 4 SD LOG, 5 MAP DIR,
-     * 6 MAP DETAILS, 7 POI, 8 MAP LAYERS - последний.
-     */
-    st = press(st, PURRGO_ACTION_DOWN);
-    CHECK(menu_app_get_config_cursor() == 1);
+    /* TZ - последний пункт: курсор упирается в границу. */
     const int16_t tz0 = menu_app_get_draft_tz_offset();
-    st = press(st, PURRGO_ACTION_OK);
-    CHECK(menu_app_get_draft_tz_offset() == tz0 + 15);      /* пункт 1 - TZ */
-    for (int i = 0; i < 10; i++) {   /* с запасом: курсор упирается в последний пункт */
+    for (int i = 0; i < 10; i++) {   /* с запасом */
         st = press(st, PURRGO_ACTION_DOWN);
     }
     CHECK(menu_app_get_config_cursor() == menu_app_get_config_count() - 1);
-    CHECK(menu_app_get_config_count() == 9);
-    st = press(st, PURRGO_ACTION_OK);                          /* MAP LAYERS */
+    st = press(st, PURRGO_ACTION_OK);
+    CHECK(menu_app_get_draft_tz_offset() == tz0 + 15);
+
+    /* MAP LAYERS (пункт 2): вход и возврат в CONFIG, черновик цел. */
+    for (int i = 0; i < 6; i++) { st = press(st, PURRGO_ACTION_UP); }
+    CHECK(menu_app_get_config_cursor() == 2);
+    st = press(st, PURRGO_ACTION_OK);
     CHECK(st == APP_STATE_MENU_MAP_LAYERS);
-    st = press(st, PURRGO_ACTION_MENU);                        /* назад в CONFIG, черновик цел */
+    st = press(st, PURRGO_ACTION_MENU);
     CHECK(st == APP_STATE_MENU_CONFIG);
     CHECK(menu_app_get_draft_power_source() == PURRGO_POWER_SRC_NIMH);
     CHECK(menu_app_get_draft_tz_offset() == tz0 + 15);
@@ -156,6 +160,7 @@ static void test_menu(void)
     CHECK(menu_app_get_draft_power_source() == PURRGO_POWER_SRC_NIMH);
 
     /* Выбор 5V: NIMH -> LI-ION AA -> LITHIUM -> 5V; BACK применяет и сохраняет. */
+    for (int i = 0; i < 6; i++) { st = press(st, PURRGO_ACTION_DOWN); }
     st = press(st, PURRGO_ACTION_OK);
     st = press(st, PURRGO_ACTION_OK);
     st = press(st, PURRGO_ACTION_OK);
