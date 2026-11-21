@@ -206,14 +206,19 @@ static void test_power_save(void)
 
     /*
      * Набор систем одним кадром: при PSM выключаются SBAS и BeiDou (в PSM не работают),
-     * GLONASS - только при PURRGO_GNSS_SIG_GPS_GAL. GPS и Galileo не трогаются.
+     * GLONASS - только при PURRGO_GNSS_SIG_GPS_GAL и PURRGO_GNSS_SIG_GPS_GAL_BDS; во втором случае
+     * BeiDou остаётся: B1C = 0, B1I = 1, BDS = 1. GPS и Galileo не трогаются.
      */
     const int64_t sbas = find_key(0x10310020U, &frame, &pairs);
     const int64_t bds = find_key(0x10310022U, &frame, &pairs);
     const int64_t glo = find_key(0x10310025U, &frame, &pairs);
+    const int64_t b1i = find_key(0x1031000DU, &frame, &pairs);
+    const int64_t b1c = find_key(0x1031000FU, &frame, &pairs);
     CHECK(sbas == (PURRGO_GNSS_SIG_OFF_SBAS ? 0 : -1));
-    CHECK(bds == (PURRGO_GNSS_SIG_OFF_BDS ? 0 : -1));
+    CHECK(bds == (PURRGO_GNSS_SIG_OFF_BDS ? 0 : PURRGO_GNSS_SIG_BDS_B1I ? 1 : -1));
     CHECK(glo == (PURRGO_GNSS_SIG_OFF_GLO ? 0 : -1));
+    CHECK(b1i == (PURRGO_GNSS_SIG_BDS_B1I ? 1 : -1));
+    CHECK(b1c == (PURRGO_GNSS_SIG_BDS_B1I ? 0 : -1));
     CHECK(find_key(0x1031001FU, &f2, &p2) == -1);
     CHECK(find_key(0x10310021U, &f2, &p2) == -1);
 #if PURRGO_GNSS_SIGNAL_FRAME

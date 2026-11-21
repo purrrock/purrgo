@@ -77,6 +77,14 @@ Interface Description SPG 5.10, группа `CFG-PM`; поведение - Inte
 несовместим с GLONASS L1OF, SBAS в PSM не принимается. Первый запуск с заводским набором: кадр PSM отклонён (NAK,
 `PSM state 0`).
 
+**Набор систем (`PURRGO_GNSS_SIGNALS`).** В PSM работают GPS, Galileo, QZSS и либо GLONASS, либо BeiDou B1I (вместе
+они несовместимы). Режим 0 оставляет GLONASS (`SBAS_ENA` = 0, `BDS_ENA` = 0), режим 2 заменяет его на B1I: кадр
+`Signals` выключает `GLO_ENA` (`0x10310025`) и `BDS_B1C_ENA` (`0x1031000F`), затем включает `BDS_B1_ENA` (`0x1031000D`)
+и `BDS_ENA` (`0x10310022`); при PSM в него добавляется `SBAS_ENA` = 0. Ограничения взяты из Integration Manual MAX-M10S
+(UBX-20053088, раздел 3.6.2: B1C и SBAS в PSM) и сноски 1 даташита G10A-F30 (B1I и B1C/GLONASS L1OF). Даташит MAX-M10S,
+табл. 15: ток слежения в PSM у GPS+GAL+GLO и GPS+GAL+BDS B1I одинаков (5 мА), холодный старт 23 с с GLONASS и 27 с с B1I.
+На G10A-F30 режим 2 не проверялся: при NAK кадра `Signals` приёмник остаётся на заводском наборе.
+
 **Трекер: PSMCT, а не PSMOO.** Режим ON/OFF (PSMOO, `PURRGO_GNSS_TRACKER_MODE` = 2) на G10A-F30 нестабилен. Логи с SD
 (17.11.2026): за 48 с трекера приёмник четыре раза возвращался к заводскому состоянию - 38400 бод, NMEA, мигающий PPS
 (`GNSS RX error` -> `RX error storm` -> `listening for NMEA at 38400 baud`), в том числе на улице при хорошем фиксе
@@ -155,6 +163,7 @@ VALSET целиком или отклоняет целиком, поэтому N
 | `PURRGO_GNSS_NAV_STATUS` | 1 | 1 - включить UBX-NAV-STATUS, SPF из `spoofDetState` |
 | `PURRGO_GNSS_NAV_SAT` | 1 | 1 - включить UBX-NAV-SAT, C/N0 в строке RF |
 | `PURRGO_GNSS_TIMEPULSE` | 1 | 0 - заводской 1PPS; 1 - без импульсов (длина 0, вывод включён); 2 - `CFG-TP-TP1_ENA` = 0 (на G10A F30 светодиод PPS горит постоянно). Слой `PURRGO_GNSS_UBX_LAYERS`, после каждого включения модуля |
+| `PURRGO_GNSS_SIGNALS` | `PURRGO_GNSS_SIG_FACTORY` (0) | набор систем (`CFG-SIGNAL-*`): 0 - ничего сверх требований PSM; 1 (`PURRGO_GNSS_SIG_GPS_GAL`) - GPS+Galileo; 2 (`PURRGO_GNSS_SIG_GPS_GAL_BDS`) - GPS+Galileo+BeiDou B1I вместо GLONASS (QZSS остаётся). Кадр `Signals`, уходит при настройке после включения модуля |
 | `PURRGO_GNSS_DYNMODEL` | `PURRGO_GNSS_DYN_BICYCLE` (= Portable, 0) | `CFG-NAVSPG-DYNMODEL`; значения `PURRGO_GNSS_DYN_*` |
 | `PURRGO_GNSS_ODO_PROFILE` | `PURRGO_GNSS_ODO_CYCL` (1) | `CFG-ODO-PROFILE` |
 | `PURRGO_GNSS_TRACK_MAX_HACC_M` | 20 | точка с hAcc выше в трек не пишется |

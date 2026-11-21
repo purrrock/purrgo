@@ -709,21 +709,31 @@ static void test_configure_frames(void)
     if (sat > 0)  { CHECK(sat > dop && sat < od && g_cfg_len[sat] == 17 && valset_value(sat, 0x20910016U, &v) && v == 1); }
     if (itfm > 0) { CHECK(itfm > dop && itfm < od && g_cfg_len[itfm] == 17 && valset_value(itfm, 0x1041000DU, &v) && v == 1); }
 
-    /* Набор систем: SBAS и BeiDou выключаются вместе с PSM, GLONASS - только при SIG_GPS_GAL. */
+    /*
+     * Набор систем: SBAS и BeiDou выключаются вместе с PSM, GLONASS - при SIG_GPS_GAL и SIG_GPS_GAL_BDS;
+     * при SIG_GPS_GAL_BDS BeiDou остаётся: B1C = 0, B1I = 1, BDS = 1, всё в кадре "Signals".
+     */
     const int sbas = frame_with_key(0x10310020U);
     const int bds  = frame_with_key(0x10310022U);
     const int glo  = frame_with_key(0x10310025U);
+    const int b1i  = frame_with_key(0x1031000DU);
+    const int b1c  = frame_with_key(0x1031000FU);
     CHECK((sbas > 0) == (PURRGO_GNSS_SIG_OFF_SBAS != 0));
-    CHECK((bds > 0) == (PURRGO_GNSS_SIG_OFF_BDS != 0));
+    CHECK((bds > 0) == (PURRGO_GNSS_SIG_OFF_BDS != 0 || PURRGO_GNSS_SIG_BDS_B1I != 0));
     CHECK((glo > 0) == (PURRGO_GNSS_SIG_OFF_GLO != 0));
+    CHECK((b1i > 0) == (PURRGO_GNSS_SIG_BDS_B1I != 0));
+    CHECK((b1c > 0) == (PURRGO_GNSS_SIG_BDS_B1I != 0));
     CHECK(frame_with_key(0x1031001FU) == -1 && frame_with_key(0x10310021U) == -1);   /* GPS и Galileo остаются */
 #if PURRGO_GNSS_SIGNAL_FRAME
     {
         const int sig_frame = (bds > 0) ? bds : (sbas > 0) ? sbas : glo;
         CHECK(sig_frame == 1);                           /* сразу за базовой */
         if (sbas > 0) { CHECK(sbas == sig_frame && valset_value(sig_frame, 0x10310020U, &v) && v == 0); }
-        if (bds > 0)  { CHECK(bds == sig_frame && valset_value(sig_frame, 0x10310022U, &v) && v == 0); }
+        if (bds > 0)  { CHECK(bds == sig_frame && valset_value(sig_frame, 0x10310022U, &v) &&
+                              v == (PURRGO_GNSS_SIG_BDS_B1I ? 1U : 0U)); }
         if (glo > 0)  { CHECK(glo == sig_frame && valset_value(sig_frame, 0x10310025U, &v) && v == 0); }
+        if (b1i > 0)  { CHECK(b1i == sig_frame && valset_value(sig_frame, 0x1031000DU, &v) && v == 1); }
+        if (b1c > 0)  { CHECK(b1c == sig_frame && valset_value(sig_frame, 0x1031000FU, &v) && v == 0); }
     }
 #endif
 

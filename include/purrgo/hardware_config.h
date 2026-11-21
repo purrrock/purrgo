@@ -247,18 +247,30 @@
  *                                 BeiDou выключаются. Заметно только в непрерывном
  *                                 режиме (даташит: на ~1 мА меньше); в PSMCT по
  *                                 даташиту выигрыша от выключения GLONASS нет.
+ *   PURRGO_GNSS_SIG_GPS_GAL_BDS (2) - GPS, Galileo и BeiDou B1I (и QZSS): вместо GLONASS.
+ *                                 B1I в PSM поддерживается, но не совместим с GLONASS L1OF
+ *                                 и BeiDou B1C (даташит G10A-F30, сноска 1), поэтому кадр
+ *                                 CFG-SIGNAL выключает GLONASS и B1C и включает B1I, всё в
+ *                                 одном кадре VALSET (сначала выключения). По даташиту
+ *                                 MAX-M10S ток слежения в PSM у GPS+GAL+GLO и GPS+GAL+BDS B1I
+ *                                 одинаковый, холодный старт у B1I дольше (27 с против
+ *                                 23 с); что даёт больше спутников, зависит от региона.
+ *                                 Не проверено на железе: при NAK кадра "Signals"
+ *                                 приёмник остаётся на заводском наборе.
  *
  * Смена набора перезапускает ГНСС-подсистему приёмника, поэтому команда уходит
  * только при настройке после включения, до первого фикса.
  */
-#define PURRGO_GNSS_SIG_FACTORY 0
-#define PURRGO_GNSS_SIG_GPS_GAL 1
+#define PURRGO_GNSS_SIG_FACTORY     0
+#define PURRGO_GNSS_SIG_GPS_GAL     1
+#define PURRGO_GNSS_SIG_GPS_GAL_BDS 2
 
 #ifndef PURRGO_GNSS_SIGNALS
 #define PURRGO_GNSS_SIGNALS PURRGO_GNSS_SIG_FACTORY
 #endif
-#if (PURRGO_GNSS_SIGNALS != PURRGO_GNSS_SIG_FACTORY) && (PURRGO_GNSS_SIGNALS != PURRGO_GNSS_SIG_GPS_GAL)
-#error "PURRGO_GNSS_SIGNALS must be PURRGO_GNSS_SIG_FACTORY (0) or PURRGO_GNSS_SIG_GPS_GAL (1)"
+#if (PURRGO_GNSS_SIGNALS != PURRGO_GNSS_SIG_FACTORY) && (PURRGO_GNSS_SIGNALS != PURRGO_GNSS_SIG_GPS_GAL) && \
+    (PURRGO_GNSS_SIGNALS != PURRGO_GNSS_SIG_GPS_GAL_BDS)
+#error "PURRGO_GNSS_SIGNALS must be PURRGO_GNSS_SIG_FACTORY (0), PURRGO_GNSS_SIG_GPS_GAL (1) or PURRGO_GNSS_SIG_GPS_GAL_BDS (2)"
 #endif
 #if (PURRGO_HW_GNSS_RECEIVER == PURRGO_GNSS_RECEIVER_UBX) && (PURRGO_GNSS_SIGNALS != PURRGO_GNSS_SIG_FACTORY)
 #define PURRGO_GNSS_SIGNALS_ACTIVE 1
@@ -267,13 +279,22 @@
 #endif
 
 /*
- * Что выключает кадр CFG-SIGNAL (0/1): SBAS и BeiDou - вместе с PSM, GLONASS и BeiDou -
- * при PURRGO_GNSS_SIG_GPS_GAL. Кадр отправляется, если выключается хоть одна система.
+ * Что делает кадр CFG-SIGNAL (0/1): SBAS и BeiDou выключаются вместе с PSM, GLONASS и BeiDou - при
+ * PURRGO_GNSS_SIG_GPS_GAL, GLONASS и BeiDou B1C выключаются, а BeiDou B1I включается - при
+ * PURRGO_GNSS_SIG_GPS_GAL_BDS (BeiDou при этом остаётся включённым, PURRGO_GNSS_SIG_OFF_BDS = 0).
+ * Кадр отправляется, если меняется хоть одна система.
  */
+#if PURRGO_GNSS_SIGNALS_ACTIVE && (PURRGO_GNSS_SIGNALS == PURRGO_GNSS_SIG_GPS_GAL_BDS)
+#define PURRGO_GNSS_SIG_BDS_B1I 1
+#else
+#define PURRGO_GNSS_SIG_BDS_B1I 0
+#endif
 #define PURRGO_GNSS_SIG_OFF_SBAS (PURRGO_GNSS_PSM_ANY)
-#define PURRGO_GNSS_SIG_OFF_BDS  ((PURRGO_GNSS_PSM_ANY) || (PURRGO_GNSS_SIGNALS_ACTIVE))
+#define PURRGO_GNSS_SIG_OFF_BDS  ((((PURRGO_GNSS_PSM_ANY) || (PURRGO_GNSS_SIGNALS_ACTIVE))) && !(PURRGO_GNSS_SIG_BDS_B1I))
 #define PURRGO_GNSS_SIG_OFF_GLO  (PURRGO_GNSS_SIGNALS_ACTIVE)
-#define PURRGO_GNSS_SIGNAL_COUNT (PURRGO_GNSS_SIG_OFF_SBAS + PURRGO_GNSS_SIG_OFF_BDS + PURRGO_GNSS_SIG_OFF_GLO)
+/* Число пар ключ-значение в кадре: B1I - три ключа (BDS_B1C = 0, BDS_B1 = 1, BDS = 1). */
+#define PURRGO_GNSS_SIGNAL_COUNT (PURRGO_GNSS_SIG_OFF_SBAS + PURRGO_GNSS_SIG_OFF_BDS + PURRGO_GNSS_SIG_OFF_GLO + \
+                                  3 * (PURRGO_GNSS_SIG_BDS_B1I))
 
 #if PURRGO_GNSS_SIGNAL_COUNT != 0
 #define PURRGO_GNSS_SIGNAL_FRAME 1

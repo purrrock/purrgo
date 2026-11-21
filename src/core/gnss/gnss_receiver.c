@@ -173,6 +173,8 @@ size_t purrgo_ubx_build_valset(uint8_t *out, size_t out_size, uint8_t layers,
 /* Набор систем (PURRGO_GNSS_SIGNALS, PSM): групповые ключи CFG-SIGNAL. */
 #define UBX_KEY_SIGNAL_SBAS_ENA      0x10310020U  /* L */
 #define UBX_KEY_SIGNAL_BDS_ENA       0x10310022U  /* L */
+#define UBX_KEY_SIGNAL_BDS_B1_ENA    0x1031000DU  /* L: BeiDou B1I */
+#define UBX_KEY_SIGNAL_BDS_B1C_ENA   0x1031000FU  /* L: BeiDou B1C */
 #define UBX_KEY_SIGNAL_GLO_ENA       0x10310025U  /* L */
 
 /*
@@ -258,6 +260,8 @@ static const key_name_t k_key_names[] = {
     { UBX_KEY_PM_ONTIME,            "PM-ONTIME" },
     { UBX_KEY_SIGNAL_SBAS_ENA,      "SIGNAL-SBAS" },
     { UBX_KEY_SIGNAL_BDS_ENA,       "SIGNAL-BDS" },
+    { UBX_KEY_SIGNAL_BDS_B1_ENA,    "SIGNAL-BDS-B1I" },
+    { UBX_KEY_SIGNAL_BDS_B1C_ENA,   "SIGNAL-BDS-B1C" },
     { UBX_KEY_SIGNAL_GLO_ENA,       "SIGNAL-GLO" },
     { UBX_KEY_UART1_BAUDRATE,       "UART1-BAUDRATE" },
 };
@@ -452,7 +456,8 @@ void purrgo_gnss_receiver_configure_ubx_profile(purrgo_gnss_tx_fn tx, purrgo_gns
      * Набор систем: отдельной командой, сразу за базовой. Приёмник перезапускает ГНСС
      * после смены набора, поэтому делаем это в начале настройки. В режиме
      * энергосбережения SBAS не принимается (manual рекомендует его выключить), а BeiDou
-     * B1C не поддержан: оба выключаются (см. hardware_config.h).
+     * B1C не поддержан: оба выключаются. При PURRGO_GNSS_SIG_GPS_GAL_BDS вместо GLONASS и
+     * B1C включается B1I (см. hardware_config.h).
      */
     static const purrgo_ubx_cfg_item_t signals[] = {
 #if PURRGO_GNSS_SIG_OFF_SBAS
@@ -463,6 +468,12 @@ void purrgo_gnss_receiver_configure_ubx_profile(purrgo_gnss_tx_fn tx, purrgo_gns
 #endif
 #if PURRGO_GNSS_SIG_OFF_BDS
         { UBX_KEY_SIGNAL_BDS_ENA, 0U },
+#endif
+#if PURRGO_GNSS_SIG_BDS_B1I
+        /* B1I несовместим с B1C и GLONASS L1OF: сначала выключения (GLONASS выше), затем включения. */
+        { UBX_KEY_SIGNAL_BDS_B1C_ENA, 0U },
+        { UBX_KEY_SIGNAL_BDS_B1_ENA,  1U },
+        { UBX_KEY_SIGNAL_BDS_ENA,     1U },
 #endif
     };
     add_group(groups, &n, "Signals", signals, sizeof signals / sizeof signals[0], layers);
