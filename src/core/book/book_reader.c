@@ -1074,41 +1074,41 @@ bool purrgo_book_reader_handle_button(purrgo_state_t state, purrgo_btn_t button,
 
 /* ---- Для отрисовки и тестов ------------------------------------------------------ */
 
-void purrgo_book_reader_get_view(purrgo_book_view_t *v)
+void purrgo_book_reader_get_view(purrgo_book_view_t *view)
 {
-    memset(v, 0, sizeof(*v));
-    v->open = s.open;
-    v->error = s.error;
-    v->file = s.file;
-    v->find_query = s.query;
+    memset(view, 0, sizeof(*view));
+    view->open = s.open;
+    view->error = s.error;
+    view->file = s.file;
+    view->find_query = s.query;
     if (!s.open) {
         return;
     }
-    v->page_error = s.page_error;
-    v->page = s.page;
-    v->page_count = s.hdr.page_count;
-    v->percent = percent_of(s.page, s.hdr.page_count);
-    v->jump = s.jump;
-    v->jump_percent = s.jump_percent;
-    v->jump_page = page_of_percent(s.jump_percent, s.hdr.page_count);
+    view->page_error = s.page_error;
+    view->page = s.page;
+    view->page_count = s.hdr.page_count;
+    view->percent = percent_of(s.page, s.hdr.page_count);
+    view->jump = s.jump;
+    view->jump_percent = s.jump_percent;
+    view->jump_page = page_of_percent(s.jump_percent, s.hdr.page_count);
     if (s.page_error == PGB_OK && s.page_len > 0u) {
         if (s.page_is_image) {
-            v->image = s.page_buf;
-            v->image_w = s.img_w;
-            v->image_h = s.img_h;
+            view->image = s.page_buf;
+            view->image_w = s.img_w;
+            view->image_h = s.img_h;
         } else {
-            v->text = s.page_buf;
-            v->text_len = s.page_len;
+            view->text = s.page_buf;
+            view->text_len = s.page_len;
         }
     }
 
-    v->find = s.find;
+    view->find = s.find;
     if (s.find == PURRGO_BOOK_FIND_RUNNING) {
-        v->find_percent = find_percent();
-    } else if (s.find == PURRGO_BOOK_FIND_FOUND && v->text != NULL && s.hit_page == s.page &&
-               s.hit_off < v->text_len) {
-        v->hl_start = s.hit_off;
-        v->hl_len = (s.hit_len > v->text_len - s.hit_off) ? (uint32_t)v->text_len - s.hit_off
+        view->find_percent = find_percent();
+    } else if (s.find == PURRGO_BOOK_FIND_FOUND && view->text != NULL && s.hit_page == s.page &&
+               s.hit_off < view->text_len) {
+        view->hl_start = s.hit_off;
+        view->hl_len = (s.hit_len > view->text_len - s.hit_off) ? (uint32_t)view->text_len - s.hit_off
                                                           : s.hit_len;
     }
 }

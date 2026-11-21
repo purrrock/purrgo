@@ -395,7 +395,7 @@ void gfx_draw_thick_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1,
         for (;;) {
             const bool last = (cx == ex && cy == ey);
             const int32_t e2 = err * 2;
-            const bool step_y = !last && (e2 <= dx);
+            const bool step_y = (e2 <= dx); /* при last цикл завершается до использования */
 
             if (last || step_y) {
                 for (int32_t off = lo; off <= hi; ++off) {

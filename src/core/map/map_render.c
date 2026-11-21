@@ -84,11 +84,17 @@ bool map_render_try_place_label(
     uint16_t h
 )
 {
+    /* Считаем в int32_t и ограничиваем: у края int16_t сумма иначе «заворачивается». */
+    int32_t max_x = (int32_t)x + (int32_t)w;
+    int32_t max_y = (int32_t)y + (int32_t)h;
+    if (max_x > INT16_MAX) max_x = INT16_MAX;
+    if (max_y > INT16_MAX) max_y = INT16_MAX;
+
     label_bbox_t new_box = {
         .min_x = x,
         .min_y = y,
-        .max_x = x + (int16_t)w,
-        .max_y = y + (int16_t)h
+        .max_x = (int16_t)max_x,
+        .max_y = (int16_t)max_y
     };
 
     /*

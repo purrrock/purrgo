@@ -33,78 +33,78 @@ static void ck_add(purrgo_ubx_parser_t *p, uint8_t byte)
     p->ck_b = (uint8_t)(p->ck_b + p->ck_a);
 }
 
-purrgo_ubx_feed_t purrgo_ubx_parser_feed(purrgo_ubx_parser_t *p, uint8_t byte)
+purrgo_ubx_feed_t purrgo_ubx_parser_feed(purrgo_ubx_parser_t *parser, uint8_t byte)
 {
-    switch (p->state) {
+    switch (parser->state) {
     case PURRGO_UBX_PARSER_IDLE:
         if (byte == 0xB5U) {
-            p->state = PURRGO_UBX_PARSER_SYNC2;
+            parser->state = PURRGO_UBX_PARSER_SYNC2;
             return PURRGO_UBX_FEED_CONSUMED;
         }
         return PURRGO_UBX_FEED_NOT_UBX;
 
     case PURRGO_UBX_PARSER_SYNC2:
         if (byte == 0x62U) {
-            p->state = PURRGO_UBX_PARSER_CLASS;
-            p->ck_a = 0U;
-            p->ck_b = 0U;
+            parser->state = PURRGO_UBX_PARSER_CLASS;
+            parser->ck_a = 0U;
+            parser->ck_b = 0U;
             return PURRGO_UBX_FEED_CONSUMED;
         }
         if (byte == 0xB5U) {
             return PURRGO_UBX_FEED_CONSUMED;     /* B5 B5 62: первый был мусором */
         }
-        p->state = PURRGO_UBX_PARSER_IDLE;
+        parser->state = PURRGO_UBX_PARSER_IDLE;
         return PURRGO_UBX_FEED_NOT_UBX;
 
     case PURRGO_UBX_PARSER_CLASS:
-        p->msg_class = byte;
-        ck_add(p, byte);
-        p->state = PURRGO_UBX_PARSER_ID;
+        parser->msg_class = byte;
+        ck_add(parser, byte);
+        parser->state = PURRGO_UBX_PARSER_ID;
         return PURRGO_UBX_FEED_CONSUMED;
 
     case PURRGO_UBX_PARSER_ID:
-        p->msg_id = byte;
-        ck_add(p, byte);
-        p->state = PURRGO_UBX_PARSER_LEN1;
+        parser->msg_id = byte;
+        ck_add(parser, byte);
+        parser->state = PURRGO_UBX_PARSER_LEN1;
         return PURRGO_UBX_FEED_CONSUMED;
 
     case PURRGO_UBX_PARSER_LEN1:
-        p->length = byte;
-        ck_add(p, byte);
-        p->state = PURRGO_UBX_PARSER_LEN2;
+        parser->length = byte;
+        ck_add(parser, byte);
+        parser->state = PURRGO_UBX_PARSER_LEN2;
         return PURRGO_UBX_FEED_CONSUMED;
 
     case PURRGO_UBX_PARSER_LEN2:
-        p->length = (uint16_t)(p->length | ((uint16_t)byte << 8));
-        if (p->length > PURRGO_UBX_MAX_PAYLOAD) {
-            p->state = PURRGO_UBX_PARSER_IDLE;   /* слишком длинный (или мусор): не ждём его конца */
+        parser->length = (uint16_t)(parser->length | ((uint16_t)byte << 8));
+        if (parser->length > PURRGO_UBX_MAX_PAYLOAD) {
+            parser->state = PURRGO_UBX_PARSER_IDLE;   /* слишком длинный (или мусор): не ждём его конца */
             return PURRGO_UBX_FEED_NOT_UBX;
         }
-        ck_add(p, byte);
-        p->pos = 0U;
-        p->state = (p->length == 0U) ? PURRGO_UBX_PARSER_CK_A : PURRGO_UBX_PARSER_PAYLOAD;
+        ck_add(parser, byte);
+        parser->pos = 0U;
+        parser->state = (parser->length == 0U) ? PURRGO_UBX_PARSER_CK_A : PURRGO_UBX_PARSER_PAYLOAD;
         return PURRGO_UBX_FEED_CONSUMED;
 
     case PURRGO_UBX_PARSER_PAYLOAD:
-        p->payload[p->pos++] = byte;
-        ck_add(p, byte);
-        if (p->pos >= p->length) {
-            p->state = PURRGO_UBX_PARSER_CK_A;
+        parser->payload[parser->pos++] = byte;
+        ck_add(parser, byte);
+        if (parser->pos >= parser->length) {
+            parser->state = PURRGO_UBX_PARSER_CK_A;
         }
         return PURRGO_UBX_FEED_CONSUMED;
 
     case PURRGO_UBX_PARSER_CK_A:
-        if (byte == p->ck_a) {
-            p->state = PURRGO_UBX_PARSER_CK_B;
+        if (byte == parser->ck_a) {
+            parser->state = PURRGO_UBX_PARSER_CK_B;
         } else {
-            p->state = PURRGO_UBX_PARSER_IDLE;
+            parser->state = PURRGO_UBX_PARSER_IDLE;
         }
         return PURRGO_UBX_FEED_CONSUMED;
 
     case PURRGO_UBX_PARSER_CK_B:
     default:
-        p->state = PURRGO_UBX_PARSER_IDLE;
-        return (byte == p->ck_b) ? PURRGO_UBX_FEED_FRAME : PURRGO_UBX_FEED_CONSUMED;
+        parser->state = PURRGO_UBX_PARSER_IDLE;
+        return (byte == parser->ck_b) ? PURRGO_UBX_FEED_FRAME : PURRGO_UBX_FEED_CONSUMED;
     }
 }
 
@@ -329,66 +329,66 @@ static void apply_pvt_time(const uint8_t *p, purrgo_gnss_solution_t *sol)
     }
 }
 
-bool purrgo_gnss_ubx_apply_pvt(const uint8_t *p, uint16_t length, purrgo_gnss_solution_t *sol)
+bool purrgo_gnss_ubx_apply_pvt(const uint8_t *payload, uint16_t length, purrgo_gnss_solution_t *solution)
 {
-    if (p == NULL || sol == NULL || length != PVT_LENGTH) {
+    if (payload == NULL || solution == NULL || length != PVT_LENGTH) {
         return false;
     }
 
-    const uint8_t fix_type = p[20];
-    const uint8_t flags = p[21];
-    const uint16_t flags3 = rd_u16(&p[78]);
+    const uint8_t fix_type = payload[20];
+    const uint8_t flags = payload[21];
+    const uint16_t flags3 = rd_u16(&payload[78]);
     s_st.psm_valid = true;
     s_st.psm_state = (uint8_t)((flags >> 2) & 0x07U);
     const bool fix_ok = ((flags & 0x01U) != 0U) && (fix_type >= 2U) && (fix_type <= 4U) &&
                         ((flags3 & 0x01U) == 0U);
 
-    apply_pvt_time(p, sol);
-    sol->valid = fix_ok;
-    sol->fix_type = fix_ok ? ((fix_type == 2U) ? 2U : 3U) : 1U;
-    sol->fix_quality = fix_ok ? (((flags & 0x02U) != 0U) ? 2U : 1U) : 0U;
-    sol->satellites_tracked = p[23];
-    sol->pdop_100 = (int32_t)rd_u16(&p[76]);
+    apply_pvt_time(payload, solution);
+    solution->valid = fix_ok;
+    solution->fix_type = fix_ok ? ((fix_type == 2U) ? 2U : 3U) : 1U;
+    solution->fix_quality = fix_ok ? (((flags & 0x02U) != 0U) ? 2U : 1U) : 0U;
+    solution->satellites_tracked = payload[23];
+    solution->pdop_100 = (int32_t)rd_u16(&payload[76]);
 
     if (!fix_ok) {
-        sol->speed_knots = 0;
-        sol->course_valid = false;
-        sol->acc_valid = false;
+        solution->speed_knots = 0;
+        solution->course_valid = false;
+        solution->acc_valid = false;
         return true;
     }
 
-    sol->lon_1e7 = rd_i32(&p[24]);
-    sol->lat_1e7 = rd_i32(&p[28]);
+    solution->lon_1e7 = rd_i32(&payload[24]);
+    solution->lat_1e7 = rd_i32(&payload[28]);
 
     /* hMSL, мм -> м с округлением к ближайшему (в обе стороны симметрично). */
-    const int32_t hmsl_mm = rd_i32(&p[36]);
-    sol->alt_m = (hmsl_mm >= 0) ? (hmsl_mm + 500) / 1000 : -((-hmsl_mm + 500) / 1000);
+    const int32_t hmsl_mm = rd_i32(&payload[36]);
+    solution->alt_m = (hmsl_mm >= 0) ? (hmsl_mm + 500) / 1000 : -((-hmsl_mm + 500) / 1000);
 
-    int32_t gspeed = rd_i32(&p[60]);
+    int32_t gspeed = rd_i32(&payload[60]);
     if (gspeed < 0) {
         gspeed = 0;
     }
     /* мм/с -> сотые доли узла: x * 3600 / 1852 / 1000 * 100 = x * 360 / 1852. */
-    sol->speed_knots = (int32_t)(((int64_t)gspeed * 360) / 1852);
+    solution->speed_knots = (int32_t)(((int64_t)gspeed * 360) / 1852);
 
-    const int32_t head_mot = rd_i32(&p[64]);
-    const uint32_t head_acc = rd_u32(&p[72]);
+    const int32_t head_mot = rd_i32(&payload[64]);
+    const uint32_t head_acc = rd_u32(&payload[72]);
     if (gspeed >= COURSE_MIN_SPEED_MM_S && head_mot >= 0 && head_acc <= COURSE_MAX_HEADACC_1E5) {
         int32_t course = head_mot / 1000;          /* 1e-5 градуса -> сотые доли градуса */
         if (course >= 36000) {
             course -= 36000;
         }
-        sol->course_deg_100 = course;
-        sol->course_valid = true;
+        solution->course_deg_100 = course;
+        solution->course_valid = true;
     } else {
-        sol->course_valid = false;
+        solution->course_valid = false;
     }
 
-    const uint32_t hacc = rd_u32(&p[40]);
-    sol->acc_valid = (hacc != 0xFFFFFFFFU);
-    sol->hacc_mm = hacc;
-    sol->vacc_mm = rd_u32(&p[44]);
-    sol->sacc_mm_s = rd_u32(&p[68]);
+    const uint32_t hacc = rd_u32(&payload[40]);
+    solution->acc_valid = (hacc != 0xFFFFFFFFU);
+    solution->hacc_mm = hacc;
+    solution->vacc_mm = rd_u32(&payload[44]);
+    solution->sacc_mm_s = rd_u32(&payload[68]);
     return true;
 }
 

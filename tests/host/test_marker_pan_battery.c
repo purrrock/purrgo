@@ -184,6 +184,54 @@ static void test_pan_step(void)
     CHECK(px_y <= PURRGO_MAP_VIEWPORT_HEIGHT_PX);
 }
 
+/* Ручное панорамирование не выходит за ±90°/±180°; PLUS/MINUS на краю масштаба не "съедают" кнопку. */
+static void test_pan_and_zoom_limits(void)
+{
+    memset(&app_config, 0, sizeof app_config);
+    app_config.last_lat_1e7 = 899999000;
+    app_config.last_lon_1e7 = 1799999000;
+    purrgo_map_controller_init();
+
+    for (int i = 0; i < 4; i++) {
+        (void)purrgo_map_controller_handle_button(PURRGO_ACTION_UP);
+    }
+    CHECK(map_app_get_map_center_lat() <= 900000000);
+    CHECK(map_app_get_map_center_lat() >= -900000000);
+
+    for (int i = 0; i < 4; i++) {
+        CHECK(purrgo_map_controller_handle_button(PURRGO_ACTION_RIGHT));
+    }
+    CHECK(map_app_get_map_center_lon() >= -1800000000);
+    CHECK(map_app_get_map_center_lon() <= 1800000000);
+
+    app_config.last_lat_1e7 = -899999000;
+    app_config.last_lon_1e7 = -1799999000;
+    purrgo_map_controller_init();
+    for (int i = 0; i < 4; i++) {
+        (void)purrgo_map_controller_handle_button(PURRGO_ACTION_DOWN);
+        (void)purrgo_map_controller_handle_button(PURRGO_ACTION_LEFT);
+    }
+    CHECK(map_app_get_map_center_lat() >= -900000000);
+    CHECK(map_app_get_map_center_lon() >= -1800000000);
+    CHECK(map_app_get_map_center_lon() <= 1800000000);
+
+    /* Масштаб: до упора true, на пределе false и без изменения. */
+    for (int i = 0; i < PURRGO_MAP_SCALE_COUNT; i++) {
+        (void)purrgo_map_controller_handle_button(PURRGO_ACTION_PLUS);
+    }
+    CHECK(map_app_get_map_zoom_level() == 0);
+    CHECK(!purrgo_map_controller_handle_button(PURRGO_ACTION_PLUS));
+    CHECK(map_app_get_map_zoom_level() == 0);
+    CHECK(purrgo_map_controller_handle_button(PURRGO_ACTION_MINUS));
+    CHECK(map_app_get_map_zoom_level() == 1);
+    for (int i = 0; i < PURRGO_MAP_SCALE_COUNT; i++) {
+        (void)purrgo_map_controller_handle_button(PURRGO_ACTION_MINUS);
+    }
+    CHECK(map_app_get_map_zoom_level() == PURRGO_MAP_SCALE_COUNT - 1);
+    CHECK(!purrgo_map_controller_handle_button(PURRGO_ACTION_MINUS));
+    CHECK(map_app_get_map_zoom_level() == PURRGO_MAP_SCALE_COUNT - 1);
+}
+
 static void test_track_battery(void)
 {
     purrgo_logger_reset();
@@ -374,6 +422,7 @@ int main(void)
 {
     test_marker_threshold_and_battery_line();
     test_pan_step();
+    test_pan_and_zoom_limits();
     test_track_battery();
     test_battery_monitor();
     test_center_on_marker();
