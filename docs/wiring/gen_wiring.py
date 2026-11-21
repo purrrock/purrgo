@@ -54,9 +54,12 @@ def flag33(x, y, side="up", color="#b71c1c"):
     text(x, y - 27, "3V3", 11, "middle", "bold", color)
 
 
-def resistor_v(x, y, h, label):
+def resistor_v(x, y, h, label, left=False):
     rect(x - 8, y, 16, h, "#fff", "#333", 1.5, 2)
-    text(x + 14, y + h / 2 + 4, label, 11)
+    if left:
+        text(x - 14, y + h / 2 + 4, label, 11, "end")
+    else:
+        text(x + 14, y + h / 2 + 4, label, 11)
 
 
 def wire(name, color, pts, width=2.2):
@@ -78,6 +81,17 @@ C_PWR = "#b71c1c"
 C_5V = "#d84315"
 C_SWD = "#455a64"
 C_GND = "#222"
+C_REC = "#f57f17"   # рекомендуемые детали (не из PINOUT)
+
+
+def cap_v(x, y0, y1, plus=False):
+    m = (y0 + y1) / 2
+    line(x, y0, x, m - 3, C_REC, 1.8)
+    line(x - 10, m - 3, x + 10, m - 3, C_REC, 2.6)
+    line(x - 10, m + 3, x + 10, m + 3, C_REC, 2.6)
+    line(x, m + 3, x, y1, C_REC, 1.8)
+    if plus:
+        text(x - 13, m - 4, "+", 12, "end", "bold", C_REC)
 
 # ---------- плата ----------
 BX0, BX1, BY0, BY1 = 800, 1300, 330, 1070
@@ -186,35 +200,54 @@ text(48, y3 - 14, "−", 14, "start", "bold")
 dot(170, y3, 4, C_PWR)
 line(70, y3 + 34, 70, y3 + 52, C_GND, 1.8)
 gnd(70, y3 + 52)
+# выключатель SW1 (рекомендуется)
+sw_a, sw_b = 190, 232
+rect(176, y3 - 30, 70, 50, "none", C_REC, 1.4, 6, "5 4")
+out.append(f'<circle cx="{sw_a}" cy="{y3}" r="3" fill="#fff" stroke="#333" stroke-width="1.5"/>')
+out.append(f'<circle cx="{sw_b}" cy="{y3}" r="3" fill="#fff" stroke="#333" stroke-width="1.5"/>')
+line(sw_a, y3, sw_b - 6, y3 - 16, "#333", 1.8)
+text(211, y3 + 14, "SW1", 11, "middle", "bold", C_REC)
+text(211, y3 - 34, "выключатель", 9.5, "middle", "bold", C_REC)
 # TPS63802
-rect(250, y3 - 30, 140, 60, "#fff8e1", "#333", 1.8, 6)
-text(320, y3 - 8, "TPS63802", 13, "middle", "bold")
-text(320, y3 + 8, "buck-boost, Vout 3,3 В", 10, "middle", "normal", "#555")
-text(257, y3 + 22, "VIN", 9.5, "start", "bold")
-text(383, y3 + 22, "VOUT", 9.5, "end", "bold")
-text(320, y3 + 44 - 3, "GND", 9.5, "middle", "bold")
-line(320, y3 + 30, 320, y3 + 46, C_GND, 1.8)
-gnd(320, y3 + 46)
-# провода питания (чёрный/красный)
-wire("BAT+", C_PWR, [(170, y3), (250, y3)], 3)
-wire("3V3", C_PWR, [(390, y3), (PX_L, y3)], 3)
-# делитель батареи на АЦП
-DIVX = 210
+rect(300, y3 - 30, 140, 60, "#fff8e1", "#333", 1.8, 6)
+text(370, y3 - 8, "TPS63802", 13, "middle", "bold")
+text(370, y3 + 8, "buck-boost, Vout 3,3 В", 10, "middle", "normal", "#555")
+text(307, y3 + 22, "VIN", 9.5, "start", "bold")
+text(433, y3 + 22, "VOUT", 9.5, "end", "bold")
+text(370, y3 + 41, "GND", 9.5, "middle", "bold")
+line(370, y3 + 30, 370, y3 + 46, C_GND, 1.8)
+gnd(370, y3 + 46)
+# провода питания
+wire("BAT+ sw", C_PWR, [(170, y3), (sw_a - 3, y3)], 3)
+wire("BAT+ vin", C_PWR, [(sw_b + 3, y3), (300, y3)], 3)
+wire("3V3", C_PWR, [(440, y3), (PX_L, y3)], 3)
+# C1: 220 мкФ у входа TPS63802
+dot(285, y3, 3.5, C_PWR)
+cap_v(285, y3, y3 + 48, True)
+gnd(285, y3 + 48)
+text(296, y3 + 62, "C1 220 мкФ", 10, "start", "bold", C_REC)
+# C2: объём на шине 3V3
+dot(600, y3, 3.5, C_PWR)
+cap_v(600, y3, y3 + 40)
+gnd(600, y3 + 40)
+text(612, y3 + 26, "C2 47…100 мкФ", 10.5, "start", "bold", C_REC)
+# делитель батареи на АЦП (после выключателя)
+DIVX = 250
 dot(DIVX, y3, 3.5, C_PWR)
 wire("BAT+ tap", C_ADC, [(DIVX, y3), (DIVX, 480)], 2.2)
-resistor_v(DIVX, 480, 46, "1 МΩ")
+resistor_v(DIVX, 480, 46, "1 МΩ", True)
 wire("div1", C_ADC, [(DIVX, 526), (DIVX, 560)], 2.2)
 dot(DIVX, 560, 3.5, C_ADC)
 wire("div2", C_ADC, [(DIVX, 560), (DIVX, 575)], 2.2)
-resistor_v(DIVX, 575, 46, "1 МΩ")
+resistor_v(DIVX, 575, 46, "1 МΩ", True)
 line(DIVX, 621, DIVX, 636, C_GND, 1.8)
 gnd(DIVX, 636)
-wire("div cap", C_ADC, [(DIVX, 560), (276, 560), (276, 580)], 2.2)
-line(264, 580, 288, 580, C_ADC, 2)
-line(264, 587, 288, 587, C_ADC, 2)
-line(276, 587, 276, 636, C_GND, 1.8)
-gnd(276, 636)
-text(292, 586, "100 нФ", 11)
+wire("div cap", C_ADC, [(DIVX, 560), (330, 560), (330, 580)], 2.2)
+line(318, 580, 342, 580, C_ADC, 2)
+line(318, 587, 342, 587, C_ADC, 2)
+line(330, 587, 330, 636, C_GND, 1.8)
+gnd(330, 636)
+text(346, 586, "100 нФ", 11)
 wire("V_MAIN_BAT", C_ADC, [(PX_L, Y(6)), (DIVX, Y(6))], 2.2)
 # земля платы
 line(PX_L, Y(2), PX_L - 14, Y(2), C_GND, 1.8)
@@ -223,20 +256,32 @@ gnd(PX_L - 14, Y(2) - 0)
 text(PX_L - 8, Y(1) + 4, "NC", 10, "end", "normal", "#9e9e9e")
 
 # ---------- GNSS (слева) ----------
-GX1 = 400
+GX1 = 300
 GY0, GY1 = 672, 890
 rect(40, GY0, GX1 - 40, GY1 - GY0, "#fff", "#333", 1.8, 6)
-text(60, GY0 + 24, "GNSS-модуль G10A F30", 14, "start", "bold")
-text(60, GY0 + 42, "Quescan, UBX / NMEA", 11, "start", "normal", "#555")
+text(54, GY0 + 22, "GNSS G10A F30", 13.5, "start", "bold")
+text(54, GY0 + 38, "Quescan, UBX / NMEA", 10.5, "start", "normal", "#555")
 rows = [("VCC", 700), ("GND", 732), ("TX", Y(12)), ("RX", Y(13)), ("EN", Y(14)), ("1PPS", 866)]
 names = {"VCC": "2  VCC", "GND": "5  GND", "TX": "3  TX (T)", "RX": "4  RX (R)", "EN": "6  EN (E)", "1PPS": "1  1PPS"}
 for nm, y in rows:
     dot(GX1, y, 4, "#333")
     text(GX1 - 8, y + 4, names[nm], 12, "end", "bold")
-flag33(GX1 + 0, 700, "up")  # заменим ниже на левый флаг
-# (флаг для VCC рисуем справа от блока)
 text(GX1 + 6, 866 + 4, "NC", 10, "start", "normal", "#9e9e9e")
-gnd(GX1 + 0, 732 + 0)
+# развязка питания GNSS: C3 10 мкФ + C4 100 нФ
+line(GX1, 700, 392, 700, C_PWR, 1.8)
+line(GX1, 732, 392, 732, C_GND, 1.8)
+for cx in (326, 362):
+    cap_v(cx, 700, 732)
+    for yy in (700, 732):
+        dot(cx, yy, 3, C_PWR if yy == 700 else C_GND)
+flag33(392, 700)
+gnd(392, 732)
+text(305, 693, "C3 10 мкФ", 9.5, "start", "bold", C_REC)
+text(318, 749, "C4 100 нФ", 9.5, "start", "bold", C_REC)
+# опция: ключ питания GNSS
+rect(52, 748, 154, 66, "none", C_REC, 1.3, 5, "5 4")
+for i, t in enumerate(("Опция: ключ MT9700-N", "на VCC GNSS (EN ключа", "← PB0), если EN модуля", "не выключает GNSS")):
+    text(58, 762 + i * 14, t, 9.5, "start", "normal", C_REC)
 wire("GNSS_TX", C_GNSS, [(PX_L, Y(12)), (GX1, Y(12))])
 wire("GNSS_RX", C_GNSS, [(PX_L, Y(13)), (GX1, Y(13))])
 wire("GNSS_EN", C_GEN, [(PX_L, Y(7)), (415, Y(7)), (415, Y(14)), (GX1, Y(14))])
@@ -282,7 +327,19 @@ dot(1600, SY0, 4, C_SDCD)
 text(1600, SY0 + 16, "CD", 12, "middle", "bold")
 dot(SX1, 420, 4, "#333")
 text(SX1 - 8, 424, "VCC", 12, "end", "bold")
-flag33(SX1 + 0, 420)
+line(SX1, 420, 1968, 420, C_PWR, 1.8)
+for cx in (1925, 1950):
+    dot(cx, 420, 3, C_PWR)
+    cap_v(cx, 420, 470)
+    gnd(cx, 470)
+text(1915, 508, "C7 10 мкФ · C8 100 нФ", 9.5, "start", "bold", C_REC)
+rect(1968, 402, 76, 36, "#fffde7", C_REC, 1.5, 4, "5 4")
+text(2006, 424, "MT9700-N", 10.5, "middle", "bold")
+text(2006, 396, "Q2 (опц.)", 9.5, "middle", "bold", C_REC)
+line(2044, 420, 2074, 420, C_PWR, 1.8)
+flag33(2074, 420)
+line(2006, 438, 2006, 452, C_REC, 1.5)
+text(1975, 466, "EN ← GPIO SD_PWR", 9.5, "start", "normal", C_REC)
 dot(SX1, 462, 4, "#333")
 text(SX1 - 8, 466, "GND", 12, "end", "bold")
 gnd(SX1, 462)
@@ -323,7 +380,7 @@ line(ZX0 + 70, by - 12, ZX0 + 70, by + 12, "#333", 2.5)
 line(ZX0 + 80, by - 12, ZX0 + 80, by + 12, "#333", 2.5)
 line(ZX0 + 80, by, ZX1 - 24, by, "#333", 1.5)
 wire("BUZZER_N", C_BUZ, [(PX_R, by), (ZX0, by)])
-wire("BUZZER_P", C_BUZ, [(PX_L, Y(9)), (700, Y(9)), (700, 100), (2000, 100), (2000, by), (ZX1, by)])
+wire("BUZZER_P", C_BUZ, [(PX_L, Y(9)), (700, Y(9)), (700, 100), (2100, 100), (2100, by), (ZX1, by)])
 text(1380, 94, "BUZZER_P (PA6 → излучатель)", 10.5, "middle", "normal", C_BUZ, False, True)
 text(1410, by - 6, "BUZZER_N (PB6)", 10.5, "middle", "normal", C_BUZ, False, True)
 
@@ -377,19 +434,25 @@ for nm, px, *_ in left_pins[3:]:
     line(px, HY0 + 62, px + 12, HY0 + 86, "#333", 1.6)
     line(px, HY0 + 92, px, HY0 + 112, C_GND, 1.8)
     gnd(px, HY0 + 112)
-# питание HAT
+# питание HAT + развязка C5, C6
 dot(HX0, 1560, 4, "#333")
 text(HX0 + 8, 1564, "VCC", 11, "start", "bold")
-line(HX0, 1560, HX0 - 20, 1560, "#333", 1.5)
-flag33(HX0 - 20, 1560)
 dot(HX0, 1600, 4, "#333")
 text(HX0 + 8, 1604, "GND", 11, "start", "bold")
-line(HX0, 1600, HX0 - 20, 1600, "#333", 1.5)
-gnd(HX0 - 20, 1600)
+line(HX0, 1560, 690, 1560, C_PWR, 1.8)
+line(HX0, 1600, 690, 1600, C_GND, 1.8)
+for cx in (745, 715):
+    cap_v(cx, 1560, 1600)
+    dot(cx, 1560, 3, C_PWR)
+    dot(cx, 1600, 3, C_GND)
+flag33(690, 1560)
+gnd(690, 1600)
+text(676, 1573, "C5 10 мкФ", 9.5, "end", "bold", C_REC)
+text(676, 1589, "C6 100 нФ", 9.5, "end", "bold", C_REC)
 
 # ---------- легенда ----------
 LX, LY = 1450, 1330
-rect(LX, LY, 700, 310, "#fff", "#b0bec5", 1.2, 8)
+rect(LX, LY, 700, 345, "#fff", "#b0bec5", 1.2, 8)
 text(LX + 16, LY + 26, "Цвета сигналов", 14, "start", "bold")
 legend = [
     (C_SPI1, "SPI1 (E-Ink): PA5 SCK, PA7 MOSI"),
@@ -404,6 +467,7 @@ legend = [
     (C_ADC, "PB1 V_MAIN_BAT (делитель 1 МΩ + 1 МΩ, 100 нФ)"),
     (C_PWR, "3V3 / BAT+"),
     (C_5V, "5 V (USB-C)"),
+    (C_REC, "рекомендуется (не из PINOUT): C1…C8, SW1, Q2 и ключ GNSS — пунктир"),
 ]
 for i, (c, t) in enumerate(legend):
     yy = LY + 48 + i * 20

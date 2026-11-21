@@ -1,15 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="2200" height="1700" viewBox="0 0 2200 1700" xmlns:c2pa="http://c2pa.org/manifest">
 <rect width="2200" height="1700" fill="#ffffff"/>
-<path d="M 170 458 L 250 458" fill="none" stroke="#b71c1c" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-<path d="M 390 458 L 695 458 A 5 5 0 0 1 705 458 L 723 458 A 5 5 0 0 1 733 458 L 760 458" fill="none" stroke="#b71c1c" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-<path d="M 210 458 L 210 480" fill="none" stroke="#6d4c41" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
-<path d="M 210 526 L 210 560" fill="none" stroke="#6d4c41" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
-<path d="M 210 560 L 210 575" fill="none" stroke="#6d4c41" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
-<path d="M 210 560 L 276 560 L 276 580" fill="none" stroke="#6d4c41" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
-<path d="M 760 560 L 705 560 A 5 5 0 0 0 695 560 L 445 560 A 5 5 0 0 0 435 560 L 210 560" fill="none" stroke="#6d4c41" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
-<path d="M 760 764 L 489 764 A 5 5 0 0 0 479 764 L 467 764 A 5 5 0 0 0 457 764 L 445 764 A 5 5 0 0 0 435 764 L 420 764 A 5 5 0 0 0 410 764 L 400 764" fill="none" stroke="#c2185b" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
-<path d="M 760 798 L 489 798 A 5 5 0 0 0 479 798 L 467 798 A 5 5 0 0 0 457 798 L 445 798 A 5 5 0 0 0 435 798 L 420 798 A 5 5 0 0 0 410 798 L 400 798" fill="none" stroke="#c2185b" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
-<path d="M 760 594 L 705 594 A 5 5 0 0 0 695 594 L 445 594 A 5 5 0 0 0 435 594 L 415 594 L 415 832 L 400 832" fill="none" stroke="#ef6c00" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M 170 458 L 187 458" fill="none" stroke="#b71c1c" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M 235 458 L 300 458" fill="none" stroke="#b71c1c" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M 440 458 L 695 458 A 5 5 0 0 1 705 458 L 723 458 A 5 5 0 0 1 733 458 L 760 458" fill="none" stroke="#b71c1c" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M 250 458 L 250 480" fill="none" stroke="#6d4c41" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M 250 526 L 250 560" fill="none" stroke="#6d4c41" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M 250 560 L 250 575" fill="none" stroke="#6d4c41" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M 250 560 L 330 560 L 330 580" fill="none" stroke="#6d4c41" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M 760 560 L 705 560 A 5 5 0 0 0 695 560 L 445 560 A 5 5 0 0 0 435 560 L 250 560" fill="none" stroke="#6d4c41" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M 760 764 L 489 764 A 5 5 0 0 0 479 764 L 467 764 A 5 5 0 0 0 457 764 L 445 764 A 5 5 0 0 0 435 764 L 420 764 A 5 5 0 0 0 410 764 L 300 764" fill="none" stroke="#c2185b" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M 760 798 L 489 798 A 5 5 0 0 0 479 798 L 467 798 A 5 5 0 0 0 457 798 L 445 798 A 5 5 0 0 0 435 798 L 420 798 A 5 5 0 0 0 410 798 L 300 798" fill="none" stroke="#c2185b" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M 760 594 L 705 594 A 5 5 0 0 0 695 594 L 445 594 A 5 5 0 0 0 435 594 L 415 594 L 415 832 L 300 832" fill="none" stroke="#ef6c00" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
 <path d="M 900 250 L 900 321" fill="none" stroke="#d84315" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 <path d="M 1180 250 L 1180 330" fill="none" stroke="#455a64" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
 <path d="M 1240 250 L 1240 330" fill="none" stroke="#455a64" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
@@ -23,7 +24,7 @@
 <path d="M 1340 594 L 1520 594" fill="none" stroke="#6a1b9a" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
 <path d="M 1520 628 L 1496 628" fill="none" stroke="#222" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
 <path d="M 1340 832 L 1700 832" fill="none" stroke="#e65100" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
-<path d="M 760 662 L 700 662 L 700 100 L 2000 100 L 2000 832 L 1900 832" fill="none" stroke="#e65100" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M 760 662 L 700 662 L 700 100 L 2100 100 L 2100 832 L 1900 832" fill="none" stroke="#e65100" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
 <path d="M 760 526 L 705 526 A 5 5 0 0 0 695 526 L 440 526 L 440 1250 L 810 1250 L 810 1330" fill="none" stroke="#00838f" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
 <path d="M 760 628 L 705 628 A 5 5 0 0 0 695 628 L 462 628 L 462 1230 L 850 1230 L 850 1330" fill="none" stroke="#1565c0" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
 <path d="M 760 696 L 484 696 L 484 1210 L 890 1210 L 890 1330" fill="none" stroke="#1565c0" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
@@ -251,65 +252,113 @@
 <line x1="60" y1="518" x2="80" y2="518" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
 <line x1="64" y1="522" x2="76" y2="522" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
 <line x1="68" y1="526" x2="72" y2="526" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
-<rect x="250" y="428" width="140" height="60" rx="6" fill="#fff8e1" stroke="#333" stroke-width="1.8"/>
-<text x="320" y="450" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="13" text-anchor="middle" fill="#222" font-weight="bold">TPS63802</text>
-<text x="320" y="466" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="10" text-anchor="middle" fill="#555">buck-boost, Vout 3,3 В</text>
-<text x="257" y="480" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="9.5" text-anchor="start" fill="#222" font-weight="bold">VIN</text>
-<text x="383" y="480" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="9.5" text-anchor="end" fill="#222" font-weight="bold">VOUT</text>
-<text x="320" y="499" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="9.5" text-anchor="middle" fill="#222" font-weight="bold">GND</text>
-<line x1="320" y1="488" x2="320" y2="504" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
-<line x1="320" y1="504" x2="320" y2="512" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
-<line x1="310" y1="512" x2="330" y2="512" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
-<line x1="314" y1="516" x2="326" y2="516" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
-<line x1="318" y1="520" x2="322" y2="520" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
-<circle cx="210" cy="458" r="3.5" fill="#b71c1c" stroke="#fff" stroke-width="1"/>
-<rect x="202" y="480" width="16" height="46" rx="2" fill="#fff" stroke="#333" stroke-width="1.5"/>
-<text x="224" y="507.0" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="11" text-anchor="start" fill="#222">1 МΩ</text>
-<circle cx="210" cy="560" r="3.5" fill="#6d4c41" stroke="#fff" stroke-width="1"/>
-<rect x="202" y="575" width="16" height="46" rx="2" fill="#fff" stroke="#333" stroke-width="1.5"/>
-<text x="224" y="602.0" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="11" text-anchor="start" fill="#222">1 МΩ</text>
-<line x1="210" y1="621" x2="210" y2="636" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
-<line x1="210" y1="636" x2="210" y2="644" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
-<line x1="200" y1="644" x2="220" y2="644" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
-<line x1="204" y1="648" x2="216" y2="648" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
-<line x1="208" y1="652" x2="212" y2="652" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
-<line x1="264" y1="580" x2="288" y2="580" stroke="#6d4c41" stroke-width="2" stroke-linecap="round"/>
-<line x1="264" y1="587" x2="288" y2="587" stroke="#6d4c41" stroke-width="2" stroke-linecap="round"/>
-<line x1="276" y1="587" x2="276" y2="636" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
-<line x1="276" y1="636" x2="276" y2="644" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
-<line x1="266" y1="644" x2="286" y2="644" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
-<line x1="270" y1="648" x2="282" y2="648" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
-<line x1="274" y1="652" x2="278" y2="652" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
-<text x="292" y="586" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="11" text-anchor="start" fill="#222">100 нФ</text>
+<rect x="176" y="428" width="70" height="50" rx="6" fill="none" stroke="#f57f17" stroke-width="1.4" stroke-dasharray="5 4"/>
+<circle cx="190" cy="458" r="3" fill="#fff" stroke="#333" stroke-width="1.5"/>
+<circle cx="232" cy="458" r="3" fill="#fff" stroke="#333" stroke-width="1.5"/>
+<line x1="190" y1="458" x2="226" y2="442" stroke="#333" stroke-width="1.8" stroke-linecap="round"/>
+<text x="211" y="472" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="11" text-anchor="middle" fill="#f57f17" font-weight="bold">SW1</text>
+<text x="211" y="424" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="9.5" text-anchor="middle" fill="#f57f17" font-weight="bold">выключатель</text>
+<rect x="300" y="428" width="140" height="60" rx="6" fill="#fff8e1" stroke="#333" stroke-width="1.8"/>
+<text x="370" y="450" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="13" text-anchor="middle" fill="#222" font-weight="bold">TPS63802</text>
+<text x="370" y="466" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="10" text-anchor="middle" fill="#555">buck-boost, Vout 3,3 В</text>
+<text x="307" y="480" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="9.5" text-anchor="start" fill="#222" font-weight="bold">VIN</text>
+<text x="433" y="480" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="9.5" text-anchor="end" fill="#222" font-weight="bold">VOUT</text>
+<text x="370" y="499" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="9.5" text-anchor="middle" fill="#222" font-weight="bold">GND</text>
+<line x1="370" y1="488" x2="370" y2="504" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="370" y1="504" x2="370" y2="512" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="360" y1="512" x2="380" y2="512" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="364" y1="516" x2="376" y2="516" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="368" y1="520" x2="372" y2="520" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
+<circle cx="285" cy="458" r="3.5" fill="#b71c1c" stroke="#fff" stroke-width="1"/>
+<line x1="285" y1="458" x2="285" y2="479.0" stroke="#f57f17" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="275" y1="479.0" x2="295" y2="479.0" stroke="#f57f17" stroke-width="2.6" stroke-linecap="round"/>
+<line x1="275" y1="485.0" x2="295" y2="485.0" stroke="#f57f17" stroke-width="2.6" stroke-linecap="round"/>
+<line x1="285" y1="485.0" x2="285" y2="506" stroke="#f57f17" stroke-width="1.8" stroke-linecap="round"/>
+<text x="272" y="478.0" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="12" text-anchor="end" fill="#f57f17" font-weight="bold">+</text>
+<line x1="285" y1="506" x2="285" y2="514" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="275" y1="514" x2="295" y2="514" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="279" y1="518" x2="291" y2="518" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="283" y1="522" x2="287" y2="522" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
+<text x="296" y="520" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="10" text-anchor="start" fill="#f57f17" font-weight="bold">C1 220 мкФ</text>
+<circle cx="600" cy="458" r="3.5" fill="#b71c1c" stroke="#fff" stroke-width="1"/>
+<line x1="600" y1="458" x2="600" y2="475.0" stroke="#f57f17" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="590" y1="475.0" x2="610" y2="475.0" stroke="#f57f17" stroke-width="2.6" stroke-linecap="round"/>
+<line x1="590" y1="481.0" x2="610" y2="481.0" stroke="#f57f17" stroke-width="2.6" stroke-linecap="round"/>
+<line x1="600" y1="481.0" x2="600" y2="498" stroke="#f57f17" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="600" y1="498" x2="600" y2="506" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="590" y1="506" x2="610" y2="506" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="594" y1="510" x2="606" y2="510" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="598" y1="514" x2="602" y2="514" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
+<text x="612" y="484" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="10.5" text-anchor="start" fill="#f57f17" font-weight="bold">C2 47…100 мкФ</text>
+<circle cx="250" cy="458" r="3.5" fill="#b71c1c" stroke="#fff" stroke-width="1"/>
+<rect x="242" y="480" width="16" height="46" rx="2" fill="#fff" stroke="#333" stroke-width="1.5"/>
+<text x="236" y="507.0" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="11" text-anchor="end" fill="#222">1 МΩ</text>
+<circle cx="250" cy="560" r="3.5" fill="#6d4c41" stroke="#fff" stroke-width="1"/>
+<rect x="242" y="575" width="16" height="46" rx="2" fill="#fff" stroke="#333" stroke-width="1.5"/>
+<text x="236" y="602.0" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="11" text-anchor="end" fill="#222">1 МΩ</text>
+<line x1="250" y1="621" x2="250" y2="636" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="250" y1="636" x2="250" y2="644" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="240" y1="644" x2="260" y2="644" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="244" y1="648" x2="256" y2="648" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="248" y1="652" x2="252" y2="652" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="318" y1="580" x2="342" y2="580" stroke="#6d4c41" stroke-width="2" stroke-linecap="round"/>
+<line x1="318" y1="587" x2="342" y2="587" stroke="#6d4c41" stroke-width="2" stroke-linecap="round"/>
+<line x1="330" y1="587" x2="330" y2="636" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="330" y1="636" x2="330" y2="644" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="320" y1="644" x2="340" y2="644" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="324" y1="648" x2="336" y2="648" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="328" y1="652" x2="332" y2="652" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
+<text x="346" y="586" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="11" text-anchor="start" fill="#222">100 нФ</text>
 <line x1="760" y1="424" x2="746" y2="424" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
 <line x1="746" y1="424" x2="746" y2="432" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
 <line x1="736" y1="432" x2="756" y2="432" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
 <line x1="740" y1="436" x2="752" y2="436" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
 <line x1="744" y1="440" x2="748" y2="440" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
 <text x="752" y="394" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="10" text-anchor="end" fill="#9e9e9e">NC</text>
-<rect x="40" y="672" width="360" height="218" rx="6" fill="#fff" stroke="#333" stroke-width="1.8"/>
-<text x="60" y="696" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="14" text-anchor="start" fill="#222" font-weight="bold">GNSS-модуль G10A F30</text>
-<text x="60" y="714" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="11" text-anchor="start" fill="#555">Quescan, UBX / NMEA</text>
-<circle cx="400" cy="700" r="4" fill="#333" stroke="#fff" stroke-width="1"/>
-<text x="392" y="704" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="12" text-anchor="end" fill="#222" font-weight="bold">2  VCC</text>
-<circle cx="400" cy="732" r="4" fill="#333" stroke="#fff" stroke-width="1"/>
-<text x="392" y="736" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="12" text-anchor="end" fill="#222" font-weight="bold">5  GND</text>
-<circle cx="400" cy="764" r="4" fill="#333" stroke="#fff" stroke-width="1"/>
-<text x="392" y="768" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="12" text-anchor="end" fill="#222" font-weight="bold">3  TX (T)</text>
-<circle cx="400" cy="798" r="4" fill="#333" stroke="#fff" stroke-width="1"/>
-<text x="392" y="802" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="12" text-anchor="end" fill="#222" font-weight="bold">4  RX (R)</text>
-<circle cx="400" cy="832" r="4" fill="#333" stroke="#fff" stroke-width="1"/>
-<text x="392" y="836" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="12" text-anchor="end" fill="#222" font-weight="bold">6  EN (E)</text>
-<circle cx="400" cy="866" r="4" fill="#333" stroke="#fff" stroke-width="1"/>
-<text x="392" y="870" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="12" text-anchor="end" fill="#222" font-weight="bold">1  1PPS</text>
-<line x1="400" y1="700" x2="400" y2="686" stroke="#b71c1c" stroke-width="1.8" stroke-linecap="round"/>
-<polygon points="394,686 406,686 400,678" fill="#b71c1c"/>
-<text x="400" y="673" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="11" text-anchor="middle" fill="#b71c1c" font-weight="bold">3V3</text>
-<text x="406" y="870" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="10" text-anchor="start" fill="#9e9e9e">NC</text>
-<line x1="400" y1="732" x2="400" y2="740" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
-<line x1="390" y1="740" x2="410" y2="740" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
-<line x1="394" y1="744" x2="406" y2="744" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
-<line x1="398" y1="748" x2="402" y2="748" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
+<rect x="40" y="672" width="260" height="218" rx="6" fill="#fff" stroke="#333" stroke-width="1.8"/>
+<text x="54" y="694" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="13.5" text-anchor="start" fill="#222" font-weight="bold">GNSS G10A F30</text>
+<text x="54" y="710" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="10.5" text-anchor="start" fill="#555">Quescan, UBX / NMEA</text>
+<circle cx="300" cy="700" r="4" fill="#333" stroke="#fff" stroke-width="1"/>
+<text x="292" y="704" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="12" text-anchor="end" fill="#222" font-weight="bold">2  VCC</text>
+<circle cx="300" cy="732" r="4" fill="#333" stroke="#fff" stroke-width="1"/>
+<text x="292" y="736" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="12" text-anchor="end" fill="#222" font-weight="bold">5  GND</text>
+<circle cx="300" cy="764" r="4" fill="#333" stroke="#fff" stroke-width="1"/>
+<text x="292" y="768" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="12" text-anchor="end" fill="#222" font-weight="bold">3  TX (T)</text>
+<circle cx="300" cy="798" r="4" fill="#333" stroke="#fff" stroke-width="1"/>
+<text x="292" y="802" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="12" text-anchor="end" fill="#222" font-weight="bold">4  RX (R)</text>
+<circle cx="300" cy="832" r="4" fill="#333" stroke="#fff" stroke-width="1"/>
+<text x="292" y="836" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="12" text-anchor="end" fill="#222" font-weight="bold">6  EN (E)</text>
+<circle cx="300" cy="866" r="4" fill="#333" stroke="#fff" stroke-width="1"/>
+<text x="292" y="870" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="12" text-anchor="end" fill="#222" font-weight="bold">1  1PPS</text>
+<text x="306" y="870" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="10" text-anchor="start" fill="#9e9e9e">NC</text>
+<line x1="300" y1="700" x2="392" y2="700" stroke="#b71c1c" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="300" y1="732" x2="392" y2="732" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="326" y1="700" x2="326" y2="713.0" stroke="#f57f17" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="316" y1="713.0" x2="336" y2="713.0" stroke="#f57f17" stroke-width="2.6" stroke-linecap="round"/>
+<line x1="316" y1="719.0" x2="336" y2="719.0" stroke="#f57f17" stroke-width="2.6" stroke-linecap="round"/>
+<line x1="326" y1="719.0" x2="326" y2="732" stroke="#f57f17" stroke-width="1.8" stroke-linecap="round"/>
+<circle cx="326" cy="700" r="3" fill="#b71c1c" stroke="#fff" stroke-width="1"/>
+<circle cx="326" cy="732" r="3" fill="#222" stroke="#fff" stroke-width="1"/>
+<line x1="362" y1="700" x2="362" y2="713.0" stroke="#f57f17" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="352" y1="713.0" x2="372" y2="713.0" stroke="#f57f17" stroke-width="2.6" stroke-linecap="round"/>
+<line x1="352" y1="719.0" x2="372" y2="719.0" stroke="#f57f17" stroke-width="2.6" stroke-linecap="round"/>
+<line x1="362" y1="719.0" x2="362" y2="732" stroke="#f57f17" stroke-width="1.8" stroke-linecap="round"/>
+<circle cx="362" cy="700" r="3" fill="#b71c1c" stroke="#fff" stroke-width="1"/>
+<circle cx="362" cy="732" r="3" fill="#222" stroke="#fff" stroke-width="1"/>
+<line x1="392" y1="700" x2="392" y2="686" stroke="#b71c1c" stroke-width="1.8" stroke-linecap="round"/>
+<polygon points="386,686 398,686 392,678" fill="#b71c1c"/>
+<text x="392" y="673" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="11" text-anchor="middle" fill="#b71c1c" font-weight="bold">3V3</text>
+<line x1="392" y1="732" x2="392" y2="740" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="382" y1="740" x2="402" y2="740" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="386" y1="744" x2="398" y2="744" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="390" y1="748" x2="394" y2="748" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
+<text x="305" y="693" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="9.5" text-anchor="start" fill="#f57f17" font-weight="bold">C3 10 мкФ</text>
+<text x="318" y="749" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="9.5" text-anchor="start" fill="#f57f17" font-weight="bold">C4 100 нФ</text>
+<rect x="52" y="748" width="154" height="66" rx="5" fill="none" stroke="#f57f17" stroke-width="1.3" stroke-dasharray="5 4"/>
+<text x="58" y="762" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="9.5" text-anchor="start" fill="#f57f17">Опция: ключ MT9700-N</text>
+<text x="58" y="776" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="9.5" text-anchor="start" fill="#f57f17">на VCC GNSS (EN ключа</text>
+<text x="58" y="790" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="9.5" text-anchor="start" fill="#f57f17">← PB0), если EN модуля</text>
+<text x="58" y="804" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="9.5" text-anchor="start" fill="#f57f17">не выключает GNSS</text>
 <rect x="40" y="130" width="330" height="100" rx="8" fill="#fff" stroke="#b71c1c" stroke-width="1.6" stroke-dasharray="7 5"/>
 <text x="205" y="156" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="12.5" text-anchor="middle" fill="#b71c1c" font-weight="bold">ORing LM66200 (WeAct) — заказан</text>
 <text x="205" y="176" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="11" text-anchor="middle" fill="#555">подключение в схеме пока не определено</text>
@@ -346,9 +395,35 @@
 <text x="1600" y="366" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="12" text-anchor="middle" fill="#222" font-weight="bold">CD</text>
 <circle cx="1900" cy="420" r="4" fill="#333" stroke="#fff" stroke-width="1"/>
 <text x="1892" y="424" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="12" text-anchor="end" fill="#222" font-weight="bold">VCC</text>
-<line x1="1900" y1="420" x2="1900" y2="406" stroke="#b71c1c" stroke-width="1.8" stroke-linecap="round"/>
-<polygon points="1894,406 1906,406 1900,398" fill="#b71c1c"/>
-<text x="1900" y="393" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="11" text-anchor="middle" fill="#b71c1c" font-weight="bold">3V3</text>
+<line x1="1900" y1="420" x2="1968" y2="420" stroke="#b71c1c" stroke-width="1.8" stroke-linecap="round"/>
+<circle cx="1925" cy="420" r="3" fill="#b71c1c" stroke="#fff" stroke-width="1"/>
+<line x1="1925" y1="420" x2="1925" y2="442.0" stroke="#f57f17" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="1915" y1="442.0" x2="1935" y2="442.0" stroke="#f57f17" stroke-width="2.6" stroke-linecap="round"/>
+<line x1="1915" y1="448.0" x2="1935" y2="448.0" stroke="#f57f17" stroke-width="2.6" stroke-linecap="round"/>
+<line x1="1925" y1="448.0" x2="1925" y2="470" stroke="#f57f17" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="1925" y1="470" x2="1925" y2="478" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="1915" y1="478" x2="1935" y2="478" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="1919" y1="482" x2="1931" y2="482" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="1923" y1="486" x2="1927" y2="486" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
+<circle cx="1950" cy="420" r="3" fill="#b71c1c" stroke="#fff" stroke-width="1"/>
+<line x1="1950" y1="420" x2="1950" y2="442.0" stroke="#f57f17" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="1940" y1="442.0" x2="1960" y2="442.0" stroke="#f57f17" stroke-width="2.6" stroke-linecap="round"/>
+<line x1="1940" y1="448.0" x2="1960" y2="448.0" stroke="#f57f17" stroke-width="2.6" stroke-linecap="round"/>
+<line x1="1950" y1="448.0" x2="1950" y2="470" stroke="#f57f17" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="1950" y1="470" x2="1950" y2="478" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="1940" y1="478" x2="1960" y2="478" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="1944" y1="482" x2="1956" y2="482" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="1948" y1="486" x2="1952" y2="486" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
+<text x="1915" y="508" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="9.5" text-anchor="start" fill="#f57f17" font-weight="bold">C7 10 мкФ · C8 100 нФ</text>
+<rect x="1968" y="402" width="76" height="36" rx="4" fill="#fffde7" stroke="#f57f17" stroke-width="1.5" stroke-dasharray="5 4"/>
+<text x="2006" y="424" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="10.5" text-anchor="middle" fill="#222" font-weight="bold">MT9700-N</text>
+<text x="2006" y="396" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="9.5" text-anchor="middle" fill="#f57f17" font-weight="bold">Q2 (опц.)</text>
+<line x1="2044" y1="420" x2="2074" y2="420" stroke="#b71c1c" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="2074" y1="420" x2="2074" y2="406" stroke="#b71c1c" stroke-width="1.8" stroke-linecap="round"/>
+<polygon points="2068,406 2080,406 2074,398" fill="#b71c1c"/>
+<text x="2074" y="393" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="11" text-anchor="middle" fill="#b71c1c" font-weight="bold">3V3</text>
+<line x1="2006" y1="438" x2="2006" y2="452" stroke="#f57f17" stroke-width="1.5" stroke-linecap="round"/>
+<text x="1975" y="466" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="9.5" text-anchor="start" fill="#f57f17">EN ← GPIO SD_PWR</text>
 <circle cx="1900" cy="462" r="4" fill="#333" stroke="#fff" stroke-width="1"/>
 <text x="1892" y="466" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="12" text-anchor="end" fill="#222" font-weight="bold">GND</text>
 <line x1="1900" y1="462" x2="1900" y2="470" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
@@ -470,18 +545,32 @@
 <line x1="1078" y1="1458" x2="1082" y2="1458" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
 <circle cx="780" cy="1560" r="4" fill="#333" stroke="#fff" stroke-width="1"/>
 <text x="788" y="1564" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="11" text-anchor="start" fill="#222" font-weight="bold">VCC</text>
-<line x1="780" y1="1560" x2="760" y2="1560" stroke="#333" stroke-width="1.5" stroke-linecap="round"/>
-<line x1="760" y1="1560" x2="760" y2="1546" stroke="#b71c1c" stroke-width="1.8" stroke-linecap="round"/>
-<polygon points="754,1546 766,1546 760,1538" fill="#b71c1c"/>
-<text x="760" y="1533" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="11" text-anchor="middle" fill="#b71c1c" font-weight="bold">3V3</text>
 <circle cx="780" cy="1600" r="4" fill="#333" stroke="#fff" stroke-width="1"/>
 <text x="788" y="1604" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="11" text-anchor="start" fill="#222" font-weight="bold">GND</text>
-<line x1="780" y1="1600" x2="760" y2="1600" stroke="#333" stroke-width="1.5" stroke-linecap="round"/>
-<line x1="760" y1="1600" x2="760" y2="1608" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
-<line x1="750" y1="1608" x2="770" y2="1608" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
-<line x1="754" y1="1612" x2="766" y2="1612" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
-<line x1="758" y1="1616" x2="762" y2="1616" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
-<rect x="1450" y="1330" width="700" height="310" rx="8" fill="#fff" stroke="#b0bec5" stroke-width="1.2"/>
+<line x1="780" y1="1560" x2="690" y2="1560" stroke="#b71c1c" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="780" y1="1600" x2="690" y2="1600" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="745" y1="1560" x2="745" y2="1577.0" stroke="#f57f17" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="735" y1="1577.0" x2="755" y2="1577.0" stroke="#f57f17" stroke-width="2.6" stroke-linecap="round"/>
+<line x1="735" y1="1583.0" x2="755" y2="1583.0" stroke="#f57f17" stroke-width="2.6" stroke-linecap="round"/>
+<line x1="745" y1="1583.0" x2="745" y2="1600" stroke="#f57f17" stroke-width="1.8" stroke-linecap="round"/>
+<circle cx="745" cy="1560" r="3" fill="#b71c1c" stroke="#fff" stroke-width="1"/>
+<circle cx="745" cy="1600" r="3" fill="#222" stroke="#fff" stroke-width="1"/>
+<line x1="715" y1="1560" x2="715" y2="1577.0" stroke="#f57f17" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="705" y1="1577.0" x2="725" y2="1577.0" stroke="#f57f17" stroke-width="2.6" stroke-linecap="round"/>
+<line x1="705" y1="1583.0" x2="725" y2="1583.0" stroke="#f57f17" stroke-width="2.6" stroke-linecap="round"/>
+<line x1="715" y1="1583.0" x2="715" y2="1600" stroke="#f57f17" stroke-width="1.8" stroke-linecap="round"/>
+<circle cx="715" cy="1560" r="3" fill="#b71c1c" stroke="#fff" stroke-width="1"/>
+<circle cx="715" cy="1600" r="3" fill="#222" stroke="#fff" stroke-width="1"/>
+<line x1="690" y1="1560" x2="690" y2="1546" stroke="#b71c1c" stroke-width="1.8" stroke-linecap="round"/>
+<polygon points="684,1546 696,1546 690,1538" fill="#b71c1c"/>
+<text x="690" y="1533" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="11" text-anchor="middle" fill="#b71c1c" font-weight="bold">3V3</text>
+<line x1="690" y1="1600" x2="690" y2="1608" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="680" y1="1608" x2="700" y2="1608" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="684" y1="1612" x2="696" y2="1612" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="688" y1="1616" x2="692" y2="1616" stroke="#222" stroke-width="1.8" stroke-linecap="round"/>
+<text x="676" y="1573" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="9.5" text-anchor="end" fill="#f57f17" font-weight="bold">C5 10 мкФ</text>
+<text x="676" y="1589" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="9.5" text-anchor="end" fill="#f57f17" font-weight="bold">C6 100 нФ</text>
+<rect x="1450" y="1330" width="700" height="345" rx="8" fill="#fff" stroke="#b0bec5" stroke-width="1.2"/>
 <text x="1466" y="1356" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="14" text-anchor="start" fill="#222" font-weight="bold">Цвета сигналов</text>
 <line x1="1466" y1="1374" x2="1500" y2="1374" stroke="#1565c0" stroke-width="3.5" stroke-linecap="round"/>
 <text x="1510" y="1378" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="11.5" text-anchor="start" fill="#222">SPI1 (E-Ink): PA5 SCK, PA7 MOSI</text>
@@ -507,7 +596,9 @@
 <text x="1510" y="1578" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="11.5" text-anchor="start" fill="#222">3V3 / BAT+</text>
 <line x1="1466" y1="1594" x2="1500" y2="1594" stroke="#d84315" stroke-width="3.5" stroke-linecap="round"/>
 <text x="1510" y="1598" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="11.5" text-anchor="start" fill="#222">5 V (USB-C)</text>
-<text x="1466" y="1626" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="10.5" text-anchor="start" fill="#666">Пересечения проводов без соединения показаны «мостиками». Земля — по символам GND.</text>
+<line x1="1466" y1="1614" x2="1500" y2="1614" stroke="#f57f17" stroke-width="3.5" stroke-linecap="round"/>
+<text x="1510" y="1618" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="11.5" text-anchor="start" fill="#222">рекомендуется (не из PINOUT): C1…C8, SW1, Q2 и ключ GNSS — пунктир</text>
+<text x="1466" y="1646" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="10.5" text-anchor="start" fill="#666">Пересечения проводов без соединения показаны «мостиками». Земля — по символам GND.</text>
 <text x="40" y="52" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="28" text-anchor="start" fill="#263238" font-weight="bold">PurrGO — схема подключения</text>
 <text x="40" y="80" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="13" text-anchor="start" fill="#546e7a">STM32U585CIU6 (WeAct CoreBoard V3.1) · GNSS · E-Ink HAT · microSD · пьезо · питание</text>
-<metadata><c2pa:manifest>AAAWgmp1bWIAAAAeanVtZGMycGEAEQAQgAAAqgA4m3EDYzJwYQAAABZcanVtYgAAAEdqdW1kYzJtYQARABCAAACqADibcQN1cm46YzJwYTpkNDJlNGZkNC0wNjZiLTQ0ZTEtYWM1Yi1jYzYzZjYzMTAzYmIAAAADl2p1bWIAAAApanVtZGMyYXMAEQAQgAAAqgA4m3EDYzJwYS5hc3NlcnRpb25zAAAAALxqdW1iAAAARGp1bWRjYm9yABEAEIAAAKoAOJtxE2MycGEuaW5ncmVkaWVudC52MwAAAAAYYzJzaLU7Z1ZYvLeAIgMA25HWROcAAABwY2JvcqNpZGM6Zm9ybWF0bWltYWdlL3N2Zyt4bWxqaW5zdGFuY2VJRHgseG1wOmlpZDowMTMwZjBjMC04OTJjLTRkNjQtODU3NC05MzE1Yzk5ZmJmMjNscmVsYXRpb25zaGlwaHBhcmVudE9mAAAB4mp1bWIAAABBanVtZGNib3IAEQAQgAAAqgA4m3ETYzJwYS5hY3Rpb25zLnYyAAAAABhjMnNo/+3+mZ1+ErigY+dxv55OFAAAAZljYm9yomdhY3Rpb25zgqJmYWN0aW9ua2MycGEub3BlbmVkanBhcmFtZXRlcnOha2luZ3JlZGllbnRzgaJjdXJseC1zZWxmI2p1bWJmPWMycGEuYXNzZXJ0aW9ucy9jMnBhLmluZ3JlZGllbnQudjNkaGFzaFggkKCrOee6w/I5bKpuFr5pk38+V+gSWxb+5SdAwyIhxLCkZmFjdGlvbngdY29tLmFudGhyb3BpYy5jbGF1ZGUucHJvdmlkZWRqcGFyYW1ldGVyc6F4H2NvbS5hbnRocm9waWMub3JpZ2luLWNvbmZpZGVuY2VndW5rbm93bmtkZXNjcmlwdGlvbnhmQ2xhdWRlIHByb3ZpZGVkIHRoaXMgZmlsZSBhdCB0aGUgcmVxdWVzdCBvZiBhIHVzZXIgYW5kIG1heSBoYXZlIGNyZWF0ZWQgb3IgbW9kaWZpZWQgdGhlIGZpbGUgY29udGVudHMubXNvZnR3YXJlQWdlbnShZG5hbWVmQ2xhdWRlcmFsbEFjdGlvbnNJbmNsdWRlZPUAAADIanVtYgAAAEBqdW1kY2JvcgARABCAAACqADibcRNjMnBhLmhhc2guZGF0YQAAAAAYYzJzaJfqm4s7qHZ6fLsaatnliXwAAACAY2JvcqVjYWxnZnNoYTI1NmNwYWRKAAAAAAAAAAAAAGRoYXNoWCAMvLkUgt7SbkUmg+VILkuECr2hxfaVg8/tLQYQcwnyQ2RuYW1lbmp1bWJmIG1hbmlmZXN0amV4Y2x1c2lvbnOBomVzdGFydBoAAQRxZmxlbmd0aBkeBAAAAj5qdW1iAAAAJ2p1bWRjMmNsABEAEIAAAKoAOJtxA2MycGEuY2xhaW0udjIAAAACD2Nib3KlY2FsZ2ZzaGEyNTZpc2lnbmF0dXJleE1zZWxmI2p1bWJmPS9jMnBhL3VybjpjMnBhOmQ0MmU0ZmQ0LTA2NmItNDRlMS1hYzViLWNjNjNmNjMxMDNiYi9jMnBhLnNpZ25hdHVyZWppbnN0YW5jZUlEeCx4bXA6aWlkOjZiMDA2MmU1LWFmZTMtNDRiYi05NWI1LTA1MzM2YWUyNTlmM3JjcmVhdGVkX2Fzc2VydGlvbnODomN1cmx4LXNlbGYjanVtYmY9YzJwYS5hc3NlcnRpb25zL2MycGEuaW5ncmVkaWVudC52M2RoYXNoWCCQoKs557rD8jlsqm4WvmmTfz5X6BJbFv7lJ0DDIiHEsKJjdXJseCpzZWxmI2p1bWJmPWMycGEuYXNzZXJ0aW9ucy9jMnBhLmFjdGlvbnMudjJkaGFzaFggwrCIDh/VpygwHh8xYKvykjv7UTMG+OYj/cC4bm5Z+NGiY3VybHgpc2VsZiNqdW1iZj1jMnBhLmFzc2VydGlvbnMvYzJwYS5oYXNoLmRhdGFkaGFzaFggqxo0z7s0Quu7gJojAjiPH55BZDX5GvI0IFiHwAQirvt0Y2xhaW1fZ2VuZXJhdG9yX2luZm+jZG5hbWVvQW50aHJvcGljIEZpbGVzZ3ZlcnNpb25lMS4wLjBrc3BlY1ZlcnNpb25lMi40LjAAABA4anVtYgAAAChqdW1kYzJjcwARABCAAACqADibcQNjMnBhLnNpZ25hdHVyZQAAABAIY2JvctKEWQISogEmGCFZAgowggIGMIIBjaADAgECAhRA5aAK7sI50L64g/oGQgU9Z1UTADAKBggqhkjOPQQDAzBJMRcwFQYDVQQKEw5BbnRocm9waWMsIFBCQzEuMCwGA1UEAxMlQW50aHJvcGljIENvbnRlbnQgQ3JlZGVudGlhbHMgUm9vdCBDQTAeFw0yNjA4MDcxODQzNTZaFw0yODA4MDYxOTQzNTZaMEQxFzAVBgNVBAoTDkFudGhyb3BpYywgUEJDMSkwJwYDVQQDEyBBbnRocm9waWMgQ2xhdWRlIENvbnRlbnQgU2lnbmluZzBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABJh6CmvLUBgFFNU0vUKlOVtE6djd17L5SuwX0LemFisBM3dkd/3cyjxFA3Qo5S46fX0/ihY0VZ7mfb9KF703t5OjWDBWMA4GA1UdDwEB/wQEAwIHgDAVBgNVHSUEDjAMBgorBgEEAYPoXgIBMAwGA1UdEwEB/wQCMAAwHwYDVR0jBBgwFoAUzlHiBIFOZFsj+OPEz5o+nMHXXMIwCgYIKoZIzj0EAwMDZwAwZAIwMXMdFJ4BetLLVY7ORuE9noqbbAZOZn/aArXyTwFAZfKrPzxF2vPoJNf1+UCdg1XGAjBwX1zd9WGqYkqmL5SFqw1QySjr1zJfpJM9+1rdDwSPLMOPOjKuiXjoU/pUUeG9RwmhY3BhZFkNngAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPZYQK8KIzTNBjWibQg97FRnxoE45tTnd1MTRxa2jmLwnbp5SvtEHmfQvgSUZhf/s1tk5dRPMoSKVOezwLltuuw+glY=</c2pa:manifest></metadata></svg>
+<metadata><c2pa:manifest>AAAWgmp1bWIAAAAeanVtZGMycGEAEQAQgAAAqgA4m3EDYzJwYQAAABZcanVtYgAAAEdqdW1kYzJtYQARABCAAACqADibcQN1cm46YzJwYTo5OTIxMzlkYi1iMzVhLTQ3MmEtYmM0Ny0wNDA3Nzg1MzEwM2UAAAADl2p1bWIAAAApanVtZGMyYXMAEQAQgAAAqgA4m3EDYzJwYS5hc3NlcnRpb25zAAAAALxqdW1iAAAARGp1bWRjYm9yABEAEIAAAKoAOJtxE2MycGEuaW5ncmVkaWVudC52MwAAAAAYYzJzaNEKNQfCtvOyr003tElL154AAABwY2JvcqNpZGM6Zm9ybWF0bWltYWdlL3N2Zyt4bWxqaW5zdGFuY2VJRHgseG1wOmlpZDpjZWM5NWZiZS00ODJmLTQ0Y2UtOGE2Ni0yOTQ3ZjRhOTc5ODBscmVsYXRpb25zaGlwaHBhcmVudE9mAAAB4mp1bWIAAABBanVtZGNib3IAEQAQgAAAqgA4m3ETYzJwYS5hY3Rpb25zLnYyAAAAABhjMnNoXxCQbxkzZ4v0w3+aTLP/cAAAAZljYm9yomdhY3Rpb25zgqJmYWN0aW9ua2MycGEub3BlbmVkanBhcmFtZXRlcnOha2luZ3JlZGllbnRzgaJjdXJseC1zZWxmI2p1bWJmPWMycGEuYXNzZXJ0aW9ucy9jMnBhLmluZ3JlZGllbnQudjNkaGFzaFggKGjPgaWc9NDSpCUaL+DfUGQ/gBlHxFuikYwYPbVG39ikZmFjdGlvbngdY29tLmFudGhyb3BpYy5jbGF1ZGUucHJvdmlkZWRqcGFyYW1ldGVyc6F4H2NvbS5hbnRocm9waWMub3JpZ2luLWNvbmZpZGVuY2VndW5rbm93bmtkZXNjcmlwdGlvbnhmQ2xhdWRlIHByb3ZpZGVkIHRoaXMgZmlsZSBhdCB0aGUgcmVxdWVzdCBvZiBhIHVzZXIgYW5kIG1heSBoYXZlIGNyZWF0ZWQgb3IgbW9kaWZpZWQgdGhlIGZpbGUgY29udGVudHMubXNvZnR3YXJlQWdlbnShZG5hbWVmQ2xhdWRlcmFsbEFjdGlvbnNJbmNsdWRlZPUAAADIanVtYgAAAEBqdW1kY2JvcgARABCAAACqADibcRNjMnBhLmhhc2guZGF0YQAAAAAYYzJzaOVN7GmmugU/Mpc/Pw+G2t8AAACAY2JvcqVjYWxnZnNoYTI1NmNwYWRKAAAAAAAAAAAAAGRoYXNoWCDCwf+pw5lQYID3wXx/pm/aZ3ywVkYmiMBTj4aLGeAyTmRuYW1lbmp1bWJmIG1hbmlmZXN0amV4Y2x1c2lvbnOBomVzdGFydBoAAS2yZmxlbmd0aBkeBAAAAj5qdW1iAAAAJ2p1bWRjMmNsABEAEIAAAKoAOJtxA2MycGEuY2xhaW0udjIAAAACD2Nib3KlY2FsZ2ZzaGEyNTZpc2lnbmF0dXJleE1zZWxmI2p1bWJmPS9jMnBhL3VybjpjMnBhOjk5MjEzOWRiLWIzNWEtNDcyYS1iYzQ3LTA0MDc3ODUzMTAzZS9jMnBhLnNpZ25hdHVyZWppbnN0YW5jZUlEeCx4bXA6aWlkOjc5MGZkNzc3LTI4ZjYtNDM4MS1hNjcxLWZhMTAwMjExYjVkNXJjcmVhdGVkX2Fzc2VydGlvbnODomN1cmx4LXNlbGYjanVtYmY9YzJwYS5hc3NlcnRpb25zL2MycGEuaW5ncmVkaWVudC52M2RoYXNoWCAoaM+BpZz00NKkJRov4N9QZD+AGUfEW6KRjBg9tUbf2KJjdXJseCpzZWxmI2p1bWJmPWMycGEuYXNzZXJ0aW9ucy9jMnBhLmFjdGlvbnMudjJkaGFzaFggLvoU535zZdcGoC+f5nLECq+cYYIy3D7qMkewts69xSyiY3VybHgpc2VsZiNqdW1iZj1jMnBhLmFzc2VydGlvbnMvYzJwYS5oYXNoLmRhdGFkaGFzaFggPaBs1oh7/hfy1Eh0BibA7dmfhFClY8tzaW0y8zkGlyp0Y2xhaW1fZ2VuZXJhdG9yX2luZm+jZG5hbWVvQW50aHJvcGljIEZpbGVzZ3ZlcnNpb25lMS4wLjBrc3BlY1ZlcnNpb25lMi40LjAAABA4anVtYgAAAChqdW1kYzJjcwARABCAAACqADibcQNjMnBhLnNpZ25hdHVyZQAAABAIY2JvctKEWQISogEmGCFZAgowggIGMIIBjaADAgECAhRA5aAK7sI50L64g/oGQgU9Z1UTADAKBggqhkjOPQQDAzBJMRcwFQYDVQQKEw5BbnRocm9waWMsIFBCQzEuMCwGA1UEAxMlQW50aHJvcGljIENvbnRlbnQgQ3JlZGVudGlhbHMgUm9vdCBDQTAeFw0yNjA4MDcxODQzNTZaFw0yODA4MDYxOTQzNTZaMEQxFzAVBgNVBAoTDkFudGhyb3BpYywgUEJDMSkwJwYDVQQDEyBBbnRocm9waWMgQ2xhdWRlIENvbnRlbnQgU2lnbmluZzBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABJh6CmvLUBgFFNU0vUKlOVtE6djd17L5SuwX0LemFisBM3dkd/3cyjxFA3Qo5S46fX0/ihY0VZ7mfb9KF703t5OjWDBWMA4GA1UdDwEB/wQEAwIHgDAVBgNVHSUEDjAMBgorBgEEAYPoXgIBMAwGA1UdEwEB/wQCMAAwHwYDVR0jBBgwFoAUzlHiBIFOZFsj+OPEz5o+nMHXXMIwCgYIKoZIzj0EAwMDZwAwZAIwMXMdFJ4BetLLVY7ORuE9noqbbAZOZn/aArXyTwFAZfKrPzxF2vPoJNf1+UCdg1XGAjBwX1zd9WGqYkqmL5SFqw1QySjr1zJfpJM9+1rdDwSPLMOPOjKuiXjoU/pUUeG9RwmhY3BhZFkNngAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPZYQEqYtV2mOOCSNjnHoyU9dhyk61lDze/6iSPt7sB9FvFrmsl7JUAwu95Tjjy5SZpf8pUEHTEkws5ZGu8heJMOnGA=</c2pa:manifest></metadata></svg>
