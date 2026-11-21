@@ -143,6 +143,9 @@ typedef struct {
     uint8_t pvt_num_sv;
     uint32_t pvt_ms;             /* время приёма (purrgo_system_time_ms) */
     uint32_t pvt_count;
+    uint32_t pvt_fix_count;      /* сколько PVT пришло с действительным решением (fixOK) */
+    uint32_t pvt_fix_ms;         /* время приёма последнего PVT с решением */
+    uint32_t pvt_hacc_mm;        /* hAcc последнего PVT, мм */
 
     /* UBX-NAV-ODO */
     bool odo_valid;

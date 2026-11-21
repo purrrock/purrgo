@@ -28,6 +28,15 @@
  */
 #define PURRGO_LOG_BUFFER_SIZE 256U
 
+/*
+ * Отметка времени "[сек.мс] " в начале каждой строки UART (то же значение HAL_GetTick(), что в LOG.TXT на SD).
+ * Отключить: -DPURRGO_LOG_UART_TIMESTAMP=0.
+ */
+#ifndef PURRGO_LOG_UART_TIMESTAMP
+#define PURRGO_LOG_UART_TIMESTAMP 1
+#endif
+#define PURRGO_LOG_PREFIX_SIZE 24U
+
 /* Мигать светодиодом PC13 на каждое сообщение: по умолчанию только при INFO/DEBUG. */
 #ifndef PURRGO_LOG_LED
 #define PURRGO_LOG_LED (PURRGO_LOG_LEVEL >= PURRGO_LOG_LEVEL_INFO)
@@ -78,18 +87,13 @@ static uint32_t sd_ring_fill(void)
  */
 static void sd_ring_push(const char *msg, uint32_t len)
 {
-    char prefix[24];
-    const uint32_t tick = HAL_GetTick();
-    const int pl = purrgo_snprintf(prefix, sizeof prefix, "[%lu.%03lu] ",
-                                   (unsigned long)(tick / 1000U), (unsigned long)(tick % 1000U));
-    const uint32_t plen = (pl > 0) ? (uint32_t)pl : 0U;
-
+    /* msg уже содержит отметку времени (её ставит purrgo_logger_write). */
     const uint32_t primask = __get_PRIMASK();
     __disable_irq();
 
     const uint32_t free_bytes = (SD_LOG_RING_SIZE - 1U) - sd_ring_fill();
 
-    if ((plen + len) > free_bytes)
+    if (len > free_bytes)
     {
         sd_dropped++;
     }
@@ -97,11 +101,6 @@ static void sd_ring_push(const char *msg, uint32_t len)
     {
         uint32_t head = sd_ring_head;
 
-        for (uint32_t i = 0U; i < plen; i++)
-        {
-            sd_ring[head] = prefix[i];
-            head = (head + 1U) % SD_LOG_RING_SIZE;
-        }
         for (uint32_t i = 0U; i < len; i++)
         {
             sd_ring[head] = msg[i];
@@ -400,9 +399,22 @@ void purrgo_logger_write(const char *format, ...)
      * Он находится в стеке текущего вызова функции и после выхода
      * из неё больше не используется.
      */
-    char buffer[PURRGO_LOG_BUFFER_SIZE];
+    char buffer[PURRGO_LOG_PREFIX_SIZE + PURRGO_LOG_BUFFER_SIZE];
+    uint32_t plen = 0U;
 
     va_list args;
+
+    /* Отметка времени одна на UART и SD: строки в обоих логах совпадают. */
+    {
+        const uint32_t tick = HAL_GetTick();
+        const int pl = purrgo_snprintf(buffer, PURRGO_LOG_PREFIX_SIZE, "[%lu.%03lu] ",
+                                       (unsigned long)(tick / 1000U), (unsigned long)(tick % 1000U));
+
+        if ((pl > 0) && ((uint32_t)pl < PURRGO_LOG_PREFIX_SIZE))
+        {
+            plen = (uint32_t)pl;
+        }
+    }
 
     /*
      * Инициализируем обработку переменного количества аргументов.
@@ -416,8 +428,8 @@ void purrgo_logger_write(const char *format, ...)
      * больше sizeof(buffer) байт с учётом завершающего '\0'.
      */
     int length = purrgo_vsnprintf(
-        buffer,
-        sizeof(buffer),
+        buffer + plen,
+        PURRGO_LOG_BUFFER_SIZE,
         format,
         args
     );
@@ -443,10 +455,11 @@ void purrgo_logger_write(const char *format, ...)
      *
      * Мы передадим только реально записанную часть буфера.
      */
-    if ((size_t)length >= sizeof(buffer))
+    if ((size_t)length >= PURRGO_LOG_BUFFER_SIZE)
     {
-        length = (int)(sizeof(buffer) - 1U);
+        length = (int)(PURRGO_LOG_BUFFER_SIZE - 1U);
     }
+    length += (int)plen;
 
     /*
      * Передаём сообщение через USART1.
@@ -463,8 +476,8 @@ void purrgo_logger_write(const char *format, ...)
      */
     (void)HAL_UART_Transmit(
         &huart1,
-        (uint8_t *)buffer,
-        (uint16_t)length,
+        (uint8_t *)(buffer + (PURRGO_LOG_UART_TIMESTAMP ? 0U : plen)),
+        (uint16_t)(length - (PURRGO_LOG_UART_TIMESTAMP ? 0 : (int)plen)),
         100U
     );
 

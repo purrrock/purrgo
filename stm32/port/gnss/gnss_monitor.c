@@ -38,6 +38,93 @@ static uint8_t s_bad_reports;   /* подряд отчётов "нет данн�
 
 #define MONITOR_BAD_REPORTS_FAULT 2U
 
+/*
+ * Отчёт по периодам трекера (только сборка с уровнем DEBUG): раз в PURRGO_GNSS_TRACKER_PERIOD_S строка
+ * "GNSS: tracker #N: FIX/NO FIX ..." - было ли за период действительное решение (PVT с fixOK). Окно
+ * отсчитывается от входа в трекер: период приёмника (PSMOO/PSMCT) считает тот же кварц с точностью до ppm,
+ * так что окно держится в фазе с циклами приёмника, но сдвиг от начала цикла произвольный.
+ */
+#if PURRGO_GNSS_TRACKER_ACTIVE && (PURRGO_LOG_LEVEL >= PURRGO_LOG_LEVEL_DEBUG)
+#define MONITOR_TRACKER_REPORT 1
+#else
+#define MONITOR_TRACKER_REPORT 0
+#endif
+
+#if MONITOR_TRACKER_REPORT
+static uint32_t s_trk_next;          /* конец текущего окна */
+static uint32_t s_trk_n;             /* номер окна */
+static uint32_t s_trk_pvt_base;      /* счётчики на начало окна */
+static uint32_t s_trk_fix_base;
+static uint32_t s_trk_bytes_base;
+static uint32_t s_trk_err_base;
+
+static uint32_t trk_errors(void)
+{
+    return s_diag.err_fe + s_diag.err_ne + s_diag.err_ore + s_diag.err_dma + s_diag.err_pe;
+}
+
+static uint32_t trk_delta(uint32_t now, uint32_t base)
+{
+    return (now >= base) ? (now - base) : now;   /* счётчик обнулился (init/смена скорости) */
+}
+
+static void tracker_window_reset(uint32_t now)
+{
+    const purrgo_gnss_ubx_status_t *ubx = purrgo_gnss_ubx_status();
+
+    s_trk_next = now + (uint32_t)PURRGO_GNSS_TRACKER_PERIOD_S * 1000U;
+    s_trk_n = 0U;
+    s_trk_pvt_base = ubx->pvt_count;
+    s_trk_fix_base = ubx->pvt_fix_count;
+    s_trk_bytes_base = s_diag.bytes;
+    s_trk_err_base = trk_errors();
+}
+
+static void tracker_report(uint32_t now)
+{
+    if ((int32_t)(now - s_trk_next) < 0)
+    {
+        return;
+    }
+    s_trk_next += (uint32_t)PURRGO_GNSS_TRACKER_PERIOD_S * 1000U;
+    if ((int32_t)(now - s_trk_next) >= 0)
+    {
+        s_trk_next = now + (uint32_t)PURRGO_GNSS_TRACKER_PERIOD_S * 1000U;   /* главный цикл долго спал */
+    }
+
+    const purrgo_gnss_ubx_status_t *ubx = purrgo_gnss_ubx_status();
+    const uint32_t pvt = trk_delta(ubx->pvt_count, s_trk_pvt_base);
+    const uint32_t fix = trk_delta(ubx->pvt_fix_count, s_trk_fix_base);
+    const unsigned long bytes = (unsigned long)trk_delta(s_diag.bytes, s_trk_bytes_base);
+    const unsigned long err = (unsigned long)trk_delta(trk_errors(), s_trk_err_base);
+
+    s_trk_n++;
+    s_trk_pvt_base = ubx->pvt_count;
+    s_trk_fix_base = ubx->pvt_fix_count;
+    s_trk_bytes_base = s_diag.bytes;
+    s_trk_err_base = trk_errors();
+
+    if (fix != 0U)
+    {
+        PURRGO_LOGD("GNSS: tracker #%lu: FIX sv=%u hAcc=%lu mm (PVT %lu, with fix %lu) psm=%u bytes=+%lu err=+%lu\r\n",
+                    (unsigned long)s_trk_n, (unsigned)ubx->pvt_num_sv, (unsigned long)ubx->pvt_hacc_mm,
+                    (unsigned long)pvt, (unsigned long)fix, (unsigned)ubx->psm_state, bytes, err);
+    }
+    else if (pvt != 0U)
+    {
+        PURRGO_LOGD("GNSS: tracker #%lu: NO FIX (PVT %lu) fixType=%u sv=%u validTime=%u psm=%u bytes=+%lu err=+%lu%s\r\n",
+                    (unsigned long)s_trk_n, (unsigned long)pvt, (unsigned)ubx->pvt_fix_type,
+                    (unsigned)ubx->pvt_num_sv, (unsigned)ubx->pvt_time_valid, (unsigned)ubx->psm_state,
+                    bytes, err, (ubx->pvt_fix_count != 0U) ? "" : " (no fix yet since start)");
+    }
+    else
+    {
+        PURRGO_LOGD("GNSS: tracker #%lu: NO FIX, no PVT from receiver (psm=%u bytes=+%lu err=+%lu)\r\n",
+                    (unsigned long)s_trk_n, (unsigned)ubx->psm_state, bytes, err);
+    }
+}
+#endif /* MONITOR_TRACKER_REPORT */
+
 /* Связь с модулем (gnss_link): скорость UART и признак "поиск скорости закончен". */
 static uint32_t s_baud = PURRGO_GNSS_BAUD_DEFAULT;
 static bool s_link_ready = true;
@@ -54,6 +141,9 @@ void purrgo_gnss_monitor_init(void)
     s_ubx_nak_reported = 0U;
     s_bad_reports = 0U;
     s_started = true;
+#if MONITOR_TRACKER_REPORT
+    tracker_window_reset(s_t_start);
+#endif
 }
 
 void purrgo_gnss_monitor_link(uint32_t baud, bool ready)
@@ -79,6 +169,9 @@ void purrgo_gnss_monitor_link(uint32_t baud, bool ready)
     s_ubx_nak_reported = 0U;
     s_bad_reports = 0U;
     s_t_next = HAL_GetTick() + MONITOR_FIRST_REPORT_MS;
+#if MONITOR_TRACKER_REPORT
+    tracker_window_reset(HAL_GetTick());
+#endif
 }
 
 void purrgo_gnss_monitor_stop(void)
@@ -136,6 +229,12 @@ static void seen_text(uint8_t mask, char *out, size_t size)
 
 void purrgo_gnss_monitor_expect_gaps(bool expect)
 {
+#if MONITOR_TRACKER_REPORT
+    if (expect && !s_expect_gaps)
+    {
+        tracker_window_reset(HAL_GetTick());   /* вход в трекер: окно отсчитывается от этого момента */
+    }
+#endif
     s_expect_gaps = expect;
 }
 
@@ -152,6 +251,13 @@ void purrgo_gnss_monitor_process(void)
     {
         return;
     }
+
+#if MONITOR_TRACKER_REPORT
+    if (s_expect_gaps)
+    {
+        tracker_report(now);
+    }
+#endif
 
     if ((int32_t)(now - s_t_next) < 0)
     {

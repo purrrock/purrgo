@@ -641,6 +641,11 @@ bool purrgo_gnss_ubx_process_frame(uint8_t msg_class, uint8_t msg_id, const uint
             s_st.pvt_num_sv = payload[23];
             s_st.pvt_ms = now_ms;
             s_st.pvt_count++;
+            s_st.pvt_hacc_mm = rd_u32(&payload[40]);
+            if (s_st.pvt_fix_ok) {
+                s_st.pvt_fix_count++;
+                s_st.pvt_fix_ms = now_ms;
+            }
             purrgo_gnss_adapter_pvt_applied();
             return true;
         }
