@@ -297,7 +297,34 @@ static void test_pvt_mapping(void)
     /* Время не применяется без validDate и validTime. */
     memset(&s, 0, sizeof s);
     v = good_pvt(); v.valid = 0x01;
-    CHECK(apply(&v, &s) && s.valid && s.year == 0 && s.hours == 0);
+    CHECK(apply(&v, &s) && s.valid && s.year == 0 && s.hours == 0 && !s.time_valid);
+
+    /* time_valid: validDate + validTime и точность tAcc; зависит от фикса не больше, чем время. */
+    memset(&s, 0, sizeof s);
+    v = good_pvt();
+    CHECK(apply(&v, &s) && s.time_valid && s.hours == 12 && s.minutes == 34);
+    v = good_pvt(); v.valid = 0x02;                      /* есть validTime, нет validDate */
+    CHECK(apply(&v, &s) && !s.time_valid);
+    v = good_pvt(); v.valid = 0x00;
+    CHECK(apply(&v, &s) && !s.time_valid);
+    {
+        /* Время известно без позиции: приёмник уже знает время, фикса ещё нет. */
+        memset(&s, 0, sizeof s);
+        v = good_pvt(); v.fix_type = 0; v.flags = 0;
+        CHECK(apply(&v, &s) && !s.valid && s.time_valid);
+        CHECK(s.year == 26 && s.month == 10 && s.day == 19 && s.hours == 12 && s.minutes == 34 && s.seconds == 56);
+
+        /* Большая погрешность времени (tAcc > 1 с) - время «примерное», не показывается. */
+        uint8_t pp[92];
+        v = good_pvt();
+        pvt_payload(&v, pp);
+        w32(&pp[12], 2000000000u);
+        CHECK(purrgo_gnss_ubx_apply_pvt(pp, 92, &s) && s.valid && !s.time_valid);
+        w32(&pp[12], 0xFFFFFFFFu);                       /* tAcc неизвестна */
+        CHECK(purrgo_gnss_ubx_apply_pvt(pp, 92, &s) && !s.time_valid);
+        w32(&pp[12], 50u);                               /* 50 нс: норма */
+        CHECK(purrgo_gnss_ubx_apply_pvt(pp, 92, &s) && s.time_valid);
+    }
 
     /* Точность недоступна (0xFFFFFFFF) или неверная длина. */
     v = good_pvt(); v.hacc = 0xFFFFFFFFu;

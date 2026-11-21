@@ -23,7 +23,8 @@ bool purrgo_time_epoch_to_datetime(uint32_t epoch, uint8_t* year, uint8_t* month
                                    uint8_t* h, uint8_t* m, uint8_t* s);
 
 // Применение смещения часового пояса к UTC времени с пересчетом календаря
-// Возвращает true при успешном смещении (без выхода за границы поддерживаемого диапазона)
+// Возвращает true при успешном смещении (без выхода за границы поддерживаемого диапазона).
+// Возвращает false, если нет ни фикса (valid), ни известного времени (time_valid).
 bool purrgo_time_apply_timezone(const purrgo_gnss_solution_t* utc, purrgo_gnss_solution_t* local, int16_t tz_offset_minutes);
 
 #endif // PURRGO_TIME_H

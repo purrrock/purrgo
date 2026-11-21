@@ -151,6 +151,8 @@ static void test_time_timezone(void)
     CHECK(!purrgo_time_apply_timezone(&in, &out, 0));
     in = fixt(26, 6, 1, 0, 0, 0); in.valid = false;             /* нет фикса */
     CHECK(!purrgo_time_apply_timezone(&in, &out, 0));
+    in.time_valid = true;                                       /* ... но время известно (PVT без фикса) */
+    CHECK(purrgo_time_apply_timezone(&in, &out, 60) && out.hours == 1);
 }
 
 /* --------------------------------------------------------- track_logger --- */

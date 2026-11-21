@@ -56,6 +56,7 @@ static uint32_t s_track_drawn_serial = 0;
 typedef struct {
     uint8_t minutes;
     uint8_t hours;
+    bool time_valid;        /* время известно: иначе в строке прочерки */
     bool gnss_valid;
     track_logger_state_t rec_state;
     bool valid;
@@ -499,14 +500,19 @@ static void ui_update_status_bar(gfx_context_t* gfx, const purrgo_gnss_solution_
         return;
     }
 
+    /*
+     * Местное время. Если время неизвестно (приёмник его не знает или замолчал) или его
+     * нельзя пересчитать в местное, показываются прочерки: нули или последнее известное
+     * время вводили бы в заблуждение. Показывать UTC вместо местного тоже нельзя.
+     */
     purrgo_gnss_solution_t display_fix;
-    if (!purrgo_time_apply_timezone(gnss, &display_fix, app_config.tz_offset_minutes)) {
-        display_fix = *gnss;
-    }
+    const bool have_time = gnss->time_valid &&
+                           purrgo_time_apply_timezone(gnss, &display_fix, app_config.tz_offset_minutes);
 
     status_bar_state_t new_state;
-    new_state.minutes = display_fix.minutes;
-    new_state.hours = display_fix.hours;
+    new_state.time_valid = have_time;
+    new_state.minutes = have_time ? display_fix.minutes : 0U;
+    new_state.hours = have_time ? display_fix.hours : 0U;
     new_state.gnss_valid = gnss->valid;
     new_state.rec_state = purrgo_logger_get_state();
     new_state.valid = true;
@@ -520,7 +526,11 @@ static void ui_update_status_bar(gfx_context_t* gfx, const purrgo_gnss_solution_
     int16_t next_x = 2;
 
     char time_str[8];
-    purrgo_snprintf(time_str, sizeof(time_str), "%02d:%02d", new_state.hours, new_state.minutes);
+    if (new_state.time_valid) {
+        purrgo_snprintf(time_str, sizeof(time_str), "%02d:%02d", new_state.hours, new_state.minutes);
+    } else {
+        purrgo_snprintf(time_str, sizeof(time_str), "--:--");
+    }
     gfx_draw_string(gfx, next_x, 1, time_str);
     next_x = (int16_t)(next_x + get_string_width(time_str) + 6);
 

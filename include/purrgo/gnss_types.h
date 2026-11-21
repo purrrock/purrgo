@@ -15,6 +15,8 @@
 // - `course_valid` indicates whether `course_deg_100` contains a valid course
 //   over ground value. Course validity is independent from position validity,
 //   because a GNSS receiver may have a valid position but no valid course.
+// - `time_valid` indicates that the UTC date/time fields are known and current
+//   (see the field comment). UI code must check it before printing the clock.
 // - Other fields (like alt_m, speed, hdop) are merged continuously from
 //   available NMEA sentences (RMC, GGA, GSA). With PURRGO_GNSS_UBX the UBX-NAV-PVT
 //   message owns position, time, speed, course, fix and satellites while it keeps
@@ -39,6 +41,14 @@ typedef struct {
                              // (для сохранения 2 знаков после запятой)
     int32_t alt_m;           // Высота над уровнем моря в метрах (из GGA, если присутствует)
     uint8_t satellites_tracked; // Количество отслеживаемых спутников (из GGA)
+
+    // Признак того, что hours/minutes/seconds/day/month/year ниже - действующее время UTC.
+    // Без него поля времени показывать нельзя: они могут быть нулями (приёмник ещё не знает
+    // времени) или последним известным временем, которое давно не обновляется (приёмник
+    // замолчал). Интерфейс в этом случае рисует прочерки "--:--".
+    // Не зависит от `valid`: приёмник может знать время и без позиции (UBX-NAV-PVT:
+    // validDate + validTime, точность tAcc), а позицию - ещё нет.
+    bool time_valid;
 
     uint8_t hours;            // Время UTC
     uint8_t minutes;

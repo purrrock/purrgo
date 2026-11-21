@@ -575,7 +575,9 @@ static void track_logger_service(const purrgo_gnss_solution_t* current_fix) {
  */
 static void update_redraw_policy(const purrgo_gnss_solution_t* fix, bool trip_info_changed) {
     const bool valid_changed = fix->valid != prev_fix.valid;
-    const bool clock_changed = fix->minutes != prev_fix.minutes || fix->hours != prev_fix.hours;
+    /* Часы меняются и при смене минуты, и при пропадании/появлении времени (прочерки <-> время). */
+    const bool clock_changed = fix->time_valid != prev_fix.time_valid ||
+                               (fix->time_valid && (fix->minutes != prev_fix.minutes || fix->hours != prev_fix.hours));
 
     if (valid_changed) {
         purrgo_ui_dirty_now(purrgo_system_time_ms());

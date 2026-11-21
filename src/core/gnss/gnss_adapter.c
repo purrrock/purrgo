@@ -243,6 +243,14 @@ bool purrgo_gnss_process_nmea(const char *nmea_line, purrgo_gnss_solution_t *sol
                  */
                 solution->acc_valid = false;
                 solution->valid = frame.valid;
+                /*
+                 * Время из RMC считается известным только вместе с активным фиксом: без него
+                 * время и дата в RMC бывают пустыми или остаточными. Без фикса прежнее время
+                 * не обновляется, поэтому оно объявляется неизвестным (time_valid = false).
+                 */
+                solution->time_valid = frame.valid && frame.time.hours >= 0 && frame.time.minutes >= 0 &&
+                                       frame.time.seconds >= 0 && frame.date.day > 0 &&
+                                       frame.date.month > 0 && frame.date.year >= 0;
                 if (frame.valid) {
                     solution->lat_1e7 = convert_to_1e7(frame.latitude);
                     solution->lon_1e7 = convert_to_1e7(frame.longitude);

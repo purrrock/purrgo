@@ -284,6 +284,35 @@ static void test_timeout_caller_chooses_duration(void)
     CHECK(!f.solution.valid);
 }
 
+static void test_timeout_resets_time_valid(void)
+{
+    purrgo_gnss_feed_t f;
+    g_now = 1000U;
+    fresh(&f);
+
+    /* Фикс и время есть: приёмник замолчал - время тоже перестало обновляться, прочерки. */
+    f.solution.valid = true;
+    f.solution.time_valid = true;
+    f.solution.hours = 9; f.solution.minutes = 30;
+    f.last_rx_ms = 1000U;
+    f.last_check_ms = 1000U;
+    run_checks(&f, 1000U, 1000U + 5000U, 5000U);
+    CHECK(f.solution.time_valid);                        /* срок ещё не вышел */
+    purrgo_gnss_feed_check_timeout(&f, 1000U + 5000U + 1U, 5000U);
+    CHECK(!f.solution.valid && !f.solution.time_valid);
+
+    /* Только время (PVT без фикса) тоже не живёт вечно после молчания приёмника. */
+    fresh(&f);
+    f.solution.valid = false;
+    f.solution.time_valid = true;
+    f.last_rx_ms = 100000U;
+    f.last_check_ms = 100000U;
+    run_checks(&f, 100000U, 100000U + 5000U, 5000U);
+    CHECK(f.solution.time_valid);
+    purrgo_gnss_feed_check_timeout(&f, 100000U + 5000U + 1U, 5000U);
+    CHECK(!f.solution.time_valid);
+}
+
 static void test_timeout_not_applied_without_fix(void)
 {
     purrgo_gnss_feed_t f;
@@ -421,6 +450,7 @@ int main(void)
     test_ubx_cannot_start_inside_nmea_line();
 #endif
     test_timeout_is_strictly_longer();
+    test_timeout_resets_time_valid();
     test_timeout_invalidates_fields();
     test_timeout_caller_chooses_duration();
     test_timeout_not_applied_without_fix();

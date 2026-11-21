@@ -89,7 +89,8 @@ bool purrgo_time_epoch_to_datetime(uint32_t epoch, uint8_t* year, uint8_t* month
 bool purrgo_time_apply_timezone(const purrgo_gnss_solution_t* utc, purrgo_gnss_solution_t* local, int16_t tz_offset_minutes) {
     *local = *utc;
 
-    if (!local->valid) return false;
+    /* Время известно либо вместе с фиксом, либо само по себе (PVT: validTime без позиции). */
+    if (!local->valid && !local->time_valid) return false;
 
     uint32_t utc_epoch;
     if (!purrgo_time_datetime_to_epoch(utc->year, utc->month, utc->day, utc->hours, utc->minutes, utc->seconds, &utc_epoch)) {

@@ -67,6 +67,11 @@ void purrgo_gnss_feed_invalidate(purrgo_gnss_feed_t *f) {
     purrgo_gnss_solution_t *s = &f->solution;
 
     s->valid = false;
+    /*
+     * Приёмник замолчал: время перестало обновляться и от "последнего известного" толку нет,
+     * оно только вводит в заблуждение. На экране будут прочерки до нового решения.
+     */
+    s->time_valid = false;
     s->course_valid = false;
     s->speed_knots = 0;
     s->fix_quality = 0;
@@ -97,7 +102,7 @@ void purrgo_gnss_feed_check_timeout(purrgo_gnss_feed_t *f, uint32_t now_ms, uint
     }
     f->last_check_ms = now_ms;
 
-    if (f->solution.valid && stamp_age_ms(now_ms, f->last_rx_ms) > timeout_ms) {
+    if ((f->solution.valid || f->solution.time_valid) && stamp_age_ms(now_ms, f->last_rx_ms) > timeout_ms) {
         PURRGO_LOGW("GNSS fix timeout\r\n");
         purrgo_gnss_feed_invalidate(f);
     }

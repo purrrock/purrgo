@@ -328,17 +328,24 @@ void ui_trip_render_values(gfx_context_t* gfx, const purrgo_gnss_solution_t* gns
     const int16_t val_x = 40; // x offset for values after 4-char label like "UTC: " (10 + 4 * 6 + 6)
     const int16_t lat_lon_x = 40;
 
-    // LOC
-    int32_t total_mins = (int32_t)gnss->hours * 60 + (int32_t)gnss->minutes + app_config.tz_offset_minutes;
-    while (total_mins < 0) total_mins += 1440;
-    while (total_mins >= 1440) total_mins -= 1440;
-    uint8_t loc_hours = (uint8_t)(total_mins / 60);
-    uint8_t loc_minutes = (uint8_t)(total_mins % 60);
-    purrgo_snprintf(buf, sizeof(buf), "%02d:%02d", loc_hours, loc_minutes);
+    // LOC и UTC: пока время неизвестно - прочерки (не нули и не последнее известное время)
+    if (gnss->time_valid) {
+        int32_t total_mins = (int32_t)gnss->hours * 60 + (int32_t)gnss->minutes + app_config.tz_offset_minutes;
+        while (total_mins < 0) total_mins += 1440;
+        while (total_mins >= 1440) total_mins -= 1440;
+        uint8_t loc_hours = (uint8_t)(total_mins / 60);
+        uint8_t loc_minutes = (uint8_t)(total_mins % 60);
+        purrgo_snprintf(buf, sizeof(buf), "%02d:%02d", loc_hours, loc_minutes);
+    } else {
+        purrgo_snprintf(buf, sizeof(buf), "--:--");
+    }
     gfx_draw_string(gfx, val_x, TRIP_ROW_Y(TRIP_ROW_LOC), buf);
 
-    // UTC
-    purrgo_snprintf(buf, sizeof(buf), "%02d:%02d", gnss->hours, gnss->minutes);
+    if (gnss->time_valid) {
+        purrgo_snprintf(buf, sizeof(buf), "%02d:%02d", gnss->hours, gnss->minutes);
+    } else {
+        purrgo_snprintf(buf, sizeof(buf), "--:--");
+    }
     gfx_draw_string(gfx, val_x, TRIP_ROW_Y(TRIP_ROW_UTC), buf);
 
     // SPD

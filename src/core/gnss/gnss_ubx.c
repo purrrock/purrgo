@@ -298,13 +298,43 @@ bool purrgo_gnss_ubx_fresh(uint32_t msg_ms, uint32_t now_ms)
 /* UBX-NAV-PVT                                                               */
 /* ------------------------------------------------------------------------- */
 
+/*
+ * Время UTC из PVT. Берётся независимо от фикса: приёмник знает время раньше, чем позицию.
+ * Время считается известным, только если приёмник объявил validDate и validTime и оценка
+ * точности tAcc не хуже PURRGO_UBX_TIME_MAX_TACC_NS: время с большой погрешностью (например,
+ * из RTC без поправки спутниками) - это "примерное" время, а на экране оно выглядело бы точным.
+ * Если время неизвестно, поля времени решения не трогаются (их значения не используются:
+ * интерфейс смотрит на time_valid и рисует прочерки).
+ */
+#ifndef PURRGO_UBX_TIME_MAX_TACC_NS
+#define PURRGO_UBX_TIME_MAX_TACC_NS 1000000000UL   /* 1 с */
+#endif
+
+static void apply_pvt_time(const uint8_t *p, purrgo_gnss_solution_t *sol)
+{
+    const uint8_t valid_flags = p[11];
+    const uint32_t t_acc_ns = rd_u32(&p[12]);
+    const bool known = ((valid_flags & 0x01U) != 0U) && ((valid_flags & 0x02U) != 0U) &&
+                       (t_acc_ns <= (uint32_t)PURRGO_UBX_TIME_MAX_TACC_NS);
+
+    sol->time_valid = known;
+    if (known) {
+        const uint16_t year = rd_u16(&p[4]);
+        sol->year = (uint8_t)((year >= 2000U) ? (year - 2000U) : 0U);
+        sol->month = p[6];
+        sol->day = p[7];
+        sol->hours = p[8];
+        sol->minutes = p[9];
+        sol->seconds = p[10];
+    }
+}
+
 bool purrgo_gnss_ubx_apply_pvt(const uint8_t *p, uint16_t length, purrgo_gnss_solution_t *sol)
 {
     if (p == NULL || sol == NULL || length != PVT_LENGTH) {
         return false;
     }
 
-    const uint8_t valid_flags = p[11];
     const uint8_t fix_type = p[20];
     const uint8_t flags = p[21];
     const uint16_t flags3 = rd_u16(&p[78]);
@@ -313,6 +343,7 @@ bool purrgo_gnss_ubx_apply_pvt(const uint8_t *p, uint16_t length, purrgo_gnss_so
     const bool fix_ok = ((flags & 0x01U) != 0U) && (fix_type >= 2U) && (fix_type <= 4U) &&
                         ((flags3 & 0x01U) == 0U);
 
+    apply_pvt_time(p, sol);
     sol->valid = fix_ok;
     sol->fix_type = fix_ok ? ((fix_type == 2U) ? 2U : 3U) : 1U;
     sol->fix_quality = fix_ok ? (((flags & 0x02U) != 0U) ? 2U : 1U) : 0U;
@@ -351,16 +382,6 @@ bool purrgo_gnss_ubx_apply_pvt(const uint8_t *p, uint16_t length, purrgo_gnss_so
         sol->course_valid = true;
     } else {
         sol->course_valid = false;
-    }
-
-    if ((valid_flags & 0x01U) != 0U && (valid_flags & 0x02U) != 0U) {
-        const uint16_t year = rd_u16(&p[4]);
-        sol->year = (uint8_t)((year >= 2000U) ? (year - 2000U) : 0U);
-        sol->month = p[6];
-        sol->day = p[7];
-        sol->hours = p[8];
-        sol->minutes = p[9];
-        sol->seconds = p[10];
     }
 
     const uint32_t hacc = rd_u32(&p[40]);
