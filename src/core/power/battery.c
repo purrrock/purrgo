@@ -195,26 +195,49 @@ bool purrgo_battery_read(purrgo_battery_t* out)
     return out->percent >= 0;
 }
 
+/* Текст заряда по готовому замеру (см. purrgo_battery_format). */
+static void format_status(const purrgo_battery_t* bat, char* buf, size_t size)
+{
+    /* Запись на SD остановлена из-за низкого питания (supply.h): заметный индикатор вместо процента. */
+    if (purrgo_supply_storage_blocked()) {
+        purrgo_snprintf(buf, size, "LOW");
+    } else if (bat->percent >= 0 && bat->percent <= 100) {
+        purrgo_snprintf(buf, size, "%d%%", (int)bat->percent);
+    } else if (bat->external) {
+        purrgo_snprintf(buf, size, "5V");
+    } else {
+        purrgo_snprintf(buf, size, "--%%");
+    }
+}
+
+/* Текст напряжения для экрана Trip computer по готовому замеру. */
+static void format_voltage(const purrgo_battery_t* bat, char* buf, size_t size)
+{
+    if (bat->external) {
+        purrgo_snprintf(buf, size, "EXT 5V");
+    } else if (bat->millivolts == 0u) {
+        purrgo_snprintf(buf, size, "---");              /* АЦП не измерил (нет данных) */
+    } else {
+        const unsigned int centivolts = ((unsigned int)bat->millivolts + 5u) / 10u;   /* 0,01 В */
+
+        if (bat->percent >= 0 && bat->percent <= 100) {
+            purrgo_snprintf(buf, size, "%u.%02u V %d%%", centivolts / 100u, centivolts % 100u,
+                            (int)bat->percent);
+        } else {
+            purrgo_snprintf(buf, size, "%u.%02u V", centivolts / 100u, centivolts % 100u);
+        }
+    }
+}
+
 void purrgo_battery_format(char* buf, size_t size)
 {
     if (buf == NULL || size == 0u) {
         return;
     }
 
-    /* Запись на SD остановлена из-за низкого питания (supply.h): заметный индикатор вместо процента. */
-    if (purrgo_supply_storage_blocked()) {
-        purrgo_snprintf(buf, size, "LOW");
-        return;
-    }
-
     purrgo_battery_t bat;
-    if (purrgo_battery_read(&bat) && bat.percent >= 0 && bat.percent <= 100) {
-        purrgo_snprintf(buf, size, "%d%%", (int)bat.percent);
-    } else if (bat.external) {
-        purrgo_snprintf(buf, size, "5V");
-    } else {
-        purrgo_snprintf(buf, size, "--%%");
-    }
+    (void)purrgo_battery_read(&bat);
+    format_status(&bat, buf, size);
 }
 
 /* ---- Монитор для строки статуса ----------------------------------------------- */
@@ -225,14 +248,25 @@ static struct {
     uint32_t              sampled_ms;
     purrgo_power_source_t src;          /* источник питания, для которого сделан замер */
     char                  text[PURRGO_BATTERY_STATUS_TEXT_SIZE];
+    char                  vtext[PURRGO_BATTERY_VOLTAGE_TEXT_SIZE];   /* для экрана Trip computer */
+    bool                  vchanged;     /* vtext изменился с прошлого take_voltage_changed() */
 } s_mon;
 
 /* Замер. true - текст изменился. */
 static bool monitor_sample(uint32_t now_ms)
 {
     char text[sizeof(s_mon.text)];
+    char vtext[sizeof(s_mon.vtext)];
+    purrgo_battery_t bat;
+    const bool first = !s_mon.sampled;
 
-    purrgo_battery_format(text, sizeof(text));
+    (void)purrgo_battery_read(&bat);            /* один замер АЦП на оба текста */
+    format_status(&bat, text, sizeof(text));
+    format_voltage(&bat, vtext, sizeof(vtext));
+    if (!first && strcmp(vtext, s_mon.vtext) != 0) {
+        s_mon.vchanged = true;
+    }
+    memcpy(s_mon.vtext, vtext, sizeof(s_mon.vtext));
     s_mon.sampled = true;
     s_mon.sampled_ms = now_ms;
     s_mon.src = app_config.power_source;
@@ -263,6 +297,23 @@ const char* purrgo_battery_status_text(void)
         (void)monitor_sample(purrgo_system_time_ms());
     }
     return s_mon.text;
+}
+
+const char* purrgo_battery_voltage_text(void)
+{
+    if (!s_mon.sampled || s_mon.src != app_config.power_source ||
+        s_mon.blocked != purrgo_supply_storage_blocked()) {
+        (void)monitor_sample(purrgo_system_time_ms());
+    }
+    return s_mon.vtext;
+}
+
+bool purrgo_battery_monitor_take_voltage_changed(void)
+{
+    const bool changed = s_mon.vchanged;
+
+    s_mon.vchanged = false;
+    return changed;
 }
 
 void purrgo_battery_monitor_reset(void)

@@ -13,6 +13,7 @@
 #include "purrgo/trip_computer.h"
 #include "purrgo/gnss_ubx.h"
 #include "purrgo/supply.h"
+#include "purrgo/battery.h"
 #include <string.h>
 
 /* Порядок строк (шаг 12 px, первая строка y = 10). */
@@ -21,20 +22,19 @@
 #define TRIP_ROW_Y(i)  ((int16_t)(TRIP_ROW_Y0 + (i) * TRIP_ROW_STEP))
 
 #define TRIP_ROW_LOC   0
-#define TRIP_ROW_UTC   1
-#define TRIP_ROW_SPD   2
-#define TRIP_ROW_CRS   3
-#define TRIP_ROW_WPT   4   /* имя цели; DST и BRG - следующие две строки */
-#define TRIP_ROW_FIX   7   /* FIX и SAT */
-#define TRIP_ROW_LAT   8
-#define TRIP_ROW_LON   9
-#define TRIP_ROW_ALT   10
+#define TRIP_ROW_SPD   1
+#define TRIP_ROW_CRS   2
+#define TRIP_ROW_WPT   3   /* имя цели; DST и BRG - следующие две строки */
+#define TRIP_ROW_FIX   6   /* FIX и SAT */
+#define TRIP_ROW_LAT   7
+#define TRIP_ROW_LON   8
+#define TRIP_ROW_ALT   9
+#define TRIP_ROW_BAT   10  /* напряжение батарей (и заряд, %) */
 #define TRIP_ROW_SUN   11  /* SUN, TO SUNSET/SUNRISE, DAY (блок очищает строки 11..14) */
 /* Данные UBX (PURRGO_GNSS_UBX = 1): ниже блока SUN. */
 #define TRIP_ROW_TRP   15  /* дистанция с начала записи трека */
 #define TRIP_ROW_ACC   16  /* точность hAcc / vAcc */
 #define TRIP_ROW_SIG   17  /* глушение и спуфинг */
-#define TRIP_ROW_RF    18  /* помехи (CW, AGC) и антенна */
 
 /*
  * Компас на цель (по наброску): кольцо с 8 засечками, буквы N/E/S/W снаружи,
@@ -44,7 +44,7 @@
  * Окно очищается при каждой перерисовке и должно вмещать кольцо и буквы.
  */
 #define TRIP_ARROW_CX    152
-#define TRIP_ARROW_CY    92
+#define TRIP_ARROW_CY    80
 #define TRIP_ARROW_RING  15   /* радиус кольца */
 #define TRIP_TICK_LEN    3    /* засечки внутрь от кольца */
 #define TRIP_LABEL_R     21   /* расстояние от центра до центра буквы */
@@ -192,10 +192,9 @@ void ui_trip_render_grid(gfx_context_t* gfx) {
     gfx_set_color(gfx, 0, 3);
     gfx_clear(gfx);
 
-    // Подписи строк: LOC, UTC, SPD, CRS, WPT, DST, BRG, FIX/SAT, LAT, LON, ALT.
+    // Подписи строк: LOC, SPD, CRS, WPT, DST, BRG, FIX/SAT, LAT, LON, ALT, BAT.
     // Блок SUN / TO SUNSET / DAY целиком рисуется в ui_trip_render_values().
     gfx_draw_string(gfx, 10, TRIP_ROW_Y(TRIP_ROW_LOC), "LOC:");
-    gfx_draw_string(gfx, 10, TRIP_ROW_Y(TRIP_ROW_UTC), "UTC:");
     gfx_draw_string(gfx, 10, TRIP_ROW_Y(TRIP_ROW_SPD), "SPD:");
     gfx_draw_string(gfx, 10, TRIP_ROW_Y(TRIP_ROW_CRS), "CRS:");
     gfx_draw_string(gfx, 10, TRIP_ROW_Y(TRIP_ROW_WPT), "WPT:");
@@ -206,11 +205,11 @@ void ui_trip_render_grid(gfx_context_t* gfx) {
     gfx_draw_string(gfx, 10, TRIP_ROW_Y(TRIP_ROW_LAT), "LAT:");
     gfx_draw_string(gfx, 10, TRIP_ROW_Y(TRIP_ROW_LON), "LON:");
     gfx_draw_string(gfx, 10, TRIP_ROW_Y(TRIP_ROW_ALT), "ALT:");
+    gfx_draw_string(gfx, 10, TRIP_ROW_Y(TRIP_ROW_BAT), "BAT:");
 #if PURRGO_GNSS_UBX
     gfx_draw_string(gfx, 10, TRIP_ROW_Y(TRIP_ROW_TRP), "TRP:");
     gfx_draw_string(gfx, 10, TRIP_ROW_Y(TRIP_ROW_ACC), "ACC:");
     gfx_draw_string(gfx, 10, TRIP_ROW_Y(TRIP_ROW_SIG), "SIG:");
-    gfx_draw_string(gfx, 10, TRIP_ROW_Y(TRIP_ROW_RF), "RF:");
 #endif
 }
 
@@ -283,39 +282,6 @@ static void ui_trip_render_ubx(gfx_context_t* gfx, int16_t val_x)
     }
     pad_to(buf, sizeof(buf), TRIP_VALUE_CHARS);
     gfx_draw_string(gfx, val_x, TRIP_ROW_Y(TRIP_ROW_SIG), buf);
-
-    /*
-     * RF: CW-помеха и AGC в процентах (UBX-MON-RF), средний C/N0 спутников решения, дБ-Гц
-     * (UBX-NAV-SAT). У G10A-F30 состояние антенны недоступно (нет схемы контроля), поэтому
-     * оно выводится только как тревога SHORT!/OPEN!, если модуль всё же его сообщит.
-     */
-    if (t->rf_valid || t->cn0_valid) {
-        char rf[16];
-        char cn[8];
-        const char* ant = "";
-
-        if (t->rf_valid) {
-            purrgo_snprintf(rf, sizeof(rf), "CW%u AGC%u", (unsigned int)t->cw_percent,
-                            (unsigned int)t->agc_percent);
-            if (t->ant_status == PURRGO_UBX_ANT_SHORT) {
-                ant = " SHORT!";
-            } else if (t->ant_status == PURRGO_UBX_ANT_OPEN) {
-                ant = " OPEN!";
-            }
-        } else {
-            purrgo_snprintf(rf, sizeof(rf), "CW-- AGC--");
-        }
-        if (t->cn0_valid) {
-            purrgo_snprintf(cn, sizeof(cn), "CN%u", (unsigned int)t->cn0_dbhz);
-        } else {
-            purrgo_snprintf(cn, sizeof(cn), "CN--");
-        }
-        purrgo_snprintf(buf, sizeof(buf), "%s %s%s", rf, cn, ant);
-    } else {
-        purrgo_snprintf(buf, sizeof(buf), "---");
-    }
-    pad_to(buf, sizeof(buf), TRIP_VALUE_CHARS + 2U);    /* "CW100 AGC100 CN99 SHORT!" - 24 знака */
-    gfx_draw_string(gfx, val_x, TRIP_ROW_Y(TRIP_ROW_RF), buf);
 }
 #endif
 
@@ -325,10 +291,10 @@ void ui_trip_render_values(gfx_context_t* gfx, const purrgo_gnss_solution_t* gns
     ui_trip_render_supply_banner(gfx);
     gfx_set_color(gfx, 0, 3);
 
-    const int16_t val_x = 40; // x offset for values after 4-char label like "UTC: " (10 + 4 * 6 + 6)
+    const int16_t val_x = 40; // x offset for values after 4-char label like "LOC: " (10 + 4 * 6 + 6)
     const int16_t lat_lon_x = 40;
 
-    // LOC и UTC: пока время неизвестно - прочерки (не нули и не последнее известное время)
+    // LOC: пока время неизвестно - прочерки (не нули и не последнее известное время)
     if (gnss->time_valid) {
         int32_t total_mins = (int32_t)gnss->hours * 60 + (int32_t)gnss->minutes + app_config.tz_offset_minutes;
         while (total_mins < 0) total_mins += 1440;
@@ -341,12 +307,6 @@ void ui_trip_render_values(gfx_context_t* gfx, const purrgo_gnss_solution_t* gns
     }
     gfx_draw_string(gfx, val_x, TRIP_ROW_Y(TRIP_ROW_LOC), buf);
 
-    if (gnss->time_valid) {
-        purrgo_snprintf(buf, sizeof(buf), "%02d:%02d", gnss->hours, gnss->minutes);
-    } else {
-        purrgo_snprintf(buf, sizeof(buf), "--:--");
-    }
-    gfx_draw_string(gfx, val_x, TRIP_ROW_Y(TRIP_ROW_UTC), buf);
 
     // SPD
     int speed_kmh = (gnss->speed_knots * 1852) / 100000;
@@ -389,6 +349,11 @@ void ui_trip_render_values(gfx_context_t* gfx, const purrgo_gnss_solution_t* gns
     purrgo_snprintf(buf, sizeof(buf), "%d m        ", (int)gnss->alt_m);
     gfx_draw_string(gfx, val_x, TRIP_ROW_Y(TRIP_ROW_ALT), buf);
 
+    // BAT: напряжение блока батарей (замер раз в минуту, общий монитор заряда)
+    purrgo_snprintf(buf, sizeof(buf), "%s", purrgo_battery_voltage_text());
+    pad_to(buf, sizeof(buf), TRIP_VALUE_CHARS);
+    gfx_draw_string(gfx, val_x, TRIP_ROW_Y(TRIP_ROW_BAT), buf);
+
 #if PURRGO_GNSS_UBX
     ui_trip_render_ubx(gfx, val_x);
 #endif
@@ -411,12 +376,17 @@ void ui_trip_render_values(gfx_context_t* gfx, const purrgo_gnss_solution_t* gns
             gfx_draw_string(gfx, 10, y_pos, buf);
             y_pos = (int16_t)(y_pos + 12);
 
-            int remain_h = sun->time_to_event_min / 60;
-            int remain_m = sun->time_to_event_min % 60;
-            if (sun->is_daytime) {
-                purrgo_snprintf(buf, sizeof(buf), "TO SUNSET: %02dh %02dm", remain_h, remain_m);
+            if (sun->time_to_event_min < 0) {
+                /* Время (или позиция) неизвестно: отсчёт не обновляется - не ясно ни время, ни событие. */
+                purrgo_snprintf(buf, sizeof(buf), "TO SUNSET/RISE: --h --m");
             } else {
-                purrgo_snprintf(buf, sizeof(buf), "TO SUNRISE: %02dh %02dm", remain_h, remain_m);
+                int remain_h = sun->time_to_event_min / 60;
+                int remain_m = sun->time_to_event_min % 60;
+                if (sun->is_daytime) {
+                    purrgo_snprintf(buf, sizeof(buf), "TO SUNSET: %02dh %02dm", remain_h, remain_m);
+                } else {
+                    purrgo_snprintf(buf, sizeof(buf), "TO SUNRISE: %02dh %02dm", remain_h, remain_m);
+                }
             }
             gfx_draw_string(gfx, 10, y_pos, buf);
             y_pos = (int16_t)(y_pos + 12);

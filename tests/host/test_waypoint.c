@@ -916,19 +916,19 @@ static void test_app_here_map_center_and_trip(void)
     CHECK(purrgo_app_get_state() == APP_STATE_TRIP_COMPUTER);
     purrgo_app_ui_render(&g, purrgo_app_get_gnss_solution(), NULL);
 
-    CHECK(fcount(40, 58, 130, 70) > 15);                /* имя "North" (строка WPT) */
-    CHECK(fcount(40, 70, 114, 82) > 15);                /* "1.11 km" (строка DST) */
-    CHECK(fcount(40, 82, 130, 94) > 15);                /* "000 deg N" (строка BRG) */
-    CHECK(fcount(134, 70, 176, 106) > 30);              /* круг компаса и стрелка */
+    CHECK(fcount(40, 46, 130, 58) > 15);                /* имя "North" (строка WPT) */
+    CHECK(fcount(40, 58, 114, 70) > 15);                /* "1.11 km" (строка DST) */
+    CHECK(fcount(40, 70, 130, 82) > 15);                /* "000 deg N" (строка BRG) */
+    CHECK(fcount(134, 58, 176, 94) > 30);              /* круг компаса и стрелка */
 
     /* Цель снята: блок пуст, стрелки нет. */
     purrgo_wpt_clear();
     run_ticks(1500);
     memset(g_ffb, 0, sizeof g_ffb);
     purrgo_app_ui_render(&g, purrgo_app_get_gnss_solution(), NULL);
-    CHECK(fcount(134, 70, 176, 106) == 0);
-    CHECK(fcount(40, 70, 130, 94) == 0);                /* DST и BRG пусты */
-    CHECK(fcount(40, 58, 130, 70) > 5);                 /* "NONE" */
+    CHECK(fcount(134, 58, 176, 94) == 0);
+    CHECK(fcount(40, 58, 130, 82) == 0);                /* DST и BRG пусты */
+    CHECK(fcount(40, 46, 130, 58) > 5);                 /* "NONE" */
 }
 
 /* Сверка кадра приложения с иконкой с центром в (cx, cy). */

@@ -28,14 +28,6 @@ typedef struct {
     bool sig_valid;         /* есть свежий источник */
     uint8_t jam_state;      /* PURRGO_UBX_JAM_*: 0 неизвестно, 1 нет, 2 глушение, 3 критично */
     uint8_t spoof_state;    /* PURRGO_UBX_SPOOF_*: 0 неизвестно, 1 нет, 2 признаки, 3 подтверждён */
-
-    bool rf_valid;          /* есть свежий UBX-MON-RF */
-    uint8_t cw_percent;     /* CW-помеха, % (шаг 5) */
-    uint8_t agc_percent;    /* усиление AGC, % (шаг 5): высокое - сильные помехи */
-    uint8_t ant_status;     /* PURRGO_UBX_ANT_*: 2 OK, 3 замыкание, 4 обрыв (у G10A-F30 всегда 1) */
-
-    bool cn0_valid;         /* есть свежий UBX-NAV-SAT и хотя бы один спутник в решении */
-    uint8_t cn0_dbhz;       /* средний C/N0 спутников решения, дБ-Гц (с гистерезисом 1 дБ) */
 } purrgo_trip_info_t;
 
 void purrgo_trip_computer_init(void);

@@ -38,6 +38,8 @@ static purrgo_gnss_solution_t prev_fix = {0};
 static purrgo_gnss_feed_t gnss_feed;
 static purrgo_sun_info_t internal_sun_info = {0};
 static bool first_fix_obtained = false;
+/* Отсчёт до заката/восхода посчитан по действующему времени и позиции (иначе time_to_event_min = -1). */
+static bool sun_countdown_known = false;
 static uint32_t last_sun_update_ms = 0;
 static uint32_t last_gnss_update_ms = 0;
 
@@ -202,6 +204,7 @@ void purrgo_app_init(void) {
     purrgo_logger_set_new_track_callback(on_new_track);
 #endif
     first_fix_obtained = false;
+    sun_countdown_known = false;
     last_sun_update_ms = 0;
     last_gnss_update_ms = purrgo_system_time_ms();
     purrgo_ui_dirty_throttle_reset(last_gnss_update_ms);
@@ -437,10 +440,19 @@ static uint32_t gnss_fix_timeout_ms(void) {
  * включения - ещё и сигнал (PURRGO_SOUND_FIX_BEEP).
  */
 static void sun_service(uint32_t now_ms) {
-    if (!gnss_feed.solution.valid) {
+    /*
+     * Отсчёт "до заката/восхода" считается от текущего времени и позиции. Если время или
+     * позиция неизвестны, отсчёт не обновляется и стал бы ложным: он объявляется неизвестным
+     * (UI рисует прочерки), а время восхода/заката и длина дня остаются прежними.
+     */
+    if (!gnss_feed.solution.valid || !gnss_feed.solution.time_valid) {
+        if (sun_countdown_known) {
+            sun_countdown_known = false;
+            internal_sun_info.time_to_event_min = -1;
+        }
         return;
     }
-    if (first_fix_obtained && (now_ms - last_sun_update_ms < 60000U)) {
+    if (first_fix_obtained && sun_countdown_known && (now_ms - last_sun_update_ms < 60000U)) {
         return;
     }
 
@@ -461,6 +473,7 @@ static void sun_service(uint32_t now_ms) {
     }
 #endif
     first_fix_obtained = true;
+    sun_countdown_known = true;
     last_sun_update_ms = now_ms;
 }
 
@@ -494,6 +507,10 @@ void purrgo_app_tick(uint32_t current_time_ms) {
      */
     if (purrgo_battery_monitor_tick(current_time_ms) && state_shows_battery(current_state)) {
         purrgo_ui_dirty_mark(UI_DIRTY_STATUS);
+        purrgo_ui_dirty_defer();
+    }
+    /* Напряжение батарей выводится на экране Trip computer: перерисовка при смене текста. */
+    if (purrgo_battery_monitor_take_voltage_changed() && current_state == APP_STATE_TRIP_COMPUTER) {
         purrgo_ui_dirty_defer();
     }
 

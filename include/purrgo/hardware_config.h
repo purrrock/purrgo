@@ -428,14 +428,15 @@
  *   PURRGO_GNSS_NAV_STATUS UBX-NAV-STATUS (16 байт/с): flags2.spoofDetState (в строке SIG: SPF).
  *                          Детектор спуфинга в модуле включён всегда.
  *   PURRGO_GNSS_NAV_SAT    UBX-NAV-SAT (8 + 12 * N байт/с): средний C/N0 спутников решения
- *                          (в строке RF: CN). Модуль выдаёт все известные спутники, в том числе
- *                          не используемые в решении.
+ *                          (строка RF с C/N0 убрана из Trip
+ *                          computer, по умолчанию 0). Модуль выдаёт все известные спутники, в том
+ *                          числе не используемые в решении.
  *
  * При PURRGO_GNSS_SEC_SIG = 1 (SPG 5.30+) в строке SIG остаётся SEC-SIG, а эти источники
  * используются только пока SEC-SIG не приходит.
  * Контроль антенны (antStatus в MON-RF) у G10A-F30 недоступен: нужны внешняя схема и свободные
- * выводы PIO, а у модуля 6 выводов и встроенная антенна. Поле всегда "DONTKNOW", поэтому в строке
- * RF вместо него C/N0; SHORT/OPEN выводятся только если модуль их сообщит.
+ * выводы PIO, а у модуля 6 выводов и встроенная антенна. Поле всегда "DONTKNOW"; на экране
+ * состояние антенны не выводится.
  */
 #ifndef PURRGO_GNSS_ITFM
 #define PURRGO_GNSS_ITFM 1
@@ -444,7 +445,7 @@
 #define PURRGO_GNSS_NAV_STATUS 1
 #endif
 #ifndef PURRGO_GNSS_NAV_SAT
-#define PURRGO_GNSS_NAV_SAT 1
+#define PURRGO_GNSS_NAV_SAT 0       /* C/N0 больше нигде не выводится (строку RF убрали): команда не отправляется */
 #endif
 #if (PURRGO_GNSS_ITFM != 0 && PURRGO_GNSS_ITFM != 1) || \
     (PURRGO_GNSS_NAV_STATUS != 0 && PURRGO_GNSS_NAV_STATUS != 1) || \

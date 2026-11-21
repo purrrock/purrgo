@@ -115,6 +115,23 @@ bool purrgo_battery_monitor_tick(uint32_t now_ms);
 /* Текст заряда для строки статуса: последний замер (при первом обращении - замер сейчас). */
 const char* purrgo_battery_status_text(void);
 
+/*
+ * Напряжение блока батарей для экрана Trip computer (последний замер монитора):
+ * "3.85 V 85%", "3.85 V" (процент неизвестен), "EXT 5V" (питание 5 В, батареи не измеряются)
+ * или "---" (напряжение не измерено). Замер тот же, что и у purrgo_battery_status_text()
+ * (раз в PURRGO_BATTERY_STATUS_PERIOD_MS), АЦП на каждую перерисовку не опрашивается.
+ */
+#define PURRGO_BATTERY_VOLTAGE_TEXT_SIZE 16
+const char* purrgo_battery_voltage_text(void);
+
+/*
+ * true, если с прошлого вызова текст purrgo_battery_voltage_text() изменился (экран Trip
+ * computer нужно перерисовать); флаг сбрасывается. Первый замер после сброса изменением не
+ * считается. Отдельно от purrgo_battery_monitor_tick(): напряжение меняется чаще процента,
+ * а на карте оно не выводится, и перерисовывать её из-за него незачем.
+ */
+bool purrgo_battery_monitor_take_voltage_changed(void);
+
 /* Забыть замер (инициализация приложения, тесты). */
 void purrgo_battery_monitor_reset(void);
 

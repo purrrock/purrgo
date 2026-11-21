@@ -1,6 +1,8 @@
 /*
  * Время неизвестно - на экранах прочерки, а не нули и не "последнее известное" время:
- *   - карта: время в строке статуса; путевой компьютер: строки LOC и UTC;
+ *   - карта: время в строке статуса; путевой компьютер: строка LOC (строки UTC больше нет);
+ *   - время до заката/восхода при неизвестном времени тоже неизвестно (time_to_event_min < 0);
+ *   - напряжение батарей на экране Trip computer (purrgo_battery_voltage_text());
  *   - признак time_valid ведёт приёмник (UBX-NAV-PVT, NMEA RMC) и сбрасывает таймаут
  *     молчания приёмника;
  *   - поля hours/minutes при time_valid = false на картинку не влияют.
@@ -9,6 +11,8 @@
 #include <string.h>
 #include "purrgo/app_fsm.h"
 #include "purrgo/app_ui.h"
+#include "purrgo/battery.h"
+#include "purrgo/sun.h"
 #include "purrgo/config.h"
 #include "purrgo/gfx_rect.h"
 #include "purrgo/gfx_text.h"
@@ -129,6 +133,12 @@ static void test_map_status_bar(void)
     render(&g);
     CHECK(status_time_diff("09:30") == 0);
 
+    /* Время известно - отсчёт до заката/восхода посчитан. */
+    {
+        const purrgo_sun_info_t *sun = purrgo_app_get_sun_info();
+        CHECK(sun != NULL && sun->status == SUN_STATUS_NORMAL && sun->time_to_event_min >= 0);
+    }
+
     /* Часовой пояс применяется к времени. */
     app_config.tz_offset_minutes = 180;
     render(&g);
@@ -142,6 +152,20 @@ static void test_map_status_bar(void)
     CHECK(purrgo_app_ui_needs_render(g_now));
     render(&g);
     CHECK(status_time_diff("--:--") == 0);
+
+    /* Отсчёт до заката/восхода не показывает устаревшее значение; время восхода/заката остаётся. */
+    {
+        const purrgo_sun_info_t *sun = purrgo_app_get_sun_info();
+        CHECK(sun != NULL && sun->status == SUN_STATUS_NORMAL && sun->time_to_event_min < 0);
+    }
+
+    /* Время снова известно - отсчёт возвращается сразу, не через минуту. */
+    feed_epoch();
+    run_ms(2000, true);
+    {
+        const purrgo_sun_info_t *sun = purrgo_app_get_sun_info();
+        CHECK(sun != NULL && sun->time_to_event_min >= 0);
+    }
 }
 
 static int render_trip_fb(uint8_t *out, const purrgo_gnss_solution_t *sol)
@@ -184,17 +208,49 @@ static void test_trip_rows(void)
     CHECK(memcmp(a, c, sizeof a) == 0);
     CHECK(memcmp(a, known, sizeof a) != 0);
 
-    /* Различие только в строках LOC и UTC (y = 10..33), остальной экран тот же. */
+    /* Различие только в строке LOC (y = 10..21), остальной экран тот же. */
     int diff_outside = 0;
     for (int y = 0; y < H; y++)
         for (int x = 0; x < W; x++)
-            if (a[y * W + x] != known[y * W + x] && (y < 10 || y >= 34)) diff_outside++;
+            if (a[y * W + x] != known[y * W + x] && (y < 10 || y >= 22)) diff_outside++;
     CHECK(diff_outside == 0);
+}
+
+/* Строка BAT: напряжение блока батарей по общему монитору заряда. */
+static void test_battery_voltage_text(void)
+{
+    gfx_context_t g;
+
+    app_start(&g);
+    app_config.power_source = PURRGO_POWER_SRC_NIMH;
+    fake_power_set_battery_pin_mv(fake_power_pin_for_pack_mv(3850u));
+    purrgo_battery_monitor_reset();
+    CHECK(strncmp(purrgo_battery_voltage_text(), "3.85 V", 6) == 0);
+    CHECK(!purrgo_battery_monitor_take_voltage_changed());      /* первый замер не изменение */
+
+    /* Следующий замер (раз в период монитора) с другим напряжением: текст и флаг меняются. */
+    fake_power_set_battery_pin_mv(fake_power_pin_for_pack_mv(3600u));
+    CHECK(!purrgo_battery_monitor_tick(g_now + 1000u));          /* период ещё не прошёл */
+    CHECK(strncmp(purrgo_battery_voltage_text(), "3.85 V", 6) == 0);
+    (void)purrgo_battery_monitor_tick(g_now + PURRGO_BATTERY_STATUS_PERIOD_MS + 1000u);
+    CHECK(strncmp(purrgo_battery_voltage_text(), "3.60 V", 6) == 0);
+    CHECK(purrgo_battery_monitor_take_voltage_changed());
+    CHECK(!purrgo_battery_monitor_take_voltage_changed());      /* флаг сбрасывается */
+
+    /* Внешнее питание: батарея не измеряется. */
+    app_config.power_source = PURRGO_POWER_SRC_EXTERNAL_5V;
+    CHECK(strcmp(purrgo_battery_voltage_text(), "EXT 5V") == 0);
+
+    /* АЦП не измерил: прочерки, а не 0.00 V. */
+    app_config.power_source = PURRGO_POWER_SRC_NIMH;
+    fake_power_set_battery_pin_mv(0u);
+    CHECK(strcmp(purrgo_battery_voltage_text(), "---") == 0);
 }
 
 int main(void)
 {
     test_map_status_bar();
     test_trip_rows();
+    test_battery_voltage_text();
     return test_finish("test_time_unknown");
 }

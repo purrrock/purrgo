@@ -1367,7 +1367,7 @@ static void test_trip_info_changes(void)
 
     g_now = 10000;
     purrgo_trip_computer_update(&s);
-    CHECK(!t->dist_valid && !t->acc_valid && !t->sig_valid && !t->rf_valid);
+    CHECK(!t->dist_valid && !t->acc_valid && !t->sig_valid);
     CHECK(!purrgo_trip_computer_take_changed());          /* ничего не пришло - ничего не изменилось */
 
     /* Пришли данные: снимок меняется только в update(), не по приходу байтов. */
@@ -1380,8 +1380,6 @@ static void test_trip_info_changes(void)
     CHECK(t->dist_valid && t->dist_m == 12340);
     CHECK(t->acc_valid && t->hacc_dm == 35 && t->vacc_dm == 52);
     CHECK(t->sig_valid && t->jam_state == PURRGO_UBX_JAM_NONE && t->spoof_state == PURRGO_UBX_SPOOF_NONE);
-    CHECK(t->rf_valid && t->ant_status == PURRGO_UBX_ANT_OK);
-    CHECK(t->agc_percent == 35 && t->cw_percent == 10);   /* 3000/8191 = 36,6 % -> 35; 30/255 = 11,8 % -> 10 */
     CHECK(purrgo_trip_computer_take_changed());
     CHECK(!purrgo_trip_computer_take_changed());          /* флаг сбрасывается */
 
@@ -1398,14 +1396,11 @@ static void test_trip_info_changes(void)
     purrgo_trip_computer_update(&s);
     CHECK(purrgo_trip_computer_take_changed());
 
-    /* Глушение, спуфинг и антенна меняют снимок. */
+    /* Глушение и спуфинг меняют снимок. */
     n = sec_frame(PURRGO_UBX_JAM_WARNING, PURRGO_UBX_SPOOF_INDICATED, f, sizeof f); process(f, n, &s, g_now);
     purrgo_trip_computer_update(&s);
     CHECK(t->jam_state == PURRGO_UBX_JAM_WARNING && t->spoof_state == PURRGO_UBX_SPOOF_INDICATED);
     CHECK(purrgo_trip_computer_take_changed());
-    n = rf_frame(PURRGO_UBX_ANT_OPEN, 7000, 200, f, sizeof f); process(f, n, &s, g_now);
-    purrgo_trip_computer_update(&s);
-    CHECK(t->ant_status == PURRGO_UBX_ANT_OPEN && purrgo_trip_computer_take_changed());
 
     /* Потеря фикса убирает точность; устаревшие сообщения - остальное. */
     s.valid = false;
@@ -1413,7 +1408,7 @@ static void test_trip_info_changes(void)
     CHECK(!t->acc_valid && purrgo_trip_computer_take_changed());
     g_now += PURRGO_UBX_STALE_MS + 1U;
     purrgo_trip_computer_update(&s);
-    CHECK(!t->dist_valid && !t->sig_valid && !t->rf_valid && purrgo_trip_computer_take_changed());
+    CHECK(!t->dist_valid && !t->sig_valid && purrgo_trip_computer_take_changed());
 }
 
 static void test_trip_snapshot_and_screen(void)
@@ -1430,7 +1425,7 @@ static void test_trip_snapshot_and_screen(void)
     run_ticks(1000);
 
     const purrgo_trip_info_t *t = purrgo_trip_computer_info();
-    CHECK(!t->dist_valid && !t->sig_valid && !t->rf_valid);
+    CHECK(!t->dist_valid && !t->sig_valid);
 
     n = pvt_frame(&v, f, sizeof f); feed_bytes(f, n);
     n = odo_frame(12340, f, sizeof f); feed_bytes(f, n);
@@ -1445,8 +1440,7 @@ static void test_trip_snapshot_and_screen(void)
     CHECK(!t->dist_valid);
     run_ticks(1000);
     CHECK(t->dist_valid && t->dist_m == 12340);
-    CHECK(t->acc_valid && t->hacc_dm == 35 && t->sig_valid && t->rf_valid);
-    CHECK(t->cn0_valid && t->cn0_dbhz == 35);              /* (36 + 34) / 2 */
+    CHECK(t->acc_valid && t->hacc_dm == 35 && t->sig_valid);
 
     /* Экран Trip computer: строки UBX рисуются со значениями и без них (проверка под ASan). */
     purrgo_gnss_solution_t sol = *purrgo_app_get_gnss_solution();
@@ -1454,20 +1448,19 @@ static void test_trip_snapshot_and_screen(void)
     ui_trip_render_values(&g, &sol, NULL);
     const uint8_t bg = g_fb[240 * W + 175];
     int ink = 0;
-    for (int y = 190; y < 236; y++) {                     /* строки TRP..RF */
+    for (int y = 190; y < 226; y++) {                     /* строки TRP..SIG */
         for (int x = 0; x < W; x++) { if (g_fb[y * W + x] != bg) { ink++; } }
     }
     CHECK(ink > 100);
     run_ticks(6000);                                      /* кадры перестали приходить: данные протухли */
-    CHECK(!t->dist_valid && !t->sig_valid && !t->rf_valid);
+    CHECK(!t->dist_valid && !t->sig_valid);
     ui_trip_render_values(&g, &sol, NULL);
 }
 
 /*
- * SPG 5.10: SEC-SIG нет, строка SIG строится из MON-RF.jammingState и NAV-STATUS.spoofDetState;
- * средний C/N0 из NAV-SAT показывается с гистерезисом 1 дБ, чтобы E-Ink не обновлялся из-за шума.
+ * SPG 5.10: SEC-SIG нет, строка SIG строится из MON-RF.jammingState и NAV-STATUS.spoofDetState.
  */
-static void test_trip_sig_fallback_and_cn0(void)
+static void test_trip_sig_fallback(void)
 {
     purrgo_gnss_solution_t s;
     uint8_t f[256];
@@ -1483,7 +1476,6 @@ static void test_trip_sig_fallback_and_cn0(void)
     process(f, n, &s, g_now);
     purrgo_trip_computer_update(&s);
     CHECK(t->sig_valid && t->jam_state == PURRGO_UBX_JAM_WARNING && t->spoof_state == PURRGO_UBX_SPOOF_UNKNOWN);
-    CHECK(t->rf_valid && t->ant_status == PURRGO_UBX_ANT_DONTKNOW && !t->cn0_valid);
     CHECK(purrgo_trip_computer_take_changed());
 
     n = status_frame(PURRGO_UBX_SPOOF_NONE, 0, f, sizeof f);
@@ -1499,37 +1491,10 @@ static void test_trip_sig_fallback_and_cn0(void)
     CHECK(t->jam_state == PURRGO_UBX_JAM_NONE && t->spoof_state == PURRGO_UBX_SPOOF_AFFIRMED);
     CHECK(purrgo_trip_computer_take_changed());
 
-    /* C/N0: 36 показывается; 37 и 35 в пределах 1 дБ - без изменений снимка; 38 - новое значение. */
-    {
-        sat_t sv[2];
-        const uint8_t steps[] = { 36, 37, 35, 38 };
-        const bool changes[]  = { true, false, false, true };
-        const uint8_t shown[] = { 36, 36, 36, 38 };
-
-        for (size_t i = 0; i < sizeof steps; i++) {
-            g_now += 100;
-            sv[0].cno = sv[1].cno = steps[i];
-            sv[0].used = sv[1].used = true;
-            n = sat_frame(sv, 2, f, sizeof f); process(f, n, &s, g_now);
-            n = sec_frame(PURRGO_UBX_JAM_NONE, PURRGO_UBX_SPOOF_AFFIRMED, f, sizeof f); process(f, n, &s, g_now);
-            n = rf_frame_jam(PURRGO_UBX_JAM_WARNING, PURRGO_UBX_ANT_DONTKNOW, 3000, 30, f, sizeof f); process(f, n, &s, g_now);
-            purrgo_trip_computer_update(&s);
-            CHECK(t->cn0_valid && t->cn0_dbhz == shown[i]);
-            CHECK(purrgo_trip_computer_take_changed() == changes[i]);
-        }
-
-        /* Нет спутников в решении: C/N0 не показывается. */
-        g_now += 100;
-        sv[0].cno = 30; sv[0].used = false;
-        n = sat_frame(sv, 1, f, sizeof f); process(f, n, &s, g_now);
-        purrgo_trip_computer_update(&s);
-        CHECK(!t->cn0_valid && purrgo_trip_computer_take_changed());
-    }
-
     /* Сообщения перестали приходить: всё устаревает. */
     g_now += PURRGO_UBX_STALE_MS + 1U;
     purrgo_trip_computer_update(&s);
-    CHECK(!t->sig_valid && !t->rf_valid && !t->cn0_valid);
+    CHECK(!t->sig_valid);
 }
 #endif
 
@@ -1739,7 +1704,7 @@ int main(void)
     test_app_new_track_resets_odo();
     test_trip_info_changes();
     test_trip_snapshot_and_screen();
-    test_trip_sig_fallback_and_cn0();
+    test_trip_sig_fallback();
 #endif
     return test_finish("test_gnss_ubx");
 }

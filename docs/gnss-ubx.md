@@ -40,11 +40,11 @@
 - Если приходит `UBX-SEC-SIG` (SPG 5.30+, `PURRGO_GNSS_SEC_SIG=1`), строка SIG берётся из него.
 - **Антенна.** Супервайзеру антенны нужны внешняя схема и свободные PIO (`ANT_DETECT`, `ANT_SHORT_N`,
   `ANT_OFF_N`, MAX-M10S Integration manual, разд. 3.3.1); у G10A-F30 выводов шесть и антенна встроена,
-  поэтому `antStatus` всегда `DONTKNOW`. В строке RF вместо него **средний C/N0 спутников решения**
-  (`UBX-NAV-SAT`); `SHORT!`/`OPEN!` выводятся только если модуль всё же их сообщит.
+  поэтому `antStatus` всегда `DONTKNOW`. Состояние антенны, CW/AGC и C/N0 на экране не выводятся (строку RF
+  из Trip computer убрали как малоинформативную); `UBX-MON-RF` по-прежнему нужен для JAM.
 
-Нагрузка: NAV-STATUS 24 байта и NAV-SAT `16 + 12 * N` байт в секунду (N - все известные спутники; при 20
-около 260 байт) - примерно 3 % канала 115200 бод; буфер разборщика `PURRGO_UBX_MAX_PAYLOAD` = 800 байт
+Нагрузка: NAV-STATUS 24 байта и (если включить `PURRGO_GNSS_NAV_SAT`) NAV-SAT `16 + 12 * N` байт в секунду
+(N - все известные спутники; при 20 около 260 байт) - примерно 3 % канала 115200 бод; буфер разборщика `PURRGO_UBX_MAX_PAYLOAD` = 800 байт
 (до 64 спутников, +416 байт RAM). Сравнить ток с флагами `PURRGO_GNSS_ITFM`, `PURRGO_GNSS_NAV_STATUS`,
 `PURRGO_GNSS_NAV_SAT` = 0 и 1 (см. TODO, P1).
 
@@ -161,7 +161,7 @@ VALSET целиком или отклоняет целиком, поэтому N
 | `PURRGO_GNSS_SEC_SIG` | 0 | 1 - включить UBX-SEC-SIG (нужна прошивка SPG 5.30+) |
 | `PURRGO_GNSS_ITFM` | 1 | 1 - включить монитор помех (`CFG-ITFM-ENABLE`), JAM из `MON-RF.jammingState` |
 | `PURRGO_GNSS_NAV_STATUS` | 1 | 1 - включить UBX-NAV-STATUS, SPF из `spoofDetState` |
-| `PURRGO_GNSS_NAV_SAT` | 1 | 1 - включить UBX-NAV-SAT, C/N0 в строке RF |
+| `PURRGO_GNSS_NAV_SAT` | 0 | 1 - включить UBX-NAV-SAT (C/N0 спутников; на экране больше не выводится, разбор оставлен) |
 | `PURRGO_GNSS_TIMEPULSE` | 1 | 0 - заводской 1PPS; 1 - без импульсов (длина 0, вывод включён); 2 - `CFG-TP-TP1_ENA` = 0 (на G10A F30 светодиод PPS горит постоянно). Слой `PURRGO_GNSS_UBX_LAYERS`, после каждого включения модуля |
 | `PURRGO_GNSS_SIGNALS` | `PURRGO_GNSS_SIG_FACTORY` (0) | набор систем (`CFG-SIGNAL-*`): 0 - ничего сверх требований PSM; 1 (`PURRGO_GNSS_SIG_GPS_GAL`) - GPS+Galileo; 2 (`PURRGO_GNSS_SIG_GPS_GAL_BDS`) - GPS+Galileo+BeiDou B1I вместо GLONASS (QZSS остаётся). Кадр `Signals`, уходит при настройке после включения модуля |
 | `PURRGO_GNSS_DYNMODEL` | `PURRGO_GNSS_DYN_BICYCLE` (= Portable, 0) | `CFG-NAVSPG-DYNMODEL`; значения `PURRGO_GNSS_DYN_*` |
@@ -178,7 +178,7 @@ SPG 5.30 - мотоцикл и "не во всех продуктах". Поэт
 Модуль выдаёт всё раз в `PURRGO_GNSS_UPDATE_PERIOD_MS` (1000 мс). Ядро берёт решение и снимок
 путевого компьютера (`purrgo_trip_computer_update`) раз в секунду; экран Trip computer
 перерисовывается, только когда изменилось показанное (километры с шагом 10 м, hAcc с шагом 0,1 м,
-CW/AGC с шагом 5 %, C/N0 с гистерезисом 1 дБ, состояния).
+состояния).
 
 Экран Trip computer (строки ниже блока SUN):
 
@@ -187,10 +187,7 @@ CW/AGC с шагом 5 %, C/N0 с гистерезисом 1 дБ, состоя�
 - `ACC:` `H3.5 m V5.2 m` - hAcc / vAcc;
 - `SIG:` `JAM OK SPF OK` - глушение и спуфинг (SEC-SIG, а в SPG 5.10 - MON-RF и NAV-STATUS, см. выше);
   глушение `WARN!` - предупреждение, `CRIT!` - помеха и нет фикса; спуфинг `IND!` - признаки,
-  `AFF!!` - подтверждён; `--` - источник не сообщил состояние;
-- `RF:` `CW10 AGC35 CN36` - CW-помеха и AGC в процентах, средний C/N0 спутников решения в дБ-Гц
-  (`CN--` - нет данных или нет спутников в решении); после них `SHORT!`/`OPEN!`, если модуль сообщил
-  замыкание или обрыв антенны (у G10A-F30 не сообщает).
+  `AFF!!` - подтверждён; `--` - источник не сообщил состояние.
 
 `---` - данных нет (сообщение не приходило дольше 3,5 с, нет фикса или сборка без UBX).
 
