@@ -3,8 +3,6 @@
 #include "purrgo/map_controller.h"
 #include "purrgo/config.h"
 #include "purrgo/system_time.h"
-#include "purrgo/gnss.h"
-#include "purrgo/gnss_adapter.h"
 #include "purrgo/gnss_ubx.h"
 #include "purrgo/gnss_io.h"
 #include "purrgo/sun.h"
@@ -19,17 +17,10 @@
 #include "purrgo/waypoint.h"
 #include "purrgo/sound.h"
 #include "purrgo/hw_fault.h"
+#include "gnss/gnss_feed.h"
 #include "nav/logger_retry.h"
 #include "ui/app_data_change.h"
 #include "ui/app_keymap.h"
-
-/*
- * Таймаут фикса: если корректная RMC не приходила дольше этого времени,
- * позиция считается невалидной (приёмник молчит, антенна отключена и т.п.).
- */
-#ifndef PURRGO_GNSS_FIX_TIMEOUT_MS
-#define PURRGO_GNSS_FIX_TIMEOUT_MS 5000U
-#endif
 
 /*
  * Политика перерисовки по данным (GNSS, заряд батареи) - purrgo/ui/ui_dirty.h:
@@ -43,29 +34,17 @@
 static purrgo_state_t current_state;
 static purrgo_gnss_solution_t prev_fix = {0};
 
-static purrgo_gnss_solution_t internal_gnss_solution = {0};
+// Живое состояние приёмника: разбор потока, текущее решение, таймаут фикса (gnss/gnss_feed.h)
+static purrgo_gnss_feed_t gnss_feed;
 static purrgo_sun_info_t internal_sun_info = {0};
 static bool first_fix_obtained = false;
 static uint32_t last_sun_update_ms = 0;
 static uint32_t last_gnss_update_ms = 0;
-static purrgo_gnss_parser_t gnss_parser;
-#if PURRGO_GNSS_UBX
-static purrgo_ubx_parser_t ubx_parser;
-#endif
-
-// Таймаут фикса GNSS
-static uint32_t last_rmc_ms = 0;
-static uint32_t last_tick_ms = 0;
 
 /* Диагностические строки приёмника в логе в трекере: раз в минуту (на карте - раз в 5 с). */
 #define TRACKER_DIAG_LOG_INTERVAL_MS 60000U
 
-/*
- * Счётчик принятых решений (PVT или RMC): растёт на каждое новое решение приёмника. В трекере с PSMOO
- * решения приходят раз в период, а устаревший фикс остаётся действующим до таймаута; логгер получает
- * фикс один раз, а не каждую секунду (иначе при PURRGO_TRACK_DIAG он писал бы в GPX "отброшенные" копии).
- */
-static uint32_t gnss_fix_seq = 0;
+/* Номер решения приёмника (gnss_feed.fix_seq), уже переданного логгеру в трекере. */
 static uint32_t tracker_logged_seq = 0;
 
 // Политика перерисовки
@@ -106,30 +85,13 @@ static void ui_input_done(purrgo_state_t prev_state, bool changed) {
     }
 }
 
-// Решение приёмника "нет фикса": позиция, курс и скорость невалидны.
-static void gnss_solution_invalidate(void) {
-    internal_gnss_solution.valid = false;
-    internal_gnss_solution.course_valid = false;
-    internal_gnss_solution.speed_knots = 0;
-    internal_gnss_solution.fix_quality = 0;
-    internal_gnss_solution.acc_valid = false;   // оценки точности относятся к потерянному решению
-    /*
-     * fix_type = 0 - "тип фикса неизвестен" (как после старта): значение 1 из GSA
-     * ("нет фикса") выставляет только адаптер. Если здесь поставить 1, а приёмник
-     * (или мок на PC) не шлёт GSA, то fix_type так и останется 1 и после появления
-     * фикса фильтр качества логгера отбросит все точки: файл трека создан, а
-     * точек в нём и на экране нет.
-     */
-    internal_gnss_solution.fix_type = 0;
-}
-
 /*
  * Вход в режим чтения: читалка уже остановила трек и GNSS. Здесь сбрасывается
  * состояние навигатора: фикса нет, накопленная перерисовка по данным не нужна.
  */
 static void book_mode_entered(void) {
-    gnss_solution_invalidate();
-    prev_fix = internal_gnss_solution;
+    purrgo_gnss_feed_invalidate(&gnss_feed);
+    prev_fix = gnss_feed.solution;
     purrgo_app_data_change_forget_marker(&data_change);
     purrgo_app_data_change_forget_pos(&data_change);
     purrgo_ui_dirty_defer_cancel();
@@ -142,8 +104,7 @@ static void book_mode_entered(void) {
  */
 static void book_mode_left(void) {
     const uint32_t now = purrgo_system_time_ms();
-    last_rmc_ms = now;
-    last_tick_ms = now;
+    purrgo_gnss_feed_restart(&gnss_feed, now);
     last_gnss_update_ms = now;
     purrgo_ui_dirty_defer_cancel();
     purrgo_ui_dirty_mark(UI_DIRTY_MAP);
@@ -159,7 +120,7 @@ static void tracker_mode_entered(void) {
     purrgo_logger_set_mode(LOGGER_MODE_EXPEDITION);
     render_gate_active = false;
     purrgo_ui_dirty_defer_cancel();
-    tracker_logged_seq = gnss_fix_seq - 1U;   /* действующий фикс уходит логгеру один раз сразу */
+    tracker_logged_seq = gnss_feed.fix_seq - 1U;   /* действующий фикс уходит логгеру один раз сразу */
 
     /*
      * Экрану и трекеру не нужен фикс каждую секунду: приёмник - в PSMOO (просыпается раз в период).
@@ -167,7 +128,7 @@ static void tracker_mode_entered(void) {
      * заново, чтобы последняя секунда до входа не считалась.
      */
     purrgo_gnss_set_profile(PURRGO_GNSS_PROFILE_TRACKER);
-    last_rmc_ms = purrgo_system_time_ms();
+    purrgo_gnss_feed_restart_silence(&gnss_feed, purrgo_system_time_ms());
 #if PURRGO_GNSS_UBX
     purrgo_gnss_ubx_set_log_interval_ms(TRACKER_DIAG_LOG_INTERVAL_MS);   /* реже, чем на карте */
 #endif
@@ -188,8 +149,7 @@ static void tracker_mode_left(void) {
 #endif
 
     purrgo_logger_set_mode(app_config.log_mode);
-    last_rmc_ms = now;
-    last_tick_ms = now;
+    purrgo_gnss_feed_restart(&gnss_feed, now);
     last_gnss_update_ms = now;
     purrgo_app_data_change_forget_marker(&data_change);
     purrgo_app_data_change_forget_pos(&data_change);
@@ -236,17 +196,14 @@ static void on_new_track(void) {
 
 void purrgo_app_init(void) {
     purrgo_logger_retry_reset(&logger_retry);
-    purrgo_gnss_parser_init(&gnss_parser);
+    purrgo_gnss_feed_init(&gnss_feed, purrgo_system_time_ms());
 #if PURRGO_GNSS_UBX
-    purrgo_ubx_parser_init(&ubx_parser);
     purrgo_gnss_ubx_init();
     purrgo_logger_set_new_track_callback(on_new_track);
 #endif
     first_fix_obtained = false;
     last_sun_update_ms = 0;
     last_gnss_update_ms = purrgo_system_time_ms();
-    last_rmc_ms = last_gnss_update_ms;
-    last_tick_ms = last_gnss_update_ms;
     purrgo_ui_dirty_throttle_reset(last_gnss_update_ms);
     purrgo_battery_monitor_reset();
     purrgo_supply_reset();
@@ -451,7 +408,7 @@ void purrgo_app_notify_marker_rendered(const purrgo_gnss_solution_t* rendered_fi
 }
 
 const purrgo_gnss_solution_t* purrgo_app_get_gnss_solution(void) {
-    return &internal_gnss_solution;
+    return &gnss_feed.solution;
 }
 
 const purrgo_sun_info_t* purrgo_app_get_sun_info(void) {
@@ -459,52 +416,7 @@ const purrgo_sun_info_t* purrgo_app_get_sun_info(void) {
 }
 
 void purrgo_app_feed_gnss_byte(uint8_t byte) {
-#if PURRGO_GNSS_UBX
-    /*
-     * В потоке вперемешку NMEA-строки и бинарные кадры UBX. Кадр может начаться,
-     * только пока NMEA-строка не начата (после её конца разборщик пуст): иначе
-     * байт B5 внутри текста сорвал бы разбор. Принятый PVT, как и RMC, означает,
-     * что приёмник жив (таймаут фикса).
-     */
-    if (gnss_parser.length == 0U || purrgo_ubx_parser_active(&ubx_parser)) {
-        const purrgo_ubx_feed_t fed = purrgo_ubx_parser_feed(&ubx_parser, byte);
-
-        if (fed == PURRGO_UBX_FEED_FRAME) {
-            const uint32_t now = purrgo_system_time_ms();
-
-            if (purrgo_gnss_ubx_process_frame(ubx_parser.msg_class, ubx_parser.msg_id,
-                                              ubx_parser.payload, ubx_parser.length,
-                                              &internal_gnss_solution, now)) {
-                last_rmc_ms = now;
-                gnss_fix_seq++;
-            }
-            return;
-        }
-        if (fed == PURRGO_UBX_FEED_CONSUMED) {
-            return;
-        }
-    }
-#endif
-    if (purrgo_gnss_parser_feed(&gnss_parser, byte)) {
-        if (purrgo_gnss_process_nmea(gnss_parser.line, &internal_gnss_solution)) {
-            last_rmc_ms = purrgo_system_time_ms();
-            gnss_fix_seq++;
-        }
-        purrgo_gnss_parser_init(&gnss_parser);
-    }
-}
-
-/*
- * Возраст метки времени относительно now_ms. Метка может оказаться НОВЕЕ now_ms: главный
- * цикл берёт время такта в начале прохода, а байты GNSS разбираются позже (опрос дисплея,
- * вывод монитора), и кадр получает метку на 1 мс и более больше. Беззнаковая разность тогда
- * даёт ~4,29e9 и ложный таймаут ("GNSS fix timeout"): фикс пропадал на секунду и возвращался
- * со следующим кадром. Такая метка считается свежей (возраст 0).
- */
-static uint32_t stamp_age_ms(uint32_t now_ms, uint32_t stamp_ms) {
-    const int32_t diff = (int32_t)(now_ms - stamp_ms);
-
-    return (diff > 0) ? (uint32_t)diff : 0U;
+    purrgo_gnss_feed_byte(&gnss_feed, byte);
 }
 
 /*
@@ -520,33 +432,12 @@ static uint32_t gnss_fix_timeout_ms(void) {
     return PURRGO_GNSS_FIX_TIMEOUT_MS;
 }
 
-// Сбрасывает валидность позиции, если приёмник замолчал.
-static void gnss_check_fix_timeout(uint32_t now_ms) {
-    const uint32_t timeout_ms = gnss_fix_timeout_ms();
-
-    /*
-     * Если главный цикл простоял (блокирующий refresh e-ink занимает секунды),
-     * молчание приёмника оценить нельзя: байты ждут в буфере DMA. Даём новый
-     * срок, чтобы не мигать "нет фикса" после каждого полного обновления.
-     */
-    if (stamp_age_ms(now_ms, last_tick_ms) > (PURRGO_GNSS_FIX_TIMEOUT_MS / 2U)) {
-        last_rmc_ms = now_ms;
-    }
-    last_tick_ms = now_ms;
-
-    if (internal_gnss_solution.valid &&
-        stamp_age_ms(now_ms, last_rmc_ms) > timeout_ms) {
-        PURRGO_LOGW("GNSS fix timeout\r\n");
-        gnss_solution_invalidate();
-    }
-}
-
 /*
  * Восход/закат: считаются по первому фиксу и затем раз в минуту. Первый фикс после
  * включения - ещё и сигнал (PURRGO_SOUND_FIX_BEEP).
  */
 static void sun_service(uint32_t now_ms) {
-    if (!internal_gnss_solution.valid) {
+    if (!gnss_feed.solution.valid) {
         return;
     }
     if (first_fix_obtained && (now_ms - last_sun_update_ms < 60000U)) {
@@ -554,13 +445,13 @@ static void sun_service(uint32_t now_ms) {
     }
 
     purrgo_sun_calc(
-        internal_gnss_solution.lat_1e7,
-        internal_gnss_solution.lon_1e7,
-        internal_gnss_solution.year % 100U,
-        internal_gnss_solution.month,
-        internal_gnss_solution.day,
-        internal_gnss_solution.hours,
-        internal_gnss_solution.minutes,
+        gnss_feed.solution.lat_1e7,
+        gnss_feed.solution.lon_1e7,
+        gnss_feed.solution.year % 100U,
+        gnss_feed.solution.month,
+        gnss_feed.solution.day,
+        gnss_feed.solution.hours,
+        gnss_feed.solution.minutes,
         app_config.tz_offset_minutes,
         &internal_sun_info
     );
@@ -606,7 +497,7 @@ void purrgo_app_tick(uint32_t current_time_ms) {
         purrgo_ui_dirty_defer();
     }
 
-    gnss_check_fix_timeout(current_time_ms);
+    purrgo_gnss_feed_check_timeout(&gnss_feed, current_time_ms, gnss_fix_timeout_ms());
 
     // Накопленные изменения данных выводим не чаще минимального интервала.
     purrgo_ui_dirty_tick(current_time_ms);
@@ -614,7 +505,7 @@ void purrgo_app_tick(uint32_t current_time_ms) {
     if (current_time_ms - last_gnss_update_ms >= 1000U) {
         last_gnss_update_ms = current_time_ms;
 
-        purrgo_app_update(&internal_gnss_solution);
+        purrgo_app_update(&gnss_feed.solution);
         sun_service(current_time_ms);
     }
 }
@@ -740,8 +631,8 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
      */
     if (current_state == APP_STATE_TRACKER_SCREEN_OFF) {
         prev_fix = *current_fix;
-        if (gnss_fix_seq != tracker_logged_seq) {
-            tracker_logged_seq = gnss_fix_seq;
+        if (gnss_feed.fix_seq != tracker_logged_seq) {
+            tracker_logged_seq = gnss_feed.fix_seq;
             track_logger_service(current_fix);
         } else {
             /* Нового решения нет: обслуживаем логгер (повторы, состояние), точку не подаём. */
