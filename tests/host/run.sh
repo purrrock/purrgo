@@ -18,6 +18,19 @@ CFLAGS="-std=c11 -D_DEFAULT_SOURCE -g -fsanitize=address,undefined -fno-sanitize
 COMMON="src/platform/pc/display_hal.c src/platform/pc/purrgo_logger.c \
     tests/host/fake_fs.c tests/host/fake_power.c"
 
+# purrgo_version.h (версия, ревизия git, признак Debug) в CMake-сборке генерирует
+# cmake/PurrgoVersionGen.cmake; boot_banner.c его включает. Здесь тот же шаблон
+# cmake/version.h.in заполняется через sed, чтобы скрипту не нужен был cmake.
+GEN="$OUT/generated"
+mkdir -p "$GEN"
+VER=$(sed -n 's/^set(PURRGO_VERSION "\([^"]*\)".*/\1/p' cmake/PurrgoVersion.cmake | head -n 1)
+REV=$(git describe --always --dirty --abbrev=7 2>/dev/null || echo nogit)
+sed -e "s|@PURRGO_VERSION@|${VER:-0.0.0}|" \
+    -e "s|@PURRGO_GIT_REVISION@|$REV|" \
+    -e "s|@PURRGO_BUILD_IS_DEBUG@|1|" \
+    cmake/version.h.in > "$GEN/purrgo_version.h"
+CFLAGS="$CFLAGS -I$GEN"
+
 # Ядро собирается в статическую библиотеку, как purrgo_core в CMake: из неё берутся
 # только нужные тесту объектные файлы (тесты сами задают purrgo_system_time_ms и т.п.).
 # PURRGO_TRACK_DIAG=0 - как в tests/host/CMakeLists.txt: тесты логгера считают обычную
@@ -50,6 +63,8 @@ for t in tests/host/test_*.c; do
     RUN_ARGS=""
     extra=""
     case $name in
+        test_gfx_line_equiv)
+            extra="tests/host/gfx_line_ref.c" ;;
         test_sd_spi)
             extra="stm32/port/storage/sd_spi.c -Istm32/port/storage" ;;
         test_sd_power)
