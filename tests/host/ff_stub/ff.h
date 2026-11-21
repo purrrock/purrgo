@@ -8,6 +8,9 @@
 
 #include <stdint.h>
 
+/* Как в настоящем ff.h R0.16: fs_hal_stm32.c сверяет ревизию через _Static_assert. */
+#define FF_DEFINED 80386
+
 typedef unsigned char BYTE;
 typedef uint32_t DWORD;
 typedef unsigned int UINT;

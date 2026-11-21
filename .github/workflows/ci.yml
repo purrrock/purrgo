@@ -105,4 +105,4 @@ jobs:
         run: cmake --preset linux-gcc-test
       - name: clang-tidy (informational)
         continue-on-error: true
-        run: clang-tidy -p out/build/linux-gcc-test src/core/*/*.c
+        run: clang-tidy -p out/build/linux-gcc-test src/core/*/*.c src/core/*.c tests/host/*.c

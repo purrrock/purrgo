@@ -7,6 +7,7 @@
 #include <string.h>
 
 /* Команды SPI-режима (индекс; бит 0x80 - команда прикладная, ACMD). */
+#define SD_SPI_CMD0_RETRIES 5U  /* попыток CMD0 при инициализации */
 #define CMD0   0U           /* GO_IDLE_STATE */
 #define CMD8   8U           /* SEND_IF_COND */
 #define CMD6   6U           /* SWITCH_FUNC (High Speed) */
@@ -428,9 +429,20 @@ sd_spi_res_t sd_spi_init(sd_spi_t *sd, const sd_spi_port_t *port)
         (void)spi_tx_byte(sd, 0xFFU);
     }
 
-    if (send_cmd(sd, CMD0, 0U) != R1_IDLE)
+    /* Некоторым картам CMD0 нужен не с первой попытки. */
+    uint8_t r0 = 0xFFU;
+    for (unsigned attempt = 0U; attempt < SD_SPI_CMD0_RETRIES; attempt++)
     {
+        r0 = send_cmd(sd, CMD0, 0U);
         deselect_card(sd);
+        if (r0 == R1_IDLE)
+        {
+            break;
+        }
+        (void)spi_tx_byte(sd, 0xFFU);
+    }
+    if (r0 != R1_IDLE)
+    {
         return SD_SPI_ERR_NOCARD;
     }
 

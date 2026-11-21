@@ -97,7 +97,7 @@ void purrgo_gnss_feed_restart(purrgo_gnss_feed_t *f, uint32_t now_ms) {
 
 void purrgo_gnss_feed_check_timeout(purrgo_gnss_feed_t *f, uint32_t now_ms, uint32_t timeout_ms) {
     /* Главный цикл простоял: молчание приёмника оценить нельзя, даём новый срок. */
-    if (stamp_age_ms(now_ms, f->last_check_ms) > (PURRGO_GNSS_FIX_TIMEOUT_MS / 2U)) {
+    if (stamp_age_ms(now_ms, f->last_check_ms) > (timeout_ms / 2U)) {
         f->last_rx_ms = now_ms;
     }
     f->last_check_ms = now_ms;

@@ -548,7 +548,12 @@ purrgo_file_t* purrgo_fs_open(const char* filepath, fs_mode_t mode) {
 
     FRESULT res = f_open(&file->fil, filepath, ff_mode);
     if (res != FR_OK) {
-        PURRGO_LOGE("purrgo_fs_open: %s open error: %d\n\r", filepath, res);
+        /* Отсутствие файла/пути - штатная ситуация (проверка наличия), не ошибка. */
+        if ((res == FR_NO_FILE) || (res == FR_NO_PATH)) {
+            PURRGO_LOGD("purrgo_fs_open: %s not found (%d)\n\r", filepath, (int)res);
+        } else {
+            PURRGO_LOGE("purrgo_fs_open: %s open error: %d\n\r", filepath, (int)res);
+        }
         file->in_use = false;
         return NULL;
     }
@@ -586,7 +591,7 @@ purrgo_file_t* purrgo_fs_open(const char* filepath, fs_mode_t mode) {
 
     invalidate_cache_for_file(file);
 
-    PURRGO_LOG("purrgo_fs_open: %s opened OK\n\r", filepath);
+    PURRGO_LOGD("purrgo_fs_open: %s opened OK\n\r", filepath);
     return file;
 }
 
@@ -702,10 +707,13 @@ bool purrgo_fs_sync(purrgo_file_t* file) {
 }
 
 /*
- * Внутренние флаги FIL::flag из ff.c (FatFs R0.12c, в ff.h не экспортируются).
+ * Внутренние флаги FIL::flag из ff.c (в ff.h не экспортируются). Значения сверены
+ * с FatFs R0.16 (FF_DEFINED 80386). При обновлении FatFs проверку ниже и обходной
+ * путь в purrgo_fs_close() нужно пересмотреть.
  */
 #define PURRGO_FA_MODIFIED 0x40
 #define PURRGO_FA_DIRTY    0x80
+_Static_assert(FF_DEFINED == 80386, "FatFs updated: recheck FA_MODIFIED/FA_DIRTY workaround in purrgo_fs_close");
 
 bool purrgo_fs_close(purrgo_file_t* file) {
     if (!file || !file->in_use) return false;
@@ -715,7 +723,7 @@ bool purrgo_fs_close(purrgo_file_t* file) {
     if (res != FR_OK) {
         PURRGO_LOGE("purrgo_fs_close: error: %d\n\r", res);
         /*
-         * В FatFs R0.12c f_close() при ошибке внутреннего f_sync() не
+         * В FatFs (R0.12c-R0.16) f_close() при ошибке внутреннего f_sync() не
          * вызывает dec_lock(): запись в таблице блокировок (_FS_LOCK)
          * остаётся занятой, и повторное открытие того же файла вернёт
          * FR_LOCKED. Данные уже потеряны, поэтому сбрасываем признак

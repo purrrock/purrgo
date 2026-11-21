@@ -330,7 +330,7 @@ static void test_stalled_main_loop_gets_new_deadline(void)
 {
     purrgo_gnss_feed_t f;
     const uint32_t T = 5000U;
-    const uint32_t HALF = PURRGO_GNSS_FIX_TIMEOUT_MS / 2U;
+    const uint32_t HALF = T / 2U;   /* порог простоя считается от переданного timeout_ms */
 
     /* Цикл простоял дольше половины срока: молчание оценить нельзя - срок даётся заново. */
     g_now = 1000U;
@@ -365,6 +365,25 @@ static void test_stalled_main_loop_gets_new_deadline(void)
     }
     purrgo_gnss_feed_check_timeout(&f, grace_start + T + 1U, T);
     CHECK(!f.solution.valid);
+}
+
+static void test_stall_threshold_follows_timeout_param(void)
+{
+    purrgo_gnss_feed_t f;
+    const uint32_t T = 60000U;   /* длинный срок (трекер): порог простоя = T/2, а не константа */
+
+    g_now = 1000U;
+    fresh(&f);
+    f.solution.valid = true;
+    f.last_rx_ms = 1000U;
+    f.last_check_ms = 1000U;
+    /* Пауза больше PURRGO_GNSS_FIX_TIMEOUT_MS/2, но меньше T/2: это не простой цикла. */
+    purrgo_gnss_feed_check_timeout(&f, 1000U + PURRGO_GNSS_FIX_TIMEOUT_MS, T);
+    CHECK(f.last_rx_ms == 1000U);
+    /* Пауза больше T/2 - простой: срок даётся заново. */
+    purrgo_gnss_feed_check_timeout(&f, 1000U + PURRGO_GNSS_FIX_TIMEOUT_MS + T / 2U + 1U, T);
+    CHECK(f.last_rx_ms == 1000U + PURRGO_GNSS_FIX_TIMEOUT_MS + T / 2U + 1U);
+    CHECK(f.solution.valid);
 }
 
 static void test_stamp_from_the_future_is_fresh(void)
@@ -455,6 +474,7 @@ int main(void)
     test_timeout_caller_chooses_duration();
     test_timeout_not_applied_without_fix();
     test_stalled_main_loop_gets_new_deadline();
+    test_stall_threshold_follows_timeout_param();
     test_stamp_from_the_future_is_fresh();
     test_time_wraparound();
     test_restart();
