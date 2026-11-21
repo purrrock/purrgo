@@ -42,13 +42,27 @@ uint32_t purrgo_system_time_ms(void) { return g_now; }
 static const char* CFG = "PURRGO.CFG";
 
 /* Позиция пункта SOUND в главном меню (после SD LOG, перед MAP DETAILS). */
-#define SOUND_ITEM_INDEX 12
+#define SOUND_ITEM_INDEX 2
 
 static purrgo_state_t press(purrgo_state_t st, purrgo_action_t a)
 {
     purrgo_state_t next = st;
     (void)purrgo_menu_controller_handle_button(st, a, &next);
     return next;
+}
+
+/* Из главного меню в подменю CONFIG (последний пункт главного меню). */
+static purrgo_state_t enter_config(void)
+{
+    purrgo_state_t st = APP_STATE_MENU_MAIN;
+
+    purrgo_menu_controller_on_enter(APP_STATE_MENU_MAIN);
+    for (int i = 0; i < menu_app_get_main_count() - 1; i++) {
+        st = press(st, PURRGO_ACTION_DOWN);
+    }
+    st = press(st, PURRGO_ACTION_OK);
+    CHECK(st == APP_STATE_MENU_CONFIG);
+    return st;
 }
 
 static void feed(const char* body)
@@ -205,22 +219,21 @@ static void test_menu(void)
     char text[64];
 
     fresh();
-    purrgo_menu_controller_on_enter(APP_STATE_MENU_MAIN);
-    purrgo_state_t st = APP_STATE_MENU_MAIN;
+    purrgo_state_t st = enter_config();
     CHECK(menu_app_get_draft_sound_level() == PURRGO_SOUND_LEVEL_OFF);
 
     for (int i = 0; i < SOUND_ITEM_INDEX; i++) {
         st = press(st, PURRGO_ACTION_DOWN);
     }
-    CHECK(menu_app_get_main_cursor() == SOUND_ITEM_INDEX);
-    menu_app_get_main_item_text(SOUND_ITEM_INDEX, text, sizeof text);
+    CHECK(menu_app_get_config_cursor() == SOUND_ITEM_INDEX);
+    menu_app_get_config_item_text(SOUND_ITEM_INDEX, text, sizeof text);
     CHECK(strcmp(text, "SOUND: OFF") == 0);
 
     /* OK: OFF -> LOW. Громкость действует сразу, играется проверочный сигнал на LOW. */
     st = press(st, PURRGO_ACTION_OK);
-    CHECK(st == APP_STATE_MENU_MAIN);
+    CHECK(st == APP_STATE_MENU_CONFIG);
     CHECK(menu_app_get_draft_sound_level() == PURRGO_SOUND_LEVEL_LOW);
-    menu_app_get_main_item_text(SOUND_ITEM_INDEX, text, sizeof text);
+    menu_app_get_config_item_text(SOUND_ITEM_INDEX, text, sizeof text);
     CHECK(strcmp(text, "SOUND: LOW") == 0);
     CHECK(app_config.sound_level == PURRGO_SOUND_LEVEL_LOW);
     CHECK(fake_sound_count(PURRGO_SOUND_INFO) == 1);
@@ -229,15 +242,15 @@ static void test_menu(void)
     /* OK: LOW -> HIGH, проверочный сигнал на HIGH. */
     st = press(st, PURRGO_ACTION_OK);
     CHECK(menu_app_get_draft_sound_level() == PURRGO_SOUND_LEVEL_HIGH);
-    menu_app_get_main_item_text(SOUND_ITEM_INDEX, text, sizeof text);
+    menu_app_get_config_item_text(SOUND_ITEM_INDEX, text, sizeof text);
     CHECK(strcmp(text, "SOUND: HIGH") == 0);
     CHECK(app_config.sound_level == PURRGO_SOUND_LEVEL_HIGH);
     CHECK(fake_sound_count(PURRGO_SOUND_INFO) == 2);
     CHECK(fake_sound_last_level() == PURRGO_SOUND_LEVEL_HIGH);
 
-    /* BACK сохраняет в файл. */
+    /* BACK сохраняет в файл, возврат в главное меню. */
     st = press(st, PURRGO_ACTION_MENU);
-    CHECK(st == APP_STATE_MAP);
+    CHECK(st == APP_STATE_MENU_MAIN);
     CHECK(app_config.sound_level == PURRGO_SOUND_LEVEL_HIGH);
     {
         uint32_t n;
@@ -247,8 +260,7 @@ static void test_menu(void)
 
     /* Повторный вход: черновик из конфига. OK: HIGH -> OFF, звук обрывается и молчит сразу. */
     fake_sound_reset();
-    purrgo_menu_controller_on_enter(APP_STATE_MENU_MAIN);
-    st = APP_STATE_MENU_MAIN;
+    st = enter_config();
     CHECK(menu_app_get_draft_sound_level() == PURRGO_SOUND_LEVEL_HIGH);
     for (int i = 0; i < SOUND_ITEM_INDEX; i++) {
         st = press(st, PURRGO_ACTION_DOWN);
@@ -256,7 +268,7 @@ static void test_menu(void)
     fake_sound_reset();
     st = press(st, PURRGO_ACTION_OK);
     CHECK(menu_app_get_draft_sound_level() == PURRGO_SOUND_LEVEL_OFF);
-    menu_app_get_main_item_text(SOUND_ITEM_INDEX, text, sizeof text);
+    menu_app_get_config_item_text(SOUND_ITEM_INDEX, text, sizeof text);
     CHECK(strcmp(text, "SOUND: OFF") == 0);
     CHECK(app_config.sound_level == PURRGO_SOUND_LEVEL_OFF);   /* до BACK, а уже тихо */
     CHECK(fake_sound_total() - fake_sound_count(PURRGO_SOUND_CLICK) == 0);   /* проверочного сигнала нет */

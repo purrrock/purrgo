@@ -7,4 +7,7 @@
 void ui_render_menu_main(gfx_context_t* gfx);
 void ui_menu_main_reset(void);
 
+void ui_render_menu_config(gfx_context_t* gfx);
+void ui_menu_config_reset(void);
+
 #endif // PURRGO_UI_MENU_MAIN_H

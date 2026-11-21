@@ -19,14 +19,28 @@ uint32_t purrgo_system_time_ms(void) { return 0; }
 
 static const char* CFG = "PURRGO.CFG";
 
-/* Позиция пункта SD LOG в главном меню (после LOG, перед MAP DETAILS). */
-#define SD_LOG_ITEM_INDEX 11
+/* Позиция пункта SD LOG в подменю CONFIG (после LOG, перед MAP DIR). */
+#define SD_LOG_ITEM_INDEX 4
 
 static purrgo_state_t press(purrgo_state_t st, purrgo_action_t a)
 {
     purrgo_state_t next = st;
     (void)purrgo_menu_controller_handle_button(st, a, &next);
     return next;
+}
+
+/* Из главного меню в подменю CONFIG (последний пункт главного меню). */
+static purrgo_state_t enter_config(void)
+{
+    purrgo_state_t st = APP_STATE_MENU_MAIN;
+
+    purrgo_menu_controller_on_enter(APP_STATE_MENU_MAIN);
+    for (int i = 0; i < menu_app_get_main_count() - 1; i++) {
+        st = press(st, PURRGO_ACTION_DOWN);
+    }
+    st = press(st, PURRGO_ACTION_OK);
+    CHECK(st == APP_STATE_MENU_CONFIG);
+    return st;
 }
 
 static void test_config_key(void)
@@ -90,30 +104,29 @@ static void test_menu(void)
     purrgo_logger_sd_set_enabled(false);
     CHECK(!app_config.sd_log && !purrgo_logger_sd_enabled());
 
-    purrgo_menu_controller_on_enter(APP_STATE_MENU_MAIN);
-    purrgo_state_t st = APP_STATE_MENU_MAIN;
+    purrgo_state_t st = enter_config();
     CHECK(!menu_app_get_draft_sd_log());
 
     /* Пункт найден по тексту строки (а не только по номеру): "SD LOG: OFF". */
     for (int i = 0; i < SD_LOG_ITEM_INDEX; i++) {
         st = press(st, PURRGO_ACTION_DOWN);
     }
-    CHECK(menu_app_get_main_cursor() == SD_LOG_ITEM_INDEX);
-    menu_app_get_main_item_text(SD_LOG_ITEM_INDEX, text, sizeof text);
+    CHECK(menu_app_get_config_cursor() == SD_LOG_ITEM_INDEX);
+    menu_app_get_config_item_text(SD_LOG_ITEM_INDEX, text, sizeof text);
     CHECK(strcmp(text, "SD LOG: OFF") == 0);
 
     /* OK переключает черновик, конфиг и логгер пока не тронуты. */
     st = press(st, PURRGO_ACTION_OK);
-    CHECK(st == APP_STATE_MENU_MAIN);
+    CHECK(st == APP_STATE_MENU_CONFIG);
     CHECK(menu_app_get_draft_sd_log());
-    menu_app_get_main_item_text(SD_LOG_ITEM_INDEX, text, sizeof text);
+    menu_app_get_config_item_text(SD_LOG_ITEM_INDEX, text, sizeof text);
     CHECK(strcmp(text, "SD LOG: ON") == 0);
     CHECK(!app_config.sd_log);
     CHECK(!purrgo_logger_sd_enabled());
 
-    /* BACK применяет и сохраняет. */
+    /* BACK применяет и сохраняет, возврат в главное меню. */
     st = press(st, PURRGO_ACTION_MENU);
-    CHECK(st == APP_STATE_MAP);
+    CHECK(st == APP_STATE_MENU_MAIN);
     CHECK(app_config.sd_log);
     CHECK(purrgo_logger_sd_enabled());
     {
@@ -123,8 +136,7 @@ static void test_menu(void)
     }
 
     /* Повторный вход: черновик из конфига; выключение тоже применяется по BACK. */
-    purrgo_menu_controller_on_enter(APP_STATE_MENU_MAIN);
-    st = APP_STATE_MENU_MAIN;
+    st = enter_config();
     CHECK(menu_app_get_draft_sd_log());
     for (int i = 0; i < SD_LOG_ITEM_INDEX; i++) {
         st = press(st, PURRGO_ACTION_DOWN);

@@ -85,14 +85,25 @@ static void test_menu(void)
 
     purrgo_menu_controller_on_enter(APP_STATE_MENU_MAIN);
 
-    /* Первый пункт - BOOKS (режим чтения, см. test_book_reader.c), курсор стоит на нём. */
+    /*
+     * Главное меню - только действия: 0 BOOKS (режим чтения, см. test_book_reader.c),
+     * 1 POWER OFF, 2 TRACKER (SCREEN OFF), 3 ROUTE, 4 OPEN TRACK, 5 WAYPOINT, 6 CONFIG.
+     */
     CHECK(menu_app_get_main_cursor() == 0);
+    CHECK(menu_app_get_main_count() == 7);
     purrgo_state_t st = APP_STATE_MENU_MAIN;
-    CHECK(menu_app_get_draft_power_source() == PURRGO_POWER_SRC_LIION_AA);
+    for (int i = 0; i < 10; i++) {   /* с запасом: курсор упирается в последний пункт */
+        st = press(st, PURRGO_ACTION_DOWN);
+    }
+    CHECK(menu_app_get_main_cursor() == menu_app_get_main_count() - 1);
+    char text[64];
+    menu_app_get_main_item_text(menu_app_get_main_count() - 1, text, sizeof text);
+    CHECK(strcmp(text, "CONFIG") == 0);
 
-    /* Второй пункт - источник питания. */
-    st = press(st, PURRGO_ACTION_DOWN);
-    CHECK(menu_app_get_main_cursor() == 1);
+    /* OK на CONFIG: вход в подменю, черновик из конфига, курсор на первом пункте (POWER). */
+    st = press(st, PURRGO_ACTION_OK);
+    CHECK(st == APP_STATE_MENU_CONFIG);
+    CHECK(menu_app_get_config_cursor() == 0);
     CHECK(menu_app_get_draft_power_source() == PURRGO_POWER_SRC_LIION_AA);
 
     /* OK перебирает источники по кругу: LI-ION AA -> LITHIUM -> 5V -> ZINC -> ALKALINE -> NIMH */
@@ -106,47 +117,56 @@ static void test_menu(void)
     CHECK(menu_app_get_draft_power_source() == PURRGO_POWER_SRC_ALKALINE);
     st = press(st, PURRGO_ACTION_OK);
     CHECK(menu_app_get_draft_power_source() == PURRGO_POWER_SRC_NIMH);
-    CHECK(st == APP_STATE_MENU_MAIN);
+    CHECK(st == APP_STATE_MENU_CONFIG);
 
-    /* До MENU конфиг не меняется. */
+    /* До BACK конфиг не меняется. */
     CHECK(app_config.power_source == PURRGO_POWER_SRC_LIION_AA);
 
     /*
-     * Порядок остальных пунктов: 2 POWER OFF, 3 TRACKER (SCREEN OFF), 4 TZ, ...,
-     * 12 SOUND, 13 MAP DETAILS, 14 MAP LAYERS - последний (WAYPOINT добавлен после ROUTE).
+     * Порядок остальных пунктов CONFIG: 1 TZ, 2 SOUND, 3 LOG, 4 SD LOG, 5 MAP DIR,
+     * 6 MAP DETAILS, 7 POI, 8 MAP LAYERS - последний.
      */
     st = press(st, PURRGO_ACTION_DOWN);
-    CHECK(menu_app_get_main_cursor() == 2);
-    st = press(st, PURRGO_ACTION_DOWN);
-    CHECK(menu_app_get_main_cursor() == 3);                 /* TRACKER: OK не нажимаем */
-    st = press(st, PURRGO_ACTION_DOWN);
-    CHECK(menu_app_get_main_cursor() == 4);
+    CHECK(menu_app_get_config_cursor() == 1);
     const int16_t tz0 = menu_app_get_draft_tz_offset();
     st = press(st, PURRGO_ACTION_OK);
-    CHECK(menu_app_get_draft_tz_offset() == tz0 + 15);      /* пункт 4 - TZ */
+    CHECK(menu_app_get_draft_tz_offset() == tz0 + 15);      /* пункт 1 - TZ */
     for (int i = 0; i < 10; i++) {   /* с запасом: курсор упирается в последний пункт */
         st = press(st, PURRGO_ACTION_DOWN);
     }
-    CHECK(menu_app_get_main_cursor() == menu_app_get_main_count() - 1);
-    CHECK(menu_app_get_main_count() == 15);
+    CHECK(menu_app_get_config_cursor() == menu_app_get_config_count() - 1);
+    CHECK(menu_app_get_config_count() == 9);
     st = press(st, PURRGO_ACTION_OK);                          /* MAP LAYERS */
     CHECK(st == APP_STATE_MENU_MAP_LAYERS);
-    st = press(st, PURRGO_ACTION_MENU);                        /* назад в CONFIG */
+    st = press(st, PURRGO_ACTION_MENU);                        /* назад в CONFIG, черновик цел */
+    CHECK(st == APP_STATE_MENU_CONFIG);
+    CHECK(menu_app_get_draft_power_source() == PURRGO_POWER_SRC_NIMH);
+    CHECK(menu_app_get_draft_tz_offset() == tz0 + 15);
+
+    /* BACK из CONFIG применяет и сохраняет, возврат в главное меню. */
+    st = press(st, PURRGO_ACTION_MENU);
     CHECK(st == APP_STATE_MENU_MAIN);
+    CHECK(app_config.power_source == PURRGO_POWER_SRC_NIMH);
+    CHECK(app_config.tz_offset_minutes == tz0 + 15);
 
-    /* Новый вход в меню: черновик заново из конфига, курсор на первом пункте. */
-    purrgo_menu_controller_on_enter(APP_STATE_MENU_MAIN);
-    CHECK(menu_app_get_main_cursor() == 0);
-    CHECK(menu_app_get_draft_power_source() == PURRGO_POWER_SRC_LIION_AA);
+    /* Новый вход в CONFIG: черновик заново из конфига, курсор на первом пункте. */
+    st = press(st, PURRGO_ACTION_OK);                          /* курсор главного меню остался на CONFIG */
+    CHECK(st == APP_STATE_MENU_CONFIG);
+    CHECK(menu_app_get_config_cursor() == 0);
+    CHECK(menu_app_get_draft_power_source() == PURRGO_POWER_SRC_NIMH);
 
-    /* Выбор 5V и MENU: применяется и сохраняется. */
-    st = APP_STATE_MENU_MAIN;
-    st = press(st, PURRGO_ACTION_DOWN);                        /* BOOKS -> POWER */
-    st = press(st, PURRGO_ACTION_OK);                          /* LI-ION AA -> LITHIUM */
-    st = press(st, PURRGO_ACTION_OK);                          /* LITHIUM -> 5V */
+    /* Выбор 5V: NIMH -> LI-ION AA -> LITHIUM -> 5V; BACK применяет и сохраняет. */
+    st = press(st, PURRGO_ACTION_OK);
+    st = press(st, PURRGO_ACTION_OK);
+    st = press(st, PURRGO_ACTION_OK);
+    CHECK(menu_app_get_draft_power_source() == PURRGO_POWER_SRC_EXTERNAL_5V);
+    st = press(st, PURRGO_ACTION_MENU);
+    CHECK(st == APP_STATE_MENU_MAIN);
+    CHECK(app_config.power_source == PURRGO_POWER_SRC_EXTERNAL_5V);
+
+    /* BACK из главного меню - на карту. */
     st = press(st, PURRGO_ACTION_MENU);
     CHECK(st == APP_STATE_MAP);
-    CHECK(app_config.power_source == PURRGO_POWER_SRC_EXTERNAL_5V);
     uint32_t n;
     const uint8_t* d = fake_fs_data(CFG, &n);
     CHECK(d != NULL && strstr((const char*)d, "POWER_SRC=5\n") != NULL);

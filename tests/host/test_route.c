@@ -428,11 +428,11 @@ static void test_route_menu(void)
     put_route("._r00.gpx", "x");
     put_route("gpx", "x");
 
-    /* Пункт ROUTE в меню CONFIG (индекс 6) открывает выбор маршрута. */
+    /* Пункт ROUTE в главном меню (индекс 3) открывает выбор маршрута. */
     purrgo_state_t st = APP_STATE_MENU_MAIN;
     purrgo_menu_controller_on_enter(APP_STATE_MENU_MAIN);
-    for (int i = 0; i < 6; i++) { st = press(st, PURRGO_ACTION_DOWN); }
-    CHECK(menu_app_get_main_cursor() == 6);
+    for (int i = 0; i < 3; i++) { st = press(st, PURRGO_ACTION_DOWN); }
+    CHECK(menu_app_get_main_cursor() == 3);
     st = press(st, PURRGO_ACTION_OK);
     CHECK(st == APP_STATE_MENU_ROUTE_SELECT);
     CHECK(fake_fs_open_dirs() == 1);
@@ -465,7 +465,7 @@ static void test_route_menu(void)
     st = press(st, PURRGO_ACTION_UP);
     CHECK(cur_name()[0] == '\0');
 
-    /* Выбор файла: имя в конфиге, слой Route включается, возврат в CONFIG, каталог закрыт. */
+    /* Выбор файла: имя в конфиге, слой Route включается, возврат в главное меню, каталог закрыт. */
     CHECK(!purrgo_layer_on(app_config.layers, PURRGO_LAYER_ROUTE));
     for (int k = 0; k < 4; k++) { st = press(st, PURRGO_ACTION_DOWN); }   /* r03 */
     st = press(st, PURRGO_ACTION_OK);
@@ -517,18 +517,22 @@ static void test_route_menu(void)
     CHECK(st == APP_STATE_MENU_MAIN);
     CHECK(fake_fs_open_dirs() == 0);
 
-    /* Выбор каталога карт (DIR) после маршрутов снова показывает каталоги, а не файлы. */
+    /* Выбор каталога карт (MAP DIR в CONFIG) после маршрутов снова показывает каталоги, а не файлы. */
     st = APP_STATE_MENU_MAIN;
     purrgo_menu_controller_on_enter(APP_STATE_MENU_MAIN);
+    for (int k = 0; k < 6; k++) { st = press(st, PURRGO_ACTION_DOWN); }   /* CONFIG */
+    st = press(st, PURRGO_ACTION_OK);
+    CHECK(st == APP_STATE_MENU_CONFIG);
     for (int k = 0; k < 5; k++) { st = press(st, PURRGO_ACTION_DOWN); }   /* MAP DIR */
     st = press(st, PURRGO_ACTION_OK);
     CHECK(st == APP_STATE_MENU_DIR_SELECT);
     CHECK(menu_app_get_dir_list(&list) == 0);               /* в fake-ФС нет подкаталогов */
     st = press(st, PURRGO_ACTION_MENU);
+    CHECK(st == APP_STATE_MENU_CONFIG);                      /* назад - в CONFIG, откуда открыли */
     CHECK(fake_fs_open_dirs() == 0);
 }
 
-/* Правки в меню применяются и сохраняются при выходе минуя BACK (TRACKER, BOOKS, POWER OFF). */
+/* Правки в CONFIG применяются и сохраняются по BACK, до выхода в TRACKER из главного меню. */
 static void test_menu_drafts_on_exit(void)
 {
     fake_fs_reset();
@@ -539,11 +543,19 @@ static void test_menu_drafts_on_exit(void)
 
     purrgo_state_t st = APP_STATE_MENU_MAIN;
     purrgo_menu_controller_on_enter(APP_STATE_MENU_MAIN);
-    for (int i = 0; i < 4; i++) { st = press(st, PURRGO_ACTION_DOWN); }   /* TZ */
+    for (int i = 0; i < 6; i++) { st = press(st, PURRGO_ACTION_DOWN); }   /* CONFIG */
+    st = press(st, PURRGO_ACTION_OK);
+    CHECK(st == APP_STATE_MENU_CONFIG);
+    st = press(st, PURRGO_ACTION_DOWN);                                   /* TZ */
     st = press(st, PURRGO_ACTION_OK);
     CHECK(app_config.tz_offset_minutes == tz0);                           /* пока только черновик */
 
-    st = press(st, PURRGO_ACTION_UP);                                     /* TRACKER (SCREEN OFF) */
+    st = press(st, PURRGO_ACTION_MENU);                                   /* BACK: применить и сохранить */
+    CHECK(st == APP_STATE_MENU_MAIN);
+    CHECK(app_config.tz_offset_minutes == tz0 + 15);
+
+    for (int i = 0; i < 4; i++) { st = press(st, PURRGO_ACTION_UP); }     /* TRACKER (SCREEN OFF) */
+    CHECK(menu_app_get_main_cursor() == 2);
     st = press(st, PURRGO_ACTION_OK);
     CHECK(st == APP_STATE_TRACKER_SCREEN_OFF);
     CHECK(app_config.tz_offset_minutes == tz0 + 15);

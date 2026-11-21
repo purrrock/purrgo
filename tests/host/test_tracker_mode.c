@@ -105,22 +105,22 @@ static void test_tracker_mode(void)
     CHECK(purrgo_app_get_gnss_solution()->valid);
     purrgo_app_ui_render(&g, purrgo_app_get_gnss_solution(), NULL);
 
-    /* Меню: сразу после POWER OFF идёт пункт трекера. */
+    /* Главное меню: сразу после POWER OFF идёт пункт трекера. */
     purrgo_app_handle_button(PURRGO_BTN_KEY4_LONG);     /* карта -> Trip computer */
     purrgo_app_handle_button(PURRGO_BTN_KEY4_SHORT);    /* Trip computer -> меню */
     CHECK(purrgo_app_get_state() == APP_STATE_MENU_MAIN);
-    menu_app_get_main_item_text(2, text, sizeof text);
+    menu_app_get_main_item_text(1, text, sizeof text);
     CHECK(strcmp(text, "POWER OFF") == 0);
-    menu_app_get_main_item_text(3, text, sizeof text);
+    menu_app_get_main_item_text(2, text, sizeof text);
     CHECK(strncmp(text, "TRACKER", 7) == 0);
 
     /* Вне режима трекера комбинация ничего не делает. */
     purrgo_app_handle_button(PURRGO_BTN_COMBO_K1_K4);
     CHECK(purrgo_app_get_state() == APP_STATE_MENU_MAIN);
 
-    /* Курсор на пункт трекера (3 раза вниз) и выбор. */
-    for (int i = 0; i < 3; i++) { purrgo_app_handle_button(PURRGO_BTN_KEY2_SHORT); }
-    CHECK(menu_app_get_main_cursor() == 3);
+    /* Курсор на пункт трекера (2 раза вниз) и выбор. */
+    for (int i = 0; i < 2; i++) { purrgo_app_handle_button(PURRGO_BTN_KEY2_SHORT); }
+    CHECK(menu_app_get_main_cursor() == 2);
     CHECK(!purrgo_app_tracker_mode_active());
     CHECK(purrgo_logger_get_mode() == LOGGER_MODE_STANDARD);
     purrgo_app_handle_button(PURRGO_BTN_KEY3_SHORT);
@@ -205,7 +205,7 @@ static void test_tracker_exit_restores_off(void)
 
     purrgo_app_handle_button(PURRGO_BTN_KEY4_LONG);
     purrgo_app_handle_button(PURRGO_BTN_KEY4_SHORT);
-    for (int i = 0; i < 3; i++) { purrgo_app_handle_button(PURRGO_BTN_KEY2_SHORT); }
+    for (int i = 0; i < 2; i++) { purrgo_app_handle_button(PURRGO_BTN_KEY2_SHORT); }
     purrgo_app_handle_button(PURRGO_BTN_KEY3_SHORT);
     CHECK(purrgo_app_get_state() == APP_STATE_TRACKER_SCREEN_OFF);
 
@@ -250,7 +250,7 @@ static void test_tracker_sparse_fixes(void)
     purrgo_app_ui_render(&g, purrgo_app_get_gnss_solution(), NULL);
     purrgo_app_handle_button(PURRGO_BTN_KEY4_LONG);
     purrgo_app_handle_button(PURRGO_BTN_KEY4_SHORT);
-    for (int i = 0; i < 3; i++) { purrgo_app_handle_button(PURRGO_BTN_KEY2_SHORT); }
+    for (int i = 0; i < 2; i++) { purrgo_app_handle_button(PURRGO_BTN_KEY2_SHORT); }
     purrgo_app_handle_button(PURRGO_BTN_KEY3_SHORT);
     CHECK(purrgo_app_tracker_mode_active());
     CHECK(fake_gnss_profile_last() == (int)PURRGO_GNSS_PROFILE_TRACKER);

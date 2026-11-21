@@ -281,7 +281,7 @@ static bool state_keymap_screen(purrgo_state_t state, app_keymap_screen_t* scree
 
 /*
  * Читалка: кнопки (короткие и длинные) разбирает сама читалка, а не общая
- * схема "кнопка -> действие". Выход из читалки - в меню CONFIG.
+ * схема "кнопка -> действие". Выход из читалки - в главное меню.
  */
 static void handle_book_button(purrgo_btn_t button, purrgo_state_t prev_state) {
     purrgo_state_t next_state = current_state;
@@ -684,6 +684,7 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
             break;  // снимок путевого компьютера обновлён выше, одинаково для всех экранов
 
         case APP_STATE_MENU_MAIN:
+        case APP_STATE_MENU_CONFIG:
         case APP_STATE_MENU_DIR_SELECT:
         case APP_STATE_MENU_MAP_LAYERS:
         case APP_STATE_MENU_ROUTE_SELECT:

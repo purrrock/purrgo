@@ -14,10 +14,14 @@
 static ui_rows_t s_rows;
 
 /* Первая строка списка и шаг строк, px. */
-#define CONFIG_ROW_Y0    25
-#define CONFIG_ROW_STEP  15
+#define MENU_ROW_Y0    25
+#define MENU_ROW_STEP  15
 
 void ui_menu_main_reset(void) {
+    ui_rows_reset(&s_rows);
+}
+
+void ui_menu_config_reset(void) {
     ui_rows_reset(&s_rows);
 }
 
@@ -38,14 +42,22 @@ static void draw_item(gfx_context_t* gfx, int cursor, int row, const char* text)
     gfx_draw_string(
         gfx,
         10,
-        (int16_t)(CONFIG_ROW_Y0 + row * CONFIG_ROW_STEP),
+        (int16_t)(MENU_ROW_Y0 + row * MENU_ROW_STEP),
         text
     );
 
     ui_rows_update(&s_rows, row, cursor == row, text);
 }
 
-void ui_render_menu_main(gfx_context_t* gfx)
+typedef void (*item_text_fn)(int index, char* buf, size_t size);
+
+/*
+ * Общая отрисовка списка пунктов (главное меню и CONFIG): пункты берутся из таблиц
+ * в menu_main.c и menu_config.c, порядок строк и их число определяются ими, здесь
+ * ничего не нужно менять при добавлении пункта.
+ */
+static void render_list(gfx_context_t* gfx, const char* title, int cursor, int count,
+                        item_text_fn item_text)
 {
     char buf[PURRGO_FS_MAX_PATH + 64];
 
@@ -53,22 +65,27 @@ void ui_render_menu_main(gfx_context_t* gfx)
     gfx_clear(gfx);
     gfx_set_color(gfx, 0, 3);
 
-    const int cursor = menu_app_get_main_cursor();
-    const int count  = menu_app_get_main_count();
+    gfx_draw_string(gfx, 10, 10, title);
 
-    gfx_draw_string(gfx, 10, 10, "==== MENU ====");
-
-    /*
-     * Пункты берутся из таблицы в menu_main.c: порядок строк и их число
-     * определяются ей, здесь ничего не нужно менять при добавлении пункта.
-     */
-    ui_rows_begin(&s_rows, CONFIG_ROW_Y0, CONFIG_ROW_STEP);
+    ui_rows_begin(&s_rows, MENU_ROW_Y0, MENU_ROW_STEP);
 
     for (int row = 0; row < count; row++) {
-        menu_app_get_main_item_text(row, buf, sizeof(buf));
+        item_text(row, buf, sizeof(buf));
         purrgo_utf8_to_pgo_inplace(buf);  /* имена с SD: UTF-8 -> PurrGO-256 */
         draw_item(gfx, cursor, row, buf);
     }
 
     ui_rows_end(&s_rows, count);
+}
+
+void ui_render_menu_main(gfx_context_t* gfx)
+{
+    render_list(gfx, "==== MENU ====", menu_app_get_main_cursor(),
+                menu_app_get_main_count(), menu_app_get_main_item_text);
+}
+
+void ui_render_menu_config(gfx_context_t* gfx)
+{
+    render_list(gfx, "==== CONFIG ====", menu_app_get_config_cursor(),
+                menu_app_get_config_count(), menu_app_get_config_item_text);
 }

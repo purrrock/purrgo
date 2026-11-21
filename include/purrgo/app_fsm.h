@@ -16,7 +16,8 @@
 typedef enum {
     APP_STATE_MAP,            // Стартовая страница: Карта (viewport) + Status Bar (сверху) + Панель данных (снизу)
     APP_STATE_TRIP_COMPUTER,  // Маршрутный компьютер: Сетка полей (Data fields) с навигационной статистикой
-    APP_STATE_MENU_MAIN,      // Главное меню устройства (см. menu_main.c): книги, питание, настройки, выбор карты и маршрута
+    APP_STATE_MENU_MAIN,      // Главное меню устройства (см. menu_main.c): действия - книги, выключение, трекер, маршрут, цель, вход в CONFIG
+    APP_STATE_MENU_CONFIG,    // Подменю CONFIG (см. menu_config.c): настройки устройства, карты и логов
     APP_STATE_MENU_DIR_SELECT, // Подсостояние: Файловый браузер для выбора каталога с векторными картами
     APP_STATE_MENU_MAP_LAYERS, // Подсостояние: Экран настройки видимости слоев карты
     APP_STATE_MENU_ROUTE_SELECT, // Подсостояние: Выбор GPX-файла маршрута из каталога ROUTES

@@ -241,7 +241,7 @@ static void test_config_layers(void) {
     CHECK(purrgo_menu_controller_handle_button(APP_STATE_MENU_MAP_LAYERS, PURRGO_ACTION_OK, &next));
     CHECK(app_config.layers == saved);                                    /* до MENU конфиг не меняется */
     CHECK(purrgo_menu_controller_handle_button(APP_STATE_MENU_MAP_LAYERS, PURRGO_ACTION_MENU, &next));
-    CHECK(next == APP_STATE_MENU_MAIN);
+    CHECK(next == APP_STATE_MENU_CONFIG);   /* MAP LAYERS открывается из CONFIG */
     CHECK(!layer(PURRGO_LAYER_LANDUSE) && !layer(PURRGO_LAYER_TRACK));
     CHECK(!layer(PURRGO_LAYER_WATER) && !layer(PURRGO_LAYER_ROADS));
     d = fake_fs_data(CFG, &n);

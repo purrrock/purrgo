@@ -3,7 +3,7 @@
 
 /*
  * Внутренний интерфейс между диспетчером меню (menu_controller.c) и экранами
- * (menu_main.c, menu_layers.c, menu_dir_browser.c). Снаружи ядра не нужен.
+ * (menu_main.c, menu_config.c, menu_layers.c, menu_dir_browser.c). Снаружи ядра не нужен.
  */
 
 #include "purrgo/menu_controller.h"
@@ -27,7 +27,25 @@ typedef struct {
     bool (*on_button)(purrgo_action_t button, purrgo_state_t* next);
 } menu_screen_t;
 
+/*
+ * Пункт списочного экрана меню (главное меню и CONFIG описываются таблицами таких пунктов).
+ */
+typedef struct {
+    /* Заголовок. Показывается, если format == NULL. */
+    const char* title;
+
+    /* Формирует текст строки со значением (UTF-8). Может быть NULL. */
+    void (*format)(char* buf, size_t size);
+
+    /*
+     * Нажатие SEL. Для перехода на другой экран вызвать menu_goto(next, ...).
+     * Может быть NULL (пункт только показывает значение).
+     */
+    void (*on_select)(purrgo_state_t* next);
+} menu_item_t;
+
 extern const menu_screen_t menu_screen_main;
+extern const menu_screen_t menu_screen_config;
 extern const menu_screen_t menu_screen_map_layers;
 extern const menu_screen_t menu_screen_dir_select;
 extern const menu_screen_t menu_screen_route_select;

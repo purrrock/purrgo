@@ -8,11 +8,13 @@
  * Устройство экранов:
  *   - menu_controller.c - диспетчер: по состоянию находит экран в таблице
  *     и передаёт ему кнопки и событие входа;
- *   - menu_main.c       - главное меню (таблица пунктов);
+ *   - menu_main.c       - главное меню (действия: книги, выключение, трекер, маршрут, цель);
+ *   - menu_config.c     - подменю CONFIG (настройки устройства, логов и карты);
  *   - menu_layers.c     - экран слоёв карты;
  *   - menu_dir_browser.c - экраны выбора каталога карт и файла маршрута.
  *
- * Как добавить пункт в главное меню - см. комментарий в menu_main.c.
+ * Как добавить пункт в главное меню - см. комментарий в menu_main.c, настройку -
+ * в menu_config.c.
  */
 
 #include "purrgo/app_fsm.h"
@@ -59,10 +61,15 @@ bool purrgo_menu_controller_handle_button(
 /* Главное меню. */
 int menu_app_get_main_count(void);
 int menu_app_get_main_cursor(void);
-/* Текст пункта index (UTF-8, значение берётся из черновика настроек). */
+/* Текст пункта index (UTF-8). */
 void menu_app_get_main_item_text(int index, char* buf, size_t size);
 
-/* Черновики настроек, которые правятся в главном меню. */
+/* Подменю CONFIG: настройки. Пункты берутся из таблицы в menu_config.c. */
+int menu_app_get_config_count(void);
+int menu_app_get_config_cursor(void);
+void menu_app_get_config_item_text(int index, char* buf, size_t size);
+
+/* Черновики настроек, которые правятся в CONFIG. */
 int16_t menu_app_get_draft_tz_offset(void);
 purrgo_power_source_t menu_app_get_draft_power_source(void);
 bool menu_app_get_draft_sd_log(void);

@@ -448,6 +448,15 @@ static void select_map_dir(const char* name)
     purrgo_config_save();
 }
 
+/*
+ * Куда вернуться из браузера: выбор каталога карт открывается из CONFIG, выбор
+ * маршрута и открытие трека - из главного меню.
+ */
+static purrgo_state_t browser_parent_state(void)
+{
+    return (browse_kind == BROWSE_MAP_DIRS) ? APP_STATE_MENU_CONFIG : APP_STATE_MENU_MAIN;
+}
+
 static void browser_select(purrgo_state_t* next)
 {
     if (dir_page_count <= 0 ||
@@ -473,8 +482,8 @@ static void browser_select(purrgo_state_t* next)
         select_map_dir(name);
     }
 
+    *next = browser_parent_state();
     leave_browser();
-    *next = APP_STATE_MENU_MAIN;
 }
 
 static bool on_button(purrgo_action_t button, purrgo_state_t* next)
@@ -493,8 +502,8 @@ static bool on_button(purrgo_action_t button, purrgo_state_t* next)
             return true;
 
         case PURRGO_ACTION_MENU:
+            *next = browser_parent_state();
             leave_browser();
-            *next = APP_STATE_MENU_MAIN;
             purrgo_ui_dirty_mark(UI_DIRTY_MAP);
             return true;
 

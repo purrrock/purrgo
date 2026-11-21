@@ -34,7 +34,7 @@ static bool on_button(purrgo_action_t button, purrgo_state_t* next)
         case PURRGO_ACTION_MENU:
             app_config.layers = draft_layers;
             purrgo_config_save();
-            *next = APP_STATE_MENU_MAIN;
+            *next = APP_STATE_MENU_CONFIG;   /* MAP LAYERS открывается из CONFIG */
             return true;
 
         default:
