@@ -162,7 +162,7 @@ static void ib_tree(ib_t *b, const uint8_t *leaves, uint32_t n, uint32_t leaf_fa
         for (uint32_t j = 0; j < t->count; j++) {
             const uint8_t *nd = leaves + (t->first + j) * 25u;
             int32_t bb[4];
-            for (int q = 0; q < 4; q++) { bb[q] = (int32_t)(nd[4*q] | nd[4*q+1] << 8 | nd[4*q+2] << 16 | (uint32_t)nd[4*q+3] << 24); }
+            for (int q = 0; q < 4; q++) { bb[q] = (int32_t)((uint32_t)nd[4*q] | (uint32_t)nd[4*q+1] << 8 | (uint32_t)nd[4*q+2] << 16 | (uint32_t)nd[4*q+3] << 24); }
             bb_union(t->bb, bb, j == 0);
         }
     }
@@ -229,7 +229,7 @@ static void build_idx(blob_t *o, const uint8_t *nodes, uint32_t count)
 static uint32_t lod_at(const blob_t *o, int lod)
 {
     const uint8_t *h = o->d + 8 + 4 * lod;
-    return (uint32_t)(h[0] | h[1] << 8 | h[2] << 16 | (uint32_t)h[3] << 24);
+    return (uint32_t)h[0] | (uint32_t)h[1] << 8 | (uint32_t)h[2] << 16 | (uint32_t)h[3] << 24;
 }
 
 #define GEOM_V1 8u   /* смещение тела геометрии относительно 32 */

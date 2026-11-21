@@ -636,9 +636,16 @@ sd_spi_res_t sd_spi_write(sd_spi_t *sd, const uint8_t *buf, uint32_t sector, uin
             }
         }
 
+        /*
+         * Токен остановки шлётся и после сбоя блока: иначе карта остаётся в состоянии
+         * CMD25 и не реагирует на следующие команды. Результат этой попытки не затирает
+         * исходную ошибку.
+         */
+        const sd_spi_res_t stop = tx_data_block(sd, NULL, TOKEN_STOP_MULTI);
+
         if (res == SD_SPI_OK)
         {
-            res = tx_data_block(sd, NULL, TOKEN_STOP_MULTI);
+            res = stop;
         }
     }
 

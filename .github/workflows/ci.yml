@@ -32,6 +32,7 @@ jobs:
           sudo apt-get install -y python3-pil   # обложка и иллюстрации: без Pillow тесты картинок пропускаются
           python3 tests/check_pgo_text_table.py
           python3 -m unittest tests/test_book_compiler.py
+          python3 -m unittest tests/test_map_compiler_v4.py tests/test_sim_map_io.py tests/test_map_viewer_v4.py
 
   # Эмулятор для ПК (проверяет, что ядро собирается вместе с SDL2-приложением).
   build-pc:
