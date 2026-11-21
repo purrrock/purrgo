@@ -22,6 +22,14 @@
 
 purrgo_config_t app_config;
 
+/* Хук перед сохранением (см. purrgo_config_set_presave_hook()). */
+static purrgo_config_presave_fn s_presave_hook;
+
+void purrgo_config_set_presave_hook(purrgo_config_presave_fn fn)
+{
+    s_presave_hook = fn;
+}
+
 
 /*
  * Слои карты: единственная таблица для файла PURRGO.CFG, меню MAP LAYERS и
@@ -159,6 +167,9 @@ void purrgo_config_init(void)
     /* Полный сброс: поля, которых нет в списке ниже, тоже обнуляются. */
     memset(&app_config, 0, sizeof app_config);
 
+    /* Хук привязан к состоянию контроллера карты, а оно сбрасывается вместе с настройками. */
+    s_presave_hook = NULL;
+
     /*
      * Значения по умолчанию.
      */
@@ -232,7 +243,7 @@ void purrgo_config_init(void)
     app_config.book_page = 0;
 
     /*
-     * Последние координаты.
+     * Центр карты на холодном старте, пока в PURRGO.CFG нет сохранённого.
      */
     app_config.last_lat_1e7 = 537135000;
     app_config.last_lon_1e7 = 284199000;
@@ -709,6 +720,11 @@ bool purrgo_config_save(void)
     if (purrgo_supply_storage_blocked()) {
         PURRGO_LOGW("purrgo_config_save: skipped, SD writes stopped (low supply)\n\r");
         return false;
+    }
+
+    /* Актуальный центр карты попадает в LAST_LAT_1E7 / LAST_LON_1E7 при каждой записи файла. */
+    if (s_presave_hook != NULL) {
+        s_presave_hook();
     }
 
     PURRGO_LOG(

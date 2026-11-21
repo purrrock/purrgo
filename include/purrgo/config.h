@@ -88,12 +88,14 @@ typedef struct {
     char    wpt_name[PURRGO_WPT_NAME_MAX];
 
     /*
-     * Последняя широта для центрирования при холодном старте.
+     * Центр карты (широта) для холодного старта: при старте карта открывается с этого центра.
+     * Ключ LAST_LAT_1E7 в PURRGO.CFG. Контроллер карты обновляет значение перед каждым
+     * сохранением PURRGO.CFG (см. purrgo_config_set_presave_hook()), в том числе при выключении.
      */
     int32_t last_lat_1e7;
 
     /*
-     * Последняя долгота для центрирования при холодном старте.
+     * Центр карты (долгота) для холодного старта. Ключ LAST_LON_1E7 в PURRGO.CFG, обновляется так же.
      */
     int32_t last_lon_1e7;
 
@@ -158,6 +160,16 @@ void purrgo_config_init(void);
  */
 bool purrgo_config_load(void);
 bool purrgo_config_save(void);
+
+/*
+ * Хук, который purrgo_config_save() вызывает перед формированием файла (после проверки низкого
+ * питания). Контроллер карты через него переносит текущий центр карты в app_config, поэтому
+ * PURRGO.CFG при каждой записи (меню, выключение, читалка) получает актуальный центр. NULL - без
+ * хука. purrgo_config_init() (в том числе из purrgo_config_load()) хук сбрасывает: его регистрирует
+ * purrgo_map_controller_init() после загрузки конфига.
+ */
+typedef void (*purrgo_config_presave_fn)(void);
+void purrgo_config_set_presave_hook(purrgo_config_presave_fn fn);
 
 
 #endif /* PURRGO_CONFIG_H */

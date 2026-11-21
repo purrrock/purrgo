@@ -30,6 +30,15 @@ static const char* scale_labels[PURRGO_MAP_SCALE_COUNT] = {
     "20KM", "50KM", "100KM", "200KM", "500KM", "1000KM", "2000KM", "5000KM", "10000KM"
 };
 
+/*
+ * Перед каждой записью PURRGO.CFG (purrgo_config_save(): меню, выключение, читалка) переносим
+ * текущий центр карты в настройки: при следующем включении карта откроется там же.
+ */
+static void store_center_to_config(void) {
+    app_config.last_lat_1e7 = map_center_lat_1e7;
+    app_config.last_lon_1e7 = map_center_lon_1e7;
+}
+
 void purrgo_map_controller_init(void) {
     map_center_lat_1e7 = app_config.last_lat_1e7;
     map_center_lon_1e7 = app_config.last_lon_1e7;
@@ -38,6 +47,9 @@ void purrgo_map_controller_init(void) {
     purrgo_ui_dirty_clear(UI_DIRTY_TRACK);
     memset(&prev_fix_for_map, 0, sizeof prev_fix_for_map);
     purrgo_ui_dirty_mark(UI_DIRTY_MAP);
+
+    /* Хук после загрузки конфига: purrgo_config_init() его сбрасывает. */
+    purrgo_config_set_presave_hook(store_center_to_config);
 }
 
 int32_t map_app_get_map_center_lat(void) {
