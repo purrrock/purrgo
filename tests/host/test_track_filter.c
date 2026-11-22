@@ -481,8 +481,75 @@ static void test_course_all_quadrants(void)
     }
 }
 
+/* "Мягкая" стоянка: эпоха со скоростью ниже порога проходит, если ушла от последней точки на 15 м и больше. */
+static void test_stationary_gate(void)
+{
+    purrgo_gnss_solution_t f;
+
+    /* Внутри зазора - стоянка (скорость 0,1 уз, 10 м от последней записанной). */
+    begin(LOGGER_MODE_STANDARD);
+    f = mk(1, 10, 0); f.speed_knots = 10;
+    CHECK(!purrgo_logger_add_point(&f));
+    /* За зазором (20 м): приёмник "стоит", но позиция ушла - это движение (старт при плохом приёме). */
+    f = mk(2, 20, 0); f.speed_knots = 10;
+    CHECK(purrgo_logger_add_point(&f));
+    purrgo_logger_stop();
+
+    /* То же при известной sAcc: скорость в пределах 1,5 sAcc, но позиция ушла на 20 м. */
+    begin(LOGGER_MODE_STANDARD);
+    f = mk(1, 10, 0); f.speed_knots = 150; f.acc_valid = true; f.hacc_mm = 9000; f.sacc_mm_s = 1500;
+    CHECK(!purrgo_logger_add_point(&f));
+    f = mk(2, 20, 0); f.speed_knots = 150; f.acc_valid = true; f.hacc_mm = 9000; f.sacc_mm_s = 1500;
+    CHECK(purrgo_logger_add_point(&f));
+    purrgo_logger_stop();
+
+    /* Зазор растёт с hAcc (1,5 hAcc): при hAcc 20 м он 30 м - 20 м от последней точки ещё шум, 35 м - уже нет. */
+    begin(LOGGER_MODE_STANDARD);
+    f = mk(1, 20, 0); f.speed_knots = 10; f.acc_valid = true; f.hacc_mm = 20000; f.sacc_mm_s = 1500;
+    CHECK(!purrgo_logger_add_point(&f));
+    f = mk(2, 35, 0); f.speed_knots = 10; f.acc_valid = true; f.hacc_mm = 20000; f.sacc_mm_s = 1500;
+    CHECK(purrgo_logger_add_point(&f));
+    purrgo_logger_stop();
+
+    /* Шум на месте (до 14 м) по-прежнему не пишется. */
+    begin(LOGGER_MODE_STANDARD);
+    for (int t = 1; t <= 10; t++) {
+        f = mk((uint32_t)t, (t & 1) ? 9 : -9, (t & 2) ? 7 : -7); f.speed_knots = 20;
+        CHECK(!purrgo_logger_add_point(&f));
+    }
+    purrgo_logger_stop();
+}
+
+/* Курс как направление - только при хорошей точности позиции (hAcc <= 5 м). */
+static void test_course_needs_good_accuracy(void)
+{
+    purrgo_gnss_solution_t f;
+
+    /* Хорошая точность (hAcc 3 м): курс на север известен, точка по прямой не пишется. */
+    purrgo_logger_reset();
+    fake_fs_reset();
+    app_config.tz_offset_minutes = 0;
+    f = with_course(mk(0, 0, 0), 0, 500); f.acc_valid = true; f.hacc_mm = 3000; f.sacc_mm_s = 100;
+    CHECK(purrgo_logger_start(&f) && purrgo_logger_add_point(&f));
+    f = with_course(mk(1, 10, 0), 0, 500); f.acc_valid = true; f.hacc_mm = 3000; f.sacc_mm_s = 100;
+    CHECK(!purrgo_logger_add_point(&f));
+    purrgo_logger_stop();
+
+    /* Плохая точность (hAcc 8 м): курс не используется, направление неизвестно - вторая точка пишется. */
+    purrgo_logger_reset();
+    fake_fs_reset();
+    app_config.tz_offset_minutes = 0;
+    f = with_course(mk(0, 0, 0), 0, 500); f.acc_valid = true; f.hacc_mm = 8000; f.sacc_mm_s = 100;
+    CHECK(purrgo_logger_start(&f) && purrgo_logger_add_point(&f));
+    f = with_course(mk(1, 10, 0), 0, 500); f.acc_valid = true; f.hacc_mm = 8000; f.sacc_mm_s = 100;
+    CHECK(purrgo_logger_add_point(&f));
+    purrgo_logger_stop();
+}
+
 int main(void)
 {
+    test_stationary_gate();
+    test_course_needs_good_accuracy();
     test_stationary_follows_sacc();
     test_course_direction();
     test_course_all_quadrants();

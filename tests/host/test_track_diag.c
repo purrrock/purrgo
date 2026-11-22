@@ -66,7 +66,7 @@ static void test_diag_logs_every_epoch_with_reasons(void)
     f = mk(3, 30); f.fix_type = 2;      CHECK(!purrgo_logger_add_point(&f));   /* #3: 2D */
     f = mk(4, 40); f.hdop_100 = 700; f.satellites_tracked = 3;
                                         CHECK(!purrgo_logger_add_point(&f));   /* #4: HDOP и спутники */
-    f = mk(5, 50); f.speed_knots = 10;  CHECK(!purrgo_logger_add_point(&f));   /* #5: стоим */
+    f = mk(5, 12); f.speed_knots = 10;  CHECK(!purrgo_logger_add_point(&f));   /* #5: стоим (2 м от последней записанной: внутри зазора) */
     f = mk(6, 0);  f.lat_1e7 += 1000000;CHECK(!purrgo_logger_add_point(&f));   /* #6: выброс (111 км за 1 с) */
 
     CHECK(purrgo_logger_get_track_point_count() == 2);            /* экранный трек - только записанные */

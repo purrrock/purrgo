@@ -255,11 +255,29 @@ static bool finalize_active_file(void) {
  * и порог 0,5 уз не отбрасывал почти ничего. 1,5 - запас до обрыва: при 2,5 ходьба в плохом
  * участке уже принимается за стоянку (см. docs/measurements/tracks/). Порог не выше
  * LOGGER_STATIONARY_MAX_KNOTS_100, чтобы недостоверная sAcc не "останавливала" велосипед.
+ *
+ * Стоянка "мягкая": эпоха, которую скорость считает стоянкой, всё же проходит дальше, если ушла от
+ * последней записанной точки на зазор и больше - шум на месте обычно такого смещения не даёт, а
+ * реальный старт движения при плохом приёме (скорость ~1 м/с, sAcc ~1,5 м/с) иначе терялся бы
+ * целиком (велосипед, плохой приём: без зазора 57 с без точек при проезде ~76 м, отклонение до 35 м).
+ * Зазор - не меньше LOGGER_STATIONARY_GATE_M и не меньше LOGGER_STATIONARY_GATE_HACC_X10/10 * hAcc:
+ * реальная ошибка на месте ~1,2-1,5 hAcc, смещение меньше этого от шума не отличить. Значения -
+ * по полевым трекам (docs/measurements/tracks/filter-tuning.md): зазор 15 м даёт на стоянке 13 мин
+ * 13 точек вместо 44 (правило "0,5 уз"), при плохом приёме на месте (hAcc ~16 м) 20 точек за 20 мин
+ * вместо 87; при зазоре 2 hAcc и больше геометрия езды при плохом приёме начинает теряться.
  */
 #define LOGGER_STATIONARY_SACC_X10  15
 #define LOGGER_STATIONARY_MAX_KNOTS_100 400
-/* Курс приёмника как направление отрезка - от 2 м/с (на меньшей скорости он шумит). */
+#define LOGGER_STATIONARY_GATE_M    15U
+#define LOGGER_STATIONARY_GATE_HACC_X10 15
+/*
+ * Курс приёмника как направление отрезка - от 2 м/с (на меньшей скорости он шумит) и только при
+ * хорошей точности позиции (hAcc <= 5 м, если она известна): при плохом приёме курс шумит и
+ * выигрыша не даёт (велосипед, hAcc ~10 м: отклонение в движении 10,3 м с курсом против 8,6 м
+ * без него), при хорошем - убирает отставание хорды на дугах (hAcc ~1 м: p99 10,5 -> 6,2 м).
+ */
 #define LOGGER_COURSE_MIN_KNOTS_100 389
+#define LOGGER_COURSE_MAX_HACC_MM   5000U
 #define LOGGER_MAX_SPEED_MPS       500U    /* быстрее - выброс (скачок координат) */
 #define LOGGER_OUTLIER_RESET_COUNT 5U      /* столько согласованных выбросов подряд - сброс опорной точки */
 
@@ -294,7 +312,7 @@ static const logger_filter_params_t* filter_params(void) {
 #define LOGGER_REJ_FIX_TYPE   0x01U   /* fix_type < 3 */
 #define LOGGER_REJ_HDOP       0x02U   /* HDOP > 5.0 */
 #define LOGGER_REJ_SATS       0x04U   /* меньше 4 спутников в решении */
-#define LOGGER_REJ_STATIONARY 0x08U   /* стоим: скорость < max(0.5 уз, 1.5 sAcc), см. stationary_threshold_100 */
+#define LOGGER_REJ_STATIONARY 0x08U   /* стоим: скорость ниже порога (stationary_threshold_100) и смещение в пределах зазора (stationary_gate_m) */
 #define LOGGER_REJ_OUTLIER    0x10U   /* скачок быстрее LOGGER_MAX_SPEED_MPS */
 #define LOGGER_REJ_DECIMATED  0x20U   /* трек не изменился заметно (прореживание) */
 #define LOGGER_REJ_HACC       0x40U   /* hAcc (UBX-NAV-PVT) выше PURRGO_GNSS_TRACK_MAX_HACC_M */
@@ -334,6 +352,18 @@ static int32_t stationary_threshold_100(const purrgo_gnss_solution_t* fix) {
     return thr;
 }
 
+/* Зазор "мягкой" стоянки, м: см. LOGGER_STATIONARY_GATE_M. */
+static uint32_t stationary_gate_m(const purrgo_gnss_solution_t* fix) {
+    uint32_t gate = LOGGER_STATIONARY_GATE_M;
+    if (fix->acc_valid) {
+        uint32_t by_hacc = (uint32_t)(((uint64_t)fix->hacc_mm * LOGGER_STATIONARY_GATE_HACC_X10 / 10U) / 1000U);
+        if (by_hacc > gate) {
+            gate = by_hacc;
+        }
+    }
+    return gate;
+}
+
 /* round(1024 * sin(a)), a = 0..90 градусов. */
 static const int16_t SIN1024[91] = {
     0, 18, 36, 54, 71, 89, 107, 125, 143, 160, 178, 195, 213, 230, 248,
@@ -365,6 +395,9 @@ static int32_t sin1024_c100(uint32_t c100) {
 /* Направление по курсу GNSS (восток, север); false - курса нет или скорость мала. */
 static bool course_direction(const purrgo_gnss_solution_t* fix, int32_t* e, int32_t* n) {
     if (!fix->course_valid || fix->course_deg_100 < 0 || fix->speed_knots < LOGGER_COURSE_MIN_KNOTS_100) {
+        return false;
+    }
+    if (fix->acc_valid && fix->hacc_mm > LOGGER_COURSE_MAX_HACC_MM) {
         return false;
     }
     uint32_t c = (uint32_t)fix->course_deg_100 % 36000U;
@@ -813,7 +846,8 @@ bool purrgo_logger_add_point(const purrgo_gnss_solution_t* fix) {
             outlier_count = 0;
 
             // Стоим на месте: смещение в пределах шума GNSS не пишем, остаётся точка по таймауту.
-            if (!timeout && fix->speed_knots < stationary_threshold_100(fix)) {
+            if (!timeout && fix->speed_knots < stationary_threshold_100(fix) &&
+                dist_m < stationary_gate_m(fix)) {
                 return reject_point(fix, LOGGER_REJ_STATIONARY);
             }
 
