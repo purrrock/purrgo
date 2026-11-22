@@ -12,6 +12,8 @@
  *     (пусто)       обычная прошивка, главный цикл навигатора;
  *     SD_SPEED      скорость чтения microSD (сырые сектора и FatFs);
  *     SD_POWER      циклы выключения/включения питания microSD и повторной инициализации;
+ *     GNSS_BBR      сохраняет ли GNSS-модуль BBR, часы и эфемериды при EN = Low и в PSMOO
+ *                   (hw_test_gnss.c; вывод в UART1 и на дисплей);
  *     EINK_4GRAY    самотест 4-gray    (PURRGO_EINK_SELFTEST_4GRAY);
  *     EINK_PARTIAL  самотест partial   (PURRGO_EINK_SELFTEST_PARTIAL).
  *
@@ -40,6 +42,11 @@
 
 /* Запускает выбранный тест. Не возвращает управление. */
 void purrgo_hw_test_run(void) __attribute__((noreturn));
+
+#ifdef PURRGO_HW_TEST_GNSS_BBR
+/* Тест GNSS_BBR (hw_test_gnss.c); не возвращает управление. */
+void purrgo_hw_test_gnss_bbr(void) __attribute__((noreturn));
+#endif
 
 #endif /* PURRGO_HW_TEST_ENABLED */
 

@@ -109,7 +109,7 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
 # инициализации периферии выполняется один тест (см. port/app/hw_test.h).
 #   cmake --preset stm32u5-release -DPURRGO_HW_TEST=SD_SPEED
 # Пустое значение - обычная прошивка. Смена значения пересобирает проект.
-set(PURRGO_HW_TEST_NAMES SD_SPEED SD_POWER EINK_4GRAY EINK_PARTIAL)
+set(PURRGO_HW_TEST_NAMES SD_SPEED SD_POWER GNSS_BBR EINK_4GRAY EINK_PARTIAL)
 set(PURRGO_HW_TEST "" CACHE STRING
     "Hardware test instead of the navigator: ${PURRGO_HW_TEST_NAMES} (empty = normal firmware)")
 set_property(CACHE PURRGO_HW_TEST PROPERTY STRINGS "" ${PURRGO_HW_TEST_NAMES})

@@ -630,6 +630,8 @@ static void run_sd_power(void)
     HT("HWTEST SD_POWER done: %s (%u failed cycles)\r\n", (fails == 0U) ? "PASS" : "FAIL", fails);
 }
 
+#elif defined(PURRGO_HW_TEST_GNSS_BBR)
+/* Тест целиком в hw_test_gnss.c. */
 #else
 #error "PURRGO_HW_TEST_ENABLED is set, but no PURRGO_HW_TEST_<NAME> is defined"
 #endif
@@ -642,6 +644,8 @@ void purrgo_hw_test_run(void)
     run_sd_speed();
 #elif defined(PURRGO_HW_TEST_SD_POWER)
     run_sd_power();
+#elif defined(PURRGO_HW_TEST_GNSS_BBR)
+    purrgo_hw_test_gnss_bbr();
 #endif
 
     for (;;)

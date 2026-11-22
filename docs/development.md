@@ -77,7 +77,7 @@ cmake --build --preset stm32u5-debug
 
 | Параметр | Как передать | Назначение |
 |---|---|---|
-| `PURRGO_HW_TEST=SD_SPEED\|SD_POWER\|EINK_4GRAY\|EINK_PARTIAL` | CMake-опция | Аппаратный тест вместо навигатора, см. [`hardware.md`](hardware.md) и раздел «Аппаратные тесты» ниже |
+| `PURRGO_HW_TEST=SD_SPEED\|SD_POWER\|GNSS_BBR\|EINK_4GRAY\|EINK_PARTIAL` | CMake-опция | Аппаратный тест вместо навигатора, см. [`hardware.md`](hardware.md) и раздел «Аппаратные тесты» ниже |
 | `PURRGO_TRACK_DIAG=ON` | CMake-опция | Диагностическая запись трека (каждая эпоха GNSS), см. раздел [«Полевой тест фильтров трека»](#полевой-тест-фильтров-трека) |
 | `PURRGO_WERROR=ON` | CMake-опция | Предупреждения кода проекта - ошибки (включена в CI: host-тесты и сборка прошивки) |
 | `PURRGO_LOG_LEVEL=0..4` | CMake-опция | Уровень логирования, см. выше |
@@ -199,10 +199,22 @@ cmake --preset stm32u5-release -DPURRGO_HW_TEST=SD_SPEED
 cmake --build --preset stm32u5-release
 ```
 
-Пустое значение (`-DPURRGO_HW_TEST=`) возвращает обычную прошивку. Допустимо: `SD_SPEED`, `SD_POWER`, `EINK_4GRAY`,
+Пустое значение (`-DPURRGO_HW_TEST=`) возвращает обычную прошивку. Допустимо: `SD_SPEED`, `SD_POWER`, `GNSS_BBR`, `EINK_4GRAY`,
 `EINK_PARTIAL` (последние два включают прежние `PURRGO_EINK_SELFTEST_*`). Результаты идут в UART1 строками
 `HWTEST ...` независимо от `PURRGO_LOG_LEVEL`, поэтому тесты можно собирать и в Release. Реализация:
 `stm32/port/app/hw_test.c`, список имён: `PURRGO_HW_TEST_NAMES` в `stm32/CMakeLists.txt`.
+
+**`GNSS_BBR`.** Сохраняет ли GNSS-модуль (G10A-F30) слой конфигурации BBR, часы и эфемериды (а значит, возможен ли горячий
+старт) (1) при выключении по `EN = Low` и (2) в режиме PSMOO. Навигатор не запускается; приём идёт в «сыром» режиме
+(`stm32/port/gnss/gnss_raw.h`: без подбора скорости, настройки и восстановления связи), результаты - в UART1 строками
+`HWTEST GNSS_BBR ...` и на дисплей. Запускать на улице. Ход: связь на 38400/115200 бод и очистка следов прошлых запусков;
+`ACQ` - первый фикс и снимок `BASE`; `EN` - маркер в RAM+BBR (`CFG-ITFM-ENABLE = 1`), `EN = Low` на 15 с, снимок сразу
+после включения (маркер в BBR и RAM по `UBX-CFG-VALGET`, `msss` из `UBX-NAV-STATUS`, число спутников с эфемеридами и
+альманахом по `UBX-NAV-ORB`, достоверность времени), время до фикса; `PSMOO` - параметры и вывод `UBX-NAV-PVT/STATUS` в RAM+BBR,
+наблюдение всплесков данных и снимок на каждом (маркер, режим PSMOO в BBR, не вернулся ли NMEA, ошибки приёма UART,
+тишина дольше периода); в конце откат (`VALDEL` BBR). Параметры (`-D`): `PURRGO_HWTEST_GNSS_PHASES` (1 EN, 2 PSMOO, 3 обе),
+`..._ACQ_TIMEOUT_S`, `..._ACQ_HOLD_S`, `..._EN_CYCLES`, `..._EN_OFF_S`, `..._EN_FIX_TIMEOUT_S`, `..._PSMOO_PERIOD_S`,
+`..._PSMOO_ONTIME_S`, `..._PSMOO_CYCLES`. Итоговые строки: `EN SUMMARY` / `EN VERDICT` и `PSMOO SUMMARY` / `PSMOO VERDICT`.
 
 **`SD_SPEED`.** Карта только читается (ничего не записывается). Замеры по `DWT->CYCCNT`:
 

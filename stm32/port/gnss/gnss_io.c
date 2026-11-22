@@ -17,6 +17,7 @@
 #include "gnss_monitor.h"
 #include "gnss_link.h"
 #include "gnss_stop.h"
+#include "gnss_raw.h"
 
 /*
  * GNSS на STM32U585: LPUART1_RX -> LPDMA1 Channel 0, linked-list в круговом
@@ -156,6 +157,14 @@ static volatile uint16_t gnss_last_head = 0U;
  * ничего не отдаёт.
  */
 static volatile bool gnss_powered = true;
+
+/*
+ * "Сырой" режим (gnss_raw.h, аппаратный тест GNSS_BBR): приём через тот же DMA-буфер, но без gnss_link,
+ * настройки приёмника, монитора и восстановления связи после шторма ошибок: тест сам решает, что и когда
+ * отправлять модулю. В обычной прошивке флаг всегда false.
+ */
+static volatile bool gnss_raw_mode = false;
+static volatile uint32_t gnss_raw_err_total = 0U;
 
 /*
  * Узел и очередь linked-list: узел обязан быть выровнен по 4 байтам и лежать
@@ -726,6 +735,10 @@ static bool gnss_pop(uint16_t head, uint8_t *byte)
 {
     if (purrgo_gnss_ring_pop(&gnss_ring, head, byte))
     {
+        if (gnss_raw_mode)
+        {
+            return true;
+        }
         purrgo_gnss_monitor_feed(*byte);
         gnss_link_feed(&gnss_link, *byte);
         return true;
@@ -919,6 +932,15 @@ bool purrgo_gnss_read_byte(uint8_t *byte)
         gnss_rx_error_flag = false;
         purrgo_gnss_ring_reset(&gnss_ring);
 
+        if (gnss_raw_mode)
+        {
+            /* Тест: только счёт ошибок и перезапуск приёма, без шторма и без переустановки связи. */
+            gnss_raw_err_total++;
+            gnss_last_head = 0U;
+            (void)gnss_rx_restart();
+            return false;
+        }
+
         /* При поиске скорости ошибки кадра ожидаемы (приём на неверной скорости): без лога и счёта. */
         if (!gnss_link_busy(&gnss_link))
         {
@@ -963,6 +985,51 @@ bool purrgo_gnss_read_byte(uint8_t *byte)
 
     /* false - новых данных нет. */
     return gnss_pop(head, byte);
+}
+
+/* ------------------------- сырой режим для теста (gnss_raw.h) ------------------------- */
+
+bool purrgo_gnss_raw_start(uint32_t baud)
+{
+    gnss_raw_mode = true;
+    gnss_link_stop(&gnss_link);
+    gnss_powered = true;
+    gnss_last_head = 0U;
+    gnss_rx_error_flag = false;
+    (void)purrgo_gnss_ring_init(&gnss_ring, gnss_rx_buffer, GNSS_RX_BUFFER_SIZE);
+
+    if (!gnss_dma_setup())
+    {
+        return false;
+    }
+    return link_set_baud(baud, NULL);
+}
+
+bool purrgo_gnss_raw_set_baud(uint32_t baud)
+{
+    return link_set_baud(baud, NULL);
+}
+
+void purrgo_gnss_raw_en(bool on)
+{
+    if (!on)
+    {
+        purrgo_gnss_power_off();   /* EN = Low; в сыром режиме откат профиля трекера не выполняется */
+        return;
+    }
+    if (gnss_powered)
+    {
+        return;
+    }
+
+    HAL_GPIO_WritePin(GNSS_EN_GPIO_Port, GNSS_EN_Pin, GPIO_PIN_SET);
+    MX_LPUART1_UART_Init();        /* скорость из CubeMX (заводская скорость модуля) */
+    (void)purrgo_gnss_raw_start(hlpuart1.Init.BaudRate);
+}
+
+uint32_t purrgo_gnss_raw_errors(void)
+{
+    return gnss_raw_err_total;
 }
 
 /* ------------------------- GNSS и Stop 2 (gnss_stop.h) ------------------------- */
