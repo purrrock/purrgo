@@ -25,8 +25,7 @@
  * старте (см. purrgo/gnss_receiver.h).
  *
  *   PURRGO_GNSS_RECEIVER_NONE  - ничего не отправлять (приёмник работает с
- *                                настройками по умолчанию, например отладочный
- *                                GY-NEO6MV2);
+ *                                настройками по умолчани.
  *   PURRGO_GNSS_RECEIVER_UBX   - u-blox M10: Release-модуль G10A F30
  *                                (UBX-M10050-KB), настройка бинарными
  *                                сообщениями UBX-CFG-VALSET. По умолчанию.
@@ -78,9 +77,7 @@
  *
  * Порядок настройки (последними, после всей остальной конфигурации; OPERATEMODE - самым
  * последним ключом, как рекомендует manual):
- *  1. Набор систем (см. ниже): в PSM не поддержаны BeiDou B1C и SBAS. Без этого на
- *     G10A-F30 с заводским набором (GPS, Galileo, GLONASS, BeiDou B1C, QZSS, SBAS)
- *     кадр PSM был отклонён модулем (NAK, psmState оставался 0).
+ *  1. Набор систем (см. ниже).
  *  2. CFG-PM-DONOTENTEROFF = 1: при потере фикса приёмник остаётся в Acquisition, а не
  *     уходит в "Inactive for search"; иначе поток NMEA замолкает, а настройка в слое RAM
  *     стирается (так сказано в manual: RAM очищается при входе в это состояние).
@@ -130,7 +127,7 @@
  *                                     PSMCT; CFG-RATE-MEAS). Настройка только в RAM, приёмник не уходит в "off".
  *                                     По умолчанию.
  *   PURRGO_GNSS_TRACKER_MODE_OO  (2) - PSMOO (ON/OFF): приёмник просыпается раз в период, ищет фикс и засыпает.
- *                                     НЕ РАБОТАЕТ на G10A-F30: см. ниже.
+ *                                     Проверить на G10A-F30: см. ниже.
  *
  * По умолчанию PSMOO.
  *   PURRGO_GNSS_TRACKER_PERIOD_S  период решений, с. MODE_CT: 1..10 (по умолчанию 10); MODE_OO: 5..3600 (по
@@ -148,7 +145,7 @@
 #define PURRGO_GNSS_TRACKER_MODE_OO  2
 
 #ifndef PURRGO_GNSS_TRACKER_MODE
-#define PURRGO_GNSS_TRACKER_MODE PURRGO_GNSS_TRACKER_MODE_CT
+#define PURRGO_GNSS_TRACKER_MODE PURRGO_GNSS_TRACKER_MODE_OO // PSMOO
 #endif
 #if (PURRGO_GNSS_TRACKER_MODE != PURRGO_GNSS_TRACKER_MODE_OFF) && \
     (PURRGO_GNSS_TRACKER_MODE != PURRGO_GNSS_TRACKER_MODE_CT) && \
@@ -246,8 +243,6 @@
  *                                 MAX-M10S ток слежения в PSM у GPS+GAL+GLO и GPS+GAL+BDS B1I
  *                                 одинаковый, холодный старт у B1I дольше (27 с против
  *                                 23 с); что даёт больше спутников, зависит от региона.
- *                                 Не проверено на железе: при NAK кадра "Signals"
- *                                 приёмник остаётся на заводском наборе.
  *
  * Смена набора перезапускает ГНСС-подсистему приёмника, поэтому команда уходит
  * только при настройке после включения, до первого фикса.
@@ -305,10 +300,7 @@
 
 /*
  * Слои для настройки, которая должна пережить состояние "off" PSMOO (RAM приёмника в нём очищается):
- * основные слои плюс BBR. Только для профиля трекера: PM-ключи навигации (PSMCT) в BBR приёмник
- * отклонил (NAK на OPERATEMODE = 2 в первом запуске патча), они идут в PURRGO_GNSS_UBX_LAYERS, а
- * параметры PSMOO после трекера удаляются из BBR командой UBX-CFG-VALDEL. Работает, пока приёмник питается (EN = High): backup-домен у G10A-F30
- * получает питание от V_IO.
+ * основные слои плюс BBR.
  */
 #define PURRGO_GNSS_UBX_LAYERS_PERSIST ((PURRGO_GNSS_UBX_LAYERS) | 0x02)
 
@@ -508,8 +500,7 @@
 /*
  * Фильтр точек трека по оценке горизонтальной точности hAcc (UBX-NAV-PVT), метры:
  * точка с hAcc выше порога в трек не пишется. Когда hAcc недоступна (NMEA-режим
- * или PVT не приходит), работает прежний фильтр по HDOP. Порог подобран без
- * полевых данных: сверить на записанных треках (pg:hacc в GPX).
+ * или PVT не приходит), работает прежний фильтр по HDOP.
  */
 #ifndef PURRGO_GNSS_TRACK_MAX_HACC_M
 #define PURRGO_GNSS_TRACK_MAX_HACC_M 20U
@@ -718,19 +709,19 @@
 #define PURRGO_SOUND_DUTY_LOUD_PCT 50U
 #endif
 #ifndef PURRGO_SOUND_DUTY_MID_PCT
-#define PURRGO_SOUND_DUTY_MID_PCT 20U
+#define PURRGO_SOUND_DUTY_MID_PCT 10U
 #endif
 #ifndef PURRGO_SOUND_DUTY_QUIET_PCT
-#define PURRGO_SOUND_DUTY_QUIET_PCT 8U
+#define PURRGO_SOUND_DUTY_QUIET_PCT 4U
 #endif
 #ifndef PURRGO_SOUND_DUTY_LOUD_LOW_PCT
-#define PURRGO_SOUND_DUTY_LOUD_LOW_PCT 6U
+#define PURRGO_SOUND_DUTY_LOUD_LOW_PCT 3U
 #endif
 #ifndef PURRGO_SOUND_DUTY_MID_LOW_PCT
-#define PURRGO_SOUND_DUTY_MID_LOW_PCT 3U
+#define PURRGO_SOUND_DUTY_MID_LOW_PCT 2U
 #endif
 #ifndef PURRGO_SOUND_DUTY_QUIET_LOW_PCT
-#define PURRGO_SOUND_DUTY_QUIET_LOW_PCT 2U
+#define PURRGO_SOUND_DUTY_QUIET_LOW_PCT 1U
 #endif
 
 /* Длительности, мс. ERROR - один длинный; ARRIVED - два сигнала с паузой; INFO - короткий; CLICK - щелчок. */
