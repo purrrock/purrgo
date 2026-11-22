@@ -774,6 +774,33 @@ static void gnss_recover_link(uint32_t now)
     gnss_link_begin();
 }
 
+/* Сколько последних принятых до ошибки байтов показывать в логе (диагностика). */
+#define GNSS_ERR_DUMP_BYTES 24U
+
+/**
+ * @brief Записать в лог последние байты, принятые до остановки DMA (hex, от старых к новым).
+ *
+ * По ним видно, чем был поток перед ошибкой: корректные кадры UBX (B5 62 ...) или NMEA ("$GN..." = 24 24 47 4E)
+ * либо мусор (приёмник сменил скорость или сбросил настройку).
+ */
+static void gnss_log_bytes_before(uint16_t head)
+{
+    static const char hex[] = "0123456789ABCDEF";
+    char line[(3U * GNSS_ERR_DUMP_BYTES) + 1U];
+    size_t n = 0U;
+
+    for (uint32_t i = GNSS_ERR_DUMP_BYTES; i > 0U; i--)
+    {
+        const uint8_t b = gnss_rx_buffer[(uint32_t)(head - i) & (GNSS_RX_BUFFER_SIZE - 1U)];
+
+        line[n++] = hex[b >> 4];
+        line[n++] = hex[b & 0x0FU];
+        line[n++] = ' ';
+    }
+    line[n] = '\0';
+    PURRGO_LOGE("GNSS RX error: %u bytes before it: %s\r\n", (unsigned)GNSS_ERR_DUMP_BYTES, line);
+}
+
 /**
  * @brief Прочитать один байт из входного GNSS-потока.
  */
@@ -907,9 +934,11 @@ bool purrgo_gnss_read_byte(uint8_t *byte)
             if (gnss_rx_err_count <= GNSS_RX_ERR_LOG_MAX)
             {
                 PURRGO_LOGE("GNSS RX error 0x%lX (PE=1 NE=2 FE=4 ORE=8 DMA=0x10), dma err 0x%lX"
-                           " (DTE=1 ULE=2 USE=4), restarting RX\r\n",
+                           " (DTE=1 ULE=2 USE=4; 0x20 = abort of an idle channel, not a transfer error),"
+                           " restarting RX\r\n",
                            (unsigned long)gnss_rx_error_code,
                            (unsigned long)handle_LPDMA1_Channel0.ErrorCode);
+                gnss_log_bytes_before(head);
             }
 
             if (gnss_rx_err_count >= GNSS_RX_STORM_COUNT)

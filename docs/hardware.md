@@ -383,7 +383,7 @@ Stop 2 используется в простое в любом режиме (ч
 - `purrgo_stm32_buttons_idle()`: все кнопки отпущены, фронтов и событий нет (иначе Sleep с опросом раз в 10 мс);
 - `purrgo_gnss_stop_ready()` (`gnss_stop.h`): GNSS выключен либо связь установлена, нет ошибок приёма и ожидающих таймеров настройки, а на входе тишина не меньше `PURRGO_GNSS_STOP_QUIET_MS` (15 мс).
 
-Приём GNSS в Stop 2 идёт без ядра: LPUART1 (ядро HSI16) -> LPDMA1 -> кольцо в SRAM4. Включение в автономный режим - `RCC_SRDAMR` (`LPUART1AMEN`, `LPDMA1AMEN`, `SRAM4AMEN`) в `purrgo_stop2_init()`, бит `UESM` LPUART1 выставляет `gnss_uart_stop_cfg()` после каждой инициализации UART (у UART STM32U5 флага WUF нет).
+Приём GNSS в Stop 2 идёт без ядра: LPUART1 (ядро HSI16) -> LPDMA1 -> кольцо в SRAM4. Включение в автономный режим - `RCC_SRDAMR` (`LPUART1AMEN`, `LPDMA1AMEN`, `SRAM4AMEN`, а также `LPTIM1AMEN` для таймбейза и будильника) в `purrgo_stop2_init()`, бит `UESM` LPUART1 выставляет `gnss_uart_stop_cfg()` после каждой инициализации UART (у UART STM32U5 флага WUF нет).
 
 Источники пробуждения: кнопки K1..K4 (EXTI, спад), спад BUSY E-Ink (PB2, EXTI2, только пока задание ждёт BUSY; `eink_wake.c`), прерывание RXNE LPUART1 (разрешается только на время сна, `purrgo_gnss_stop_arm()`), ошибки приёма, половина и конец буфера LPDMA1 (запасной случай), будильник LPTIM1 (`PURRGO_STOP2_NAV_MAX_MS` = 2 с при включённом GNSS, `PURRGO_STOP2_MAX_MS` = 5 с в читалке и трекере с PSMOO). После пробуждения по первому байту МК остаётся в Sleep, пока пачка эпохи приёмника не закончится, и только после тишины снова уходит в Stop 2 (иначе на каждый байт поднимался бы PLL). 
 

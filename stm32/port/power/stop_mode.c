@@ -37,6 +37,24 @@ extern void SystemClock_Config(void);
 #define PURRGO_STOP_HSI_KERNEL_ON 0
 #endif
 
+/*
+ * 1 - диагностика Stop 2 (только в сборке с уровнем DEBUG): после каждого пробуждения (первые
+ * STOP_DIAG_FIRST, затем каждое STOP_DIAG_EVERY-е) строка "Stop2 wake #N": сколько тиков HAL прошло за сон
+ * при заказанном будильнике, сработал ли будильник LPTIM1 (CC1IF), флаги LPUART1 и кнопки. Если тики во
+ * сне не идут (slept = 0 при будильнике в секунды), а timer всегда 0 - LPTIM1 во сне не тактируется.
+ * Строки пишутся блокирующим UART: включать только для разбора, на ток и тайминги это влияет.
+ */
+#ifndef PURRGO_STOP_DIAG
+#define PURRGO_STOP_DIAG 0
+#endif
+#if (PURRGO_STOP_DIAG != 0) && (PURRGO_LOG_LEVEL >= PURRGO_LOG_LEVEL_DEBUG)
+#define STOP_DIAG_ACTIVE 1
+#else
+#define STOP_DIAG_ACTIVE 0
+#endif
+#define STOP_DIAG_FIRST 40U
+#define STOP_DIAG_EVERY 100U
+
 typedef struct
 {
     GPIO_TypeDef *port;
@@ -55,6 +73,9 @@ static const wake_pin_t k_wake_pins[] =
 
 static bool s_ready;
 static bool s_logged_first;
+#if STOP_DIAG_ACTIVE
+static uint32_t s_diag_wakes;
+#endif
 
 static IRQn_Type exti_irqn(uint16_t pin)
 {
@@ -82,6 +103,14 @@ bool purrgo_stop2_init(void)
      * Если GNSS выключен (читалка), LPUART1 остановлен и на ток эти биты не влияют.
      */
     SET_BIT(RCC->SRDAMR, RCC_SRDAMR_LPUART1AMEN | RCC_SRDAMR_LPDMA1AMEN | RCC_SRDAMR_SRAM4AMEN);
+
+    /*
+     * LPTIM1 (таймбейз HAL и будильник Stop 2, timebase.c) тоже в домене SRD: без LPTIM1AMEN его шина и
+     * ядро в Stop 2 не тактируются, счёт HAL_GetTick() во сне стоит, а будильник не срабатывает (в
+     * RCC_APB3SMENR есть только Sleep и Stop 0/1). Тогда МК в Stop 2 будят лишь кнопки и байты GNSS, а время в
+     * логе и таймауты ядра отстают от реального.
+     */
+    SET_BIT(RCC->SRDAMR, RCC_SRDAMR_LPTIM1AMEN);
 
 #if (PURRGO_STOP_HSI_KERNEL_ON != 0)
     /* HSI16 не гаснет в Stop (ток больше): запасной вариант, если LPUART1 теряет первый байт пачки. */
@@ -196,9 +225,27 @@ bool purrgo_stop2_enter(uint32_t max_ms, bool wake_on_busy)
         return false;
     }
 
+#if STOP_DIAG_ACTIVE
+    const uint32_t diag_tick0 = HAL_GetTick();
+#endif
+
     HAL_PWREx_EnterSTOP2Mode(PWR_STOPENTRY_WFI);
 
     /* ---- проснулись; PRIMASK всё ещё взведён ---- */
+
+#if STOP_DIAG_ACTIVE
+    /* Причина пробуждения: снимок до disarm (он сбрасывает флаги). */
+    const uint32_t diag_lptim_isr = LPTIM1->ISR;
+    const uint32_t diag_lpuart_isr = LPUART1->ISR;
+    uint32_t diag_btn = 0U;
+    for (unsigned i = 0U; i < WAKE_PIN_COUNT; i++)
+    {
+        if (__HAL_GPIO_EXTI_GET_FALLING_IT(k_wake_pins[i].pin) != 0U)
+        {
+            diag_btn |= (1UL << i);
+        }
+    }
+#endif
 
     /* Снять NVIC-линии, пока прерывания выключены: настоящих обработчиков у них нет. */
     if (wake_on_busy)
@@ -216,6 +263,17 @@ bool purrgo_stop2_enter(uint32_t max_ms, bool wake_on_busy)
      * HAL_GetTick(), а HAL_InitTick() в конце повторный вызов без последствий.
      */
     SystemClock_Config();
+
+#if STOP_DIAG_ACTIVE
+    s_diag_wakes++;
+    if ((s_diag_wakes <= STOP_DIAG_FIRST) || ((s_diag_wakes % STOP_DIAG_EVERY) == 0U))
+    {
+        PURRGO_LOGD("Stop2 wake #%lu: slept %lu ms (alarm %lu ms), timer=%u lpuart_isr=0x%lX btn=0x%lX\r\n",
+                    (unsigned long)s_diag_wakes, (unsigned long)(HAL_GetTick() - diag_tick0),
+                    (unsigned long)max_ms, (unsigned)(((diag_lptim_isr & LPTIM_ISR_CC1IF) != 0U) ? 1U : 0U),
+                    (unsigned long)diag_lpuart_isr, (unsigned long)diag_btn);
+    }
+#endif
 
     return true;
 }
