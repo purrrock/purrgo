@@ -12,12 +12,16 @@
  *      прошивки). Состояние настройки читается и чистится от следов прошлых запусков.
  *   1. ACQ. Ожидание первого фикса (PURRGO_HWTEST_GNSS_ACQ_TIMEOUT_S), затем выдержка, чтобы приёмник
  *      набрал эфемериды. Снимок "BASE": msss, эфемериды/альманах (UBX-NAV-ORB), маркер.
- *   2. EN. PURRGO_HWTEST_GNSS_EN_CYCLES раз: в слои RAM и BBR пишется маркер (CFG-ITFM-ENABLE = 1, по умолчанию
- *      0), EN = Low на PURRGO_HWTEST_GNSS_EN_OFF_S, EN = High. Сразу после ответа модуля снимок: маркер в
- *      слоях BBR и RAM (UBX-CFG-VALGET), msss (миллисекунды с запуска/сброса приёмника: если меньше, чем
- *      до выключения, питание ядра пропадало), число спутников с эфемеридами и альманахом, достоверность
- *      времени. Затем ожидание фикса: измеряется время до фикса (hot start около 1-3 с, cold start 25-30 с).
- *   3. PSMOO. Параметры PSMOO и вывод UBX-NAV-PVT / NAV-STATUS записываются в RAM и BBR (как у трекера).
+ *   2. EN. PURRGO_HWTEST_GNSS_EN_CYCLES раз: в RAM и BBR пишется настройка "NMEA выключен, NAV-PVT и NAV-STATUS
+ *      включены" и маркер (CFG-ITFM-ENABLE = 1, по умолчанию 0), затем EN = Low на PURRGO_HWTEST_GNSS_EN_OFF_S и
+ *      EN = High. Первые 2.5 с после включения тест только слушает (ничего не отправляет): если пошли UBX PVT/STATUS и
+ *      нет NMEA, настройка пережила выключение; если пошёл заводской NMEA, потеряна. Затем снимок: маркер в слоях
+ *      BBR и RAM (UBX-CFG-VALGET), msss (миллисекунды с запуска/сброса приёмника: если меньше, чем до выключения,
+ *      питание ядра пропадало), число спутников с эфемеридами и альманахом (UBX-NAV-ORB), достоверность времени.
+ *      Время до фикса берётся из момента приёма первого PVT с фиксом (hot start около 1-3 с, cold start 25-30 с).
+ *      Результат каждого пункта: yes / NO / ? (не удалось определить, например приёмник не ответил на опрос).
+ *   3. PSMOO. SBAS выключается (с ним PSM не принимается), параметры PSMOO и вывод UBX-NAV-PVT / NAV-STATUS
+ *      записываются в RAM и BBR (как у трекера); если приёмник отклоняет режим в BBR, он пробуется только в RAM.
  *      Тест слушает всплески данных: на каждом новом всплеске (приёмник проснулся) снимок тех же величин
  *      (запросы уходят, пока приёмник бодрствует ONTIME). Признаки сброса настройки: пропал маркер BBR,
  *      пропал режим PSMOO в BBR, снова пошёл NMEA (он выключен настройкой), приёмник молчит дольше
@@ -109,6 +113,7 @@
 /* Ключи CFG (UBX-M10 SPG 5.10 Interface Description). */
 #define KEY_MARKER         0x1041000DU   /* CFG-ITFM-ENABLE, L: по умолчанию 0; маркер "BBR жив" */
 #define KEY_NMEA_UART1     0x10740002U   /* CFG-UART1OUTPROT-NMEA, L */
+#define KEY_SBAS           0x10310020U   /* CFG-SIGNAL-SBAS_ENA, L: по умолчанию 1; для PSM нужно 0 */
 #define KEY_MSGOUT_PVT     0x20910007U   /* CFG-MSGOUT-UBX_NAV_PVT_UART1, U1 */
 #define KEY_MSGOUT_STATUS  0x2091001BU   /* CFG-MSGOUT-UBX_NAV_STATUS_UART1, U1 */
 #define KEY_PM_OPMODE      0x20D00001U   /* CFG-PM-OPERATEMODE, E1: 0 FULL, 1 PSMOO, 2 PSMCT */
@@ -137,6 +142,7 @@ static volatile uint32_t s_ack_valdel, s_nak_valdel;
 static uint32_t s_nmea_dollars;     /* сколько раз принят '$' (начало NMEA-предложения) */
 static uint32_t s_bytes;            /* принято байт с последнего сброса */
 static uint32_t s_t_first_byte;     /* HAL_GetTick() первого принятого байта (0 - не было) */
+static uint32_t s_t_first_fix;      /* HAL_GetTick() первого PVT с фиксом (0 - не было) */
 
 static struct {
     uint32_t msss, ttff;
@@ -207,6 +213,10 @@ static void on_frame(void)
         s_pvt.psm = (uint8_t)((p[21] >> 2) & 0x07U);
         s_pvt.num_sv = p[23];
         s_pvt.hacc_mm = rd32(&p[40]);
+        if (s_pvt.fix_ok && (s_pvt.fix_type >= 2U) && (s_t_first_fix == 0U))
+        {
+            s_t_first_fix = HAL_GetTick();
+        }
         s_seq_pvt++;
     }
     else if ((cls == PURRGO_UBX_CLASS_NAV) && (id == ID_NAV_ORB) && (n >= 8U))
@@ -460,6 +470,26 @@ static bool poll_msg(uint8_t cls, uint8_t id, const volatile uint32_t *seq, uint
     return wait_change(seq, old, timeout_ms);
 }
 
+/*
+ * Запрос с повторами. Ответ на опрос может стоять в очереди за NMEA на 38400 бод (секунда и больше), поэтому
+ * таймаут щедрый. Перед повтором разборщик сбрасывается: оборванный кадр не должен съесть следующий.
+ */
+static bool poll_retry(uint8_t cls, uint8_t id, const volatile uint32_t *seq, uint32_t per_try_ms, unsigned tries)
+{
+    for (unsigned i = 0U; i < tries; i++)
+    {
+        if (i != 0U)
+        {
+            purrgo_ubx_parser_init(&s_parser);
+        }
+        if (poll_msg(cls, id, seq, per_try_ms))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
 /* UBX-CFG-VALGET: 1 - ответ получен, 0 - NAK, -1 - тишина. vals[i] = значение или -1 (ключа нет в слое). */
 static int valget(uint8_t layer, const uint32_t *keys, unsigned count, int32_t *vals)
 {
@@ -491,7 +521,7 @@ static int valget(uint8_t layer, const uint32_t *keys, unsigned count, int32_t *
         return -1;
     }
     while ((s_seq_valget == old_reply) && (s_nak_valget == old_nak) &&
-           ((uint32_t)(HAL_GetTick() - t0) < 700U))
+           ((uint32_t)(HAL_GetTick() - t0) < 1500U))
     {
         idle_step();
     }
@@ -579,7 +609,7 @@ static void take_snapshot(snap_t *s)
     s->bbr[0] = s->bbr[1] = s->ram[0] = s->ram[1] = -1;
     s->bbr_rc = s->ram_rc = -1;
 
-    s->alive = poll_msg(PURRGO_UBX_CLASS_NAV, PURRGO_UBX_ID_NAV_STATUS, &s_seq_status, 800U);
+    s->alive = poll_retry(PURRGO_UBX_CLASS_NAV, PURRGO_UBX_ID_NAV_STATUS, &s_seq_status, 1500U, 3U);
     if (!s->alive)
     {
         return;
@@ -587,7 +617,7 @@ static void take_snapshot(snap_t *s)
     s->msss = s_st.msss;
     s->ttff = s_st.ttff;
 
-    if (poll_msg(PURRGO_UBX_CLASS_NAV, PURRGO_UBX_ID_NAV_PVT, &s_seq_pvt, 800U))
+    if (poll_retry(PURRGO_UBX_CLASS_NAV, PURRGO_UBX_ID_NAV_PVT, &s_seq_pvt, 1500U, 2U))
     {
         s->pvt = true;
         s->fix_type = s_pvt.fix_type;
@@ -601,7 +631,7 @@ static void take_snapshot(snap_t *s)
         s->min = s_pvt.min;
         s->sec = s_pvt.sec;
     }
-    if (poll_msg(PURRGO_UBX_CLASS_NAV, ID_NAV_ORB, &s_seq_orb, 1500U))
+    if (poll_retry(PURRGO_UBX_CLASS_NAV, ID_NAV_ORB, &s_seq_orb, 2500U, 2U))
     {
         s->orb = true;
         s->orb_sv = s_orb.sv;
@@ -609,7 +639,15 @@ static void take_snapshot(snap_t *s)
         s->alm = s_orb.alm;
     }
     s->bbr_rc = valget(0x01U, k_check_keys, 2U, s->bbr);   /* слой BBR */
+    if (s->bbr_rc < 0)
+    {
+        s->bbr_rc = valget(0x01U, k_check_keys, 2U, s->bbr);
+    }
     s->ram_rc = valget(0x00U, k_check_keys, 2U, s->ram);   /* слой RAM */
+    if (s->ram_rc < 0)
+    {
+        s->ram_rc = valget(0x00U, k_check_keys, 2U, s->ram);
+    }
 }
 
 static void log_snap(const char *tag, const snap_t *s)
@@ -637,14 +675,22 @@ static void log_snap(const char *tag, const snap_t *s)
 static uint32_t s_baud = BAUD_FACTORY;
 
 /*
- * Дождаться ответа приёмника на UBX-NAV-STATUS. Скорости пробуются по очереди (после сброса настройки модуль на
- * 38400, а в BBR могла остаться другая). Возвращает true и время до первого ответа (мс от t_start).
+ * Дождаться жизни приёмника: любой UBX-кадр (в том числе периодический NAV-PVT/STATUS) или ответ на опрос
+ * UBX-NAV-STATUS. Скорость МК не меняется первые 3 с (модулю нужно время на старт), затем скорости чередуются
+ * (после сброса настройки модуль на 38400, а в BBR могла остаться другая). reply_ms - время до первого признака
+ * жизни от t_start.
  */
 static bool link_up(uint32_t t_start, uint32_t timeout_ms, uint32_t *reply_ms)
 {
+    const uint32_t seq0 = s_seq_status + s_seq_pvt;
+    uint32_t t_toggle = t_start + 3000U;
+
     while ((uint32_t)(HAL_GetTick() - t_start) < timeout_ms)
     {
-        if (poll_msg(PURRGO_UBX_CLASS_NAV, PURRGO_UBX_ID_NAV_STATUS, &s_seq_status, 450U))
+        const bool got = ((s_seq_status + s_seq_pvt) != seq0) ||
+                         poll_msg(PURRGO_UBX_CLASS_NAV, PURRGO_UBX_ID_NAV_STATUS, &s_seq_status, 700U);
+
+        if (got)
         {
             if (reply_ms != NULL)
             {
@@ -652,8 +698,12 @@ static bool link_up(uint32_t t_start, uint32_t timeout_ms, uint32_t *reply_ms)
             }
             return true;
         }
-        s_baud = (s_baud == BAUD_FACTORY) ? BAUD_ALT : BAUD_FACTORY;
-        (void)purrgo_gnss_raw_set_baud(s_baud);
+        if ((int32_t)(HAL_GetTick() - t_toggle) >= 0)
+        {
+            s_baud = (s_baud == BAUD_FACTORY) ? BAUD_ALT : BAUD_FACTORY;
+            (void)purrgo_gnss_raw_set_baud(s_baud);
+            t_toggle = HAL_GetTick() + 1500U;
+        }
     }
     return false;
 }
@@ -672,13 +722,13 @@ static void cleanup_receiver(const char *why)
 {
     static const purrgo_ubx_cfg_item_t ram_restore[] = {
         { KEY_PM_OPMODE, 0U }, { KEY_NMEA_UART1, 1U }, { KEY_MSGOUT_PVT, 0U },
-        { KEY_MSGOUT_STATUS, 0U }, { KEY_MARKER, 0U },
+        { KEY_MSGOUT_STATUS, 0U }, { KEY_MARKER, 0U }, { KEY_SBAS, 1U },
     };
     static const uint32_t del1[] = {
         KEY_MARKER, KEY_PM_OPMODE, KEY_PM_POSPERIOD, KEY_PM_ACQPERIOD, KEY_PM_ONTIME, KEY_PM_NOOFF,
         KEY_MSGOUT_PVT, KEY_MSGOUT_STATUS,
     };
-    static const uint32_t del2[] = { KEY_NMEA_UART1 };
+    static const uint32_t del2[] = { KEY_NMEA_UART1, KEY_SBAS };
 
     wake_receiver();
     const int a = valset(LAYER_RAM, ram_restore, sizeof ram_restore / sizeof ram_restore[0]);
@@ -689,7 +739,11 @@ static void cleanup_receiver(const char *why)
        rc_text(c));
 }
 
-/* Ждать фикса опросом UBX-NAV-PVT раз в секунду. true - фикс есть; *t_ms - время от t_start. */
+/*
+ * Ждать фикса: опрос UBX-NAV-PVT раз в секунду, плюс периодический NAV-PVT, если он включён. Время фикса берётся
+ * из момента приёма первого PVT с фиксом (s_t_first_fix), а не из момента опроса. true - фикс есть;
+ * *t_ms - время от t_start.
+ */
 static bool wait_fix(uint32_t t_start, uint32_t timeout_s, const char *tag, uint32_t *t_ms)
 {
     uint32_t last_log = 0U;
@@ -697,11 +751,11 @@ static bool wait_fix(uint32_t t_start, uint32_t timeout_s, const char *tag, uint
     while ((uint32_t)(HAL_GetTick() - t_start) < (timeout_s * 1000U))
     {
         const uint32_t t_poll = HAL_GetTick();
-        const bool got = poll_msg(PURRGO_UBX_CLASS_NAV, PURRGO_UBX_ID_NAV_PVT, &s_seq_pvt, 900U);
+        const bool got = poll_msg(PURRGO_UBX_CLASS_NAV, PURRGO_UBX_ID_NAV_PVT, &s_seq_pvt, 1200U);
 
-        if (got && s_pvt.fix_ok && (s_pvt.fix_type >= 2U))
+        if (s_t_first_fix != 0U)
         {
-            *t_ms = (uint32_t)(HAL_GetTick() - t_start);
+            *t_ms = (s_t_first_fix > t_start) ? (uint32_t)(s_t_first_fix - t_start) : 0U;
             return true;
         }
         const uint32_t el = (uint32_t)(HAL_GetTick() - t_start) / 1000U;
@@ -726,41 +780,67 @@ static bool wait_fix(uint32_t t_start, uint32_t timeout_s, const char *tag, uint
 /* Фаза 2: EN = Low                                                           */
 /* ------------------------------------------------------------------------- */
 
-typedef struct {
-    bool bbr_kept, ram_kept, reset, eph_kept, hot;
-    bool alive, fixed;
-} en_result_t;
+/* Трёхзначный результат: 1 да, 0 нет, -1 не удалось определить (приёмник не ответил и т.п.). */
+static const char *tri_text(int v)
+{
+    return (v > 0) ? "yes" : ((v == 0) ? "NO" : "?");
+}
 
-static en_result_t s_en[PURRGO_HWTEST_GNSS_EN_CYCLES];
+static char yn_c(int v)
+{
+    return (v > 0) ? 'Y' : ((v == 0) ? 'N' : '?');
+}
+
+static void count_yn(int v, unsigned *yes, unsigned *no, unsigned *unk)
+{
+    if (v > 0) { (*yes)++; } else if (v == 0) { (*no)++; } else { (*unk)++; }
+}
+
+typedef struct {
+    int cfg;       /* настройка (NMEA выключен, PVT включён) пережила EN Low: по приёму без единого запроса */
+    int bbr;       /* маркер в слое BBR по VALGET */
+    int ram;       /* маркер в слое RAM по VALGET */
+    int reset;     /* ядро перезапускалось (msss стал меньше) */
+    int eph;       /* эфемериды сохранились */
+    int hot;       /* фикс не позже 6 с после EN High */
+    uint32_t fix_ms;
+    uint32_t rx_ttff_ms;
+} en_result_t;
 
 static void run_en_phase(void)
 {
-    static const purrgo_ubx_cfg_item_t marker = { KEY_MARKER, 1U };
-    unsigned bbr_ok = 0U;
-    unsigned eph_ok = 0U;
-    unsigned hot_ok = 0U;
-    unsigned reset_n = 0U;
+    /* Настройка, по которой сразу видно, пережила ли она EN Low: NMEA выключен, PVT и STATUS включены. */
+    static const purrgo_ubx_cfg_item_t persist_cfg[] = {
+        { KEY_NMEA_UART1, 0U }, { KEY_MSGOUT_PVT, 1U }, { KEY_MSGOUT_STATUS, 1U }, { KEY_MARKER, 1U },
+    };
+    const unsigned n = (unsigned)PURRGO_HWTEST_GNSS_EN_CYCLES;
+    unsigned cfg_y = 0U, cfg_n = 0U, cfg_u = 0U;
+    unsigned bbr_y = 0U, bbr_n = 0U, bbr_u = 0U;
+    unsigned rst_y = 0U, rst_n = 0U, rst_u = 0U;
+    unsigned eph_y = 0U, eph_n = 0U, eph_u = 0U;
+    unsigned hot_y = 0U, hot_n = 0U, hot_u = 0U;
     unsigned dead_n = 0U;
 
-    HT("HWTEST GNSS_BBR === phase EN: %u cycles, EN low %u s ===\r\n", (unsigned)PURRGO_HWTEST_GNSS_EN_CYCLES,
-       (unsigned)PURRGO_HWTEST_GNSS_EN_OFF_S);
+    HT("HWTEST GNSS_BBR === phase EN: %u cycles, EN low %u s ===\r\n", n, (unsigned)PURRGO_HWTEST_GNSS_EN_OFF_S);
     head_set(0, "GNSS_BBR  phase EN");
 
-    for (unsigned k = 0U; k < PURRGO_HWTEST_GNSS_EN_CYCLES; k++)
+    for (unsigned k = 0U; k < n; k++)
     {
         snap_t before;
         snap_t after;
-        en_result_t *r = &s_en[k];
-        uint32_t reply_ms = 0U;
+        en_result_t r;
         uint32_t fix_ms = 0U;
 
-        memset(r, 0, sizeof *r);
-        head_set(1, "EN cycle %u/%u", k + 1U, (unsigned)PURRGO_HWTEST_GNSS_EN_CYCLES);
+        memset(&r, 0, sizeof r);
+        r.cfg = r.bbr = r.ram = r.reset = r.eph = r.hot = -1;
+        head_set(1, "EN cycle %u/%u", k + 1U, n);
 
-        /* Маркер в RAM и BBR и снимок до выключения. */
-        const int mk = valset(LAYER_RAM_BBR, &marker, 1U);
+        /* Настройка и маркер в RAM и BBR; снимок до выключения. */
+        const int mk = valset(LAYER_RAM_BBR, persist_cfg, sizeof persist_cfg / sizeof persist_cfg[0]);
 
-        HT("HWTEST GNSS_BBR EN#%u: marker VALSET RAM+BBR -> %s\r\n", k + 1U, rc_text(mk));
+        HT("HWTEST GNSS_BBR EN#%u: persistent config (NMEA off, PVT+STATUS on, marker) RAM+BBR -> %s\r\n", k + 1U,
+           rc_text(mk));
+        delay_ms(1500U);   /* дать накопиться периодическим сообщениям (и убедиться, что NMEA ушёл) */
         take_snapshot(&before);
         log_snap("before-off", &before);
 
@@ -776,79 +856,112 @@ static void run_en_phase(void)
             idle_step();
         }
 
-        /* EN = High; считаем от этого момента. */
+        /* EN = High; все времена считаются от этого момента. */
         const uint32_t t_on = HAL_GetTick();
 
         s_bytes = 0U;
         s_t_first_byte = 0U;
+        s_t_first_fix = 0U;
         s_nmea_dollars = 0U;
         s_baud = BAUD_FACTORY;
+        const uint32_t pvt0 = s_seq_pvt;
+        const uint32_t sta0 = s_seq_status;
+
         purrgo_gnss_raw_en(true);
         purrgo_ubx_parser_init(&s_parser);
 
-        r->alive = link_up(t_on, 20000U, &reply_ms);
-        HT("HWTEST GNSS_BBR EN#%u: EN high; first byte after %ld ms, first UBX reply after %lu ms at %lu baud%s\r\n",
-           k + 1U, (s_t_first_byte != 0U) ? (long)(s_t_first_byte - t_on) : -1L, (unsigned long)reply_ms,
-           (unsigned long)s_baud, r->alive ? "" : " (NO REPLY in 20 s)");
-        if (!r->alive)
+        /* Пассивное окно: 2.5 с только слушаем, ничего не отправляя. */
+        delay_ms(2500U);
+        const uint32_t frames = (s_seq_pvt - pvt0) + (s_seq_status - sta0);
+        const uint32_t dollars = s_nmea_dollars;
+
+        if ((frames > 0U) && (dollars == 0U)) { r.cfg = 1; }
+        else if ((dollars > 0U) && (frames == 0U)) { r.cfg = 0; }
+        HT("HWTEST GNSS_BBR EN#%u: passive window 2.5 s after EN high: first byte after %ld ms, UBX PVT/STATUS frames=%lu,"
+           " NMEA '$'=%lu, bytes=%lu, first fix seen after %ld ms, UART errors total=%lu -> config %s\r\n", k + 1U,
+           (s_t_first_byte != 0U) ? (long)(s_t_first_byte - t_on) : -1L, (unsigned long)frames,
+           (unsigned long)dollars, (unsigned long)s_bytes,
+           (s_t_first_fix != 0U) ? (long)(s_t_first_fix - t_on) : -1L, (unsigned long)purrgo_gnss_raw_errors(),
+           (r.cfg > 0) ? "RETAINED (survived EN low)" : ((r.cfg == 0) ? "LOST (factory NMEA again)" : "unknown"));
+
+        uint32_t reply_ms = 0U;
+        const bool alive = link_up(t_on, 20000U, &reply_ms);
+
+        if (!alive)
         {
             dead_n++;
-            res_add("E%u: NO REPLY after EN", k + 1U);
+            HT("HWTEST GNSS_BBR EN#%u: NO REPLY in 20 s after EN high\r\n", k + 1U);
+            res_add("E%u cfg:%c NO REPLY", k + 1U, yn_c(r.cfg));
+            count_yn(r.cfg, &cfg_y, &cfg_n, &cfg_u);
+            bbr_u++; rst_u++; eph_u++; hot_u++;
             continue;
         }
 
         take_snapshot(&after);
         log_snap("after-on", &after);
 
-        r->bbr_kept = (after.bbr[0] == 1);
-        r->ram_kept = (after.ram[0] == 1);
-        r->reset = (after.msss < before.msss);
-        r->eph_kept = after.orb && before.orb && (after.eph > 0) && (after.eph * 2 >= before.eph);
-
-        r->fixed = wait_fix(t_on, PURRGO_HWTEST_GNSS_EN_FIX_TIMEOUT_S, "EN", &fix_ms);
-        if (r->fixed)
+        if (after.alive)
         {
-            (void)poll_msg(PURRGO_UBX_CLASS_NAV, PURRGO_UBX_ID_NAV_STATUS, &s_seq_status, 800U);
-            r->hot = (fix_ms <= 8000U);
+            r.reset = (after.msss < before.msss) ? 1 : 0;
+            if (after.bbr_rc > 0) { r.bbr = (after.bbr[0] == 1) ? 1 : 0; }
+            if (after.ram_rc > 0) { r.ram = (after.ram[0] == 1) ? 1 : 0; }
+            if (after.orb && before.orb)
+            {
+                r.eph = ((after.eph > 0) && ((after.eph * 2) >= before.eph)) ? 1 : 0;
+            }
         }
 
-        HT("HWTEST GNSS_BBR EN#%u RESULT: BBR marker %s, RAM marker %s, core reset %s (msss %lu -> %lu),"
-           " eph %d -> %d, alm %d -> %d, time at start valid=0x%02X, fix %s%lu ms (receiver ttff %lu ms)\r\n",
-           k + 1U, r->bbr_kept ? "KEPT" : "LOST", r->ram_kept ? "KEPT" : "LOST", r->reset ? "YES" : "no",
-           (unsigned long)before.msss, (unsigned long)after.msss, before.eph, after.eph, before.alm, after.alm,
-           (unsigned)after.valid, r->fixed ? "after " : "NOT obtained within ",
-           (unsigned long)(r->fixed ? fix_ms : (PURRGO_HWTEST_GNSS_EN_FIX_TIMEOUT_S * 1000U)),
-           (unsigned long)s_st.ttff);
+        if (wait_fix(t_on, PURRGO_HWTEST_GNSS_EN_FIX_TIMEOUT_S, "EN", &fix_ms))
+        {
+            r.fix_ms = fix_ms;
+            r.hot = (fix_ms <= 6000U) ? 1 : 0;
+            if (poll_retry(PURRGO_UBX_CLASS_NAV, PURRGO_UBX_ID_NAV_STATUS, &s_seq_status, 1500U, 3U))
+            {
+                r.rx_ttff_ms = s_st.ttff;
+            }
+        }
+        else
+        {
+            r.hot = 0;
+            r.fix_ms = PURRGO_HWTEST_GNSS_EN_FIX_TIMEOUT_S * 1000U;
+        }
 
-        res_add("E%u BBR:%c RAM:%c rst:%c", k + 1U, r->bbr_kept ? 'Y' : 'N', r->ram_kept ? 'Y' : 'N',
-                r->reset ? 'Y' : 'n');
-        res_add("  eph %d>%d fix %s%lus", before.eph, after.eph, r->fixed ? "" : ">",
-                (unsigned long)((r->fixed ? fix_ms : (PURRGO_HWTEST_GNSS_EN_FIX_TIMEOUT_S * 1000U)) / 1000U));
+        HT("HWTEST GNSS_BBR EN#%u RESULT: config retained %s | marker BBR %s, RAM %s | core reset %s (msss %lu -> %lu) |"
+           " ephemerides kept %s (eph %d -> %d, alm %d -> %d) | time valid after start 0x%02X | fix %s%lu ms after EN"
+           " high (receiver ttff %lu ms) -> hot start %s\r\n", k + 1U, tri_text(r.cfg), tri_text(r.bbr), tri_text(r.ram), tri_text(r.reset),
+           (unsigned long)before.msss, (unsigned long)after.msss, tri_text(r.eph), before.eph, after.eph, before.alm,
+           after.alm, (unsigned)after.valid, (r.hot > 0) ? "" : ">", (unsigned long)r.fix_ms,
+           (unsigned long)r.rx_ttff_ms, tri_text(r.hot));
+
+        res_add("E%u cfg:%c bbr:%c rst:%c", k + 1U, yn_c(r.cfg), yn_c(r.bbr), yn_c(r.reset));
+        res_add("  eph:%c %d>%d fix %s%lu.%lus", yn_c(r.eph), before.eph, after.eph, (r.hot > 0) ? "" : ">",
+                (unsigned long)(r.fix_ms / 1000U), (unsigned long)((r.fix_ms % 1000U) / 100U));
         scr_refresh(true);
 
-        bbr_ok += r->bbr_kept ? 1U : 0U;
-        eph_ok += r->eph_kept ? 1U : 0U;
-        hot_ok += r->hot ? 1U : 0U;
-        reset_n += r->reset ? 1U : 0U;
+        count_yn(r.cfg, &cfg_y, &cfg_n, &cfg_u);
+        count_yn(r.bbr, &bbr_y, &bbr_n, &bbr_u);
+        count_yn(r.reset, &rst_y, &rst_n, &rst_u);
+        count_yn(r.eph, &eph_y, &eph_n, &eph_u);
+        count_yn(r.hot, &hot_y, &hot_n, &hot_u);
     }
 
-    const unsigned n = (unsigned)PURRGO_HWTEST_GNSS_EN_CYCLES;
-
-    HT("HWTEST GNSS_BBR === EN SUMMARY: BBR kept %u/%u, ephemerides kept %u/%u, hot start (fix <= 8 s) %u/%u,"
-       " core reset %u/%u, no reply %u/%u ===\r\n", bbr_ok, n, eph_ok, n, hot_ok, n, reset_n, n, dead_n, n);
-    if (hot_ok == n)
+    HT("HWTEST GNSS_BBR === EN SUMMARY (yes/no/unknown of %u cycles): config retained %u/%u/%u, marker in BBR %u/%u/%u,"
+       " core reset %u/%u/%u, ephemerides kept %u/%u/%u, hot start %u/%u/%u, no reply %u ===\r\n", n, cfg_y, cfg_n,
+       cfg_u, bbr_y, bbr_n, bbr_u, rst_y, rst_n, rst_u, eph_y, eph_n, eph_u, hot_y, hot_n, hot_u, dead_n);
+    if (hot_y == n)
     {
-        HT("HWTEST GNSS_BBR EN VERDICT: state survives EN low - the EN cycle scheme gives hot starts\r\n");
+        HT("HWTEST GNSS_BBR EN VERDICT: nav data survives EN low (hot start every cycle). Configuration: %s\r\n",
+           (cfg_y == n) ? "also kept (BBR)" : ((cfg_n == n) ? "LOST - must be re-sent after every EN high" : "unclear, see cycles"));
     }
-    else if (eph_ok == 0U && hot_ok == 0U)
+    else if ((hot_n == n) && (eph_n == n))
     {
         HT("HWTEST GNSS_BBR EN VERDICT: ephemerides are lost on EN low - every fix is a cold start\r\n");
     }
     else
     {
-        HT("HWTEST GNSS_BBR EN VERDICT: mixed result, see per-cycle lines above\r\n");
+        HT("HWTEST GNSS_BBR EN VERDICT: mixed or incomplete result, see per-cycle lines above\r\n");
     }
-    res_add("EN: BBR %u/%u eph %u/%u hot %u/%u", bbr_ok, n, eph_ok, n, hot_ok, n);
+    res_add("EN cfg%u/%u eph%u/%u hot%u/%u", cfg_y, n, eph_y, n, hot_y, n);
     scr_refresh(true);
 }
 
@@ -875,6 +988,7 @@ static void run_psmoo_phase(void)
     unsigned opm_lost = 0U;
     unsigned nmea_back = 0U;
     unsigned silences = 0U;
+    bool mode_in_bbr = true;
 
     HT("HWTEST GNSS_BBR === phase PSMOO: period %u s, on-time %u s, %u bursts ===\r\n",
        (unsigned)PURRGO_HWTEST_GNSS_PSMOO_PERIOD_S, (unsigned)PURRGO_HWTEST_GNSS_PSMOO_ONTIME_S,
@@ -891,13 +1005,35 @@ static void run_psmoo_phase(void)
         return;
     }
 
+    /* PSM не работает с SBAS (manual; в рабочей прошивке он тоже выключается до PSM-ключей). Смена набора
+     * систем перезапускает ГНСС, поэтому после неё пауза и повторная проверка связи. */
+    static const purrgo_ubx_cfg_item_t sbas_off = { KEY_SBAS, 0U };
+    const int c0 = valset(LAYER_RAM_BBR, &sbas_off, 1U);
+
+    delay_ms(2500U);
+    (void)link_up(HAL_GetTick(), 10000U, NULL);
+
     const int c1 = valset(LAYER_RAM_BBR, out_cfg, sizeof out_cfg / sizeof out_cfg[0]);
     const int c2 = valset(LAYER_RAM_BBR, pm_params, sizeof pm_params / sizeof pm_params[0]);
-    const int c3 = valset(LAYER_RAM_BBR, &pm_mode, 1U);
+    int c3 = valset(LAYER_RAM_BBR, &pm_mode, 1U);
 
-    HT("HWTEST GNSS_BBR PSMOO: config RAM+BBR: output %s, params %s, mode %s\r\n", rc_text(c1), rc_text(c2),
-       rc_text(c3));
-    res_add("cfg out %s par %s mode %s", rc_text(c1), rc_text(c2), rc_text(c3));
+    if (c3 == 0)
+    {
+        /* Диагностика: принимает ли приёмник режим хотя бы в RAM (тогда в BBR он его отклоняет). */
+        const int c3r = valset(LAYER_RAM, &pm_mode, 1U);
+
+        HT("HWTEST GNSS_BBR PSMOO: OPERATEMODE=PSMOO rejected for RAM+BBR, RAM only -> %s\r\n", rc_text(c3r));
+        if (c3r == 1)
+        {
+            mode_in_bbr = false;
+            c3 = 1;
+        }
+    }
+
+    HT("HWTEST GNSS_BBR PSMOO: config: SBAS off %s, output %s, params %s, mode %s (%s)\r\n", rc_text(c0),
+       rc_text(c1), rc_text(c2), rc_text(c3), mode_in_bbr ? "RAM+BBR" : "RAM only");
+    res_add("sbas %s out %s par %s", rc_text(c0), rc_text(c1), rc_text(c2));
+    res_add("mode %s (%s)", rc_text(c3), mode_in_bbr ? "BBR" : "RAM");
     if ((c1 != 1) || (c2 != 1) || (c3 != 1))
     {
         HT("HWTEST GNSS_BBR PSMOO: configuration not accepted, phase aborted\r\n");
@@ -954,16 +1090,18 @@ static void run_psmoo_phase(void)
                 const bool nmea = (s_nmea_dollars != 0U);
 
                 bbr_lost += (s.bbr[0] != 1) ? 1U : 0U;
-                opm_lost += (s.bbr[1] != 1) ? 1U : 0U;
+                const int32_t op = mode_in_bbr ? s.bbr[1] : s.ram[1];
+
+                opm_lost += (op != 1) ? 1U : 0U;
                 nmea_back += nmea ? 1U : 0U;
                 s_nmea_dollars = 0U;
                 res_add("B%u mk:%c op:%c nm:%c sv%u e%d", bursts, (s.bbr[0] == 1) ? 'Y' : 'N',
-                        (s.bbr[1] == 1) ? 'Y' : 'N', nmea ? 'Y' : 'n', (unsigned)s_pvt.num_sv, s.eph);
+                        (op == 1) ? 'Y' : 'N', nmea ? 'Y' : 'n', (unsigned)s_pvt.num_sv, s.eph);
                 head_set(2, "burst %u/%u psm=%u", bursts, (unsigned)PURRGO_HWTEST_GNSS_PSMOO_CYCLES,
                          (unsigned)s_pvt.psm);
                 head_set(3, "fix=%u sv=%u msss=%lu", (unsigned)s_pvt.fix_type, (unsigned)s_pvt.num_sv,
                          (unsigned long)s.msss);
-                head_set(4, "BBR mk=%ld op=%ld", (long)s.bbr[0], (long)s.bbr[1]);
+                head_set(4, "mk=%ld op=%ld (%s)", (long)s.bbr[0], (long)op, mode_in_bbr ? "BBR" : "RAM");
                 scr_refresh(true);
 
                 last_pvt_seq = s_seq_pvt;
@@ -1064,6 +1202,13 @@ void purrgo_hw_test_gnss_bbr(void)
     log_snap("initial", &base);
     HT("HWTEST GNSS_BBR: initial state above shows leftovers of earlier runs (marker/OPERATEMODE in BBR)\r\n");
     cleanup_receiver("initial");
+    {
+        /* NMEA на 38400 бод задерживает ответы на опросы на секунду и больше: на время теста он выключается. */
+        static const purrgo_ubx_cfg_item_t nmea_off = { KEY_NMEA_UART1, 0U };
+
+        HT("HWTEST GNSS_BBR: NMEA off (RAM) -> %s\r\n", rc_text(valset(LAYER_RAM, &nmea_off, 1U)));
+    }
+    s_t_first_fix = 0U;
 
     /* 1. ACQ. */
     head_set(0, "GNSS_BBR  acquire");
