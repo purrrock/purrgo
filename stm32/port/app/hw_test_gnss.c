@@ -20,8 +20,10 @@
  *      питание ядра пропадало), число спутников с эфемеридами и альманахом (UBX-NAV-ORB), достоверность времени.
  *      Время до фикса берётся из момента приёма первого PVT с фиксом (hot start около 1-3 с, cold start 25-30 с).
  *      Результат каждого пункта: yes / NO / ? (не удалось определить, например приёмник не ответил на опрос).
- *   3. PSMOO. SBAS выключается (с ним PSM не принимается), параметры PSMOO и вывод UBX-NAV-PVT / NAV-STATUS
- *      записываются в RAM и BBR (как у трекера); если приёмник отклоняет режим в BBR, он пробуется только в RAM.
+ *   3. PSMOO. Набор систем как в рабочей прошивке (SBAS, GLONASS и BeiDou B1C выключены, B1I включён; после смены
+ *      ГНСС перезапускается, тест ждёт фикс), затем вывод UBX-NAV-PVT / NAV-STATUS и параметры PSMOO в RAM и BBR
+ *      (как у трекера) и режим PSMOO последним ключом. При отказе (NAK) на режим тест сам ищет причину: пробует
+ *      только RAM и, как контроль, PSMCT в RAM (принимается ли PSM вообще).
  *      Тест слушает всплески данных: на каждом новом всплеске (приёмник проснулся) снимок тех же величин
  *      (запросы уходят, пока приёмник бодрствует ONTIME). Признаки сброса настройки: пропал маркер BBR,
  *      пропал режим PSMOO в BBR, снова пошёл NMEA (он выключен настройкой), приёмник молчит дольше
@@ -114,6 +116,10 @@
 #define KEY_MARKER         0x1041000DU   /* CFG-ITFM-ENABLE, L: по умолчанию 0; маркер "BBR жив" */
 #define KEY_NMEA_UART1     0x10740002U   /* CFG-UART1OUTPROT-NMEA, L */
 #define KEY_SBAS           0x10310020U   /* CFG-SIGNAL-SBAS_ENA, L: по умолчанию 1; для PSM нужно 0 */
+#define KEY_SIG_GLO        0x10310025U   /* CFG-SIGNAL-GLO_ENA, L: по умолчанию 0 */
+#define KEY_SIG_BDS        0x10310022U   /* CFG-SIGNAL-BDS_ENA, L: по умолчанию 0 */
+#define KEY_SIG_BDS_B1     0x1031000DU   /* CFG-SIGNAL-BDS_B1_ENA (B1I), L: по умолчанию 0 */
+#define KEY_SIG_BDS_B1C    0x1031000FU   /* CFG-SIGNAL-BDS_B1C_ENA, L: по умолчанию 1; в PSM не поддерживается */
 #define KEY_MSGOUT_PVT     0x20910007U   /* CFG-MSGOUT-UBX_NAV_PVT_UART1, U1 */
 #define KEY_MSGOUT_STATUS  0x2091001BU   /* CFG-MSGOUT-UBX_NAV_STATUS_UART1, U1 */
 #define KEY_PM_OPMODE      0x20D00001U   /* CFG-PM-OPERATEMODE, E1: 0 FULL, 1 PSMOO, 2 PSMCT */
@@ -722,13 +728,15 @@ static void cleanup_receiver(const char *why)
 {
     static const purrgo_ubx_cfg_item_t ram_restore[] = {
         { KEY_PM_OPMODE, 0U }, { KEY_NMEA_UART1, 1U }, { KEY_MSGOUT_PVT, 0U },
-        { KEY_MSGOUT_STATUS, 0U }, { KEY_MARKER, 0U }, { KEY_SBAS, 1U },
+        { KEY_MSGOUT_STATUS, 0U }, { KEY_MARKER, 0U },
+        /* Заводской набор систем; сначала выключения, потом включения (B1I несовместим с B1C и GLONASS). */
+        { KEY_SIG_GLO, 0U }, { KEY_SIG_BDS, 0U }, { KEY_SIG_BDS_B1, 0U }, { KEY_SIG_BDS_B1C, 1U }, { KEY_SBAS, 1U },
     };
     static const uint32_t del1[] = {
         KEY_MARKER, KEY_PM_OPMODE, KEY_PM_POSPERIOD, KEY_PM_ACQPERIOD, KEY_PM_ONTIME, KEY_PM_NOOFF,
         KEY_MSGOUT_PVT, KEY_MSGOUT_STATUS,
     };
-    static const uint32_t del2[] = { KEY_NMEA_UART1, KEY_SBAS };
+    static const uint32_t del2[] = { KEY_NMEA_UART1, KEY_SBAS, KEY_SIG_GLO, KEY_SIG_BDS, KEY_SIG_BDS_B1, KEY_SIG_BDS_B1C };
 
     wake_receiver();
     const int a = valset(LAYER_RAM, ram_restore, sizeof ram_restore / sizeof ram_restore[0]);
@@ -1005,13 +1013,27 @@ static void run_psmoo_phase(void)
         return;
     }
 
-    /* PSM не работает с SBAS (manual; в рабочей прошивке он тоже выключается до PSM-ключей). Смена набора
-     * систем перезапускает ГНСС, поэтому после неё пауза и повторная проверка связи. */
-    static const purrgo_ubx_cfg_item_t sbas_off = { KEY_SBAS, 0U };
-    const int c0 = valset(LAYER_RAM_BBR, &sbas_off, 1U);
+    /*
+     * Набор систем как в рабочей прошивке (gnss_receiver.c, PURRGO_GNSS_SIGNALS = GPS_GAL_BDS): SBAS выключен
+     * (manual: в PSM он не обрабатывается), GLONASS выключен, BeiDou B1C выключен (в PSM не поддерживается;
+     * по умолчанию он включён), B1I включён. Порядок тоже как там: сначала выключения, потом включения.
+     * Смена набора перезапускает ГНСС, поэтому после неё ждём связь и фикс (рабочий трекер входит в PSMOO с фиксом).
+     */
+    static const purrgo_ubx_cfg_item_t signals[] = {
+        { KEY_SBAS, 0U }, { KEY_SIG_GLO, 0U }, { KEY_SIG_BDS_B1C, 0U }, { KEY_SIG_BDS_B1, 1U }, { KEY_SIG_BDS, 1U },
+    };
+    const int c0 = valset(LAYER_RAM_BBR, signals, sizeof signals / sizeof signals[0]);
 
-    delay_ms(2500U);
+    delay_ms(3000U);
     (void)link_up(HAL_GetTick(), 10000U, NULL);
+
+    uint32_t pre_fix_ms = 0U;
+
+    s_t_first_fix = 0U;
+    const bool pre_fix = wait_fix(HAL_GetTick(), 90U, "PSM-pre", &pre_fix_ms);
+
+    HT("HWTEST GNSS_BBR PSMOO: signals (SBAS/GLO/B1C off, B1I on) RAM+BBR -> %s; fix %s (%lu ms)\r\n", rc_text(c0),
+       pre_fix ? "obtained" : "NOT obtained in 90 s", (unsigned long)pre_fix_ms);
 
     const int c1 = valset(LAYER_RAM_BBR, out_cfg, sizeof out_cfg / sizeof out_cfg[0]);
     const int c2 = valset(LAYER_RAM_BBR, pm_params, sizeof pm_params / sizeof pm_params[0]);
@@ -1019,20 +1041,39 @@ static void run_psmoo_phase(void)
 
     if (c3 == 0)
     {
-        /* Диагностика: принимает ли приёмник режим хотя бы в RAM (тогда в BBR он его отклоняет). */
+        /*
+         * Диагностика отказа. (a) только RAM; (b) контроль: PSMCT в RAM (в рабочей прошивке принимается):
+         * если принят, PSM как таковой возможен и отклоняется именно PSMOO; если нет, мешает общее
+         * условие (набор систем, состояние приёмника).
+         */
+        static const purrgo_ubx_cfg_item_t ct_mode = { KEY_PM_OPMODE, 2U };
+        static const purrgo_ubx_cfg_item_t full_mode = { KEY_PM_OPMODE, 0U };
         const int c3r = valset(LAYER_RAM, &pm_mode, 1U);
 
-        HT("HWTEST GNSS_BBR PSMOO: OPERATEMODE=PSMOO rejected for RAM+BBR, RAM only -> %s\r\n", rc_text(c3r));
+        HT("HWTEST GNSS_BBR PSMOO: OPERATEMODE=PSMOO rejected for RAM+BBR; RAM only -> %s\r\n", rc_text(c3r));
         if (c3r == 1)
         {
             mode_in_bbr = false;
             c3 = 1;
         }
+        else
+        {
+            const int ct = valset(LAYER_RAM, &ct_mode, 1U);
+
+            HT("HWTEST GNSS_BBR PSMOO: control OPERATEMODE=PSMCT (RAM) -> %s: %s\r\n", rc_text(ct),
+               (ct == 1) ? "PSM in general is accepted, only PSMOO is rejected"
+                         : "PSM is rejected altogether (precondition: signals, time, receiver state)");
+            res_add("control PSMCT: %s", rc_text(ct));
+            if (ct == 1)
+            {
+                (void)valset(LAYER_RAM, &full_mode, 1U);
+            }
+        }
     }
 
-    HT("HWTEST GNSS_BBR PSMOO: config: SBAS off %s, output %s, params %s, mode %s (%s)\r\n", rc_text(c0),
+    HT("HWTEST GNSS_BBR PSMOO: config: signals %s, output %s, params %s, mode %s (%s)\r\n", rc_text(c0),
        rc_text(c1), rc_text(c2), rc_text(c3), mode_in_bbr ? "RAM+BBR" : "RAM only");
-    res_add("sbas %s out %s par %s", rc_text(c0), rc_text(c1), rc_text(c2));
+    res_add("sig %s out %s par %s", rc_text(c0), rc_text(c1), rc_text(c2));
     res_add("mode %s (%s)", rc_text(c3), mode_in_bbr ? "BBR" : "RAM");
     if ((c1 != 1) || (c2 != 1) || (c3 != 1))
     {
