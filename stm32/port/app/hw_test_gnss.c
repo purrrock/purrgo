@@ -24,10 +24,10 @@
  *      ГНСС перезапускается, тест ждёт фикс), затем вывод UBX-NAV-PVT / NAV-STATUS и параметры PSMOO в RAM и BBR
  *      (как у трекера) и режим PSMOO последним ключом. При отказе (NAK) на режим тест сам ищет причину: пробует
  *      только RAM и, как контроль, PSMCT в RAM (принимается ли PSM вообще).
- *      Тест слушает всплески данных: на каждом новом всплеске (приёмник проснулся) снимок тех же величин
- *      (запросы уходят, пока приёмник бодрствует ONTIME). Признаки сброса настройки: пропал маркер BBR,
- *      пропал режим PSMOO в BBR, снова пошёл NMEA (он выключен настройкой), приёмник молчит дольше
- *      ожидаемого (тогда он будится опросом и проверяется на обеих скоростях).
+ *      Наблюдение пассивное (тест ничего не отправляет, любая передача будит приёмник): по потоку PVT/STATUS на
+ *      каждом всплеске определяются интервал между началами всплесков, длительность работы, msss первого STATUS
+ *      (малое значение - ядро стартовало заново после "off"), ttff, ошибки UART и возврат NMEA (настройка потеряна).
+ *      В конце один опрос проверяет маркер и режим PSMOO в BBR. Тишина дольше периода будит приёмник опросом.
  *   4. Откат. Из BBR удаляются все ключи теста, в RAM возвращается полный режим.
  *
  * Настройки (-D при сборке, значения по умолчанию ниже):
@@ -40,6 +40,7 @@
  *   PURRGO_HWTEST_GNSS_PSMOO_PERIOD_S    15
  *   PURRGO_HWTEST_GNSS_PSMOO_ONTIME_S    2
  *   PURRGO_HWTEST_GNSS_PSMOO_CYCLES      6      сколько всплесков наблюдать
+ *   PURRGO_HWTEST_GNSS_PSMOO_BAUD        0      115200: скорость модуля пишется в RAM и BBR (как в рабочей прошивке)
  *
  * Тест нужно запускать на улице (или у окна с хорошим небом): без фикса сравнение эфемерид и времени фикса
  * теряет смысл (тест об этом напишет).
@@ -95,6 +96,13 @@
 #ifndef PURRGO_HWTEST_GNSS_PSMOO_CYCLES
 #define PURRGO_HWTEST_GNSS_PSMOO_CYCLES 6U
 #endif
+/* 0 - скорость модуля не меняется (38400); 115200 - как в рабочей прошивке: скорость пишется в RAM и BBR. */
+#ifndef PURRGO_HWTEST_GNSS_PSMOO_BAUD
+#define PURRGO_HWTEST_GNSS_PSMOO_BAUD 0U
+#endif
+#if (PURRGO_HWTEST_GNSS_PSMOO_BAUD != 0U) && (PURRGO_HWTEST_GNSS_PSMOO_BAUD != 115200U)
+#error "PURRGO_HWTEST_GNSS_PSMOO_BAUD must be 0 or 115200"
+#endif
 
 #define HT(...) purrgo_logger_write(__VA_ARGS__)
 
@@ -116,6 +124,7 @@
 #define KEY_MARKER         0x1041000DU   /* CFG-ITFM-ENABLE, L: по умолчанию 0; маркер "BBR жив" */
 #define KEY_NMEA_UART1     0x10740002U   /* CFG-UART1OUTPROT-NMEA, L */
 #define KEY_SBAS           0x10310020U   /* CFG-SIGNAL-SBAS_ENA, L: по умолчанию 1; для PSM нужно 0 */
+#define KEY_UART_BAUD      0x40520001U   /* CFG-UART1-BAUDRATE, U4 */
 #define KEY_SIG_GLO        0x10310025U   /* CFG-SIGNAL-GLO_ENA, L: по умолчанию 0 */
 #define KEY_SIG_BDS        0x10310022U   /* CFG-SIGNAL-BDS_ENA, L: по умолчанию 0 */
 #define KEY_SIG_BDS_B1     0x1031000DU   /* CFG-SIGNAL-BDS_B1_ENA (B1I), L: по умолчанию 0 */
@@ -723,6 +732,27 @@ static void wake_receiver(void)
     delay_ms(300U);
 }
 
+/*
+ * Сменить скорость модуля и МК. ACK на команду смены скорости может прийти на старой или на новой скорости,
+ * поэтому он не ждётся: после паузы скорость МК меняется и связь проверяется опросом.
+ */
+static bool set_module_baud(uint32_t baud, uint8_t layers)
+{
+    const purrgo_ubx_cfg_item_t item = { KEY_UART_BAUD, baud };
+    uint8_t frame[64];
+    const size_t n = purrgo_ubx_build_valset(frame, sizeof frame, layers, &item, 1U);
+
+    if ((n == 0U) || !tx_raw(frame, n))
+    {
+        return false;
+    }
+    delay_ms(250U);
+    (void)purrgo_gnss_raw_set_baud(baud);
+    s_baud = baud;
+    purrgo_ubx_parser_init(&s_parser);
+    return link_up(HAL_GetTick(), 6000U, NULL);
+}
+
 /* Вернуть приёмник в обычное состояние: ключи теста из BBR удалены, в RAM полный режим и NMEA. */
 static void cleanup_receiver(const char *why)
 {
@@ -736,9 +766,18 @@ static void cleanup_receiver(const char *why)
         KEY_MARKER, KEY_PM_OPMODE, KEY_PM_POSPERIOD, KEY_PM_ACQPERIOD, KEY_PM_ONTIME, KEY_PM_NOOFF,
         KEY_MSGOUT_PVT, KEY_MSGOUT_STATUS,
     };
-    static const uint32_t del2[] = { KEY_NMEA_UART1, KEY_SBAS, KEY_SIG_GLO, KEY_SIG_BDS, KEY_SIG_BDS_B1, KEY_SIG_BDS_B1C };
+    static const uint32_t del2[] = {
+        KEY_NMEA_UART1, KEY_SBAS, KEY_SIG_GLO, KEY_SIG_BDS, KEY_SIG_BDS_B1, KEY_SIG_BDS_B1C, KEY_UART_BAUD,
+    };
 
     wake_receiver();
+    if (s_baud != BAUD_FACTORY)
+    {
+        /* Модуль мог остаться на рабочей скорости (BBR прошлого запуска или PSMOO_BAUD): вернуть заводскую. */
+        HT("HWTEST GNSS_BBR cleanup (%s): module at %lu baud, restoring %u\r\n", why, (unsigned long)s_baud,
+           (unsigned)BAUD_FACTORY);
+        (void)set_module_baud(BAUD_FACTORY, LAYER_RAM);
+    }
     const int a = valset(LAYER_RAM, ram_restore, sizeof ram_restore / sizeof ram_restore[0]);
     const int b = valdel_bbr(del1, sizeof del1 / sizeof del1[0]);
     const int c = valdel_bbr(del2, sizeof del2 / sizeof del2[0]);
@@ -991,9 +1030,6 @@ static void run_psmoo_phase(void)
     static const purrgo_ubx_cfg_item_t pm_mode = { KEY_PM_OPMODE, 1U };
 
     const uint32_t silence_ms = ((2U * PURRGO_HWTEST_GNSS_PSMOO_PERIOD_S) + 15U) * 1000U;
-    unsigned bursts = 0U;
-    unsigned bbr_lost = 0U;
-    unsigned opm_lost = 0U;
     unsigned nmea_back = 0U;
     unsigned silences = 0U;
     bool mode_in_bbr = true;
@@ -1035,6 +1071,14 @@ static void run_psmoo_phase(void)
     HT("HWTEST GNSS_BBR PSMOO: signals (SBAS/GLO/B1C off, B1I on) RAM+BBR -> %s; fix %s (%lu ms)\r\n", rc_text(c0),
        pre_fix ? "obtained" : "NOT obtained in 90 s", (unsigned long)pre_fix_ms);
 
+#if PURRGO_HWTEST_GNSS_PSMOO_BAUD != 0U
+    /* Как в рабочей прошивке: скорость UART пишется и в BBR (иначе после "off" модуль вернулся бы на 38400). */
+    const bool baud_ok = set_module_baud(PURRGO_HWTEST_GNSS_PSMOO_BAUD, LAYER_RAM_BBR);
+
+    HT("HWTEST GNSS_BBR PSMOO: module baud -> %lu (RAM+BBR): link %s\r\n",
+       (unsigned long)PURRGO_HWTEST_GNSS_PSMOO_BAUD, baud_ok ? "OK" : "LOST");
+    res_add("baud %lu: %s", (unsigned long)PURRGO_HWTEST_GNSS_PSMOO_BAUD, baud_ok ? "OK" : "LOST");
+#endif
     const int c1 = valset(LAYER_RAM_BBR, out_cfg, sizeof out_cfg / sizeof out_cfg[0]);
     const int c2 = valset(LAYER_RAM_BBR, pm_params, sizeof pm_params / sizeof pm_params[0]);
     int c3 = valset(LAYER_RAM_BBR, &pm_mode, 1U);
@@ -1081,91 +1125,109 @@ static void run_psmoo_phase(void)
         return;
     }
 
+    /*
+     * Наблюдение ПАССИВНОЕ: тест ничего не отправляет, пока идут всплески (любая передача на RX будит приёмник из
+     * "off" и удерживает его: прошлый прогон показал, что опросы меняли ритм). Всплеск - это серия периодических
+     * PVT/STATUS; пауза больше 3 с - приёмник ушёл в "off". Из потока берутся: интервал между началами
+     * всплесков (сетка периода), длительность работы, msss первого STATUS всплеска (малое значение - ядро
+     * стартовало заново после "off"), ttff, состояние PSM, спутники, ошибки UART, возврат NMEA (настройка потеряна).
+     * Маркер и режим в BBR проверяются опросом один раз в конце.
+     */
     s_nmea_dollars = 0U;
     const uint32_t t_start = HAL_GetTick();
-    uint32_t last_pvt_seq = s_seq_pvt;
-    uint32_t t_last_pvt = t_start;
-    uint32_t t_burst_start = 0U;
-    uint32_t err_before = purrgo_gnss_raw_errors();
+    const uint32_t total_ms = ((PURRGO_HWTEST_GNSS_PSMOO_CYCLES + 2U) * PURRGO_HWTEST_GNSS_PSMOO_PERIOD_S + 180U) * 1000U;
+    uint32_t seen_pvt = s_seq_pvt;
+    uint32_t seen_sta = s_seq_status;
+    uint32_t t_last_frame = t_start;
+    uint32_t t_prev_burst = 0U;
+    uint32_t t_burst = 0U;
+    uint32_t gap_ms = 0U;
+    uint32_t msss_first = 0U;
+    uint32_t frames = 0U;
+    uint32_t err_mark = purrgo_gnss_raw_errors();
+    uint32_t err_all = 0U;
     bool in_burst = false;
+    bool sta_seen = false;
+    unsigned done = 0U;
 
-    while (bursts < PURRGO_HWTEST_GNSS_PSMOO_CYCLES)
+    while (done < PURRGO_HWTEST_GNSS_PSMOO_CYCLES)
     {
         idle_step();
 
         const uint32_t now = HAL_GetTick();
 
-        if ((uint32_t)(now - t_start) > (((PURRGO_HWTEST_GNSS_PSMOO_CYCLES + 2U) *
-                                          PURRGO_HWTEST_GNSS_PSMOO_PERIOD_S) + 180U) * 1000U)
+        if ((uint32_t)(now - t_start) > total_ms)
         {
-            HT("HWTEST GNSS_BBR PSMOO: overall timeout, only %u bursts seen\r\n", bursts);
+            HT("HWTEST GNSS_BBR PSMOO: overall timeout, %u bursts completed\r\n", done);
             break;
         }
-
-        if (s_seq_pvt != last_pvt_seq)
+        if (s_nmea_dollars != 0U)
         {
-            const bool new_burst = !in_burst || ((uint32_t)(now - t_last_pvt) > 3000U);
-            const uint32_t gap = now - t_last_pvt;
+            nmea_back++;
+            HT("HWTEST GNSS_BBR PSMOO: NMEA '$' x%lu appeared - receiver is back to factory output (configuration lost)\r\n",
+               (unsigned long)s_nmea_dollars);
+            s_nmea_dollars = 0U;
+        }
 
-            last_pvt_seq = s_seq_pvt;
-            t_last_pvt = now;
-            if (new_burst)
+        const bool got_pvt = (s_seq_pvt != seen_pvt);
+        const bool got_sta = (s_seq_status != seen_sta);
+
+        if (got_pvt || got_sta)
+        {
+            seen_pvt = s_seq_pvt;
+            seen_sta = s_seq_status;
+            t_last_frame = now;
+            if (!in_burst)
             {
-                snap_t s;
-
                 in_burst = true;
-                bursts++;
-                t_burst_start = now;
-
-                /* Приёмник бодрствует ONTIME секунд: снимок сразу (запросы тоже не дают ему уснуть). */
-                take_snapshot(&s);
-                const uint32_t errs = purrgo_gnss_raw_errors() - err_before;
-
-                err_before = purrgo_gnss_raw_errors();
-                HT("HWTEST GNSS_BBR PSMOO burst %u: t=%lu s, gap=%lu ms, psm=%u fix=%u sv=%u, NMEA '$' since last=%lu,"
-                   " UART rx errors since last=%lu\r\n", bursts, (unsigned long)((now - t_start) / 1000U),
-                   (unsigned long)gap, (unsigned)s_pvt.psm, (unsigned)s_pvt.fix_type, (unsigned)s_pvt.num_sv,
-                   (unsigned long)s_nmea_dollars, (unsigned long)errs);
-                log_snap("burst", &s);
-
-                const bool nmea = (s_nmea_dollars != 0U);
-
-                bbr_lost += (s.bbr[0] != 1) ? 1U : 0U;
-                const int32_t op = mode_in_bbr ? s.bbr[1] : s.ram[1];
-
-                opm_lost += (op != 1) ? 1U : 0U;
-                nmea_back += nmea ? 1U : 0U;
-                s_nmea_dollars = 0U;
-                res_add("B%u mk:%c op:%c nm:%c sv%u e%d", bursts, (s.bbr[0] == 1) ? 'Y' : 'N',
-                        (op == 1) ? 'Y' : 'N', nmea ? 'Y' : 'n', (unsigned)s_pvt.num_sv, s.eph);
-                head_set(2, "burst %u/%u psm=%u", bursts, (unsigned)PURRGO_HWTEST_GNSS_PSMOO_CYCLES,
-                         (unsigned)s_pvt.psm);
-                head_set(3, "fix=%u sv=%u msss=%lu", (unsigned)s_pvt.fix_type, (unsigned)s_pvt.num_sv,
-                         (unsigned long)s.msss);
-                head_set(4, "mk=%ld op=%ld (%s)", (long)s.bbr[0], (long)op, mode_in_bbr ? "BBR" : "RAM");
-                scr_refresh(true);
-
-                last_pvt_seq = s_seq_pvt;
-                t_last_pvt = HAL_GetTick();
+                sta_seen = false;
+                frames = 0U;
+                t_burst = now;
+                gap_ms = (t_prev_burst != 0U) ? (uint32_t)(now - t_prev_burst) : 0U;
+            }
+            if (got_pvt)
+            {
+                frames++;
+            }
+            if (got_sta && !sta_seen)
+            {
+                sta_seen = true;
+                msss_first = s_st.msss;
             }
         }
-        else if (in_burst && ((uint32_t)(now - t_last_pvt) > 3000U))
+        else if (in_burst && ((uint32_t)(now - t_last_frame) > 3000U))
         {
-            in_burst = false;   /* всплеск закончился: приёмник в "off" */
-            HT("HWTEST GNSS_BBR PSMOO: burst %u ended after %lu ms, receiver silent (off)\r\n", bursts,
-               (unsigned long)(t_last_pvt - t_burst_start));
-        }
+            const uint32_t on_ms = (uint32_t)(t_last_frame - t_burst);
+            const uint32_t errs = purrgo_gnss_raw_errors() - err_mark;
 
-        /* Слишком долгая тишина: опрос будит приёмник и показывает, жив ли он и в каком состоянии. */
-        if ((uint32_t)(now - t_last_pvt) > silence_ms)
+            err_mark = purrgo_gnss_raw_errors();
+            err_all += errs;
+            done++;
+            in_burst = false;
+            t_prev_burst = t_burst;
+            HT("HWTEST GNSS_BBR PSMOO burst %u: t=%lu s, start-to-start %lu ms (period %u s), on %lu ms, PVT frames %lu,"
+               " msss at first STATUS %lu ms (small = core restarted), last msss %lu ms, receiver ttff %lu ms,"
+               " psm=%u fix=%u sv=%u, UART errors %lu\r\n", done, (unsigned long)((t_burst - t_start) / 1000U),
+               (unsigned long)gap_ms, (unsigned)PURRGO_HWTEST_GNSS_PSMOO_PERIOD_S, (unsigned long)on_ms,
+               (unsigned long)frames, (unsigned long)msss_first, (unsigned long)s_st.msss, (unsigned long)s_st.ttff,
+               (unsigned)s_pvt.psm, (unsigned)s_pvt.fix_type, (unsigned)s_pvt.num_sv, (unsigned long)errs);
+            res_add("B%u g%lu.%lu on%lu.%lu t%lu sv%u", done, (unsigned long)(gap_ms / 1000U),
+                    (unsigned long)((gap_ms % 1000U) / 100U), (unsigned long)(on_ms / 1000U),
+                    (unsigned long)((on_ms % 1000U) / 100U), (unsigned long)s_st.ttff, (unsigned)s_pvt.num_sv);
+            head_set(2, "burst %u/%u psm=%u", done, (unsigned)PURRGO_HWTEST_GNSS_PSMOO_CYCLES, (unsigned)s_pvt.psm);
+            head_set(3, "fix=%u sv=%u nmea=%u", (unsigned)s_pvt.fix_type, (unsigned)s_pvt.num_sv, nmea_back);
+            scr_refresh(false);
+        }
+        else if (!in_burst && ((uint32_t)(now - t_last_frame) > silence_ms))
         {
+            /* Настоящая тишина: опрос будит приёмник и показывает, жив ли он и на какой скорости. */
             snap_t s;
 
             silences++;
-            HT("HWTEST GNSS_BBR PSMOO: SILENT for %lu ms (expected a burst every %u s), probing at %lu baud and the other one\r\n",
-               (unsigned long)(now - t_last_pvt), (unsigned)PURRGO_HWTEST_GNSS_PSMOO_PERIOD_S, (unsigned long)s_baud);
+            HT("HWTEST GNSS_BBR PSMOO: SILENT for %lu ms (expected a burst every %u s), probing (wakes the receiver)\r\n",
+               (unsigned long)(now - t_last_frame), (unsigned)PURRGO_HWTEST_GNSS_PSMOO_PERIOD_S);
             wake_receiver();
-            const bool alive = link_up(HAL_GetTick(), 6000U, NULL);
+            const bool alive = link_up(HAL_GetTick(), 8000U, NULL);
 
             take_snapshot(&s);
             log_snap("after-silence", &s);
@@ -1173,29 +1235,41 @@ static void run_psmoo_phase(void)
                alive ? "ALIVE" : "DEAD", (unsigned long)s_baud, (unsigned long)s_nmea_dollars);
             res_add("silence: %s %lu bd", alive ? "alive" : "DEAD", (unsigned long)s_baud);
             scr_refresh(true);
-            if (!alive || (silences >= 3U))
+            if (!alive || (silences >= 2U))
             {
                 break;
             }
-            t_last_pvt = HAL_GetTick();
-            last_pvt_seq = s_seq_pvt;
+            seen_pvt = s_seq_pvt;
+            seen_sta = s_seq_status;
+            t_last_frame = HAL_GetTick();
             in_burst = false;
         }
     }
 
+    /* Итоговая проверка опросом (будит приёмник): маркер и режим в BBR и RAM. */
+    snap_t fin;
+
+    wake_receiver();
+    (void)link_up(HAL_GetTick(), 8000U, NULL);
+    take_snapshot(&fin);
+    log_snap("PSMOO-final", &fin);
+
+    const int32_t op_bbr = fin.bbr[1];
+    const bool final_ok = fin.alive && (fin.bbr_rc > 0) && (fin.bbr[0] == 1) && (mode_in_bbr ? (op_bbr == 1) : (fin.ram[1] == 1));
     const unsigned n = (unsigned)PURRGO_HWTEST_GNSS_PSMOO_CYCLES;
 
-    HT("HWTEST GNSS_BBR === PSMOO SUMMARY: %u/%u bursts seen, BBR marker lost %u, PSMOO mode lost from BBR %u,"
-       " NMEA reappeared %u, silences %u ===\r\n", bursts, n, bbr_lost, opm_lost, nmea_back, silences);
-    if ((bursts == n) && (bbr_lost == 0U) && (opm_lost == 0U) && (nmea_back == 0U) && (silences == 0U))
+    HT("HWTEST GNSS_BBR === PSMOO SUMMARY: %u/%u bursts, NMEA reappeared %u, real silences %u, UART errors %lu,"
+       " final check: marker BBR=%ld, OPERATEMODE BBR=%ld RAM=%ld (%s) ===\r\n", done, n, nmea_back, silences,
+       (unsigned long)err_all, (long)fin.bbr[0], (long)op_bbr, (long)fin.ram[1], final_ok ? "config kept" : "NOT confirmed");
+    if ((done == n) && (nmea_back == 0U) && (silences == 0U) && final_ok)
     {
-        HT("HWTEST GNSS_BBR PSMOO VERDICT: configuration and BBR survived all off/on cycles\r\n");
+        HT("HWTEST GNSS_BBR PSMOO VERDICT: PSMOO ran %u off/on cycles, configuration (BBR) survived\r\n", n);
     }
     else
     {
-        HT("HWTEST GNSS_BBR PSMOO VERDICT: configuration or the receiver was LOST (see burst lines above)\r\n");
+        HT("HWTEST GNSS_BBR PSMOO VERDICT: configuration or the receiver was LOST or the run is incomplete (see above)\r\n");
     }
-    res_add("PSMOO: %u/%u lost bbr%u op%u nm%u", bursts, n, bbr_lost, opm_lost, nmea_back);
+    res_add("PSMOO %u/%u nm%u sil%u bbr:%c", done, n, nmea_back, silences, final_ok ? 'Y' : 'N');
     scr_refresh(true);
 }
 
