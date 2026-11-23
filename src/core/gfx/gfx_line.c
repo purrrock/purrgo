@@ -317,15 +317,17 @@ void gfx_draw_dashed_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1
     }
 }
 
-void gfx_draw_thick_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1, int16_t y1, int16_t thickness)
+/*
+ * Общая реализация толстой линии: по ходу линии (Брезенхем) закрашиваются пиксели
+ * со смещениями поперёк [lo, hi] (для пологой линии - по y, иначе - по x).
+ * caps: на неотсечённых концах закрашивается квадрат [cap_lo, cap_hi]^2 вокруг конца.
+ */
+static void thick_line_impl(
+    gfx_context_t *ctx,
+    int16_t x0, int16_t y0, int16_t x1, int16_t y1,
+    int32_t lo, int32_t hi,
+    bool caps, int32_t cap_lo, int32_t cap_hi)
 {
-    if (ctx == NULL || thickness <= 0) return;
-
-    if (thickness == 1) {
-        gfx_draw_line(ctx, x0, y0, x1, y1);
-        return;
-    }
-
     if (ctx->draw_pixel == NULL) return;
 
     // Сохраняем исходные координаты для отрисовки "шапок" на стыках
@@ -355,34 +357,18 @@ void gfx_draw_thick_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1,
     // Флаг ориентации линии: если dx больше абсолютного dy, линия пологая
     const bool is_horizontal = (dx > -dy);
 
-    // Смещения толщины поперёк линии: [lo, hi] (толщина 2: 0..1, 3: -1..1, иначе по центру).
-    int32_t lo;
-    int32_t hi;
-    if (thickness == 2) {
-        lo = 0;
-        hi = 1;
-    } else if (thickness == 3) {
-        lo = -1;
-        hi = 1;
-    } else {
-        lo = -(int32_t)(thickness >> 1);
-        hi = lo + thickness - 1;
-    }
-
     // Отрисовка концов ("caps"), если они не были отсечены (чтобы не было пробелов на стыках).
-    if (thickness == 2 || thickness == 3) {
-        const int32_t c_lo = (thickness == 2) ? 0 : -1;
-        const int32_t c_hi = 1;
+    if (caps) {
         if (x0 == orig_x0 && y0 == orig_y0) {
-            for (int32_t oy = c_lo; oy <= c_hi; ++oy) {
-                for (int32_t ox = c_lo; ox <= c_hi; ++ox) {
+            for (int32_t oy = cap_lo; oy <= cap_hi; ++oy) {
+                for (int32_t ox = cap_lo; ox <= cap_hi; ++ox) {
                     lp_pixel(&p, (int32_t)orig_x0 + ox, (int32_t)orig_y0 + oy);
                 }
             }
         }
         if (x1 == orig_x1 && y1 == orig_y1) {
-            for (int32_t oy = c_lo; oy <= c_hi; ++oy) {
-                for (int32_t ox = c_lo; ox <= c_hi; ++ox) {
+            for (int32_t oy = cap_lo; oy <= cap_hi; ++oy) {
+                for (int32_t ox = cap_lo; ox <= cap_hi; ++ox) {
                     lp_pixel(&p, (int32_t)orig_x1 + ox, (int32_t)orig_y1 + oy);
                 }
             }
@@ -441,6 +427,63 @@ void gfx_draw_thick_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1,
             cy += sy;
         }
     }
+}
+
+void gfx_draw_thick_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1, int16_t y1, int16_t thickness)
+{
+    if (ctx == NULL || thickness <= 0) return;
+
+    if (thickness == 1) {
+        gfx_draw_line(ctx, x0, y0, x1, y1);
+        return;
+    }
+
+    // Смещения толщины поперёк линии: [lo, hi] (толщина 2: 0..1, 3: -1..1, иначе по центру).
+    int32_t lo;
+    int32_t hi;
+    if (thickness == 2) {
+        lo = 0;
+        hi = 1;
+    } else if (thickness == 3) {
+        lo = -1;
+        hi = 1;
+    } else {
+        lo = -(int32_t)(thickness >> 1);
+        hi = lo + thickness - 1;
+    }
+
+    // Шапки только у толщин 2 и 3.
+    thick_line_impl(ctx, x0, y0, x1, y1, lo, hi,
+                    thickness == 2 || thickness == 3,
+                    (thickness == 2) ? 0 : -1, 1);
+}
+
+void gfx_draw_thick_line_halo(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1, int16_t y1,
+                              int16_t thickness, int16_t halo)
+{
+    if (ctx == NULL || thickness <= 0 || halo < 0) return;
+
+    // Те же смещения, что у gfx_draw_thick_line(thickness), расширенные на halo с обеих сторон.
+    int32_t lo;
+    int32_t hi;
+    int32_t cap_lo;
+    int32_t cap_hi;
+    if (thickness == 1) {
+        lo = 0; hi = 0; cap_lo = 0; cap_hi = 0;
+    } else if (thickness == 2) {
+        lo = 0; hi = 1; cap_lo = 0; cap_hi = 1;
+    } else if (thickness == 3) {
+        lo = -1; hi = 1; cap_lo = -1; cap_hi = 1;
+    } else {
+        lo = -(int32_t)(thickness >> 1);
+        hi = lo + thickness - 1;
+        cap_lo = lo;
+        cap_hi = hi;
+    }
+
+    // Шапки есть всегда: обводка должна замыкать стык и вокруг конца ядра.
+    thick_line_impl(ctx, x0, y0, x1, y1, lo - halo, hi + halo,
+                    true, cap_lo - halo, cap_hi + halo);
 }
 
 void gfx_draw_dotted_line(gfx_context_t *ctx, int16_t x0, int16_t y0, int16_t x1, int16_t y1)

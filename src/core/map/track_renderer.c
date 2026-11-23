@@ -4,11 +4,14 @@
 #include "purrgo/gfx_line.h"
 
 /*
- * Трек: чёрная линия 1 px с белой обводкой (по 1 px с каждой стороны).
- * Обводка отличает трек от ручья (чёрная линия 1 px без обводки) и
- * от маршрута (чёрная линия 3 px с белой осевой линией).
+ * Трек: чёрная линия TRACK_CORE_PX с белой обводкой по TRACK_HALO_PX с каждой
+ * стороны (общая ширина TRACK_CORE_PX + 2 * TRACK_HALO_PX = 4 px). Обводка
+ * отличает трек от ручья (чёрная линия 1 px без обводки) и от маршрута
+ * (чёрная линия 3 px с белой осевой линией). Обводка рисуется одним вызовом
+ * gfx_draw_thick_line_halo.
  */
-#define TRACK_CASING_PX 3
+#define TRACK_CORE_PX  2
+#define TRACK_HALO_PX  1
 
 /*
  * Один проход по всему треку. Сначала белая обводка всех отрезков, потом
@@ -37,10 +40,12 @@ static void track_render_pass(
 
                 if (map_clip_segment_to_safe(&x0, &y0, &x1, &y1)) {
                     if (casing) {
-                        gfx_draw_thick_line(gfx, (int16_t)x0, (int16_t)y0,
-                                            (int16_t)x1, (int16_t)y1, TRACK_CASING_PX);
+                        gfx_draw_thick_line_halo(gfx, (int16_t)x0, (int16_t)y0,
+                                                 (int16_t)x1, (int16_t)y1,
+                                                 TRACK_CORE_PX, TRACK_HALO_PX);
                     } else {
-                        gfx_draw_line(gfx, (int16_t)x0, (int16_t)y0, (int16_t)x1, (int16_t)y1);
+                        gfx_draw_thick_line(gfx, (int16_t)x0, (int16_t)y0,
+                                            (int16_t)x1, (int16_t)y1, TRACK_CORE_PX);
                     }
                 }
             }
@@ -92,7 +97,7 @@ static void rect_union(purrgo_rect_t *acc, bool *acc_valid, const purrgo_rect_t 
 
 /*
  * Рисует один отрезок трека (по точкам p0 -> p1) с отсечением по окну карты.
- * true - отрезок попал в окно; out_rect - его рамка (с запасом 1 px, внутри окна).
+ * true - отрезок попал в окно; out_rect - его рамка (с запасом на обводку, внутри окна).
  */
 static bool draw_segment(
     gfx_context_t *gfx,
@@ -117,10 +122,11 @@ static bool draw_segment(
     int16_t min_y = (int16_t)((y0 < y1) ? y0 : y1);
     int16_t max_y = (int16_t)((y0 > y1) ? y0 : y1);
 
-    min_x -= 1;
-    max_x += 1;
-    min_y -= 1;
-    max_y += 1;
+    /* Обводка выступает на HALO в обе стороны, ядро толщиной CORE - на CORE-1 вправо/вниз. */
+    min_x -= TRACK_HALO_PX;
+    max_x += TRACK_HALO_PX + TRACK_CORE_PX - 1;
+    min_y -= TRACK_HALO_PX;
+    max_y += TRACK_HALO_PX + TRACK_CORE_PX - 1;
 
     if (max_x < vp->offset_x || min_x >= vp->offset_x + vp->width ||
         max_y < vp->offset_y || min_y >= vp->offset_y + vp->height) {
@@ -128,10 +134,11 @@ static bool draw_segment(
     }
 
     if (casing) {
-        gfx_draw_thick_line(gfx, (int16_t)x0, (int16_t)y0, (int16_t)x1, (int16_t)y1,
-                            TRACK_CASING_PX);
+        gfx_draw_thick_line_halo(gfx, (int16_t)x0, (int16_t)y0, (int16_t)x1, (int16_t)y1,
+                                 TRACK_CORE_PX, TRACK_HALO_PX);
     } else {
-        gfx_draw_line(gfx, (int16_t)x0, (int16_t)y0, (int16_t)x1, (int16_t)y1);
+        gfx_draw_thick_line(gfx, (int16_t)x0, (int16_t)y0, (int16_t)x1, (int16_t)y1,
+                            TRACK_CORE_PX);
     }
 
     if (min_x < vp->offset_x) min_x = vp->offset_x;
@@ -180,11 +187,12 @@ bool purrgo_track_render_new_segments(
 
     /*
      * Обводка нового отрезка затирает конец предыдущей чёрной линии у стыка,
-     * поэтому чёрная линия перерисовывается на один отрезок глубже (i0 - 1,
-     * уже нарисованный, без своей обводки). Сначала белая обводка новых
-     * отрезков, потом чёрная линия.
+     * поэтому чёрная линия перерисовывается на два отрезка глубже (уже
+     * нарисованных, без своей обводки; два - на случай коротких отрезков,
+     * когда обводка достаёт и до предыдущего стыка). Сначала белая обводка
+     * новых отрезков, потом чёрная линия.
      */
-    const size_t black_from = (i0 >= 2U) ? (i0 - 1U) : i0;
+    const size_t black_from = (i0 >= 3U) ? (i0 - 2U) : 1U;
 
     for (int pass = 0; pass < 2; pass++) {
         const bool casing = (pass == 0);
