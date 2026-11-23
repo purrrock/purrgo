@@ -212,7 +212,7 @@ cmake --build --preset stm32u5-release
 после включения (маркер в BBR и RAM по `UBX-CFG-VALGET`, `msss` из `UBX-NAV-STATUS`, число спутников с эфемеридами и
 альманахом по `UBX-NAV-ORB`, достоверность времени), время до фикса; `PSMOO` - параметры и вывод `UBX-NAV-PVT/STATUS` в RAM+BBR,
 наблюдение всплесков данных и снимок на каждом (маркер, режим PSMOO в BBR, не вернулся ли NMEA, ошибки приёма UART,
-тишина дольше периода); в конце откат (`VALDEL` BBR). Параметры (`-D`): `PURRGO_HWTEST_GNSS_PHASES` (1 EN, 2 PSMOO, 3 обе),
+тишина дольше периода); в конце откат (`VALDEL` BBR). Параметры передаются в CMake (`-DPURRGO_HWTEST_GNSS_PSMOO_BAUD=115200`; значение остаётся в кэше, пустое - умолчание): `PURRGO_HWTEST_GNSS_PHASES` (1 EN, 2 PSMOO, 3 обе),
 `..._ACQ_TIMEOUT_S`, `..._ACQ_HOLD_S`, `..._EN_CYCLES`, `..._EN_OFF_S`, `..._EN_FIX_TIMEOUT_S`, `..._PSMOO_PERIOD_S`,
 `..._PSMOO_ONTIME_S`, `..._PSMOO_CYCLES`. Итоговые строки: `EN SUMMARY` / `EN VERDICT` и `PSMOO SUMMARY` / `PSMOO VERDICT`.
 

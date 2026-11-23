@@ -29,7 +29,6 @@ STM32CubeIDE/
 .vscode/
 
 # Generated/temporary files
-*.log
 *.tmp
 *.d
 *.o

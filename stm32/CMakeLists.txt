@@ -114,6 +114,15 @@ set(PURRGO_HW_TEST "" CACHE STRING
     "Hardware test instead of the navigator: ${PURRGO_HW_TEST_NAMES} (empty = normal firmware)")
 set_property(CACHE PURRGO_HW_TEST PROPERTY STRINGS "" ${PURRGO_HW_TEST_NAMES})
 
+# Параметры теста GNSS_BBR (port/app/hw_test_gnss.c). Пустое значение - значение по умолчанию из исходника.
+#   cmake --preset stm32u5-release -DPURRGO_HW_TEST=GNSS_BBR -DPURRGO_HWTEST_GNSS_PSMOO_BAUD=115200
+# Значение остаётся в кэше CMake: чтобы вернуть умолчание, передайте пустое (-DPURRGO_HWTEST_GNSS_PSMOO_BAUD=).
+set(PURRGO_HWTEST_GNSS_PARAMS PHASES ACQ_TIMEOUT_S ACQ_HOLD_S EN_CYCLES EN_OFF_S EN_FIX_TIMEOUT_S
+    PSMOO_PERIOD_S PSMOO_ONTIME_S PSMOO_CYCLES PSMOO_BAUD)
+foreach(_p IN LISTS PURRGO_HWTEST_GNSS_PARAMS)
+    set(PURRGO_HWTEST_GNSS_${_p} "" CACHE STRING "GNSS_BBR test parameter ${_p} (empty = default)")
+endforeach()
+
 if(NOT PURRGO_HW_TEST STREQUAL "")
     if(NOT PURRGO_HW_TEST IN_LIST PURRGO_HW_TEST_NAMES)
         message(FATAL_ERROR
@@ -127,6 +136,18 @@ if(NOT PURRGO_HW_TEST STREQUAL "")
     else()
         target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
             PURRGO_HW_TEST_ENABLED PURRGO_HW_TEST_${PURRGO_HW_TEST})
+    endif()
+    if(PURRGO_HW_TEST STREQUAL "GNSS_BBR")
+        foreach(_p IN LISTS PURRGO_HWTEST_GNSS_PARAMS)
+            set(_v "${PURRGO_HWTEST_GNSS_${_p}}")
+            if(NOT _v STREQUAL "")
+                if(NOT _v MATCHES "^[0-9]+$")
+                    message(FATAL_ERROR "PURRGO_HWTEST_GNSS_${_p}='${_v}': нужно целое число")
+                endif()
+                message(STATUS "GNSS_BBR: PURRGO_HWTEST_GNSS_${_p}=${_v}")
+                target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE PURRGO_HWTEST_GNSS_${_p}=${_v})
+            endif()
+        endforeach()
     endif()
 endif()
 
