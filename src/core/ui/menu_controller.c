@@ -13,6 +13,8 @@ static const menu_screen_t* const screens[] = {
     &menu_screen_dir_select,
     &menu_screen_route_select,
     &menu_screen_wpt_select,
+    &menu_screen_poi_category,
+    &menu_screen_poi_results,
 };
 
 #define SCREEN_COUNT (sizeof(screens) / sizeof(screens[0]))

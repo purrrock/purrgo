@@ -428,6 +428,63 @@ static bool map_read_section(purrgo_file_t *idx_file, uint32_t start, uint32_t s
     return true;
 }
 
+bool map_idx_open_lod(purrgo_file_t *idx_file, uint32_t lod, map_section_t *section)
+{
+    if (idx_file == NULL || section == NULL || lod >= PURRGO_MAP_LOD_COUNT) {
+        return false;
+    }
+
+    pgo_header_info_t header = {0};
+
+    if (!map_parse_pgo_header(idx_file, &header) || header.file_type != 1) {
+        return false;
+    }
+
+    const uint32_t start = header.lod_offset[lod];
+    const uint32_t end = (lod + 1u < PURRGO_MAP_LOD_COUNT) ? header.lod_offset[lod + 1u]
+                                                           : header.file_end;
+
+    return map_read_section(idx_file, start, end - start, section);
+}
+
+bool purrgo_map_poi_files(const char *map_dir, purrgo_file_t **idx_out, purrgo_file_t **db_out)
+{
+    if (map_dir == NULL || idx_out == NULL || db_out == NULL) {
+        return false;
+    }
+    *idx_out = NULL;
+    *db_out = NULL;
+
+    if (map_dir[0] == '\0' || strlen(map_dir) > MAP_DIR_MAX_LEN) {
+        return false;
+    }
+
+    /* Тот же контекст, что у отрисовки: каталог сменился - файлы прежней карты закрываются. */
+    if (s_map_context.dir_invalid || strcmp(s_map_context.current_map_dir, map_dir) != 0) {
+        map_close_all_files();
+        strcpy(s_map_context.current_map_dir, map_dir);
+    }
+
+    for (size_t i = 0; i < MAP_LAYER_COUNT; i++) {
+        const map_layer_desc_t *d = &k_layers[i];
+        map_layer_state_t *st = &s_map_context.layer[i];
+
+        if (d->type != MAP_LAYER_POIS) {
+            continue;
+        }
+        if (st->idx == NULL) {
+            map_layer_open(d, st, map_dir);   /* нет файла: пользователь мог вставить SD позже */
+        }
+        if (st->idx != NULL && st->db == NULL) {
+            map_layer_open_labels(d, st, map_dir);
+        }
+        *idx_out = st->idx;
+        *db_out = st->db;
+        return st->idx != NULL;
+    }
+    return false;
+}
+
 bool purrgo_map_render_layer(
     purrgo_file_t *idx_file,
     purrgo_file_t *mlp_file,

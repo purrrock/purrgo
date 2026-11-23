@@ -7,6 +7,7 @@
  *   карта:            K1..K4 коротко - влево/вправо/вверх/вниз (панорама);
  *                     K1 длинно - минус, K2 длинно - плюс (масштаб), K3 длинно - OK, K4 длинно - меню;
  *   путевой компьютер: только K4 (коротко и длинно) - меню;
+ *   меню (OK_LONG):   как меню, но долгое K3 - OK_LONG (результаты поиска объектов);
  *   меню:             K1 - вверх, K2 - вниз, K3 - OK, K4 - меню; короткое и длинное равнозначны.
  * Комбинация K1+K4 действием не бывает ни на одном экране.
  */
@@ -29,6 +30,10 @@ static const purrgo_action_t k_expected[APP_KEYMAP_SCREEN_COUNT][9] = {
     [APP_KEYMAP_MENU] = {
         PURRGO_ACTION_UP, PURRGO_ACTION_DOWN, PURRGO_ACTION_OK, PURRGO_ACTION_MENU,
         PURRGO_ACTION_UP, PURRGO_ACTION_DOWN, PURRGO_ACTION_OK, PURRGO_ACTION_MENU,
+        N },
+    [APP_KEYMAP_MENU_OK_LONG] = {
+        PURRGO_ACTION_UP, PURRGO_ACTION_DOWN, PURRGO_ACTION_OK, PURRGO_ACTION_MENU,
+        PURRGO_ACTION_UP, PURRGO_ACTION_DOWN, PURRGO_ACTION_OK_LONG, PURRGO_ACTION_MENU,
         N },
 };
 

@@ -87,14 +87,14 @@ static void test_menu(void)
 
     /*
      * Главное меню - только действия: 0 CONFIG, 1 POWER OFF, 2 TRACKER (SCREEN OFF),
-     * 3 ROUTE, 4 OPEN TRACK, 5 WAYPOINT, 6 BOOKS (режим чтения, см. test_book_reader.c).
+     * 3 ROUTE, 4 OPEN TRACK, 5 WAYPOINT, 6 SEARCH, 7 BOOKS (режим чтения, см. test_book_reader.c).
      */
     CHECK(menu_app_get_main_cursor() == 0);
-    CHECK(menu_app_get_main_count() == 7);
+    CHECK(menu_app_get_main_count() == 8);
     char text[64];
     menu_app_get_main_item_text(0, text, sizeof text);
     CHECK(strcmp(text, "CONFIG") == 0);
-    menu_app_get_main_item_text(6, text, sizeof text);
+    menu_app_get_main_item_text(7, text, sizeof text);
     CHECK(strcmp(text, "BOOKS") == 0);
     purrgo_state_t st = APP_STATE_MENU_MAIN;
 

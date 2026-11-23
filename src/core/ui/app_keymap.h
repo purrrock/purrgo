@@ -17,6 +17,7 @@ typedef enum {
     APP_KEYMAP_MAP,    /* карта (APP_STATE_MAP) */
     APP_KEYMAP_TRIP,   /* путевой компьютер (APP_STATE_TRIP_COMPUTER) */
     APP_KEYMAP_MENU,   /* любой экран, которым владеет menu_controller */
+    APP_KEYMAP_MENU_OK_LONG, /* то же, но долгое K3 - PURRGO_ACTION_OK_LONG (результаты поиска объектов) */
     APP_KEYMAP_SCREEN_COUNT
 } app_keymap_screen_t;
 

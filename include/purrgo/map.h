@@ -55,6 +55,17 @@ bool purrgo_map_render_viewport(
     const purrgo_map_render_params_t *params
 );
 
+/*
+ * Файлы слоя POI каталога map_dir (pois.idx и pois.db) для поиска объектов. Это те же открытые
+ * файлы, что использует отрисовка слоя POI: отдельных слотов файловой системы поиск не занимает
+ * и пользуется общим кэшем секторов. Файлы принадлежат карте - вызывающий их не закрывает и не
+ * хранит указатель дольше текущей операции (смена каталога карты, выключение слоя POI в
+ * настройках или purrgo_map_shutdown() закрывают их).
+ * Возвращает false, если pois.idx нет или каталог недопустим. *db_out может быть NULL
+ * (pois.db не открылся) - тогда названий нет, но координаты искать можно.
+ */
+bool purrgo_map_poi_files(const char *map_dir, purrgo_file_t **idx_out, purrgo_file_t **db_out);
+
 void purrgo_map_shutdown(void);
 
 #endif /* PURRGO_MAP_H */

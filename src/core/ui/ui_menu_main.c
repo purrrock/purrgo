@@ -25,6 +25,10 @@ void ui_menu_config_reset(void) {
     ui_rows_reset(&s_rows);
 }
 
+void ui_menu_poi_category_reset(void) {
+    ui_rows_reset(&s_rows);
+}
+
 /*
  * Рисует пункт меню в строке row: выбранный (row == cursor) - инверсно.
  * Изменение текста или выделения строки регистрирует её область обновления
@@ -88,4 +92,10 @@ void ui_render_menu_config(gfx_context_t* gfx)
 {
     render_list(gfx, "==== CONFIG ====", menu_app_get_config_cursor(),
                 menu_app_get_config_count(), menu_app_get_config_item_text);
+}
+
+void ui_render_menu_poi_category(gfx_context_t* gfx)
+{
+    render_list(gfx, "==== SEARCH ====", menu_app_get_poi_category_cursor(),
+                menu_app_get_poi_category_count(), menu_app_get_poi_category_text);
 }

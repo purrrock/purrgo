@@ -21,6 +21,13 @@ bool purrgo_map_controller_handle_button(purrgo_action_t button);
 void purrgo_map_controller_fit_bounds(int32_t min_lat_1e7, int32_t min_lon_1e7,
                                       int32_t max_lat_1e7, int32_t max_lon_1e7);
 
+/*
+ * Поставить центр карты в точку (1e-7 градуса), масштаб не менять. Включает ручной режим
+ * (автоследование за GNSS выключено до долгого K3 CENTER): в центре окна остаётся перекрестие,
+ * с которого WAYPOINT > MAP CENTER делает точку целью. Точка вне допустимых координат - без изменений.
+ */
+void purrgo_map_controller_center_on(int32_t lat_1e7, int32_t lon_1e7);
+
 // COMPATIBILITY API DECLARED IN APP_FSM.H
 int32_t map_app_get_map_center_lat(void);
 int32_t map_app_get_map_center_lon(void);

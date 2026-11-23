@@ -42,6 +42,18 @@ static const keymap_entry_t k_menu_keys[] = {
     { PURRGO_BTN_KEY4_LONG,  PURRGO_ACTION_MENU },
 };
 
+/* Меню, где долгий выбор отличается от короткого: короткое K3 - OK, долгое - OK_LONG. */
+static const keymap_entry_t k_menu_ok_long_keys[] = {
+    { PURRGO_BTN_KEY1_SHORT, PURRGO_ACTION_UP      },
+    { PURRGO_BTN_KEY1_LONG,  PURRGO_ACTION_UP      },
+    { PURRGO_BTN_KEY2_SHORT, PURRGO_ACTION_DOWN    },
+    { PURRGO_BTN_KEY2_LONG,  PURRGO_ACTION_DOWN    },
+    { PURRGO_BTN_KEY3_SHORT, PURRGO_ACTION_OK      },
+    { PURRGO_BTN_KEY3_LONG,  PURRGO_ACTION_OK_LONG },
+    { PURRGO_BTN_KEY4_SHORT, PURRGO_ACTION_MENU    },
+    { PURRGO_BTN_KEY4_LONG,  PURRGO_ACTION_MENU    },
+};
+
 typedef struct {
     const keymap_entry_t *entries;
     size_t count;
@@ -54,6 +66,7 @@ static const keymap_t k_keymaps[APP_KEYMAP_SCREEN_COUNT] = {
     [APP_KEYMAP_MAP]  = KEYMAP(k_map_keys),
     [APP_KEYMAP_TRIP] = KEYMAP(k_trip_keys),
     [APP_KEYMAP_MENU] = KEYMAP(k_menu_keys),
+    [APP_KEYMAP_MENU_OK_LONG] = KEYMAP(k_menu_ok_long_keys),
 };
 
 purrgo_action_t purrgo_app_keymap_action(app_keymap_screen_t screen, purrgo_btn_t button) {

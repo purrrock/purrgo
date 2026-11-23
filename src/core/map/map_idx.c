@@ -36,9 +36,17 @@ static uint8_t s_blk[PURRGO_MAP_BLOCK_SIZE];
 /* Буфер подписи (общий: отрисовка однопоточная). 22 символа + завершающий ноль. */
 static char name_buf[PURRGO_MAP_LABEL_MAX + 1u];
 
-/* Контекст обхода одной секции LOD. */
+/* Контекст обхода дерева одной секции LOD (общий для отрисовки и поиска). */
 typedef struct {
     purrgo_file_t *idx;
+    const map_section_t *sec;
+    const purrgo_bbox_t *cam;
+    map_idx_leaf_fn leaf;      /* вызывается для каждого узла данных листового блока */
+    void *leaf_ctx;
+} map_tree_t;
+
+/* Контекст отрисовки: листовой обработчик map_idx_draw_leaf() получает его как leaf_ctx. */
+typedef struct {
     purrgo_file_t *mlp;
     purrgo_file_t *db;
     const purrgo_bbox_t *cam;
@@ -46,8 +54,7 @@ typedef struct {
     gfx_context_t *gfx;
     purrgo_map_layer_t layer_type;
     const purrgo_map_render_params_t *params;
-    const map_section_t *sec;
-} map_walk_t;
+} map_draw_t;
 
 /*
  * Подпись для карты из поля названия записи .db (раздел 10.6.1): до 22 символов; длиннее -
@@ -123,11 +130,16 @@ static bool map_db_read_name(purrgo_file_t *db_file, uint32_t v2, bool is_poi, c
     return ok;
 }
 
+bool map_label_read(purrgo_file_t *db_file, uint32_t v2, bool is_poi, char *out)
+{
+    return map_db_read_name(db_file, v2, is_poi, out);
+}
+
 /*
  * Узел данных (25 байт, раздел 8): bbox, тип, v1 (геометрия в .mlp), v2 (запись .db).
  * Проверяет пересечение с камерой и рисует объект.
  */
-static void map_idx_draw_data_node(const map_walk_t *w, const uint8_t *n)
+static void map_idx_draw_data_node(const map_draw_t *w, const uint8_t *n)
 {
     purrgo_file_t *mlp_file = w->mlp;
     purrgo_file_t *db_file = w->db;
@@ -322,6 +334,12 @@ return;
     }
 }
 
+/* Листовой обработчик отрисовки: узел данных -> объект на экране. */
+static void map_idx_draw_leaf(void *ctx, const uint8_t *node)
+{
+    map_idx_draw_data_node((const map_draw_t *)ctx, node);
+}
+
 /* ------------------------------------------------------------------------ обход --- */
 
 /* Ссылка на блок детей, прошедшая отсечение по камере. */
@@ -339,7 +357,7 @@ typedef struct {
  *   depth  - сколько блоков уже пройдено от корня (для предела глубины).
  * false - ошибка чтения или нарушение раздела 7.1: узел отвергается целиком, обход прекращается.
  */
-static bool map_idx_walk_block(const map_walk_t *w, uint32_t off, int32_t level, uint32_t count,
+static bool map_idx_walk_block(const map_tree_t *w, uint32_t off, int32_t level, uint32_t count,
                                uint32_t depth)
 {
     const map_section_t *sec = w->sec;
@@ -359,7 +377,7 @@ static bool map_idx_walk_block(const map_walk_t *w, uint32_t off, int32_t level,
     /* Листовой блок: узлы данных идут подряд с нулевого байта. */
     if (level < 0) {
         for (uint32_t i = 0; i < count; i++) {
-            map_idx_draw_data_node(w, &s_blk[i * PURRGO_MAP_DATA_NODE_SIZE]);
+            w->leaf(w->leaf_ctx, &s_blk[i * PURRGO_MAP_DATA_NODE_SIZE]);
         }
         return true;
     }
@@ -417,6 +435,28 @@ static bool map_idx_walk_block(const map_walk_t *w, uint32_t off, int32_t level,
     return true;
 }
 
+bool map_idx_visit_section(
+    purrgo_file_t *idx_file,
+    const map_section_t *section,
+    const purrgo_bbox_t *cam,
+    map_idx_leaf_fn leaf,
+    void *leaf_ctx
+)
+{
+    if (idx_file == NULL || section == NULL || cam == NULL || leaf == NULL) {
+        return false;
+    }
+    if (section->depth == 0u) {
+        return true;   /* пустой LOD: корневого блока нет */
+    }
+
+    const map_tree_t w = { idx_file, section, cam, leaf, leaf_ctx };
+
+    /* Корень: навигационный блок с root_count узлами уровня depth - 1 (раздел 5.3). */
+    return map_idx_walk_block(&w, section->start + PURRGO_MAP_BLOCK_SIZE,
+                              (int32_t)section->depth - 1, section->root_count, 0u);
+}
+
 bool map_idx_walk_section(
     purrgo_file_t *idx_file,
     purrgo_file_t *mlp_file,
@@ -429,15 +469,7 @@ bool map_idx_walk_section(
     const purrgo_map_render_params_t *params
 )
 {
-    if (section->depth == 0u) {
-        return true;   /* пустой LOD: корневого блока нет */
-    }
+    map_draw_t d = { mlp_file, db_file, cam, vp, gfx, layer_type, params };
 
-    const map_walk_t w = {
-        idx_file, mlp_file, db_file, cam, vp, gfx, layer_type, params, section
-    };
-
-    /* Корень: навигационный блок с root_count узлами уровня depth - 1 (раздел 5.3). */
-    return map_idx_walk_block(&w, section->start + PURRGO_MAP_BLOCK_SIZE,
-                              (int32_t)section->depth - 1, section->root_count, 0u);
+    return map_idx_visit_section(idx_file, section, cam, map_idx_draw_leaf, &d);
 }

@@ -3,7 +3,7 @@
 
 /*
  * Внутренний интерфейс между диспетчером меню (menu_controller.c) и экранами
- * (menu_main.c, menu_config.c, menu_layers.c, menu_dir_browser.c). Снаружи ядра не нужен.
+ * (menu_main.c, menu_config.c, menu_layers.c, menu_dir_browser.c, menu_waypoint.c, menu_poi.c). Снаружи ядра не нужен.
  */
 
 #include "purrgo/menu_controller.h"
@@ -50,6 +50,8 @@ extern const menu_screen_t menu_screen_map_layers;
 extern const menu_screen_t menu_screen_dir_select;
 extern const menu_screen_t menu_screen_route_select;
 extern const menu_screen_t menu_screen_wpt_select;
+extern const menu_screen_t menu_screen_poi_category;
+extern const menu_screen_t menu_screen_poi_results;
 
 /*
  * Переход на другой экран меню "вперёд": записывает состояние в *next и

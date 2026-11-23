@@ -316,3 +316,42 @@ void purrgo_utf8_to_pgo_inplace(char *str)
     }
     *d = '\0';
 }
+
+size_t purrgo_pgo_to_utf8(const char *src, char *dst, size_t dst_size)
+{
+    if (dst == NULL || dst_size == 0u) {
+        return 0u;
+    }
+
+    size_t n = 0u;
+
+    for (; src != NULL && *src != '\0'; src++) {
+        const uint8_t b = (uint8_t)*src;
+        uint32_t cp = 0x3Fu;   /* '?' */
+
+        if (b < 0x80u) {
+            cp = b;
+        } else if (b >= 0x80u && b <= 0xBFu) {
+            cp = 0x0410u + (uint32_t)(b - 0x80u);   /* А..я */
+        } else if (b == 0xF0u) {
+            cp = 0x0401u;   /* Ё */
+        } else if (b == 0xF1u) {
+            cp = 0x0451u;   /* ё */
+        }
+
+        if (cp < 0x80u) {
+            if (n + 1u >= dst_size) {
+                break;
+            }
+            dst[n++] = (char)cp;
+        } else {
+            if (n + 2u >= dst_size) {
+                break;
+            }
+            dst[n++] = (char)(0xC0u | (cp >> 6));
+            dst[n++] = (char)(0x80u | (cp & 0x3Fu));
+        }
+    }
+    dst[n] = '\0';
+    return n;
+}

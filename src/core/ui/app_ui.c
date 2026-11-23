@@ -5,6 +5,7 @@
 #include "ui_menu_main.h"
 #include "ui_dir_select.h"
 #include "ui_wpt_select.h"
+#include "ui_poi_results.h"
 #include "ui_map_layers.h"
 #include "ui_book.h"
 #include "purrgo/ui/ui_dirty.h"
@@ -137,9 +138,17 @@ static void ui_draw_key_hints(gfx_context_t* gfx, purrgo_state_t state, bool mar
         case APP_STATE_MENU_MAP_LAYERS:
         case APP_STATE_MENU_ROUTE_SELECT:
         case APP_STATE_MENU_WPT_SELECT:
+        case APP_STATE_MENU_POI_CATEGORY:
             k1 = "\x18";
             k2 = "\x19";
             k3 = "SEL";
+            k4 = "BCK";
+            break;
+
+        case APP_STATE_MENU_POI_RESULTS:
+            k1 = "\x18";
+            k2 = "\x19";
+            k3 = "MAP/WPT";   /* SEL - показать на карте, долгое SEL - сделать целью */
             k4 = "BCK";
             break;
 
@@ -254,6 +263,18 @@ void purrgo_app_ui_render(
                 ui_menu_wpt_select_reset();
             }
             ui_render_menu_wpt_select(gfx);
+            break;
+        case APP_STATE_MENU_POI_CATEGORY:
+            if (prev_state != APP_STATE_MENU_POI_CATEGORY) {
+                ui_menu_poi_category_reset();
+            }
+            ui_render_menu_poi_category(gfx);
+            break;
+        case APP_STATE_MENU_POI_RESULTS:
+            if (prev_state != APP_STATE_MENU_POI_RESULTS) {
+                ui_poi_results_reset();
+            }
+            ui_render_poi_results(gfx);
             break;
         case APP_STATE_MENU_MAP_LAYERS:
             if (prev_state != APP_STATE_MENU_MAP_LAYERS) {

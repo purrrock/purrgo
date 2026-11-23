@@ -15,6 +15,7 @@
 #include "purrgo/book_reader.h"
 #include "purrgo/battery.h"
 #include "purrgo/waypoint.h"
+#include "purrgo/poi_search.h"
 #include "purrgo/sound.h"
 #include "purrgo/hw_fault.h"
 #include "gnss/gnss_feed.h"
@@ -42,6 +43,10 @@ static bool first_fix_obtained = false;
 static bool sun_countdown_known = false;
 static uint32_t last_sun_update_ms = 0;
 static uint32_t last_gnss_update_ms = 0;
+/* Последняя позиция действующего фикса (purrgo_app_get_last_position()). */
+static bool last_pos_known = false;
+static int32_t last_pos_lat_1e7 = 0;
+static int32_t last_pos_lon_1e7 = 0;
 
 /* Диагностические строки приёмника в логе в трекере: раз в минуту (на карте - раз в 5 с). */
 #define TRACKER_DIAG_LOG_INTERVAL_MS 60000U
@@ -177,7 +182,7 @@ bool purrgo_app_tracker_mode_active(void) {
  * Условия платформы (дисплей, кнопки, вход GNSS) проверяет она сама.
  */
 bool purrgo_app_deep_sleep_allowed(uint32_t now_ms) {
-    if (purrgo_book_reader_search_running()) {
+    if (purrgo_book_reader_search_running() || purrgo_poi_search_running()) {
         return false;
     }
     if (render_gate_active) {
@@ -205,6 +210,8 @@ void purrgo_app_init(void) {
 #endif
     first_fix_obtained = false;
     sun_countdown_known = false;
+    last_pos_known = false;
+    purrgo_poi_search_cancel();
     last_sun_update_ms = 0;
     last_gnss_update_ms = purrgo_system_time_ms();
     purrgo_ui_dirty_throttle_reset(last_gnss_update_ms);
@@ -271,6 +278,8 @@ static bool state_keymap_screen(purrgo_state_t state, app_keymap_screen_t* scree
         *screen = APP_KEYMAP_MAP;
     } else if (state == APP_STATE_TRIP_COMPUTER) {
         *screen = APP_KEYMAP_TRIP;
+    } else if (state == APP_STATE_MENU_POI_RESULTS) {
+        *screen = APP_KEYMAP_MENU_OK_LONG;   /* короткое K3 - на карту, долгое - сделать целью */
     } else if (purrgo_menu_controller_owns_state(state)) {
         *screen = APP_KEYMAP_MENU;
     } else {
@@ -414,6 +423,15 @@ const purrgo_gnss_solution_t* purrgo_app_get_gnss_solution(void) {
     return &gnss_feed.solution;
 }
 
+bool purrgo_app_get_last_position(int32_t* lat_1e7, int32_t* lon_1e7) {
+    if (!last_pos_known || lat_1e7 == NULL || lon_1e7 == NULL) {
+        return false;
+    }
+    *lat_1e7 = last_pos_lat_1e7;
+    *lon_1e7 = last_pos_lon_1e7;
+    return true;
+}
+
 const purrgo_sun_info_t* purrgo_app_get_sun_info(void) {
     return first_fix_obtained ? &internal_sun_info : NULL;
 }
@@ -493,6 +511,16 @@ void purrgo_app_tick(uint32_t current_time_ms) {
     if (purrgo_supply_tick(current_time_ms) && state_shows_supply_indicator(current_state)) {
         purrgo_ui_dirty_mark(UI_DIRTY_STATUS);
         purrgo_ui_dirty_now(current_time_ms);
+    }
+
+    /*
+     * Поиск объектов: один проход индекса за такт, между проходами обрабатываются кнопки (BACK
+     * отменяет поиск). Список выводится, когда поиск закончен (найдено, пусто или ошибка).
+     */
+    if (current_state == APP_STATE_MENU_POI_RESULTS && purrgo_poi_search_running()) {
+        if (purrgo_poi_search_step() != PURRGO_POI_SEARCH_RUNNING) {
+            purrgo_ui_dirty_mark(UI_DIRTY_SCREEN);
+        }
     }
 
     // Читалка: запись позиции чтения на SD по тайм-ауту бездействия и очередной шаг поиска по книге.
@@ -661,6 +689,12 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
         return;
     }
 
+    if (current_fix->valid) {
+        last_pos_known = true;
+        last_pos_lat_1e7 = current_fix->lat_1e7;
+        last_pos_lon_1e7 = current_fix->lon_1e7;
+    }
+
     /* Расстояние и пеленг до цели (раз в секунду, вместе с остальными данными). */
     purrgo_wpt_update(current_fix);
 
@@ -689,6 +723,8 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
         case APP_STATE_MENU_MAP_LAYERS:
         case APP_STATE_MENU_ROUTE_SELECT:
         case APP_STATE_MENU_WPT_SELECT:
+        case APP_STATE_MENU_POI_CATEGORY:
+        case APP_STATE_MENU_POI_RESULTS:
             break;  // меню не требует периодического обновления
 
         case APP_STATE_BOOK_LIST:

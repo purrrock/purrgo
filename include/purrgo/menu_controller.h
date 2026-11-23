@@ -11,6 +11,8 @@
  *   - menu_main.c       - главное меню (действия: книги, выключение, трекер, маршрут, цель);
  *   - menu_config.c     - подменю CONFIG (настройки устройства, логов и карты);
  *   - menu_layers.c     - экран слоёв карты;
+ *   - menu_waypoint.c   - выбор цели навигации;
+ *   - menu_poi.c        - поиск объектов: категория, затем ближайшие объекты;
  *   - menu_dir_browser.c - экраны выбора каталога карт и файла маршрута.
  *
  * Как добавить пункт в главное меню - см. комментарий в menu_main.c, настройку -
@@ -94,6 +96,20 @@ int menu_app_get_wpt_cursor(void);
 int menu_app_get_wpt_top(void);
 int menu_app_get_wpt_visible(void);
 void menu_app_get_wpt_item_text(int index, char* buf, size_t size);
+
+/*
+ * Поиск объектов (SEARCH). Категории: текст "RU / EN" в UTF-8 (перед выводом на дисплей -
+ * purrgo_utf8_to_pgo_inplace()); результаты берутся из purrgo/poi_search.h, а здесь - курсор и
+ * окно списка: видимая часть начинается с menu_app_get_poi_result_top().
+ */
+int menu_app_get_poi_category_count(void);
+int menu_app_get_poi_category_cursor(void);
+void menu_app_get_poi_category_text(int index, char* buf, size_t size);
+
+int menu_app_get_poi_result_count(void);
+int menu_app_get_poi_result_cursor(void);
+int menu_app_get_poi_result_top(void);
+int menu_app_get_poi_result_visible(void);
 
 /* Слои карты. */
 int menu_app_get_map_layers_cursor(void);

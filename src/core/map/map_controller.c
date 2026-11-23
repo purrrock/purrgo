@@ -235,6 +235,17 @@ void purrgo_map_controller_fit_bounds(int32_t min_lat_1e7, int32_t min_lon_1e7,
     purrgo_ui_dirty_mark(UI_DIRTY_MAP);
 }
 
+void purrgo_map_controller_center_on(int32_t lat_1e7, int32_t lon_1e7) {
+    if (lat_1e7 < -900000000 || lat_1e7 > 900000000 ||
+        lon_1e7 < -1800000000 || lon_1e7 > 1800000000) {
+        return;
+    }
+    map_center_lat_1e7 = lat_1e7;
+    map_center_lon_1e7 = lon_1e7;
+    manual_pan_active = true;
+    purrgo_ui_dirty_mark(UI_DIRTY_MAP);
+}
+
 /* Центрирование карты на маркёре GNSS: маркёр в центре окна карты. */
 static void center_map_on_fix(const purrgo_gnss_solution_t* fix) {
     if (!fix->valid) {

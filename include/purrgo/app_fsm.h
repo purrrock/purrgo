@@ -22,6 +22,8 @@ typedef enum {
     APP_STATE_MENU_MAP_LAYERS, // Подсостояние: Экран настройки видимости слоев карты
     APP_STATE_MENU_ROUTE_SELECT, // Подсостояние: Выбор GPX-файла маршрута из каталога ROUTES
     APP_STATE_MENU_WPT_SELECT, // Подсостояние: Выбор цели навигации (Waypoint): снять, HERE, центр карты, точки из GPX
+    APP_STATE_MENU_POI_CATEGORY, // Подсостояние: Поиск объектов (SEARCH) - выбор категории (см. menu_poi.c)
+    APP_STATE_MENU_POI_RESULTS,  // Подсостояние: Поиск объектов - ближайшие объекты категории (идёт поиск, затем список)
     APP_STATE_BOOK_LIST,      // Читалка: список книг из каталога BOOKS (GNSS и запись трека выключены)
     APP_STATE_BOOK_READ,      // Читалка: страница книги, 1-bit (см. book_reader.h)
     APP_STATE_BOOK_SEARCH_INPUT, // Читалка: экранная клавиатура для ввода строки поиска по книге
@@ -39,6 +41,12 @@ typedef enum {
     PURRGO_ACTION_MINUS,
     PURRGO_ACTION_MENU,
     PURRGO_ACTION_OK,
+    /*
+     * Долгое нажатие выбора. Приходит только на экранах, где оно отличается от короткого
+     * (список результатов поиска: короткое - показать на карте, долгое - сделать целью);
+     * на остальных экранах оба нажатия дают PURRGO_ACTION_OK (ui/app_keymap.c).
+     */
+    PURRGO_ACTION_OK_LONG,
     PURRGO_ACTION_NONE
 } purrgo_action_t;
 
@@ -91,6 +99,13 @@ void purrgo_app_tick(uint32_t current_time_ms);
 
 // Геттеры для состояния GNSS и Солнца
 const purrgo_gnss_solution_t* purrgo_app_get_gnss_solution(void);
+
+/*
+ * Последняя позиция, по которой был действующий фикс GNSS с момента включения (фикс мог
+ * пропасть). false - фикса с включения не было. Нужна поиску объектов: без фикса расстояния
+ * считаются от неё, а при её отсутствии - от центра карты.
+ */
+bool purrgo_app_get_last_position(int32_t* lat_1e7, int32_t* lon_1e7);
 const purrgo_sun_info_t* purrgo_app_get_sun_info(void);
 
 // Уведомление конечного автомата о том, что маркер был успешно отрисован

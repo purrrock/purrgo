@@ -98,6 +98,13 @@ static void wpt_select(purrgo_state_t* next)
 
 
 
+/* SEARCH: поиск объектов карты - сначала категория (menu_poi.c). */
+static void search_select(purrgo_state_t* next)
+{
+    menu_goto(next, APP_STATE_MENU_POI_CATEGORY);
+}
+
+
 static void config_select(purrgo_state_t* next)
 {
     menu_goto(next, APP_STATE_MENU_CONFIG);
@@ -115,6 +122,7 @@ static const menu_item_t main_items[] = {
     { .format = route_format, .on_select = route_select },
     { .title = "OPEN TRACK", .on_select = track_open_select },
     { .format = wpt_format, .on_select = wpt_select },
+    { .title = "SEARCH", .on_select = search_select },
     { .title = "BOOKS", .on_select = books_select },
 };
 
