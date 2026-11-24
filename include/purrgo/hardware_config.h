@@ -687,11 +687,15 @@
  * Звуковые сигналы (пьезоизлучатель, purrgo/sound.h)
  * --------------------------------------------------------------------------
  *
- * Пьезоизлучатель включён дифференциально между PA6 (TIM16_CH1) и PB6 (TIM16_CH1N): на нём
- * +-3,3 В вместо 3,3 В размаха, громкость выше примерно вдвое по напряжению. Громкость
- * регулируется скважностью: чем уже импульс, тем слабее основная гармоника
- * (амплитуда пропорциональна sin(pi * D)): 50 % - максимум, 20 % - около -4,5 дБ, 8 % - около -12 дБ.
- * Все значения ниже подбираются по месту под конкретный излучатель и корпус.
+ * Пьезоизлучатель включён между PA6 (TIM16_CH1) и PB6 (TIM16_CH1N).
+ *
+ * HIGH: выводы переключаются в противофазе (мост), на излучателе +-3,3 В, то есть 6,6 В размаха.
+ * LOW: переключается только PA6, а PB6 держится в Low (GPIO): размах 3,3 В, вдвое меньше,
+ * то есть примерно на 6 дБ тише при той же форме сигнала (PURRGO_SOUND_LOW_SINGLE_ENDED).
+ * Громкость не регулируется скважностью как основным способом: теория (амплитуда основной
+ * гармоники пропорциональна sin(pi * D)) обещает падение, но у реального излучателя с резонансом
+ * корпуса узкие импульсы звучат почти так же громко, зато меняют тембр. Скважности ниже
+ * (особенно 10 % и 4 % у HIGH) - уже подобранные по месту значения, их можно менять независимо.
  */
 
 /* Частота тона, Гц: около резонанса излучателя (пьезодиски 2-4,6 кГц). */
@@ -699,11 +703,16 @@
 #define PURRGO_SOUND_FREQ_HZ 4000U
 #endif
 
+/* LOW: 1 - питать излучатель одним выводом (PA6), PB6 в Low: размах вдвое меньше, около -6 дБ к HIGH; 0 - как HIGH (мост). */
+#ifndef PURRGO_SOUND_LOW_SINGLE_ENDED
+#define PURRGO_SOUND_LOW_SINGLE_ENDED 1
+#endif
+
 /*
  * Скважность, % периода (1..50), по классам сигнала (LOUD - ERROR и ARRIVED, MID - INFO,
  * QUIET - щелчок) и по настройке SOUND меню: HIGH - значения без суффикса, LOW - с суффиксом _LOW.
- * LOW на 12-16 дБ тише HIGH при том же классе (50 % -> 6 %, 20 % -> 3 %, 8 % -> 2 %): тихий режим для
- * помещения и ночи, в кармане может быть не слышен.
+ * По умолчанию LOW повторяет скважности HIGH: тогда разница громкости - ровно уменьшенный размах
+ * (PURRGO_SOUND_LOW_SINGLE_ENDED). Если LOW нужен ещё тише, уменьшайте скважности _LOW.
  */
 #ifndef PURRGO_SOUND_DUTY_LOUD_PCT
 #define PURRGO_SOUND_DUTY_LOUD_PCT 50U
@@ -715,13 +724,13 @@
 #define PURRGO_SOUND_DUTY_QUIET_PCT 4U
 #endif
 #ifndef PURRGO_SOUND_DUTY_LOUD_LOW_PCT
-#define PURRGO_SOUND_DUTY_LOUD_LOW_PCT 3U
+#define PURRGO_SOUND_DUTY_LOUD_LOW_PCT PURRGO_SOUND_DUTY_LOUD_PCT
 #endif
 #ifndef PURRGO_SOUND_DUTY_MID_LOW_PCT
-#define PURRGO_SOUND_DUTY_MID_LOW_PCT 2U
+#define PURRGO_SOUND_DUTY_MID_LOW_PCT PURRGO_SOUND_DUTY_MID_PCT
 #endif
 #ifndef PURRGO_SOUND_DUTY_QUIET_LOW_PCT
-#define PURRGO_SOUND_DUTY_QUIET_LOW_PCT 1U
+#define PURRGO_SOUND_DUTY_QUIET_LOW_PCT PURRGO_SOUND_DUTY_QUIET_PCT
 #endif
 
 /* Длительности, мс. ERROR - один длинный; ARRIVED - два сигнала с паузой; INFO - короткий; CLICK - щелчок. */

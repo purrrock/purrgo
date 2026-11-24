@@ -1,0 +1,41 @@
+[0.000] HWTEST GNSS_BBR start (phases mask 3)
+[1.336] HWTEST GNSS_BBR: module answers at 38400 baud (first reply after 1331 ms)
+[2.145] HWTEST GNSS_BBR initial: module SILENT (no reply to UBX-NAV-STATUS)
+[2.151] HWTEST GNSS_BBR: initial state above shows leftovers of earlier runs (marker/OPERATEMODE in BBR)
+[2.532] HWTEST GNSS_BBR cleanup (initial): RAM restore ACK, BBR delete ACK / ACK
+[2.539] HWTEST GNSS_BBR === phase ACQ: waiting for a fix (up to 300 s) ===
+[3.227] HWTEST GNSS_BBR ACQ: waiting for fix 0 s: fix=2 sv=3 psm=0
+[3.987] HWTEST GNSS_BBR ACQ: waiting for fix 1 s: fix=3 sv=7 psm=0
+[4.941] HWTEST GNSS_BBR ACQ: first fix after 2396 ms; holding 20 s to collect ephemerides
+[25.750] HWTEST GNSS_BBR BASE: module SILENT (no reply to UBX-NAV-STATUS)
+[25.760] HWTEST GNSS_BBR === phase EN: 3 cycles, EN low 15 s ===
+[25.783] HWTEST GNSS_BBR EN#1: marker VALSET RAM+BBR -> ACK
+[28.290] HWTEST GNSS_BBR before-off: msss=25709 ms, rx-ttff=2709 ms, fix=3 ok=1 sv=15, time valid=0xF7 2026-11-23 11:03:50
+[28.300] HWTEST GNSS_BBR before-off: orbit db: 92 SV, eph usable 18, alm usable 88 | marker BBR=1 RAM=1 | OPERATEMODE BBR=-1 RAM=0 | VALGET rc BBR=ACK RAM=ACK (-1 = key absent in layer)
+[28.317] HWTEST GNSS_BBR EN#1: EN low for 15 s
+[48.054] HWTEST GNSS_BBR EN#1: EN high; first byte after 284 ms, first UBX reply after 4737 ms at 38400 baud
+[48.865] HWTEST GNSS_BBR after-on: module SILENT (no reply to UBX-NAV-STATUS)
+[50.568] HWTEST GNSS_BBR EN#1 RESULT: BBR marker LOST, RAM marker LOST, core reset YES (msss 25709 -> 0), eph 18 -> 0, alm 88 -> 0, time at start valid=0x00, fix after 6449 ms (receiver ttff 660 ms)
+[50.615] HWTEST GNSS_BBR EN#2: marker VALSET RAM+BBR -> ACK
+[53.200] HWTEST GNSS_BBR before-off: msss=7160 ms, rx-ttff=660 ms, fix=3 ok=1 sv=13, time valid=0xF7 2026-11-23 11:04:15
+[53.210] HWTEST GNSS_BBR before-off: orbit db: 92 SV, eph usable 18, alm usable 88 | marker BBR=1 RAM=1 | OPERATEMODE BBR=-1 RAM=0 | VALGET rc BBR=ACK RAM=ACK (-1 = key absent in layer)
+[53.227] HWTEST GNSS_BBR EN#2: EN low for 15 s
+[74.949] HWTEST GNSS_BBR EN#2: EN high; first byte after 284 ms, first UBX reply after 6722 ms at 38400 baud
+[75.760] HWTEST GNSS_BBR after-on: module SILENT (no reply to UBX-NAV-STATUS)
+[77.441] HWTEST GNSS_BBR EN#2 RESULT: BBR marker LOST, RAM marker LOST, core reset YES (msss 7160 -> 0), eph 18 -> 0, alm 88 -> 0, time at start valid=0x00, fix after 8412 ms (receiver ttff 1134 ms)
+[77.490] HWTEST GNSS_BBR EN#3: marker VALSET RAM+BBR -> ACK
+[80.059] HWTEST GNSS_BBR before-off: msss=9134 ms, rx-ttff=1134 ms, fix=3 ok=1 sv=13, time valid=0xF7 2026-11-23 11:04:42
+[80.069] HWTEST GNSS_BBR before-off: orbit db: 92 SV, eph usable 18, alm usable 88 | marker BBR=1 RAM=1 | OPERATEMODE BBR=-1 RAM=0 | VALGET rc BBR=ACK RAM=ACK (-1 = key absent in layer)
+[80.086] HWTEST GNSS_BBR EN#3: EN low for 15 s
+[101.798] HWTEST GNSS_BBR EN#3: EN high; first byte after 284 ms, first UBX reply after 6712 ms at 38400 baud
+[102.609] HWTEST GNSS_BBR after-on: module SILENT (no reply to UBX-NAV-STATUS)
+[104.300] HWTEST GNSS_BBR EN#3 RESULT: BBR marker LOST, RAM marker LOST, core reset YES (msss 9134 -> 0), eph 18 -> 0, alm 88 -> 0, time at start valid=0x00, fix after 8412 ms (receiver ttff 1153 ms)
+[104.328] HWTEST GNSS_BBR === EN SUMMARY: BBR kept 0/3, ephemerides kept 0/3, hot start (fix <= 8 s) 1/3, core reset 3/3, no reply 0/3 ===
+[104.340] HWTEST GNSS_BBR EN VERDICT: mixed result, see per-cycle lines above
+[104.360] HWTEST GNSS_BBR === phase PSMOO: period 15 s, on-time 2 s, 6 bursts ===
+[104.837] HWTEST GNSS_BBR PSMOO: config RAM+BBR: output ACK, params ACK, mode NAK
+[104.844] HWTEST GNSS_BBR PSMOO: configuration not accepted, phase aborted
+[105.225] HWTEST GNSS_BBR cleanup (final): RAM restore ACK, BBR delete ACK / ACK
+[107.940] HWTEST GNSS_BBR final: msss=10153 ms, rx-ttff=1153 ms, fix=3 ok=1 sv=11, time valid=0xF7 2026-11-23 11:05:10
+[107.950] HWTEST GNSS_BBR final: orbit db: 92 SV, eph usable 18, alm usable 88 | marker BBR=-1 RAM=0 | OPERATEMODE BBR=-1 RAM=0 | VALGET rc BBR=NAK RAM=ACK (-1 = key absent in layer)
+[107.966] HWTEST GNSS_BBR done

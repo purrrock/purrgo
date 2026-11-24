@@ -1,8 +1,10 @@
 /*
  * Звуковые сигналы: пьезоизлучатель на TIM16 (CH1 + CH1N), см. sound_stm32.h.
  *
- * Тон - ШИМ частоты PURRGO_SOUND_FREQ_HZ на CH1 и его комплемент на CH1N, поэтому на излучателе
- * между выводами +-3,3 В. Громкость задаёт скважность (hardware_config.h). Между шагами и после
+ * Тон - ШИМ частоты PURRGO_SOUND_FREQ_HZ. HIGH: CH1 и его комплемент на CH1N (мост), на излучателе
+ * между выводами +-3,3 В. LOW: работает только CH1 (PA6), PB6 остаётся обычным GPIO в Low,
+ * размах 3,3 В, вдвое меньше (PURRGO_SOUND_LOW_SINGLE_ENDED). Скважность по классам сигнала
+ * задаёт hardware_config.h. Между шагами и после
  * сигнала ШИМ останавливается, а оба вывода переводятся в обычный GPIO-выход Low: на излучателе
  * 0 В без постоянной составляющей, ток не течёт (CubeMX-овский режим idle у остановленных каналов
  * не используется, чтобы не зависеть от его тонкостей).
@@ -135,7 +137,7 @@ static void pwm_stop(void)
     s_snd.pwm_on = false;
 }
 
-static void pwm_start(uint8_t duty_pct)
+static void pwm_start(uint8_t duty_pct, bool single_ended)
 {
     uint32_t arr = (s_snd.tick_hz / PURRGO_SOUND_FREQ_HZ);
 
@@ -157,18 +159,35 @@ static void pwm_start(uint8_t duty_pct)
     __HAL_TIM_SET_COUNTER(&htim16, 0U);
     htim16.Instance->EGR = TIM_EGR_UG;   /* значения из теневых регистров в рабочие */
 
-    /* Выводы обратно в альтернативную функцию TIM16 (CubeMX: HAL_TIM_MspPostInit). */
-    HAL_TIM_MspPostInit(&htim16);
+    if (single_ended) {
+        /*
+         * Один вывод: PA6 в альтернативную функцию TIM16_CH1, PB6 остаётся GPIO-выходом Low
+         * (pins_low() в pwm_stop()). Комплементарный канал не запускается.
+         */
+        GPIO_InitTypeDef gpio = {0};
 
-    (void)HAL_TIM_PWM_Start(&htim16, TIM_CHANNEL_1);
-    (void)HAL_TIMEx_PWMN_Start(&htim16, TIM_CHANNEL_1);
+        gpio.Pin       = BUZZER_P_Pin;
+        gpio.Mode      = GPIO_MODE_AF_PP;
+        gpio.Pull      = GPIO_NOPULL;
+        gpio.Speed     = GPIO_SPEED_FREQ_LOW;
+        gpio.Alternate = GPIO_AF14_TIM16;
+        HAL_GPIO_Init(BUZZER_P_GPIO_Port, &gpio);
+
+        (void)HAL_TIM_PWM_Start(&htim16, TIM_CHANNEL_1);
+    } else {
+        /* Мост: оба вывода обратно в альтернативную функцию TIM16 (CubeMX: HAL_TIM_MspPostInit). */
+        HAL_TIM_MspPostInit(&htim16);
+
+        (void)HAL_TIM_PWM_Start(&htim16, TIM_CHANNEL_1);
+        (void)HAL_TIMEx_PWMN_Start(&htim16, TIM_CHANNEL_1);
+    }
     s_snd.pwm_on = true;
 }
 
 #else   /* TIM16 ещё не настроен в CubeMX: заглушка */
 
 static void pwm_stop(void)             { s_snd.pwm_on = false; }
-static void pwm_start(uint8_t duty)    { (void)duty; s_snd.pwm_on = true; }
+static void pwm_start(uint8_t duty, bool se) { (void)duty; (void)se; s_snd.pwm_on = true; }
 
 #endif
 
@@ -186,7 +205,8 @@ static void sound_begin_step(uint32_t now_ms)
 
     s_snd.step_end_ms = now_ms + step->ms;
     if (step->vol != VOL_PAUSE) {
-        pwm_start(k_duty[(unsigned)s_snd.level - 1U][(unsigned)step->vol - 1U]);
+        pwm_start(k_duty[(unsigned)s_snd.level - 1U][(unsigned)step->vol - 1U],
+                  (PURRGO_SOUND_LOW_SINGLE_ENDED != 0) && (s_snd.level == PURRGO_SOUND_LEVEL_LOW));
     } else {
         pwm_stop();
     }
