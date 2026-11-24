@@ -1,0 +1,29 @@
+[0.000] HWTEST GNSS_BBR start (phases mask 4)
+[1.680] HWTEST GNSS_BBR: module answers at 38400 baud (first reply after 1675 ms)
+[4.671] HWTEST GNSS_BBR initial: msss=2092 ms, rx-ttff=0 ms, fix=3 ok=0 sv=5, time valid=0x37 2026-11-24 07:35:01
+[4.681] HWTEST GNSS_BBR initial: orbit db: 72 SV, eph usable 14, alm usable 72 | marker BBR=1 RAM=1 | OPERATEMODE BBR=-1 RAM=0 | RAM canary=14 (set 14, default 15) | VALGET rc BBR=ACK RAM=ACK (-1 = key absent in layer)
+[4.700] HWTEST GNSS_BBR: initial state above shows leftovers of earlier runs (marker/OPERATEMODE in BBR)
+[5.097] HWTEST GNSS_BBR cleanup (initial): RAM restore ACK, BBR delete ACK / ACK
+[5.140] HWTEST GNSS_BBR cleanup (initial): Flash delete ACK
+[5.159] HWTEST GNSS_BBR: NMEA off (RAM) -> ACK
+[5.163] HWTEST GNSS_BBR === phase FLASH: values in RAM / BBR / Flash layers vs. software and hardware reset ===
+[5.793] HWTEST GNSS_BBR cleanup (flash-pre): RAM restore ACK, BBR delete ACK / ACK
+[6.000] HWTEST GNSS_BBR cleanup (flash-pre): Flash delete ACK
+[6.099] HWTEST GNSS_BBR FLASH: write Flash ACK, BBR ACK, RAM ACK
+[6.177] HWTEST GNSS_BBR FLASH before reset: RAM layer [ram-only 4, bbr-key 0, flash-key 15] | BBR layer [-1, 1, -1] | Flash layer [-1, -1, 14] (rc ACK/ACK/ACK; -1 = key absent in layer; set values 4/1/14)
+[7.512] HWTEST GNSS_BBR FLASH: controlled software reset sent; link UP (first sign of life 314 ms after the 1 s pause) at 38400 baud
+[7.606] HWTEST GNSS_BBR FLASH after software reset: RAM layer [ram-only 3, bbr-key 1, flash-key 14] | BBR layer [-1, 1, -1] | Flash layer [-1, -1, 14] (rc ACK/ACK/ACK; -1 = key absent in layer; set values 4/1/14)
+[10.396] HWTEST GNSS_BBR after-sw-reset: msss=1858 ms, rx-ttff=858 ms, fix=3 ok=1 sv=8, time valid=0x37 2026-11-24 07:35:07
+[10.406] HWTEST GNSS_BBR after-sw-reset: orbit db: 72 SV, eph usable 14, alm usable 72 | marker BBR=1 RAM=1 | OPERATEMODE BBR=-1 RAM=0 | RAM canary=14 (set 14, default 15) | VALGET rc BBR=ACK RAM=ACK (-1 = key absent in layer)
+[12.334] HWTEST GNSS_BBR FLASH: hardware (watchdog) reset sent; link UP (first sign of life 904 ms after the 1 s pause) at 38400 baud
+[12.420] HWTEST GNSS_BBR FLASH after hardware reset: RAM layer [ram-only 3, bbr-key 0, flash-key 14] | BBR layer [-1, -1, -1] | Flash layer [-1, -1, 14] (rc ACK/NAK/ACK; -1 = key absent in layer; set values 4/1/14)
+[15.242] HWTEST GNSS_BBR after-hw-reset: msss=2019 ms, rx-ttff=0 ms, fix=0 ok=0 sv=0, time valid=0xF0 2021-03-07 00:00:03
+[15.252] HWTEST GNSS_BBR after-hw-reset: orbit db: 0 SV, eph usable 0, alm usable 0 | marker BBR=-1 RAM=0 | OPERATEMODE BBR=-1 RAM=0 | RAM canary=14 (set 14, default 15) | VALGET rc BBR=NAK RAM=ACK (-1 = key absent in layer)
+[15.272] HWTEST GNSS_BBR FLASH SW reset: RAM-only value kept NO, BBR value kept yes, Flash value kept yes, Flash loaded into RAM yes
+[15.284] HWTEST GNSS_BBR FLASH HW reset: RAM-only value kept NO, BBR value kept NO, Flash value kept yes, Flash loaded into RAM yes; nav data after reset: eph 0, alm 0, time valid 0xF0
+[15.300] HWTEST GNSS_BBR FLASH VERDICT: the Flash layer keeps configuration through a hardware reset and loads it into RAM at startup (usable for permanent tracker settings)
+[15.780] HWTEST GNSS_BBR cleanup (final): RAM restore ACK, BBR delete ACK / ACK
+[15.823] HWTEST GNSS_BBR cleanup (final): Flash delete ACK
+[18.808] HWTEST GNSS_BBR final: msss=1019 ms, rx-ttff=0 ms, fix=0 ok=0 sv=0, time valid=0xF0 2021-03-07 00:00:02
+[18.817] HWTEST GNSS_BBR final: orbit db: 0 SV, eph usable 0, alm usable 0 | marker BBR=-1 RAM=0 | OPERATEMODE BBR=-1 RAM=0 | RAM canary=15 (set 14, default 15) | VALGET rc BBR=NAK RAM=ACK (-1 = key absent in layer)
+[18.836] HWTEST GNSS_BBR done
