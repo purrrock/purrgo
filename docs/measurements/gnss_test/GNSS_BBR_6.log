@@ -1,0 +1,84 @@
+[0.000] HWTEST GNSS_BBR start (phases mask 3)
+[1.294] HWTEST GNSS_BBR: module answers at 38400 baud (first reply after 1289 ms)
+[4.319] HWTEST GNSS_BBR initial: msss=2019 ms, rx-ttff=0 ms, fix=0 ok=0 sv=0, time valid=0xF0 2021-03-07 00:00:03
+[4.329] HWTEST GNSS_BBR initial: orbit db: 0 SV, eph usable 0, alm usable 0 | marker BBR=-1 RAM=0 | OPERATEMODE BBR=-1 RAM=0 | VALGET rc BBR=NAK RAM=ACK (-1 = key absent in layer)
+[4.344] HWTEST GNSS_BBR: initial state above shows leftovers of earlier runs (marker/OPERATEMODE in BBR)
+[4.808] HWTEST GNSS_BBR cleanup (initial): RAM restore ACK, BBR delete ACK / ACK
+[4.829] HWTEST GNSS_BBR: NMEA off (RAM) -> ACK
+[4.833] HWTEST GNSS_BBR === phase ACQ: waiting for a fix (up to 300 s) ===
+[5.753] HWTEST GNSS_BBR ACQ: waiting for fix 0 s: fix=0 sv=0 psm=0
+[6.748] HWTEST GNSS_BBR ACQ: waiting for fix 1 s: fix=0 sv=0 psm=0
+[11.723] HWTEST GNSS_BBR ACQ: waiting for fix 6 s: fix=0 sv=0 psm=0
+[16.109] HWTEST GNSS_BBR ACQ: waiting for fix 11 s: fix=0 sv=0 psm=0
+[21.091] HWTEST GNSS_BBR ACQ: waiting for fix 16 s: fix=0 sv=0 psm=0
+[26.067] HWTEST GNSS_BBR ACQ: waiting for fix 21 s: fix=0 sv=0 psm=0
+[31.045] HWTEST GNSS_BBR ACQ: waiting for fix 26 s: fix=0 sv=0 psm=0
+[36.022] HWTEST GNSS_BBR ACQ: waiting for fix 31 s: fix=0 sv=0 psm=0
+[40.938] HWTEST GNSS_BBR ACQ: waiting for fix 36 s: fix=0 sv=0 psm=0
+[45.972] HWTEST GNSS_BBR ACQ: waiting for fix 41 s: fix=0 sv=0 psm=0
+[50.950] HWTEST GNSS_BBR ACQ: waiting for fix 46 s: fix=0 sv=0 psm=0
+[55.926] HWTEST GNSS_BBR ACQ: waiting for fix 51 s: fix=0 sv=0 psm=0
+[60.900] HWTEST GNSS_BBR ACQ: waiting for fix 56 s: fix=0 sv=0 psm=0
+[66.720] HWTEST GNSS_BBR ACQ: waiting for fix 61 s: fix=2 sv=3 psm=0
+[69.712] HWTEST GNSS_BBR ACQ: first fix after 64871 ms; holding 20 s to collect ephemerides
+[92.627] HWTEST GNSS_BBR BASE: msss=86262 ms, rx-ttff=60271 ms, fix=2 ok=1 sv=3, time valid=0xF3 2026-11-24 06:52:51
+[92.637] HWTEST GNSS_BBR BASE: orbit db: 6 SV, eph usable 4, alm usable 3 | marker BBR=-1 RAM=0 | OPERATEMODE BBR=-1 RAM=0 | VALGET rc BBR=NAK RAM=ACK (-1 = key absent in layer)
+[92.657] HWTEST GNSS_BBR === phase EN: 3 cycles, EN low 15 s ===
+[92.689] HWTEST GNSS_BBR EN#1: persistent config (NMEA off, PVT+STATUS on, marker) RAM+BBR -> ACK
+[96.635] HWTEST GNSS_BBR before-off: msss=90262 ms, rx-ttff=60271 ms, fix=2 ok=1 sv=3, time valid=0xF3 2026-11-24 06:52:55
+[96.645] HWTEST GNSS_BBR before-off: orbit db: 6 SV, eph usable 4, alm usable 3 | marker BBR=1 RAM=1 | OPERATEMODE BBR=-1 RAM=0 | VALGET rc BBR=ACK RAM=ACK (-1 = key absent in layer)
+[96.661] HWTEST GNSS_BBR EN#1: EN low for 15 s
+[114.161] HWTEST GNSS_BBR EN#1: passive window 2.5 s after EN high: first byte after 276 ms, UBX PVT/STATUS frames=6, NMEA '$'=0, bytes=372, first fix seen after -1 ms, UART errors total=0 -> config RETAINED (survived EN low)
+[117.549] HWTEST GNSS_BBR after-on: msss=3638 ms, rx-ttff=638 ms, fix=2 ok=0 sv=3, time valid=0xF3 2026-11-24 06:53:16
+[117.559] HWTEST GNSS_BBR after-on: orbit db: 6 SV, eph usable 4, alm usable 3 | marker BBR=1 RAM=1 | OPERATEMODE BBR=-1 RAM=0 | VALGET rc BBR=ACK RAM=ACK (-1 = key absent in layer)
+[118.489] HWTEST GNSS_BBR EN: waiting for fix 6 s: fix=2 sv=3 psm=0
+[123.470] HWTEST GNSS_BBR EN: waiting for fix 11 s: fix=2 sv=3 psm=0
+[128.444] HWTEST GNSS_BBR EN: waiting for fix 16 s: fix=2 sv=3 psm=0
+[133.425] HWTEST GNSS_BBR EN: waiting for fix 21 s: fix=2 sv=3 psm=0
+[138.400] HWTEST GNSS_BBR EN: waiting for fix 26 s: fix=2 sv=3 psm=0
+[143.389] HWTEST GNSS_BBR EN: waiting for fix 31 s: fix=2 sv=4 psm=0
+[148.372] HWTEST GNSS_BBR EN: waiting for fix 36 s: fix=2 sv=4 psm=0
+[153.345] HWTEST GNSS_BBR EN: waiting for fix 41 s: fix=2 sv=4 psm=0
+[158.321] HWTEST GNSS_BBR EN: waiting for fix 46 s: fix=2 sv=4 psm=0
+[163.298] HWTEST GNSS_BBR EN: waiting for fix 51 s: fix=2 sv=4 psm=0
+[168.273] HWTEST GNSS_BBR EN: waiting for fix 56 s: fix=2 sv=4 psm=0
+[173.248] HWTEST GNSS_BBR EN: waiting for fix 61 s: fix=3 sv=4 psm=0
+[178.219] HWTEST GNSS_BBR EN: waiting for fix 66 s: fix=3 sv=4 psm=0
+[183.202] HWTEST GNSS_BBR EN: waiting for fix 71 s: fix=3 sv=4 psm=0
+[188.176] HWTEST GNSS_BBR EN: waiting for fix 76 s: fix=3 sv=4 psm=0
+[193.165] HWTEST GNSS_BBR EN#1 RESULT: config retained yes | marker BBR yes, RAM yes | core reset yes (msss 90262 -> 3638) | ephemerides kept yes (eph 4 -> 4, alm 3 -> 3) | time valid after start 0xF3 | fix >81496 ms after EN high (receiver ttff 638 ms) -> hot star[193.220] HWTEST GNSS_BBR EN#2: persistent config (NMEA off, PVT+STATUS on, marker) RAM+BBR -> ACK
+[197.210] HWTEST GNSS_BBR before-off: msss=83638 ms, rx-ttff=638 ms, fix=3 ok=1 sv=5, time valid=0xF7 2026-11-24 06:54:36
+[197.220] HWTEST GNSS_BBR before-off: orbit db: 19 SV, eph usable 7, alm usable 15 | marker BBR=1 RAM=1 | OPERATEMODE BBR=-1 RAM=0 | VALGET rc BBR=ACK RAM=ACK (-1 = key absent in layer)
+[197.237] HWTEST GNSS_BBR EN#2: EN low for 15 s
+[214.738] HWTEST GNSS_BBR EN#2: passive window 2.5 s after EN high: first byte after 266 ms, UBX PVT/STATUS frames=8, NMEA '$'=0, bytes=496, first fix seen after -1 ms, UART errors total=0 -> config RETAINED (survived EN low)
+[218.122] HWTEST GNSS_BBR after-on: msss=3609 ms, rx-ttff=1109 ms, fix=2 ok=0 sv=4, time valid=0xF7 2026-11-24 06:54:57
+[218.132] HWTEST GNSS_BBR after-on: orbit db: 19 SV, eph usable 7, alm usable 15 | marker BBR=1 RAM=1 | OPERATEMODE BBR=-1 RAM=0 | VALGET rc BBR=ACK RAM=ACK (-1 = key absent in layer)
+[219.048] HWTEST GNSS_BBR EN: waiting for fix 6 s: fix=3 sv=4 psm=0
+[224.019] HWTEST GNSS_BBR EN: waiting for fix 11 s: fix=3 sv=4 psm=0
+[227.017] HWTEST GNSS_BBR EN#2 RESULT: config retained yes | marker BBR yes, RAM yes | core reset yes (msss 83638 -> 3609) | ephemerides kept yes (eph 7 -> 7, alm 15 -> 15) | time valid after start 0xF7 | fix 14771 ms after EN high (receiver ttff 1109 ms) -> hot st[227.074] HWTEST GNSS_BBR EN#3: persistent config (NMEA off, PVT+STATUS on, marker) RAM+BBR -> ACK
+[231.052] HWTEST GNSS_BBR before-off: msss=16609 ms, rx-ttff=1109 ms, fix=3 ok=1 sv=5, time valid=0xF7 2026-11-24 06:55:10
+[231.062] HWTEST GNSS_BBR before-off: orbit db: 19 SV, eph usable 7, alm usable 15 | marker BBR=1 RAM=1 | OPERATEMODE BBR=-1 RAM=0 | VALGET rc BBR=ACK RAM=ACK (-1 = key absent in layer)
+[231.079] HWTEST GNSS_BBR EN#3: EN low for 15 s
+[248.580] HWTEST GNSS_BBR EN#3: passive window 2.5 s after EN high: first byte after 264 ms, UBX PVT/STATUS frames=6, NMEA '$'=0, bytes=372, first fix seen after -1 ms, UART errors total=0 -> config RETAINED (survived EN low)
+[251.968] HWTEST GNSS_BBR after-on: msss=3616 ms, rx-ttff=616 ms, fix=3 ok=1 sv=5, time valid=0xF7 2026-11-24 06:55:31
+[251.978] HWTEST GNSS_BBR after-on: orbit db: 19 SV, eph usable 7, alm usable 15 | marker BBR=1 RAM=1 | OPERATEMODE BBR=-1 RAM=0 | VALGET rc BBR=ACK RAM=ACK (-1 = key absent in layer)
+[252.902] HWTEST GNSS_BBR EN#3 RESULT: config retained yes | marker BBR yes, RAM yes | core reset yes (msss 16609 -> 3616) | ephemerides kept yes (eph 7 -> 7, alm 15 -> 15) | time valid after start 0xF7 | fix 4829 ms after EN high (receiver ttff 616 ms) -> hot star[252.936] HWTEST GNSS_BBR (hot start = fix within 15000 ms after EN high; override: PURRGO_HWTEST_GNSS_HOT_MS)
+[252.946] HWTEST GNSS_BBR === EN SUMMARY (yes/no/unknown of 3 cycles): config retained 3/0/0, marker in BBR 3/0/0, core reset 3/0/0, ephemerides kept 3/0/0, hot start 2/1/0, no reply 0 ===
+[252.963] HWTEST GNSS_BBR EN VERDICT: mixed or incomplete result, see per-cycle lines above
+[252.984] HWTEST GNSS_BBR === phase PSMOO: period 15 s, on-time 2 s, 6 bursts ===
+[258.862] HWTEST GNSS_BBR PSMOO: signals (SBAS/GLO/B1C off, B1I on) RAM+BBR -> ACK; fix obtained (994 ms)
+[258.945] HWTEST GNSS_BBR PSMOO: config: signals ACK, output ACK, params ACK, mode ACK (RAM+BBR)
+[272.800] HWTEST GNSS_BBR PSMOO burst 1: t=0 s, start-to-start 0 ms (period 15 s), on 9936 ms, PVT frames 10, msss at first STATUS 5901 ms (small = core restarted), last msss 14901 ms, receiver ttff 401 ms, psm=3 fix=3 sv=4, UART errors 0
+[293.710] HWTEST GNSS_BBR PSMOO burst 2: t=20 s, start-to-start 19774 ms (period 15 s), on 11072 ms, PVT frames 13, msss at first STATUS 20 ms (small = core restarted), last msss 10209 ms, receiver ttff 709 ms, psm=3 fix=3 sv=4, UART errors 0
+[305.655] HWTEST GNSS_BBR PSMOO burst 3: t=35 s, start-to-start 15203 ms (period 15 s), on 7814 ms, PVT frames 8, msss at first STATUS 20 ms (small = core restarted), last msss 7057 ms, receiver ttff 1057 ms, psm=3 fix=3 sv=4, UART errors 0
+[321.585] HWTEST GNSS_BBR PSMOO burst 4: t=50 s, start-to-start 14950 ms (period 15 s), on 8794 ms, PVT frames 9, msss at first STATUS 20 ms (small = core restarted), last msss 8040 ms, receiver ttff 1040 ms, psm=3 fix=3 sv=4, UART errors 0
+[335.520] HWTEST GNSS_BBR PSMOO burst 5: t=65 s, start-to-start 14917 ms (period 15 s), on 7812 ms, PVT frames 8, msss at first STATUS 20 ms (small = core restarted), last msss 7051 ms, receiver ttff 1051 ms, psm=3 fix=3 sv=4, UART errors 0
+[351.449] HWTEST GNSS_BBR PSMOO burst 6: t=80 s, start-to-start 14947 ms (period 15 s), on 8794 ms, PVT frames 9, msss at first STATUS 20 ms (small = core restarted), last msss 8042 ms, receiver ttff 1042 ms, psm=3 fix=3 sv=4, UART errors 0
+[353.506] HWTEST GNSS_BBR PSMOO-final: msss=733 ms, rx-ttff=0 ms, fix=2 ok=0 sv=3, time valid=0x37 2026-11-24 06:57:13
+[353.516] HWTEST GNSS_BBR PSMOO-final: orbit db: 20 SV, eph usable 7, alm usable 16 | marker BBR=1 RAM=1 | OPERATEMODE BBR=1 RAM=1 | VALGET rc BBR=ACK RAM=ACK (-1 = key absent in layer)
+[353.532] HWTEST GNSS_BBR === PSMOO SUMMARY: 6/6 bursts, NMEA reappeared 0, real silences 0, UART errors 0, final check: marker BBR=1, OPERATEMODE BBR=1 RAM=1 (config kept) ===
+[353.548] HWTEST GNSS_BBR PSMOO VERDICT: PSMOO ran 6 off/on cycles, configuration (BBR) survived
+[353.967] HWTEST GNSS_BBR cleanup (final): RAM restore ACK, BBR delete ACK / ACK
+[356.600] HWTEST GNSS_BBR final: msss=461 ms, rx-ttff=461 ms, fix=2 ok=0 sv=3, time valid=0x37 2026-11-24 06:57:16
+[356.610] HWTEST GNSS_BBR final: orbit db: 20 SV, eph usable 7, alm usable 16 | marker BBR=-1 RAM=0 | OPERATEMODE BBR=-1 RAM=0 | VALGET rc BBR=NAK RAM=ACK (-1 = key absent in layer)
+[356.626] HWTEST GNSS_BBR done
