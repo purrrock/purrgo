@@ -10,6 +10,7 @@
 | [`Batt-discharge/`](Batt-discharge/) | Кривые разряда батарей: `LIION.txt`, `ZINK-CARBON.txt` (время и напряжение на элемент) |
 | [`Current/`](Current/) | Потребляемый ток, мА (`timestamp;value mA`): `Debug, 10.11.2026` и `Release, 12.11.2026`, по файлу на сценарий (книга, карта, выключение и т. д.) |
 | [`tracks/`](tracks/) | Записанные треки: `bicycle.gpx`, `bicycle2.gpx`, `indoor.gpx`, `pedestian.gpx`, `Tracker_mode_bicycle.gpx` и архивы `LIION.zip`, `ZINK-CARBON.zip` |
+| [`gnss_test/`](gnss_test/) | Логи `GNSS_BBR_1` ... `GNSS_BBR_8` теста `PURRGO_HW_TEST=GNSS_BBR` (23-24.11.2026): сохранение BBR, эфемерид и RAM при `EN` = Low, в PSMOO и при сбросах, слой Flash. Методика, таблица прогонов (какие логи недостоверны) и итоги: [`../gnss-retention.md`](../gnss-retention.md) |
 | [`tracks/filter-tuning.md`](tracks/filter-tuning.md) | Подбор фильтра трека по `bicycle`, `bicycle2`, `indoor`, `pedestian`, `Tracker_mode_bicycle`: что показали данные, варианты и выбранные пороги |
 
 Правило: новый замер - новый файл с датой и сборкой (`PURRGO_HW_TEST`, ключевые `-D`, плата, источник питания) в начале.

@@ -1003,7 +1003,9 @@ static void __attribute__((unused)) run_en_phase(void)
             }
         }
 
-        if (wait_fix(t_on, PURRGO_HWTEST_GNSS_EN_FIX_TIMEOUT_S, "EN", &fix_ms))
+        const bool got_fix = wait_fix(t_on, PURRGO_HWTEST_GNSS_EN_FIX_TIMEOUT_S, "EN", &fix_ms);
+
+        if (got_fix)
         {
             r.fix_ms = fix_ms;
             r.hot = (fix_ms <= (uint32_t)PURRGO_HWTEST_GNSS_HOT_MS) ? 1 : 0;
@@ -1018,12 +1020,14 @@ static void __attribute__((unused)) run_en_phase(void)
             r.fix_ms = PURRGO_HWTEST_GNSS_EN_FIX_TIMEOUT_S * 1000U;
         }
 
-        HT("HWTEST GNSS_BBR EN#%u RESULT: config retained %s | marker BBR %s, RAM %s | RAM-only value kept %s | core reset %s (msss %lu -> %lu) |"
-           " ephemerides kept %s (eph %d -> %d, alm %d -> %d) | time valid after start 0x%02X | fix %s%lu ms after EN"
-           " high (receiver ttff %lu ms) -> hot start %s\r\n", k + 1U, tri_text(r.cfg), tri_text(r.bbr), tri_text(r.ram), tri_text(r.ram_only), tri_text(r.reset),
-           (unsigned long)before.msss, (unsigned long)after.msss, tri_text(r.eph), before.eph, after.eph, before.alm,
-           after.alm, (unsigned)after.valid, (r.hot > 0) ? "" : ">", (unsigned long)r.fix_ms,
-           (unsigned long)r.rx_ttff_ms, tri_text(r.hot));
+        /* Две строки: буфер логгера 256 байт, длинная строка обрезается (так потерялось время фикса в логе 7). */
+        HT("HWTEST GNSS_BBR EN#%u RESULT: config retained %s | marker BBR %s, RAM %s | RAM-only value kept %s |"
+           " core reset %s (msss %lu -> %lu)\r\n", k + 1U, tri_text(r.cfg), tri_text(r.bbr), tri_text(r.ram),
+           tri_text(r.ram_only), tri_text(r.reset), (unsigned long)before.msss, (unsigned long)after.msss);
+        HT("HWTEST GNSS_BBR EN#%u RESULT: ephemerides kept %s (eph %d -> %d, alm %d -> %d) | time valid 0x%02X |"
+           " fixOK %s%lu ms after EN high (receiver ttff %lu ms) -> hot start %s\r\n", k + 1U, tri_text(r.eph),
+           before.eph, after.eph, before.alm, after.alm, (unsigned)after.valid, got_fix ? "" : "NOT obtained within ",
+           (unsigned long)r.fix_ms, (unsigned long)r.rx_ttff_ms, tri_text(r.hot));
 
         res_add("E%u cfg:%c bbr:%c ram:%c rst:%c", k + 1U, yn_c(r.cfg), yn_c(r.bbr), yn_c(r.ram_only), yn_c(r.reset));
         res_add("  eph:%c %d>%d fix %s%lu.%lus", yn_c(r.eph), before.eph, after.eph, (r.hot > 0) ? "" : ">",
