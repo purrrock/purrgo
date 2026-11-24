@@ -39,6 +39,7 @@
  *   PURRGO_HWTEST_GNSS_EN_FIX_TIMEOUT_S  90
  *   PURRGO_HWTEST_GNSS_PSMOO_PERIOD_S    15
  *   PURRGO_HWTEST_GNSS_PSMOO_ONTIME_S    2
+ *   PURRGO_HWTEST_GNSS_HOT_MS            15000  фикс не позже этого после EN High = горячий старт
  *   PURRGO_HWTEST_GNSS_PSMOO_CYCLES      6      сколько всплесков наблюдать
  *   PURRGO_HWTEST_GNSS_PSMOO_BAUD        0      115200: скорость модуля пишется в RAM и BBR (как в рабочей прошивке)
  *
@@ -95,6 +96,10 @@
 #endif
 #ifndef PURRGO_HWTEST_GNSS_PSMOO_CYCLES
 #define PURRGO_HWTEST_GNSS_PSMOO_CYCLES 6U
+#endif
+/* Фикс не позже стольких мс после EN High считается горячим стартом (холодный старт при том же небе - 60-80 с). */
+#ifndef PURRGO_HWTEST_GNSS_HOT_MS
+#define PURRGO_HWTEST_GNSS_HOT_MS 15000U
 #endif
 /* 0 - скорость модуля не меняется (38400); 115200 - как в рабочей прошивке: скорость пишется в RAM и BBR. */
 #ifndef PURRGO_HWTEST_GNSS_PSMOO_BAUD
@@ -961,7 +966,7 @@ static void run_en_phase(void)
         if (wait_fix(t_on, PURRGO_HWTEST_GNSS_EN_FIX_TIMEOUT_S, "EN", &fix_ms))
         {
             r.fix_ms = fix_ms;
-            r.hot = (fix_ms <= 6000U) ? 1 : 0;
+            r.hot = (fix_ms <= (uint32_t)PURRGO_HWTEST_GNSS_HOT_MS) ? 1 : 0;
             if (poll_retry(PURRGO_UBX_CLASS_NAV, PURRGO_UBX_ID_NAV_STATUS, &s_seq_status, 1500U, 3U))
             {
                 r.rx_ttff_ms = s_st.ttff;
@@ -992,6 +997,8 @@ static void run_en_phase(void)
         count_yn(r.hot, &hot_y, &hot_n, &hot_u);
     }
 
+    HT("HWTEST GNSS_BBR (hot start = fix within %lu ms after EN high; override: PURRGO_HWTEST_GNSS_HOT_MS)\r\n",
+       (unsigned long)PURRGO_HWTEST_GNSS_HOT_MS);
     HT("HWTEST GNSS_BBR === EN SUMMARY (yes/no/unknown of %u cycles): config retained %u/%u/%u, marker in BBR %u/%u/%u,"
        " core reset %u/%u/%u, ephemerides kept %u/%u/%u, hot start %u/%u/%u, no reply %u ===\r\n", n, cfg_y, cfg_n,
        cfg_u, bbr_y, bbr_n, bbr_u, rst_y, rst_n, rst_u, eph_y, eph_n, eph_u, hot_y, hot_n, hot_u, dead_n);
