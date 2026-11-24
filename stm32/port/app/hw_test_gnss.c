@@ -28,10 +28,16 @@
  *      каждом всплеске определяются интервал между началами всплесков, длительность работы, msss первого STATUS
  *      (малое значение - ядро стартовало заново после "off"), ttff, ошибки UART и возврат NMEA (настройка потеряна).
  *      В конце один опрос проверяет маркер и режим PSMOO в BBR. Тишина дольше периода будит приёмник опросом.
+ *   3b. FLASH (маска 4). Три безвредных ключа, по одному на слой: только RAM, BBR, Flash. Затем UBX-CFG-RST: сначала
+ *      программный сброс (RAM стирается, BBR остаётся), потом аппаратный (стираются RAM и BBR). После каждого
+ *      значения читаются из слоёв RAM, BBR и Flash: что пережило сброс и загружается ли Flash в RAM при старте.
+ *      После аппаратного сброса снимается состояние навигационных данных. Аппаратный сброс может обнулить
+ *      эфемериды (следующий фикс холодный: до минуты). Ключи удаляются в cleanup_receiver().
  *   4. Откат. Из BBR удаляются все ключи теста, в RAM возвращается полный режим.
  *
  * Настройки (-D при сборке, значения по умолчанию ниже):
- *   PURRGO_HWTEST_GNSS_PHASES            1 = только EN, 2 = только PSMOO, 3 = обе (по умолчанию 3)
+ *   PURRGO_HWTEST_GNSS_PHASES            битовая маска: 1 EN, 2 PSMOO, 4 FLASH (по умолчанию 3; 4 - только Flash, без ожидания
+ *                                        фикса; 7 - все, FLASH последней)
  *   PURRGO_HWTEST_GNSS_ACQ_TIMEOUT_S     300
  *   PURRGO_HWTEST_GNSS_ACQ_HOLD_S        20     выдержка после первого фикса
  *   PURRGO_HWTEST_GNSS_EN_CYCLES         3
@@ -133,6 +139,9 @@
 #define KEY_CANARY         0x20410002U   /* CFG-ITFM-CWTHRESHOLD, U1: по умолчанию 15; "канарейка" только для слоя RAM */
 #define CANARY_VALUE       14U
 #define CANARY_DEFAULT     15U
+#define KEY_CANARY2        0x20410001U   /* CFG-ITFM-BBTHRESHOLD, U1: по умолчанию 3; значение только в RAM (тест FLASH) */
+#define CANARY2_VALUE      4U
+#define CANARY2_DEFAULT    3U
 #define KEY_UART_BAUD      0x40520001U   /* CFG-UART1-BAUDRATE, U4 */
 #define KEY_SIG_GLO        0x10310025U   /* CFG-SIGNAL-GLO_ENA, L: по умолчанию 0 */
 #define KEY_SIG_BDS        0x10310022U   /* CFG-SIGNAL-BDS_ENA, L: по умолчанию 0 */
@@ -743,6 +752,7 @@ static void wake_receiver(void)
     delay_ms(300U);
 }
 
+#if (PURRGO_HWTEST_GNSS_PHASES & 4)
 static int valdel_layers(uint8_t layers, const uint32_t *keys, size_t count)
 {
     uint8_t frame[96];
@@ -750,33 +760,7 @@ static int valdel_layers(uint8_t layers, const uint32_t *keys, size_t count)
 
     return cfg_wait(frame, n, &s_ack_valdel, &s_nak_valdel);
 }
-
-/*
- * Есть ли у модуля слой Flash: запись маркера в слой Flash принимается (ACK) только если флэш есть; сразу после
- * этого значение читается обратно и удаляется. NAK на запись - флэша нет (или слой недоступен).
- */
-static void flash_probe(void)
-{
-    static const purrgo_ubx_cfg_item_t mk = { KEY_MARKER, 1U };
-    static const uint32_t key = KEY_MARKER;
-    int32_t v[1] = { -1 };
-
-    const int g0 = valget(0x02U, &key, 1U, v);
-    const int w = valset(LAYER_FLASH, &mk, 1U);
-    int g1 = -2;
-    int d = -2;
-
-    v[0] = -1;
-    if (w == 1)
-    {
-        g1 = valget(0x02U, &key, 1U, v);
-        d = valdel_layers(LAYER_FLASH, &key, 1U);
-    }
-    HT("HWTEST GNSS_BBR flash probe: VALGET(flash) %s; VALSET(flash) %s; readback %ld (rc %s); VALDEL(flash) %s -> %s\r\n",
-       rc_text(g0), rc_text(w), (long)v[0], (g1 == -2) ? "-" : rc_text(g1), (d == -2) ? "-" : rc_text(d),
-       (w == 1) ? "module HAS a flash configuration layer" : "no flash layer (write rejected)");
-    res_add("flash layer: %s", (w == 1) ? "YES" : "no");
-}
+#endif
 
 /*
  * Сменить скорость модуля и МК. ACK на команду смены скорости может прийти на старой или на новой скорости,
@@ -803,7 +787,7 @@ static bool set_module_baud(uint32_t baud, uint8_t layers)
 static void cleanup_receiver(const char *why)
 {
     static const purrgo_ubx_cfg_item_t ram_restore[] = {
-        { KEY_PM_OPMODE, 0U }, { KEY_NMEA_UART1, 1U }, { KEY_MSGOUT_PVT, 0U }, { KEY_CANARY, CANARY_DEFAULT },
+        { KEY_PM_OPMODE, 0U }, { KEY_NMEA_UART1, 1U }, { KEY_MSGOUT_PVT, 0U }, { KEY_CANARY, CANARY_DEFAULT }, { KEY_CANARY2, CANARY2_DEFAULT },
         { KEY_MSGOUT_STATUS, 0U }, { KEY_MARKER, 0U },
         /* Заводской набор систем; сначала выключения, потом включения (B1I несовместим с B1C и GLONASS). */
         { KEY_SIG_GLO, 0U }, { KEY_SIG_BDS, 0U }, { KEY_SIG_BDS_B1, 0U }, { KEY_SIG_BDS_B1C, 1U }, { KEY_SBAS, 1U },
@@ -830,6 +814,14 @@ static void cleanup_receiver(const char *why)
 
     HT("HWTEST GNSS_BBR cleanup (%s): RAM restore %s, BBR delete %s / %s\r\n", why, rc_text(a), rc_text(b),
        rc_text(c));
+#if (PURRGO_HWTEST_GNSS_PHASES & 4)
+    {
+        /* Следы теста FLASH: ключ в слое Flash (удаление отсутствующего ключа не ошибка). */
+        static const uint32_t fkey = KEY_CANARY;
+
+        HT("HWTEST GNSS_BBR cleanup (%s): Flash delete %s\r\n", why, rc_text(valdel_layers(LAYER_FLASH, &fkey, 1U)));
+    }
+#endif
 }
 
 /*
@@ -901,7 +893,7 @@ typedef struct {
     uint32_t rx_ttff_ms;
 } en_result_t;
 
-static void run_en_phase(void)
+static void __attribute__((unused)) run_en_phase(void)
 {
     /* Настройка, по которой сразу видно, пережила ли она EN Low: NMEA выключен, PVT и STATUS включены. */
     static const purrgo_ubx_cfg_item_t persist_cfg[] = {
@@ -1072,7 +1064,7 @@ static void run_en_phase(void)
 /* Фаза 3: PSMOO                                                              */
 /* ------------------------------------------------------------------------- */
 
-static void run_psmoo_phase(void)
+static void __attribute__((unused)) run_psmoo_phase(void)
 {
     static const purrgo_ubx_cfg_item_t out_cfg[] = {
         { KEY_NMEA_UART1, 0U }, { KEY_MSGOUT_PVT, 1U }, { KEY_MSGOUT_STATUS, 1U }, { KEY_MARKER, 1U },
@@ -1338,6 +1330,195 @@ static void run_psmoo_phase(void)
     scr_refresh(true);
 }
 
+#if (PURRGO_HWTEST_GNSS_PHASES & 4)
+/* ------------------------------------------------------------------------- */
+/* Фаза 4: слой Flash                                                         */
+/* ------------------------------------------------------------------------- */
+
+/*
+ * Три ключа, по одному на слой: [0] только RAM (CFG-ITFM-BBTHRESHOLD = 4), [1] BBR (CFG-ITFM-ENABLE = 1),
+ * [2] Flash (CFG-ITFM-CWTHRESHOLD = 14). Все безвредны, по умолчанию 3 / 0 / 15, откат в cleanup_receiver().
+ */
+static const uint32_t k_layer_keys[3] = { KEY_CANARY2, KEY_MARKER, KEY_CANARY };
+
+typedef struct {
+    int32_t ram[3], bbr[3], fl[3];   /* значение ключа в слое; -1 - ключа в слое нет */
+    int rc_ram, rc_bbr, rc_fl;       /* 1 ответ, 0 NAK, -1 тишина */
+} layers_t;
+
+static int valget_retry(uint8_t layer, const uint32_t *keys, unsigned n, int32_t *vals)
+{
+    int rc = -1;
+
+    for (unsigned i = 0U; i < 3U; i++)
+    {
+        rc = valget(layer, keys, n, vals);
+        if (rc >= 0)
+        {
+            break;
+        }
+        purrgo_ubx_parser_init(&s_parser);
+    }
+    return rc;
+}
+
+static void read_layers(layers_t *l)
+{
+    memset(l, 0, sizeof *l);
+    for (unsigned i = 0U; i < 3U; i++)
+    {
+        l->ram[i] = l->bbr[i] = l->fl[i] = -1;
+    }
+    l->rc_ram = valget_retry(0x00U, k_layer_keys, 3U, l->ram);
+    l->rc_bbr = valget_retry(0x01U, k_layer_keys, 3U, l->bbr);
+    l->rc_fl = valget_retry(0x02U, k_layer_keys, 3U, l->fl);
+}
+
+static void log_layers(const char *tag, const layers_t *l)
+{
+    HT("HWTEST GNSS_BBR FLASH %s: RAM layer [ram-only %ld, bbr-key %ld, flash-key %ld] | BBR layer [%ld, %ld, %ld] |"
+       " Flash layer [%ld, %ld, %ld] (rc %s/%s/%s; -1 = key absent in layer; set values %u/1/%u)\r\n", tag,
+       (long)l->ram[0], (long)l->ram[1], (long)l->ram[2], (long)l->bbr[0], (long)l->bbr[1], (long)l->bbr[2],
+       (long)l->fl[0], (long)l->fl[1], (long)l->fl[2], rc_text(l->rc_ram), rc_text(l->rc_bbr), rc_text(l->rc_fl),
+       (unsigned)CANARY2_VALUE, (unsigned)CANARY_VALUE);
+}
+
+/* UBX-CFG-RST (ответа нет) и возврат связи: после сброса RAM модуль на заводской скорости 38400. */
+static bool reset_and_relink(uint8_t reset_mode, const char *name)
+{
+    const uint8_t pl[4] = { 0x00U, 0x00U, reset_mode, 0x00U };   /* navBbrMask = 0 (hot start), resetMode */
+    uint32_t t_ms = 0U;
+
+    (void)tx_msg(CLS_CFG, 0x04U, pl, sizeof pl);
+    delay_ms(1000U);
+    s_baud = BAUD_FACTORY;
+    (void)purrgo_gnss_raw_set_baud(BAUD_FACTORY);
+    purrgo_ubx_parser_init(&s_parser);
+
+    const bool up = link_up(HAL_GetTick(), 15000U, &t_ms);
+
+    HT("HWTEST GNSS_BBR FLASH: %s reset sent; link %s (first sign of life %lu ms after the 1 s pause) at %lu baud\r\n",
+       name, up ? "UP" : "NOT RESTORED", (unsigned long)t_ms, (unsigned long)s_baud);
+    if (up)
+    {
+        /* Заводской NMEA задерживает ответы на опросы: выключить (только RAM, ключи теста не затрагиваются). */
+        static const purrgo_ubx_cfg_item_t nmea_off = { KEY_NMEA_UART1, 0U };
+
+        (void)valset(LAYER_RAM, &nmea_off, 1U);
+    }
+    return up;
+}
+
+static void run_flash_phase(void)
+{
+    static const purrgo_ubx_cfg_item_t f_item = { KEY_CANARY, CANARY_VALUE };
+    static const purrgo_ubx_cfg_item_t b_item = { KEY_MARKER, 1U };
+    static const purrgo_ubx_cfg_item_t r_item = { KEY_CANARY2, CANARY2_VALUE };
+    layers_t pre, sw, hw;
+    snap_t sn;
+
+    HT("HWTEST GNSS_BBR === phase FLASH: values in RAM / BBR / Flash layers vs. software and hardware reset ===\r\n");
+    head_set(0, "GNSS_BBR  phase FLASH");
+    head_set(1, "SW reset, then HW reset");
+
+    if (!link_up(HAL_GetTick(), 15000U, NULL))
+    {
+        HT("HWTEST GNSS_BBR FLASH: module does not answer, phase skipped\r\n");
+        res_add("FLASH: no module reply");
+        return;
+    }
+    cleanup_receiver("flash-pre");   /* известное состояние, 38400 бод */
+    {
+        static const purrgo_ubx_cfg_item_t nmea_off = { KEY_NMEA_UART1, 0U };
+
+        (void)valset(LAYER_RAM, &nmea_off, 1U);
+    }
+
+    const int wf = valset(LAYER_FLASH, &f_item, 1U);
+    const int wb = valset(LAYER_BBR, &b_item, 1U);
+    const int wr = valset(LAYER_RAM, &r_item, 1U);
+
+    HT("HWTEST GNSS_BBR FLASH: write Flash %s, BBR %s, RAM %s\r\n", rc_text(wf), rc_text(wb), rc_text(wr));
+    read_layers(&pre);
+    log_layers("before reset", &pre);
+    if ((wf != 1) || (pre.fl[2] != (int32_t)CANARY_VALUE))
+    {
+        HT("HWTEST GNSS_BBR FLASH: value not stored in the Flash layer - no flash, phase aborted\r\n");
+        res_add("FLASH: write failed");
+        return;
+    }
+    res_add("write fl:%s bbr:%s ram:%s", rc_text(wf), rc_text(wb), rc_text(wr));
+
+    /* A. Программный сброс: RAM стирается, BBR остаётся. */
+    const bool up_sw = reset_and_relink(0x01U, "controlled software");
+
+    if (up_sw)
+    {
+        read_layers(&sw);
+        log_layers("after software reset", &sw);
+        take_snapshot(&sn);
+        log_snap("after-sw-reset", &sn);
+    }
+
+    /* B. Аппаратный сброс: стираются RAM и BBR (мануал, таблица сбросов); навигационные данные тоже? */
+    const bool up_hw = reset_and_relink(0x00U, "hardware (watchdog)");
+
+    if (up_hw)
+    {
+        read_layers(&hw);
+        log_layers("after hardware reset", &hw);
+        take_snapshot(&sn);
+        log_snap("after-hw-reset", &sn);
+    }
+
+    const int32_t cw = (int32_t)CANARY_VALUE;
+
+    if (up_sw)
+    {
+        const int a = (sw.ram[0] == (int32_t)CANARY2_VALUE) ? 1 : 0;   /* RAM-значение пережило */
+        const int b = (sw.bbr[1] == 1) ? 1 : 0;                         /* BBR-значение пережило */
+        const int f = (sw.fl[2] == cw) ? 1 : 0;                         /* Flash-значение пережило */
+        const int l = (sw.ram[2] == cw) ? 1 : 0;                        /* Flash загружен в RAM при старте */
+
+        HT("HWTEST GNSS_BBR FLASH SW reset: RAM-only value kept %s, BBR value kept %s, Flash value kept %s, Flash loaded into RAM %s\r\n",
+           tri_text(a), tri_text(b), tri_text(f), tri_text(l));
+        res_add("SW ram:%c bbr:%c fl:%c ->ram:%c", yn_c(a), yn_c(b), yn_c(f), yn_c(l));
+    }
+    else
+    {
+        res_add("SW reset: link LOST");
+    }
+    if (up_hw)
+    {
+        const int a = (hw.ram[0] == (int32_t)CANARY2_VALUE) ? 1 : 0;
+        const int b = (hw.bbr[1] == 1) ? 1 : 0;
+        const int f = (hw.fl[2] == cw) ? 1 : 0;
+        const int l = (hw.ram[2] == cw) ? 1 : 0;
+
+        HT("HWTEST GNSS_BBR FLASH HW reset: RAM-only value kept %s, BBR value kept %s, Flash value kept %s, Flash loaded into RAM %s;"
+           " nav data after reset: eph %d, alm %d, time valid 0x%02X\r\n", tri_text(a), tri_text(b), tri_text(f),
+           tri_text(l), sn.eph, sn.alm, (unsigned)sn.valid);
+        res_add("HW ram:%c bbr:%c fl:%c ->ram:%c", yn_c(a), yn_c(b), yn_c(f), yn_c(l));
+        res_add("  nav after HW: eph%d alm%d", sn.eph, sn.alm);
+        if ((f == 1) && (l == 1))
+        {
+            HT("HWTEST GNSS_BBR FLASH VERDICT: the Flash layer keeps configuration through a hardware reset and loads it into RAM"
+               " at startup (usable for permanent tracker settings)\r\n");
+        }
+        else
+        {
+            HT("HWTEST GNSS_BBR FLASH VERDICT: Flash configuration did NOT survive or was not applied - see layer lines above\r\n");
+        }
+    }
+    else
+    {
+        HT("HWTEST GNSS_BBR FLASH VERDICT: link not restored after the hardware reset - check baud/wiring\r\n");
+        res_add("HW reset: link LOST");
+    }
+    scr_refresh(true);
+}
+#endif /* PURRGO_HWTEST_GNSS_PHASES & 4 */
+
 /* ------------------------------------------------------------------------- */
 /* Точка входа                                                                */
 /* ------------------------------------------------------------------------- */
@@ -1345,7 +1526,6 @@ static void run_psmoo_phase(void)
 void purrgo_hw_test_gnss_bbr(void)
 {
     snap_t base;
-    uint32_t fix_ms = 0U;
 
     HT("HWTEST GNSS_BBR start (phases mask %d)\r\n", (int)PURRGO_HWTEST_GNSS_PHASES);
     scr_init();
@@ -1382,7 +1562,6 @@ void purrgo_hw_test_gnss_bbr(void)
     log_snap("initial", &base);
     HT("HWTEST GNSS_BBR: initial state above shows leftovers of earlier runs (marker/OPERATEMODE in BBR)\r\n");
     cleanup_receiver("initial");
-    flash_probe();
     {
         /* NMEA на 38400 бод задерживает ответы на опросы на секунду и больше: на время теста он выключается. */
         static const purrgo_ubx_cfg_item_t nmea_off = { KEY_NMEA_UART1, 0U };
@@ -1390,6 +1569,9 @@ void purrgo_hw_test_gnss_bbr(void)
         HT("HWTEST GNSS_BBR: NMEA off (RAM) -> %s\r\n", rc_text(valset(LAYER_RAM, &nmea_off, 1U)));
     }
     s_t_first_fix = 0U;
+
+#if (PURRGO_HWTEST_GNSS_PHASES & 3)
+    uint32_t fix_ms = 0U;
 
     /* 1. ACQ. */
     head_set(0, "GNSS_BBR  acquire");
@@ -1414,6 +1596,7 @@ void purrgo_hw_test_gnss_bbr(void)
     log_snap("BASE", &base);
     res_add("BASE sv%u eph%d alm%d", (unsigned)base.num_sv, base.eph, base.alm);
     scr_refresh(true);
+#endif
 
     /* 2, 3. Основные фазы. */
 #if (PURRGO_HWTEST_GNSS_PHASES & 1)
@@ -1421,6 +1604,9 @@ void purrgo_hw_test_gnss_bbr(void)
 #endif
 #if (PURRGO_HWTEST_GNSS_PHASES & 2)
     run_psmoo_phase();
+#endif
+#if (PURRGO_HWTEST_GNSS_PHASES & 4)
+    run_flash_phase();   /* последней: аппаратный сброс стирает BBR и навигационные данные */
 #endif
 
     /* 4. Откат. */
