@@ -83,6 +83,9 @@ void Error_Handler(void);
 #define Detect_SD_GPIO_Port GPIOB
 #define SD_CS_Pin GPIO_PIN_12
 #define SD_CS_GPIO_Port GPIOB
+#define PWR_SRC_Pin GPIO_PIN_8
+#define PWR_SRC_GPIO_Port GPIOA
+#define PWR_SRC_EXTI_IRQn EXTI8_IRQn
 #define BUZZER_N_Pin GPIO_PIN_6
 #define BUZZER_N_GPIO_Port GPIOB
 #define EINK_CS_Pin GPIO_PIN_7
