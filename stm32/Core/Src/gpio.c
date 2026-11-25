@@ -102,7 +102,7 @@ void MX_GPIO_Init(void)
 
   /*Configure GPIO pin : PWR_SRC_Pin */
   GPIO_InitStruct.Pin = PWR_SRC_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING_FALLING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(PWR_SRC_GPIO_Port, &GPIO_InitStruct);
 
@@ -113,7 +113,7 @@ void MX_GPIO_Init(void)
   HAL_NVIC_SetPriority(EXTI1_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(EXTI1_IRQn);
 
-  HAL_NVIC_SetPriority(EXTI8_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(EXTI8_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(EXTI8_IRQn);
 
   HAL_NVIC_SetPriority(EXTI14_IRQn, 5, 0);
