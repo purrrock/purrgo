@@ -12,7 +12,9 @@
  * Мониторинг батареи (см. purrgo/battery.h).
  *
  * Кривая разряда выбирается по источнику питания из app_config.power_source
- * (меню CONFIG, первый пункт). Напряжение на выводе АЦП даёт платформа
+ * (меню CONFIG, первый пункт); пока модуль ORing сообщает о питании от 5 В
+ * (purrgo_platform_ext_power_present()), источником считается 5V
+ * (purrgo_battery_active_source()). Напряжение на выводе АЦП даёт платформа
  * (purrgo_platform_battery_pin_mv()), здесь оно пересчитывается по делителю.
  * Если напряжение не измерено (0), процент берётся из заглушки
  * PURRGO_BATTERY_STUB_PERCENT; для проверки отображения можно переопределить
@@ -166,13 +168,21 @@ uint32_t purrgo_battery_pack_mv_from_pin(uint32_t pin_mv)
     return (uint32_t)(div * PURRGO_HW_BATT_CAL_PERMILLE / 1000u);
 }
 
+purrgo_power_source_t purrgo_battery_active_source(void)
+{
+    if (purrgo_platform_ext_power_present()) {
+        return PURRGO_POWER_SRC_EXTERNAL_5V;
+    }
+    return app_config.power_source;
+}
+
 bool purrgo_battery_read(purrgo_battery_t* out)
 {
     if (!out) {
         return false;
     }
 
-    const purrgo_power_source_t src = app_config.power_source;
+    const purrgo_power_source_t src = purrgo_battery_active_source();
 
     out->percent = -1;
     out->millivolts = 0;
@@ -269,7 +279,7 @@ static bool monitor_sample(uint32_t now_ms)
     memcpy(s_mon.vtext, vtext, sizeof(s_mon.vtext));
     s_mon.sampled = true;
     s_mon.sampled_ms = now_ms;
-    s_mon.src = app_config.power_source;
+    s_mon.src = purrgo_battery_active_source();
     s_mon.blocked = purrgo_supply_storage_blocked();
     if (strcmp(text, s_mon.text) == 0) {
         return false;
@@ -282,7 +292,7 @@ bool purrgo_battery_monitor_tick(uint32_t now_ms)
 {
     const bool first = !s_mon.sampled;
 
-    if (!first && s_mon.src == app_config.power_source &&
+    if (!first && s_mon.src == purrgo_battery_active_source() &&
         s_mon.blocked == purrgo_supply_storage_blocked() &&
         (uint32_t)(now_ms - s_mon.sampled_ms) < PURRGO_BATTERY_STATUS_PERIOD_MS) {
         return false;
@@ -292,7 +302,7 @@ bool purrgo_battery_monitor_tick(uint32_t now_ms)
 
 const char* purrgo_battery_status_text(void)
 {
-    if (!s_mon.sampled || s_mon.src != app_config.power_source ||
+    if (!s_mon.sampled || s_mon.src != purrgo_battery_active_source() ||
         s_mon.blocked != purrgo_supply_storage_blocked()) {
         (void)monitor_sample(purrgo_system_time_ms());
     }
@@ -301,7 +311,7 @@ const char* purrgo_battery_status_text(void)
 
 const char* purrgo_battery_voltage_text(void)
 {
-    if (!s_mon.sampled || s_mon.src != app_config.power_source ||
+    if (!s_mon.sampled || s_mon.src != purrgo_battery_active_source() ||
         s_mon.blocked != purrgo_supply_storage_blocked()) {
         (void)monitor_sample(purrgo_system_time_ms());
     }

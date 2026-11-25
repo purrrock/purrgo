@@ -63,6 +63,27 @@ typedef struct {
 } purrgo_battery_t;
 
 /*
+ * Платформенный хук: питание сейчас идёт от внешнего источника 5 В через модуль
+ * ORing LM66200 (вывод ST модуля: низкий уровень - работает вход VI2 = 5 В,
+ * высокий - вход VI1 = батареи). STM32: stm32/port/power/power_source.c (PA8,
+ * метка PWR_SRC); без модуля в схеме (PURRGO_HW_ORING_PRESENT = 0) и на PC -
+ * false.
+ *
+ * ST показывает, какой вход открыт, а не наличие 5 В: если напряжение батарей
+ * выше 5 В (свежие Li-FeS2 до ~5,4 В) или не ниже напряжения 5 В на входе
+ * (свежие щелочные при просадке 5 В), открыт вход батарей и хук вернёт false.
+ */
+bool purrgo_platform_ext_power_present(void);
+
+/*
+ * Источник питания, по которому ядро считает заряд и порог остановки записи:
+ * PURRGO_POWER_SRC_EXTERNAL_5V, пока платформа сообщает о питании от 5 В
+ * (purrgo_platform_ext_power_present()), иначе тип элементов, выбранный в меню
+ * (app_config.power_source). Меню и PURRGO.CFG хранят выбранный тип и не меняются.
+ */
+purrgo_power_source_t purrgo_battery_active_source(void);
+
+/*
  * Платформенный хук: напряжение на выводе АЦП (середина делителя), мВ;
  * 0 - не измерено. STM32: stm32/port/power/battery_adc.c.
  */

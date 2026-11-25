@@ -33,6 +33,8 @@ void fake_power_set_battery_pin_mv(uint16_t mv);
 uint16_t fake_power_pin_for_pack_mv(uint32_t pack_mv);
 /* Низкое напряжение питания, которое вернёт purrgo_platform_supply_low() (по умолчанию false). */
 void fake_power_set_supply_low(bool low);
+/* Что вернёт purrgo_platform_ext_power_present() (питание 5 В через ORing; по умолчанию false). */
+void fake_power_set_ext_power(bool present);
 
 /*
  * Звуковые сигналы, которые ядро передало платформе (purrgo_platform_sound_play()):

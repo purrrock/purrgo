@@ -21,13 +21,13 @@ static struct {
  * Причина 2: напряжение блока батарей ниже порога источника питания (опрос раз
  * в PURRGO_SUPPLY_BATT_POLL_MS = период замера АЦП, PURRGO_SUPPLY_BATT_CONFIRM_POLLS
  * подряд). После срабатывания
- * состояние держится, пока не сменят источник питания (меню CONFIG) или не
- * перезапустят устройство. Порога нет (0) у источников без снятой кривой разряда
+ * состояние держится, пока не сменят источник питания (меню CONFIG, подача
+ * или снятие 5 В по ORing) или не перезапустят устройство. Порога нет (0) у источников без снятой кривой разряда
  * и у питания 5 В.
  */
 static bool battery_low(uint32_t now_ms)
 {
-    const purrgo_power_source_t src = app_config.power_source;
+    const purrgo_power_source_t src = purrgo_battery_active_source();
 
     if (s_supply.batt_polled && s_supply.batt_src != src) {
         /* Источник сменили в меню: накопленное состояние относится к прежнему. */
@@ -94,7 +94,7 @@ void purrgo_supply_reset(void)
     s_supply.batt_polls = 0;
     s_supply.batt_polled = false;
     s_supply.batt_poll_ms = 0;
-    s_supply.batt_src = app_config.power_source;
+    s_supply.batt_src = purrgo_battery_active_source();
 }
 
 static void storage_stop(void)

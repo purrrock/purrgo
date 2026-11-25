@@ -17,6 +17,7 @@ static int s_gnss_off_calls, s_gnss_off_seq, s_gnss_on_calls, s_gnss_on_seq;
 static void (*s_probe)(void);
 static uint16_t s_battery_pin_mv;
 static bool s_supply_low;
+static bool s_ext_power;
 static int s_gnss_profile_calls, s_gnss_profile_last;
 
 /* Платформенный хук звука: записывает сигналы, которые ядро попросило сыграть. */
@@ -59,6 +60,7 @@ void fake_power_reset(void)
     fake_sound_reset();
     s_battery_pin_mv = 0;
     s_supply_low = false;
+    s_ext_power = false;
     fake_gnss_tx_reset();
 }
 void fake_power_set_unmount_probe(void (*probe)(void)) { s_probe = probe; }
@@ -138,6 +140,8 @@ uint16_t purrgo_platform_battery_pin_mv(void) { return s_battery_pin_mv; }
 
 void fake_power_set_supply_low(bool low) { s_supply_low = low; }
 bool purrgo_platform_supply_low(void) { return s_supply_low; }
+void fake_power_set_ext_power(bool present) { s_ext_power = present; }
+bool purrgo_platform_ext_power_present(void) { return s_ext_power; }
 uint16_t fake_power_pin_for_pack_mv(uint32_t pack_mv)
 {
     const uint64_t num = (uint64_t)pack_mv * 1000u * PURRGO_HW_BATT_DIV_R_BOTTOM_OHM;

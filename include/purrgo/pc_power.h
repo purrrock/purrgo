@@ -24,4 +24,7 @@ void purrgo_pc_power_set_battery_mv(uint32_t pack_mv);
 /* true - имитировать просадку VDD ниже порога безопасной записи (как PVD). */
 void purrgo_pc_power_set_supply_low(bool low);
 
+/* true - имитировать питание от 5 В через ORing (purrgo_platform_ext_power_present()). */
+void purrgo_pc_power_set_ext_power(bool present);
+
 #endif /* PURRGO_PC_POWER_H */

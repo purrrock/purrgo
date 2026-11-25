@@ -80,6 +80,7 @@ C_ADC = "#6d4c41"
 C_PWR = "#b71c1c"
 C_5V = "#d84315"
 C_SWD = "#455a64"
+C_ST = "#827717"    # ST модуля ORing -> PA8 (PWR_SRC)
 C_GND = "#222"
 C_REC = "#f57f17"   # рекомендуемые детали (не из PINOUT)
 
@@ -129,7 +130,7 @@ P2 = [
     (2, "PB13", "SPI2_SCK", C_SPI2),
     (3, "PB14", "SPI2_MISO", C_SPI2),
     (4, "PB15", "SPI2_MOSI", C_SPI2),
-    (5, "PA8", "", None),
+    (5, "PA8", "PWR_SRC  EXTI8", C_ST),
     (6, "PA9", "USART1_TX", C_DBG),
     (7, "PA10", "USART1_RX", C_DBG),
     (8, "PA11", "", None),
@@ -208,30 +209,44 @@ out.append(f'<circle cx="{sw_b}" cy="{y3}" r="3" fill="#fff" stroke="#333" strok
 line(sw_a, y3, sw_b - 6, y3 - 16, "#333", 1.8)
 text(211, y3 + 14, "SW1", 11, "middle", "bold", C_REC)
 text(211, y3 - 34, "выключатель", 9.5, "middle", "bold", C_REC)
+# ORing LM66200 (WeAct): VI1 = батареи (после SW1), VI2 = 5 В отдельного USB-C, VO -> VIN TPS63802
+OX0, OX1 = 285, 385
+rect(OX0, y3 - 62, OX1 - OX0, 114, "#e8f5e9", "#333", 1.8, 6)
+text((OX0 + OX1) / 2, y3 - 49, "ORing LM66200", 10, "middle", "bold")
+text((OX0 + OX1) / 2, y3 - 4, "WeAct", 9.5, "middle", "normal", "#555")
+text(OX0 + 6, y3 - 26, "VI2", 9.5, "start", "bold")
+text(OX0 + 6, y3 + 14, "VI1", 9.5, "start", "bold")
+text(OX1 - 6, y3 + 14, "VO", 9.5, "end", "bold")
+text(OX1 - 6, y3 - 26, "ST", 9.5, "end", "bold")
+text((OX0 + OX1) / 2, y3 + 34, "ON не подкл.", 9, "middle", "normal", "#555")
+text(OX0 + 25 + 9, y3 + 47, "G", 9.5, "start", "bold")
+line(OX0 + 25, y3 + 52, OX0 + 25, y3 + 62, C_GND, 1.8)
+gnd(OX0 + 25, y3 + 62)
 # TPS63802
-rect(300, y3 - 30, 140, 60, "#fff8e1", "#333", 1.8, 6)
-text(370, y3 - 8, "TPS63802", 13, "middle", "bold")
-text(370, y3 + 8, "buck-boost, Vout 3,3 В", 10, "middle", "normal", "#555")
-text(307, y3 + 22, "VIN", 9.5, "start", "bold")
-text(433, y3 + 22, "VOUT", 9.5, "end", "bold")
-text(370, y3 + 41, "GND", 9.5, "middle", "bold")
-line(370, y3 + 30, 370, y3 + 46, C_GND, 1.8)
-gnd(370, y3 + 46)
+rect(430, y3 - 30, 120, 60, "#fff8e1", "#333", 1.8, 6)
+text(490, y3 - 8, "TPS63802", 13, "middle", "bold")
+text(490, y3 + 8, "buck-boost, 3,3 В", 10, "middle", "normal", "#555")
+text(437, y3 + 22, "VIN", 9.5, "start", "bold")
+text(543, y3 + 22, "VOUT", 9.5, "end", "bold")
+text(490, y3 + 41, "GND", 9.5, "middle", "bold")
+line(490, y3 + 30, 490, y3 + 46, C_GND, 1.8)
+gnd(490, y3 + 46)
 # провода питания
 wire("BAT+ sw", C_PWR, [(170, y3), (sw_a - 3, y3)], 3)
-wire("BAT+ vin", C_PWR, [(sw_b + 3, y3), (300, y3)], 3)
-wire("3V3", C_PWR, [(440, y3), (PX_L, y3)], 3)
-# C1: 220 мкФ у входа TPS63802
-dot(285, y3, 3.5, C_PWR)
-cap_v(285, y3, y3 + 48, True)
-gnd(285, y3 + 48)
-text(296, y3 + 62, "C1 220 мкФ", 10, "start", "bold", C_REC)
+wire("BAT+ vin", C_PWR, [(sw_b + 3, y3), (OX0, y3)], 3)
+wire("ORing VO", C_PWR, [(OX1, y3), (430, y3)], 3)
+wire("3V3", C_PWR, [(550, y3), (PX_L, y3)], 3)
+# C1: 220 мкФ на выходе ORing (вход TPS63802)
+dot(408, y3, 3.5, C_PWR)
+cap_v(408, y3, y3 + 48, True)
+gnd(408, y3 + 48)
+text(416, y3 - 36, "C1 220 мкФ", 10, "start", "bold", C_REC)
 # C2: объём на шине 3V3
 dot(600, y3, 3.5, C_PWR)
 cap_v(600, y3, y3 + 40)
 gnd(600, y3 + 40)
 text(612, y3 + 26, "C2 47…100 мкФ", 10.5, "start", "bold", C_REC)
-# делитель батареи на АЦП (после выключателя)
+# делитель батареи на АЦП (после выключателя, на стороне VI1: батарея измеряется и при 5 В)
 DIVX = 250
 dot(DIVX, y3, 3.5, C_PWR)
 wire("BAT+ tap", C_ADC, [(DIVX, y3), (DIVX, 480)], 2.2)
@@ -286,20 +301,26 @@ wire("GNSS_TX", C_GNSS, [(PX_L, Y(12)), (GX1, Y(12))])
 wire("GNSS_RX", C_GNSS, [(PX_L, Y(13)), (GX1, Y(13))])
 wire("GNSS_EN", C_GEN, [(PX_L, Y(7)), (415, Y(7)), (415, Y(14)), (GX1, Y(14))])
 
-# ---------- LM66200 / предупреждение (слева сверху) ----------
-rect(40, 130, 330, 100, "#fff", "#b71c1c", 1.6, 8, "7 5")
-text(205, 156, "ORing LM66200 (WeAct) — заказан", 12.5, "middle", "bold", "#b71c1c")
-text(205, 176, "подключение в схеме пока не определено", 11, "middle", "normal", "#555")
-text(205, 196, "До его установки 5 V и батареи НЕ подавать", 11, "middle", "bold", "#b71c1c")
-text(205, 214, "одновременно; Li-FeS2 вынимать перед USB", 11, "middle", "normal", "#b71c1c")
+# ---------- отдельный USB-C 5 В (слева сверху) -> VI2 ORing ----------
+rect(40, 150, 200, 86, "#fff", "#333", 1.8, 6)
+text(140, 174, "Отдельный USB-C 5 В", 12.5, "middle", "bold")
+text(140, 192, "питание (повербанк)", 11, "middle", "normal", "#555")
+text(140, 210, "CC1, CC2 → 5,1 кОм на GND", 10, "middle", "normal", C_REC)
+text(140, 226, "Li-FeS2 вынимать перед USB", 10, "middle", "bold", "#b71c1c")
+dot(240, 192, 4, C_5V)
+wire("5V VI2", C_5V, [(240, 192), (262, 192), (262, y3 - 40), (OX0, y3 - 40)], 3)
+text(248, 184, "5V", 11, "start", "bold", C_5V)
+# ST ORing -> PA8 (сверху над платой, справа заходит на P2.5)
+wire("ORing ST", C_ST, [(OX1, y3 - 40), (410, y3 - 40), (410, 150), (1365, 150), (1365, Y(5)), (PX_R, Y(5))], 2.2)
+text(420, 141, "ST → PA8 (PWR_SRC, EXTI8)", 10.5, "start", "bold", C_ST)
+text(420, 166, "High — батареи (VI1), Low — 5 В (VI2)", 10.5, "start", "normal", C_ST)
 
 # ---------- USB-C 5V и ST-LINK (над платой) ----------
-rect(780, 170, 240, 80, "#fff", "#333", 1.8, 6)
-text(900, 194, "Резервное питание", 12.5, "middle", "bold")
-text(900, 212, "USB-C 5 V (повербанк)", 12, "middle")
-text(900, 230, "в разъём платы, LDO → 3V3", 10.5, "middle", "normal", "#555")
-wire("USB 5V", C_5V, [(900, 250), (900, BY0 - 9)], 3)
-text(912, 292, "5V", 11, "start", "bold", C_5V)
+rect(780, 170, 240, 80, "#fff", "#b71c1c", 1.6, 6, "7 5")
+text(900, 194, "USB-C платы", 12.5, "middle", "bold", "#b71c1c")
+text(900, 212, "только прошивка / DFU", 11.5, "middle", "normal", "#555")
+text(900, 230, "питание не подавать: LDO платы", 10.5, "middle", "bold", "#b71c1c")
+text(900, 244, "включится параллельно TPS63802", 10.5, "middle", "bold", "#b71c1c")
 
 rect(1130, 170, 210, 80, "#fff", "#333", 1.8, 6)
 text(1235, 194, "ST-LINK (SWD)", 12.5, "middle", "bold")
@@ -465,8 +486,9 @@ legend = [
     (C_BTN, "кнопки K1…K4: PA0, PA1, PC14, PC15 (Pull-up, EXTI)"),
     (C_BUZ, "пьезо: PA6 / PB6 (TIM16_CH1 / CH1N)"),
     (C_ADC, "PB1 V_MAIN_BAT (делитель 1 МΩ + 1 МΩ, 100 нФ)"),
-    (C_PWR, "3V3 / BAT+"),
-    (C_5V, "5 V (USB-C)"),
+    (C_ST, "PA8 PWR_SRC ← ST модуля ORing LM66200 (EXTI)"),
+    (C_PWR, "3V3 / BAT+ / VO ORing"),
+    (C_5V, "5 V (отдельный USB-C → VI2 ORing)"),
     (C_REC, "рекомендуется (не из PINOUT): C1…C8, SW1, Q2 и ключ GNSS — пунктир"),
 ]
 for i, (c, t) in enumerate(legend):

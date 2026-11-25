@@ -22,6 +22,7 @@ void purrgo_platform_enter_standby(void)
  */
 static uint16_t s_pin_mv;
 static bool s_supply_low;
+static bool s_ext_power;
 
 /*
  * Блок -> вывод АЦП: обратное преобразование к purrgo_battery_pack_mv_from_pin()
@@ -44,6 +45,16 @@ void purrgo_pc_power_set_battery_mv(uint32_t pack_mv)
 void purrgo_pc_power_set_supply_low(bool low)
 {
     s_supply_low = low;
+}
+
+void purrgo_pc_power_set_ext_power(bool present)
+{
+    s_ext_power = present;
+}
+
+bool purrgo_platform_ext_power_present(void)
+{
+    return s_ext_power;
 }
 
 uint16_t purrgo_platform_battery_pin_mv(void)

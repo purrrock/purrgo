@@ -7,13 +7,17 @@
  *   - кривые разряда: границы, монотонность, разные результаты для разных
  *     источников при одном напряжении, питание 5 В без процентов;
  *   - purrgo_battery_read() использует источник из app_config; напряжение
- *     на выводе АЦП (хук платформы) пересчитывается по делителю.
+ *     на выводе АЦП (хук платформы) пересчитывается по делителю;
+ *   - питание 5 В через ORing (purrgo_platform_ext_power_present()) переключает
+ *     источник на 5V без изменения меню и конфигурации, останавливает
+ *     автоостановку записи по батарее.
  */
 #include <string.h>
 #include "purrgo/app_fsm.h"
 #include "purrgo/battery.h"
 #include "purrgo/config.h"
 #include "purrgo/menu_controller.h"
+#include "purrgo/supply.h"
 #include "fake_fs.h"
 #include "fake_power.h"
 #include "test_common.h"
@@ -310,8 +314,95 @@ static void test_pin_voltage(void)
     CHECK(b.percent == 100 && b.millivolts == 0);
 }
 
+/*
+ * Питание 5 В по ORing (purrgo_platform_ext_power_present()): ядро считает источник
+ * 5V независимо от типа элементов в меню, меню и конфигурация при этом не меняются.
+ */
+static void test_ext_power(void)
+{
+    purrgo_battery_t b;
+
+    purrgo_config_init();
+    fake_power_reset();
+    purrgo_battery_monitor_reset();
+    purrgo_supply_reset();
+
+    /* Нет 5 В: источник - выбранные батареи. */
+    app_config.power_source = PURRGO_POWER_SRC_NIMH;
+    fake_power_set_battery_pin_mv(fake_power_pin_for_pack_mv(3750));
+    CHECK(purrgo_battery_active_source() == PURRGO_POWER_SRC_NIMH);
+    CHECK(purrgo_battery_read(&b) && b.percent == 60 && !b.external);
+    CHECK(strcmp(purrgo_battery_status_text(), "60%") == 0);
+
+    /* Подали 5 В: заряда нет, статус «5V»; меню и конфигурация не тронуты. */
+    fake_power_set_ext_power(true);
+    CHECK(purrgo_battery_active_source() == PURRGO_POWER_SRC_EXTERNAL_5V);
+    CHECK(!purrgo_battery_read(&b));
+    CHECK(b.percent == -1 && b.millivolts == 0 && b.external);
+    CHECK(strcmp(purrgo_battery_status_text(), "5V") == 0);   /* смена источника подхватывается сразу */
+    CHECK(strcmp(purrgo_battery_voltage_text(), "EXT 5V") == 0);
+    CHECK(app_config.power_source == PURRGO_POWER_SRC_NIMH);
+
+    /* 5 В сняли: снова батареи. */
+    fake_power_set_ext_power(false);
+    CHECK(purrgo_battery_active_source() == PURRGO_POWER_SRC_NIMH);
+    CHECK(strcmp(purrgo_battery_status_text(), "60%") == 0);
+
+    /* Ручной выбор 5V в меню остаётся в силе и без сигнала ORing. */
+    app_config.power_source = PURRGO_POWER_SRC_EXTERNAL_5V;
+    CHECK(purrgo_battery_active_source() == PURRGO_POWER_SRC_EXTERNAL_5V);
+    fake_power_set_ext_power(false);
+    app_config.power_source = PURRGO_POWER_SRC_NIMH;
+    fake_power_reset();
+    purrgo_battery_monitor_reset();
+}
+
+/*
+ * Автоостановка записи по батарее (солевые, 3000 мВ на блок) при питании 5 В не
+ * срабатывает, а накопленное состояние сбрасывается сменой источника.
+ */
+static void test_ext_power_supply(void)
+{
+    purrgo_config_init();
+    fake_power_reset();
+    purrgo_supply_reset();
+    app_config.power_source = PURRGO_POWER_SRC_ZINC_CARBON;
+    fake_power_set_battery_pin_mv(fake_power_pin_for_pack_mv(2800));   /* ниже порога */
+
+    /* Батареи разряжены, 5 В нет: запись должна остановиться. */
+    uint32_t t = 1000u;
+    for (int i = 0; i < 6; i++) {
+        (void)purrgo_supply_tick(t);
+        t += PURRGO_SUPPLY_BATT_POLL_MS;
+    }
+    t += PURRGO_SUPPLY_LOW_CONFIRM_MS + 10u;
+    (void)purrgo_supply_tick(t);
+    CHECK(purrgo_supply_storage_blocked());
+
+    /* Подключили 5 В: источник сменился, блокировка по батарее снимается после RECOVER_MS. */
+    fake_power_set_ext_power(true);
+    t += PURRGO_SUPPLY_BATT_POLL_MS;
+    (void)purrgo_supply_tick(t);
+    t += PURRGO_SUPPLY_RECOVER_MS + 10u;
+    (void)purrgo_supply_tick(t);
+    CHECK(!purrgo_supply_storage_blocked());
+
+    /* Свежее состояние при питании 5 В: по АЦП не судим, остановки нет. */
+    purrgo_supply_reset();
+    for (int i = 0; i < 8; i++) {
+        t += PURRGO_SUPPLY_BATT_POLL_MS;
+        (void)purrgo_supply_tick(t);
+    }
+    CHECK(!purrgo_supply_storage_blocked());
+
+    fake_power_reset();
+    purrgo_supply_reset();
+}
+
 int main(void)
 {
+    test_ext_power();
+    test_ext_power_supply();
     test_config_key();
     test_menu();
     test_curves();
