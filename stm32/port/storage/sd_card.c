@@ -455,6 +455,25 @@ static void gpio_hiz(GPIO_TypeDef *port, uint32_t pin)
     HAL_GPIO_Init(port, &gi);
 }
 
+#if PURRGO_SD_POWER_SWITCH && (PURRGO_SD_DETECT_MODE != PURRGO_SD_DETECT_NONE)
+#define PURRGO_SD_DETECT_PARK 1
+#else
+#define PURRGO_SD_DETECT_PARK 0
+#endif
+
+#if PURRGO_SD_DETECT_PARK
+/* Detect_SD - вход с подтяжкой к питанию МК (как в MX_GPIO_Init). */
+static void gpio_detect_input(void)
+{
+    GPIO_InitTypeDef gi = {0};
+
+    gi.Pin = Detect_SD_Pin;
+    gi.Mode = GPIO_MODE_INPUT;
+    gi.Pull = GPIO_PULLUP;
+    HAL_GPIO_Init(Detect_SD_GPIO_Port, &gi);
+}
+#endif
+
 #if PURRGO_SD_POWER_SWITCH
 static void pwr_rail(bool on, void *ctx)
 {
@@ -478,6 +497,9 @@ static void pwr_pins(sd_pins_t mode, void *ctx)
         gpio_out(SD_SPI_PORT, SD_MOSI_PIN, GPIO_PIN_SET);
         gpio_out(SD_SPI_PORT, SD_SCK_PIN, GPIO_PIN_RESET);
         gpio_hiz(SD_SPI_PORT, SD_MISO_PIN);
+#if PURRGO_SD_DETECT_PARK
+        gpio_detect_input();
+#endif
         return;
     }
 
@@ -490,6 +512,12 @@ static void pwr_pins(sd_pins_t mode, void *ctx)
     gpio_hiz(SD_CS_GPIO_Port, SD_CS_Pin);
 #else
     gpio_out(SD_CS_GPIO_Port, SD_CS_Pin, GPIO_PIN_SET);
+#endif
+#if PURRGO_SD_DETECT_PARK
+    /* Внутренняя подтяжка PB10 к 3V3 через вывод CD модуля подпитывает VCC обесточенной
+     * карты (на плате: ~1,9 В на VO ключа при вставленной карте). В OFF - Hi-Z; при
+     * включении pwr_pins(SD_PINS_IDLE) возвращает вход с подтяжкой. */
+    gpio_hiz(Detect_SD_GPIO_Port, Detect_SD_Pin);
 #endif
 }
 
