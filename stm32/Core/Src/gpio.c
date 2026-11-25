@@ -50,7 +50,7 @@ void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(Alive_LED_GPIO_Port, Alive_LED_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(SD_PWR_GPIO_Port, SD_PWR_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(SD_PWR_GPIO_Port, SD_PWR_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, GNSS_EN_Pin|SD_CS_Pin|EINK_CS_Pin|EINK_RST_Pin, GPIO_PIN_SET);
