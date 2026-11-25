@@ -71,6 +71,8 @@ void Error_Handler(void);
 #define K2_Pin GPIO_PIN_1
 #define K2_GPIO_Port GPIOA
 #define K2_EXTI_IRQn EXTI1_IRQn
+#define SD_PWR_Pin GPIO_PIN_4
+#define SD_PWR_GPIO_Port GPIOA
 #define BUZZER_P_Pin GPIO_PIN_6
 #define BUZZER_P_GPIO_Port GPIOA
 #define GNSS_EN_Pin GPIO_PIN_0
