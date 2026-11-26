@@ -5,6 +5,7 @@
 #include "map_render.h"
 #include "purrgo/fs_hal.h"
 #include "purrgo/render_prof.h"
+#include "purrgo/system_time.h"
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -133,6 +134,9 @@ static void map_layer_reset(map_layer_state_t* st)
     st->labels_missing = false;
 }
 
+/* Когда файлы слоёв в последний раз понадобились (отрисовка или поиск POI). */
+static uint32_t s_files_used_ms;
+
 static void map_close_all_files(void)
 {
     for (size_t i = 0; i < MAP_LAYER_COUNT; i++) {
@@ -229,6 +233,8 @@ static bool map_sync_files(const purrgo_map_render_params_t *params)
 {
     const char* map_dir = params->map_dir;
 
+    s_files_used_ms = purrgo_system_time_ms();
+
     if (strlen(map_dir) > MAP_DIR_MAX_LEN) {
         if (!s_map_context.dir_invalid) {
             map_close_all_files();
@@ -268,6 +274,28 @@ static bool map_sync_files(const purrgo_map_render_params_t *params)
         }
     }
 
+    return true;
+}
+
+bool purrgo_map_release_idle(uint32_t now_ms, uint32_t idle_ms)
+{
+    bool any_open = false;
+
+    for (size_t i = 0; i < MAP_LAYER_COUNT; i++) {
+        const map_layer_state_t* st = &s_map_context.layer[i];
+
+        if (st->idx != NULL || st->mlp != NULL || st->db != NULL) {
+            any_open = true;
+            break;
+        }
+    }
+    if (!any_open || (uint32_t)(now_ms - s_files_used_ms) < idle_ms) {
+        return false;
+    }
+
+    /* Следующий кадр откроет нужные слои заново (map_sync_files()); экран не трогаем. */
+    map_close_all_files();
+    PURRGO_LOG("Map files released (idle %lu ms)\r\n", (unsigned long)(now_ms - s_files_used_ms));
     return true;
 }
 
@@ -454,6 +482,7 @@ bool purrgo_map_poi_files(const char *map_dir, purrgo_file_t **idx_out, purrgo_f
     }
     *idx_out = NULL;
     *db_out = NULL;
+    s_files_used_ms = purrgo_system_time_ms();
 
     if (map_dir[0] == '\0' || strlen(map_dir) > MAP_DIR_MAX_LEN) {
         return false;

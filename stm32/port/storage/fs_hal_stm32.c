@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include "purrgo/logger.h"
 #include "purrgo/render_prof.h"
+#include "sd_card.h"
 
 #define STM32_MAX_FILES 14
 #define STM32_MAX_DIRS 2
@@ -517,6 +518,7 @@ const char* purrgo_fs_get_books_path(void) {
 
 purrgo_file_t* purrgo_fs_open(const char* filepath, fs_mode_t mode) {
     if (!filepath) return NULL;
+    (void)purrgo_sd_wake();     /* карта могла быть припаркована по тайм-ауту простоя */
     BYTE ff_mode = 0;
     switch (mode) {
         case FS_READ:
@@ -735,11 +737,13 @@ bool purrgo_fs_close(purrgo_file_t* file) {
         }
     }
     file->in_use = false;
+    purrgo_sd_touch();          /* тайм-аут парковки отсчитывается от последнего закрытия */
     return res == FR_OK;
 }
 
 bool purrgo_fs_replace(const char* src, const char* dst) {
     if (!src || !dst) return false;
+    (void)purrgo_sd_wake();
 
     /* f_rename() не перезаписывает существующий файл: сначала удаляем. */
     FRESULT res = f_unlink(dst);
@@ -758,12 +762,14 @@ bool purrgo_fs_replace(const char* src, const char* dst) {
 
 bool purrgo_fs_exists(const char* path) {
     if (!path) return false;
+    (void)purrgo_sd_wake();
     /* fno == NULL допустим: нужна только проверка наличия, буфер FILINFO на стеке не нужен */
     return f_stat(path, NULL) == FR_OK;
 }
 
 purrgo_dir_t* purrgo_fs_opendir(const char* path) {
     if (!path) return NULL;
+    (void)purrgo_sd_wake();
 
     purrgo_dir_t* dir = NULL;
     for (int i = 0; i < STM32_MAX_DIRS; i++) {
@@ -807,4 +813,16 @@ void purrgo_fs_closedir(purrgo_dir_t* dir) {
     if (!dir || !dir->in_use) return;
     f_closedir(&dir->dir);
     dir->in_use = false;
+    purrgo_sd_touch();
+}
+
+uint32_t purrgo_fs_stm32_open_count(void) {
+    uint32_t n = 0u;
+    for (int i = 0; i < STM32_MAX_FILES; i++) {
+        if (file_pool[i].in_use) n++;
+    }
+    for (int i = 0; i < STM32_MAX_DIRS; i++) {
+        if (dir_pool[i].in_use) n++;
+    }
+    return n;
 }

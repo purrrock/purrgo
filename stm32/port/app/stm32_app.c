@@ -373,6 +373,12 @@ static void purrgo_stm32_display_and_banner(void)
 void purrgo_stm32_init(void)
 {
   /*
+   * Карта обесточена сразу (и Detect_SD в Hi-Z): баннер и ожидание панели идут секундами,
+   * а до purrgo_sd_init() подтяжка Detect_SD подпитывала бы обесточенную карту.
+   */
+  purrgo_sd_park();
+
+  /*
    * -------------------------------------------------------------------------
    * Диагностический UART.
    * -------------------------------------------------------------------------
@@ -557,6 +563,12 @@ void purrgo_stm32_process(void)
    */
   purrgo_sd_poll(current_time_ms);
 
+  /* Парковка карты по тайм-ауту простоя (без открытых файлов); просыпается при первом обращении к ФС. */
+  purrgo_sd_idle_service();
+
+  /* Файлы карты отпускаются после простоя (иначе открытые слои не дают SD припарковаться). */
+  (void)purrgo_map_release_idle(current_time_ms, PURRGO_MAP_IDLE_RELEASE_MS);
+
   /* Запись лога на SD (если включена в меню): сбрасывает накопленные сообщения пачкой. */
   purrgo_logger_sd_service(current_time_ms);
 
@@ -569,8 +581,12 @@ void purrgo_stm32_process(void)
     purrgo_sd_state_t sd_state = purrgo_sd_state();
     if (sd_state == PURRGO_SD_READY && s_prev_sd_state != PURRGO_SD_READY)
     {
-      purrgo_map_shutdown();
-      purrgo_ui_dirty_mark(UI_DIRTY_MAP);
+      /* Пробуждение из парковки: открытых файлов не было, слои закрывать и перерисовывать не нужно. */
+      if (!purrgo_sd_take_park_wake())
+      {
+        purrgo_map_shutdown();
+        purrgo_ui_dirty_mark(UI_DIRTY_MAP);
+      }
     }
     s_prev_sd_state = sd_state;
   }

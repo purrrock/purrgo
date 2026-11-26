@@ -68,4 +68,22 @@ bool purrgo_map_poi_files(const char *map_dir, purrgo_file_t **idx_out, purrgo_f
 
 void purrgo_map_shutdown(void);
 
+/*
+ * Через сколько мс без отрисовки карты и поиска POI файлы слоёв отпускаются
+ * (purrgo_map_release_idle()). Открытые файлы не дают карте SD парковаться по тайм-ауту,
+ * а карта на стоянке, режим путевого компьютера или меню файлы не используют.
+ */
+#ifndef PURRGO_MAP_IDLE_RELEASE_MS
+#define PURRGO_MAP_IDLE_RELEASE_MS 20000u
+#endif
+
+/*
+ * Закрыть файлы слоёв, если карта не использовалась idle_ms. Вызывать из главного цикла
+ * (now_ms - purrgo_system_time_ms()). Экран не перерисовывается: следующий кадр карты сам
+ * откроет нужные слои заново, это дороже кадра с открытыми файлами (открытие, таблицы CLMT,
+ * холодный кэш секторов и, если карта SD припаркована, её включение).
+ * @return true, если файлы были закрыты.
+ */
+bool purrgo_map_release_idle(uint32_t now_ms, uint32_t idle_ms);
+
 #endif /* PURRGO_MAP_H */
