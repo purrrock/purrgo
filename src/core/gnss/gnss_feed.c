@@ -4,6 +4,7 @@
 #include "purrgo/gnss_ubx.h"
 #include "purrgo/logger.h"
 #include "purrgo/system_time.h"
+#include "purrgo/utc_hint.h"
 
 /*
  * Возраст метки времени относительно now_ms. Метка может оказаться НОВЕЕ now_ms: главный
@@ -46,6 +47,7 @@ void purrgo_gnss_feed_byte(purrgo_gnss_feed_t *f, uint8_t byte) {
                                               &f->solution, now)) {
                 f->last_rx_ms = now;
                 f->fix_seq++;
+                purrgo_utc_hint_filter(&f->solution, now);
             }
             return;
         }
@@ -58,6 +60,7 @@ void purrgo_gnss_feed_byte(purrgo_gnss_feed_t *f, uint8_t byte) {
         if (purrgo_gnss_process_nmea(f->nmea.line, &f->solution)) {
             f->last_rx_ms = purrgo_system_time_ms();
             f->fix_seq++;
+            purrgo_utc_hint_filter(&f->solution, f->last_rx_ms);
         }
         purrgo_gnss_parser_init(&f->nmea);
     }

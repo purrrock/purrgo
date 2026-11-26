@@ -19,6 +19,7 @@
 #include "purrgo/sound.h"
 #include "purrgo/hw_fault.h"
 #include "gnss/gnss_feed.h"
+#include "purrgo/utc_hint.h"
 #include "nav/logger_retry.h"
 #include "ui/app_data_change.h"
 #include "ui/app_keymap.h"
@@ -552,6 +553,7 @@ void purrgo_app_tick(uint32_t current_time_ms) {
 
         purrgo_app_update(&gnss_feed.solution);
         sun_service(current_time_ms);
+        purrgo_utc_hint_service(current_time_ms);
     }
 }
 

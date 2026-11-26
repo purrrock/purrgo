@@ -3,6 +3,7 @@
 #include "purrgo/hardware_config.h"
 #include "purrgo/logger.h"
 #include "purrgo/purrgo_format.h"
+#include "purrgo/purrgo_time.h"
 
 #include <stdarg.h>
 #include <string.h>
@@ -50,6 +51,62 @@ size_t purrgo_ubx_build_frame(uint8_t *out, size_t out_size, uint8_t msg_class,
     out[7U + len] = ck_b;
 
     return total;
+}
+
+#define UBX_CLASS_MGA        0x13U
+#define UBX_ID_MGA_INI       0x40U
+
+static void put_u16(uint8_t *p, uint32_t v)
+{
+    p[0] = (uint8_t)(v & 0xFFU);
+    p[1] = (uint8_t)((v >> 8) & 0xFFU);
+}
+
+static void put_u32(uint8_t *p, uint32_t v)
+{
+    p[0] = (uint8_t)(v & 0xFFU);
+    p[1] = (uint8_t)((v >> 8) & 0xFFU);
+    p[2] = (uint8_t)((v >> 16) & 0xFFU);
+    p[3] = (uint8_t)((v >> 24) & 0xFFU);
+}
+
+size_t purrgo_ubx_build_mga_ini_time_utc(uint8_t *out, size_t out_size, uint32_t epoch, uint32_t t_acc_s)
+{
+    uint8_t yy, mo, d, h, mi, s;
+    uint8_t p[24] = { 0 };
+
+    if (!purrgo_time_epoch_to_datetime(epoch, &yy, &mo, &d, &h, &mi, &s)) {
+        return 0U;
+    }
+    p[0] = 0x10U;                          /* type: TIME_UTC */
+    p[1] = 0x00U;                          /* version */
+    p[2] = 0x00U;                          /* ref.source = 0: время по получению сообщения */
+    p[3] = 0x80U;                          /* leapSecs неизвестны (-128) */
+    put_u16(&p[4], 2000U + (uint32_t)yy);
+    p[6] = mo;
+    p[7] = d;
+    p[8] = h;
+    p[9] = mi;
+    p[10] = s;
+    p[11] = 0x00U;                         /* bitfield0: источник не считается доверенным */
+    put_u32(&p[12], 0U);                   /* ns */
+    put_u16(&p[16], (t_acc_s > 65535U) ? 65535U : t_acc_s);
+    put_u32(&p[20], 0U);                   /* tAccNs */
+    return purrgo_ubx_build_frame(out, out_size, UBX_CLASS_MGA, UBX_ID_MGA_INI, p, (uint16_t)sizeof p);
+}
+
+size_t purrgo_ubx_build_mga_ini_pos_llh(uint8_t *out, size_t out_size, int32_t lat_1e7, int32_t lon_1e7,
+                                        int32_t alt_cm, uint32_t acc_cm)
+{
+    uint8_t p[20] = { 0 };
+
+    p[0] = 0x01U;                          /* type: POS_LLH */
+    p[1] = 0x00U;                          /* version */
+    put_u32(&p[4], (uint32_t)lat_1e7);
+    put_u32(&p[8], (uint32_t)lon_1e7);
+    put_u32(&p[12], (uint32_t)alt_cm);
+    put_u32(&p[16], acc_cm);
+    return purrgo_ubx_build_frame(out, out_size, UBX_CLASS_MGA, UBX_ID_MGA_INI, p, (uint16_t)sizeof p);
 }
 
 /* Размер значения по ключу (биты 30..28); 0 - не поддерживается (8 байт и reserved). */

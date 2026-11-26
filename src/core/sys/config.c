@@ -2,7 +2,9 @@
 #include "purrgo/fs_hal.h"
 #include "purrgo/logger.h"
 #include "purrgo/purrgo_format.h"
+#include "purrgo/purrgo_time.h"
 #include "purrgo/supply.h"
+#include "purrgo/utc_hint.h"
 #include <string.h>
 
 
@@ -162,6 +164,59 @@ static bool parse_hex32(const char* str, uint32_t* out)
 }
 
 
+
+/*
+ * LAST_UTC: последнее известное время UTC в виде YYYY-MM-DDTHH:MM:SSZ (удобно править руками). В RAM -
+ * секунды от 01.01.2000 (app_config.last_utc_epoch). Пустое значение или другой формат - время неизвестно.
+ */
+#define UTC_TEXT_LEN 20U   /* "2026-11-25T10:20:30Z" */
+
+static bool utc_digits(const char *p, unsigned n, uint32_t *out)
+{
+    uint32_t v = 0U;
+
+    for (unsigned i = 0U; i < n; i++) {
+        if (p[i] < '0' || p[i] > '9') {
+            return false;
+        }
+        v = v * 10U + (uint32_t)(p[i] - '0');
+    }
+    *out = v;
+    return true;
+}
+
+static bool parse_utc_text(const char *val, uint32_t *epoch)
+{
+    uint32_t y, mo, d, h, mi, s;
+
+    if (strlen(val) != UTC_TEXT_LEN ||
+        val[4] != '-' || val[7] != '-' || val[10] != 'T' || val[13] != ':' || val[16] != ':' || val[19] != 'Z') {
+        return false;
+    }
+    if (!utc_digits(val, 4U, &y) || !utc_digits(val + 5, 2U, &mo) || !utc_digits(val + 8, 2U, &d) ||
+        !utc_digits(val + 11, 2U, &h) || !utc_digits(val + 14, 2U, &mi) || !utc_digits(val + 17, 2U, &s)) {
+        return false;
+    }
+    if (y < 2000U || y > 2099U) {
+        return false;
+    }
+    return purrgo_time_datetime_to_epoch((uint8_t)(y - 2000U), (uint8_t)mo, (uint8_t)d,
+                                         (uint8_t)h, (uint8_t)mi, (uint8_t)s, epoch);
+}
+
+/* Пустая строка, если время неизвестно (0) или вне 2000-2099. */
+static void format_utc_text(uint32_t epoch, char *buf, size_t size)
+{
+    uint8_t y, mo, d, h, mi, s;
+
+    buf[0] = '\0';
+    if (epoch == 0U || !purrgo_time_epoch_to_datetime(epoch, &y, &mo, &d, &h, &mi, &s)) {
+        return;
+    }
+    (void)purrgo_snprintf(buf, size, "%04u-%02u-%02uT%02u:%02u:%02uZ", 2000U + (unsigned)y,
+                          (unsigned)mo, (unsigned)d, (unsigned)h, (unsigned)mi, (unsigned)s);
+}
+
 void purrgo_config_init(void)
 {
     /* Полный сброс: поля, которых нет в списке ниже, тоже обнуляются. */
@@ -169,6 +224,9 @@ void purrgo_config_init(void)
 
     /* Хук привязан к состоянию контроллера карты, а оно сбрасывается вместе с настройками. */
     s_presave_hook = NULL;
+
+    /* Последнее известное время хранится в конфигурации: сброс настроек сбрасывает и его. */
+    purrgo_utc_hint_set_floor(0U);
 
     /*
      * Значения по умолчанию.
@@ -572,6 +630,17 @@ bool purrgo_config_load(void)
             }
 
             /*
+             * Последнее известное время UTC (нижняя граница для времени приёмника и меток файлов).
+             */
+            else if (strcmp(key, "LAST_UTC") == 0) {
+                uint32_t epoch;
+
+                if (parse_utc_text(val, &epoch)) {
+                    app_config.last_utc_epoch = epoch;
+                }
+            }
+
+            /*
              * Глобальное включение POI.
              *
              * Поддержка старого формата.
@@ -705,6 +774,8 @@ bool purrgo_config_load(void)
 
     app_config.wpt_valid = wpt_set && wpt_have_lat && wpt_have_lon;
 
+    purrgo_utc_hint_set_floor(app_config.last_utc_epoch);
+
     /*
      * Применяем загруженный режим записи трека.
      */
@@ -726,6 +797,17 @@ bool purrgo_config_save(void)
     if (s_presave_hook != NULL) {
         s_presave_hook();
     }
+
+    /*
+     * Последнее известное время: оценка по данным приёмника в этом сеансе (не меньше уже сохранённого).
+     * Нет времени в сеансе - остаётся прежнее значение из файла, оно не затирается.
+     */
+    uint32_t utc_now;
+    if (purrgo_utc_hint_estimate(&utc_now) && utc_now > app_config.last_utc_epoch) {
+        app_config.last_utc_epoch = utc_now;
+    }
+    char utc_text[UTC_TEXT_LEN + 1U];
+    format_utc_text(app_config.last_utc_epoch, utc_text, sizeof utc_text);
 
     PURRGO_LOG(
         "Saving configuration to: %s\n\r",
@@ -759,6 +841,7 @@ bool purrgo_config_save(void)
         "ROUTE_SRC=%d\n"
         "LAST_LAT_1E7=%d\n"
         "LAST_LON_1E7=%d\n"
+        "LAST_UTC=%s\n"
         "POI_MODE=%d\n"
 
         "LOG_MODE=%d\n"
@@ -787,6 +870,8 @@ bool purrgo_config_save(void)
         (int)app_config.last_lat_1e7,
 
         (int)app_config.last_lon_1e7,
+
+        utc_text,
 
         (int)app_config.poi_mode,
 

@@ -113,6 +113,21 @@ size_t purrgo_ubx_build_valdel(uint8_t *out, size_t out_size, uint8_t layers,
 size_t purrgo_ubx_build_valset(uint8_t *out, size_t out_size, uint8_t layers,
                                const purrgo_ubx_cfg_item_t *items, size_t count);
 
+/*
+ * UBX-MGA-INI-TIME_UTC (0x13 0x40, 24 байта): подсказка времени. epoch - секунды от 01.01.2000 UTC,
+ * t_acc_s - заявляемая точность в секундах (больше 65535 урезается до 65535). Источник времени "по
+ * получению" (ref.source = 0), високосные секунды неизвестны (0x80). Нужно 32 байта. Возвращает длину
+ * кадра; 0, если epoch вне 2000-2099 или кадр не помещается.
+ */
+size_t purrgo_ubx_build_mga_ini_time_utc(uint8_t *out, size_t out_size, uint32_t epoch, uint32_t t_acc_s);
+
+/*
+ * UBX-MGA-INI-POS_LLH (0x13 0x40, 20 байт): подсказка позиции WGS84. alt_cm - высота, см, acc_cm -
+ * заявляемая точность (stddev), см. Нужно 28 байт. Возвращает длину кадра; 0, если не помещается.
+ */
+size_t purrgo_ubx_build_mga_ini_pos_llh(uint8_t *out, size_t out_size, int32_t lat_1e7, int32_t lon_1e7,
+                                        int32_t alt_cm, uint32_t acc_cm);
+
 #ifdef __cplusplus
 }
 #endif
