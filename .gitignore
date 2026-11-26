@@ -57,4 +57,7 @@ tests/data
 *.db
 *.mlp
 *.idx
+# готовая фикстура host-теста умного поиска (строится tests/host/data/make_search_map.py)
+!tests/host/data/search-map/*.db
+!tests/host/data/search-map/*.idx
 map.name

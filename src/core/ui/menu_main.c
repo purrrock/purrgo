@@ -3,6 +3,7 @@
 #include "purrgo/purrgo_format.h"
 #include "purrgo/power.h"
 #include "purrgo/book_reader.h"
+#include "purrgo/search_screen.h"
 #include "purrgo/track_name.h"
 #include "purrgo/ui/ui_dirty.h"
 
@@ -98,12 +99,22 @@ static void wpt_select(purrgo_state_t* next)
 
 
 
-/* SEARCH: поиск объектов карты - сначала категория (menu_poi.c). */
+/* SEARCH: поиск объектов карты по категориям без ввода текста (menu_poi.c). */
 static void search_select(purrgo_state_t* next)
 {
     menu_goto(next, APP_STATE_MENU_POI_CATEGORY);
 }
 
+/*
+ * SMART SEARCH: ввод названия или категории на экранной клавиатуре (search_screen.c). Нужен search.idx в
+ * каталоге карты; без него (или если он не подошёл к картам) остаётся на месте, SEARCH работает как раньше.
+ */
+static void smart_search_select(purrgo_state_t* next)
+{
+    if (purrgo_search_screen_enter()) {
+        *next = APP_STATE_SEARCH;
+    }
+}
 
 static void config_select(purrgo_state_t* next)
 {
@@ -123,6 +134,7 @@ static const menu_item_t main_items[] = {
     { .title = "OPEN TRACK", .on_select = track_open_select },
     { .format = wpt_format, .on_select = wpt_select },
     { .title = "SEARCH", .on_select = search_select },
+    { .title = "SMART SEARCH", .on_select = smart_search_select },
     { .title = "BOOKS", .on_select = books_select },
 };
 

@@ -1887,6 +1887,20 @@ def _align512(n):
     return (n + 511) // 512 * 512
 
 
+# Layers of named objects besides POI (docs/map-format-v4.md, 21.4): by the code range.
+_SEARCH_LAYER_NAMES = ("roads", "waterways", "water", "landuse")
+
+
+def _search_layer(code):
+    """-1 - POI (128..191), 0..3 - roads, waterways, water, landuse, None - not a searchable code."""
+
+    if code < 128:
+        return code // 32
+    if code < 192:
+        return -1
+    return None
+
+
 def validate_search_idx(path, db_path=None):
     """Strict validation of search.idx (file type 4). Returns True/False."""
 
@@ -1918,12 +1932,10 @@ def validate_search_idx(path, db_path=None):
             name_off, name_cnt, cat_off, cat_cnt,
             dict_off, dict_size, range_off, range_cnt,
         ) = struct.unpack_from("<4sHHIIIIIIIIII", data, 0x20)
+        layer_records = struct.unpack_from("<4I", data, 0x20 + 48)
 
         if magic != b"SRCH" or version != 1 or record_size != 32 or flags != 0:
             fail("SRCH header: bad magic/version/record size/flags")
-
-        if any(data[0x20 + 48:0x60]):
-            fail("SRCH header: reserved bytes must be zero")
 
         if dict_off != 0x60 or range_off != 0 or range_cnt != 0:
             fail("SRCH header: dict_offset must be 0x60, range section absent")
@@ -1974,8 +1986,19 @@ def validate_search_idx(path, db_path=None):
                 if not -1_800_000_000 <= lon <= 1_800_000_000 or not -900_000_000 <= lat <= 900_000_000:
                     fail(f"{what} #{i}: coordinates out of range")
 
-                if not 1 <= db_idx <= db_records:
-                    fail(f"{what} #{i}: db_idx {db_idx} outside 1..{db_records}")
+                layer = _search_layer(code)
+
+                if layer is None:
+                    fail(f"{what} #{i}: code {code} is not a searchable object code")
+
+                if layer == -1:
+                    if not 1 <= db_idx <= db_records:
+                        fail(f"{what} #{i}: db_idx {db_idx} outside 1..{db_records}")
+                else:
+                    # record 1 of the layer .db is the dummy one
+                    if not 2 <= db_idx <= layer_records[layer]:
+                        fail(f"{what} #{i}: db_idx {db_idx} outside 2..{layer_records[layer]} "
+                             f"of {_SEARCH_LAYER_NAMES[layer]}.db")
 
                 if klen > 16 or key[klen:] != bytes(16 - klen) or fl & ~7:
                     fail(f"{what} #{i}: bad key_len/key padding/flags")
@@ -1994,31 +2017,35 @@ def validate_search_idx(path, db_path=None):
         names = entries(name_off, name_cnt, "NAME")
         cats = entries(cat_off, cat_cnt, "CAT")
 
-        order = [(e[7], e[2], e[5] & 1) for e in names]
+        def lkey(e):
+            return _search_layer(e[3]) + 1      # POI first, then roads ... landuse
+
+        order = [(e[7], lkey(e), e[2], e[5] & 1) for e in names]
 
         if order != sorted(order):
-            fail("NAME section is not sorted by (key, db_idx, primary first)")
+            fail("NAME section is not sorted by (key, layer, db_idx, primary first)")
 
         primary = {}
         secondary = {}
 
         for e in names:
             table = secondary if e[5] & 1 else primary
-            table[e[2]] = table.get(e[2], 0) + 1
+            ident = (_search_layer(e[3]), e[2])
+            table[ident] = table.get(ident, 0) + 1
 
             if e[6] == 0:
                 fail("NAME entry with empty key")
 
         if any(v != 1 for v in primary.values()):
-            fail("a POI has more than one primary NAME entry")
+            fail("an object has more than one primary NAME entry")
 
         if any(v > 3 or k not in primary for k, v in secondary.items()):
             fail("secondary NAME entries without primary or more than 3")
 
-        cat_order = [(e[4], _morton(e[0], e[1]), e[2]) for e in cats]
+        cat_order = [(e[4], _morton(e[0], e[1]), lkey(e), e[2]) for e in cats]
 
         if cat_order != sorted(cat_order):
-            fail("CAT section is not sorted by (subtype, morton, db_idx)")
+            fail("CAT section is not sorted by (subtype, morton, layer, db_idx)")
 
         for e in cats:
             if e[4] == 0 or e[5] & 1:
@@ -2027,11 +2054,14 @@ def validate_search_idx(path, db_path=None):
             if (e[5] & 2) != 0 and e[6] != 0:
                 fail("UNNAMED CAT entry with a key")
 
+            if (e[5] & 2) != 0 and _search_layer(e[3]) != -1:
+                fail("UNNAMED CAT entry of a line or polygon layer")
+
         seen = {}
 
         for e in names + cats:
             ref = (e[0], e[1], e[3], e[4])
-            if seen.setdefault(e[2], ref) != ref:
+            if seen.setdefault((_search_layer(e[3]), e[2]), ref) != ref:
                 fail(f"entries of db_idx {e[2]} disagree on position/code/subtype")
 
         if db_path is not None:
@@ -2044,9 +2074,29 @@ def validate_search_idx(path, db_path=None):
             if struct.unpack_from("<I", db, 0x24)[0] != db_records:
                 fail("db_records differs from the record count of the .db file")
 
+        # .db files of the layers next to search.idx must have the record counts the index was built for
+        folder = os.path.dirname(os.path.abspath(path))
+
+        for i, layer_name in enumerate(_SEARCH_LAYER_NAMES):
+            if layer_records[i] == 0:
+                if any(_search_layer(e[3]) == i for e in names + cats):
+                    fail(f"entries of {layer_name} but layer_records[{i}] is 0")
+                continue
+
+            layer_db = os.path.join(folder, layer_name + ".db")
+
+            if os.path.isfile(layer_db):
+                with open(layer_db, "rb") as f:
+                    head = f.read(0x28)
+
+                if len(head) < 0x28 or struct.unpack_from("<I", head, 0x24)[0] != layer_records[i]:
+                    fail(f"layer_records[{i}] differs from the record count of {layer_name}.db")
+
         print(f"[INFO] dictionary words: {word_count}")
         print(f"[INFO] NAME entries:     {name_cnt} "
-              f"({len(primary)} POIs, {sum(secondary.values())} secondary)")
+              f"({len(primary)} objects, {sum(secondary.values())} secondary)")
+        print(f"[INFO] layer records:    " + ", ".join(
+            f"{n}={r}" for n, r in zip(_SEARCH_LAYER_NAMES, layer_records)))
         print(f"[INFO] CAT entries:      {cat_cnt}")
         print(f"[INFO] db_records:       {db_records}")
         print("[OK] search.idx validation successful.")

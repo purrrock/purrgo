@@ -95,7 +95,8 @@ V4 differences in the compiler:
 - `.idx` is written in the block layout with four LODs (`purrgo_idx_v4.py`); the `LOD` column of `features.csv` may be `0..3`;
 - LOD 2 and LOD 3 objects point to simplified geometry (`purrgo_simplify.py`, Douglas-Peucker in metres);
 - names are not shortened to 22 characters (limit: 100 bytes, section 10.6);
-- `search_categories.csv` (`Group;Subtype;Keywords_RU;Keywords_EN;OSM_Tags`) assigns search subtypes to POIs and defines the category keywords; a keyword is one word of at most 16 bytes. A row with empty `Subtype` and `OSM_Tags` is a group row.
+- `search.idx` indexes POI and the named objects of the other layers (streets and roads, waterways, water, landuse); objects of one layer with the same name whose anchor points fall into the same 0.05 degree cell are merged into one entry (section 21.5). The `.db` files are not changed by this.
+- `search_categories.csv` (`Group;Subtype;Keywords_RU;Keywords_EN;OSM_Tags`) assigns search subtypes to POIs and to named line and polygon objects and defines the category keywords; a keyword is one word of at most 16 bytes. A row with empty `Subtype` and `OSM_Tags` is a group row.
 
 Tests: `python3 -m unittest tests/test_map_compiler_v4.py`.
 

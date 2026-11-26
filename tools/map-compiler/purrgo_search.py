@@ -6,11 +6,13 @@ search.idx for PurrGO map format V4 (docs/map-format-v4.md, section 21).
 
 Contains:
   * normalization of names to search keys (21.7),
+  * representative point and merging of non-POI objects (21.5, 21.6),
   * search_categories.csv loader and subtype matching (21.8),
   * search.idx writer: SRCH header, dictionary, NAME and CAT sections.
 """
 
 import csv
+import math
 import struct
 import sys
 from typing import Dict, List, Optional, Sequence, Tuple
@@ -26,6 +28,16 @@ SEARCH_HEADER_SIZE = 64
 SEARCH_DICT_ENTRY_SIZE = 48
 SEARCH_MAX_SECONDARY = 3
 SECTION_ALIGN = 512
+
+# Layers of named objects besides POI (21.4): index = position of the layer in the
+# header table layer_records[]; the layer is chosen by the feature code range (8.1.1).
+SEARCH_LAYERS = ("roads", "waterways", "water", "landuse")
+SEARCH_LAYER_CODE_RANGES = ((0, 31), (32, 63), (64, 95), (96, 127))
+
+# Objects of a layer with the same name whose representative points fall into the same
+# cell are one entry (21.5): a long street is not thousands of ways. The cell is
+# 0.05 degrees (~5.5 km north-south, ~3.3 km east-west at 53 N), in 1e-7 degree units.
+SEARCH_MERGE_CELL = 500_000
 
 FLAG_SECONDARY = 0x01
 FLAG_UNNAMED = 0x02
@@ -221,6 +233,78 @@ class SearchCategories:
         return out
 
 
+
+# ---------------------------------------------------------------------------
+# Objects of the line and polygon layers (21.5, 21.6)
+# ---------------------------------------------------------------------------
+
+def layer_index_for_code(code: int) -> int:
+    """Layer of a feature code: 0 roads, 1 waterways, 2 water, 3 landuse; -1 otherwise."""
+    for i, (lo, hi) in enumerate(SEARCH_LAYER_CODE_RANGES):
+        if lo <= code <= hi:
+            return i
+    return -1
+
+
+def anchor_point(feature) -> Tuple[int, int]:
+    """
+    Representative point of a line or polygon object (21.5): the point the map is
+    centred on when the user picks the object in the results.
+
+    * line: the middle vertex;
+    * polygon: the vertex of the outer ring (the first part) closest to the centre of
+      the bounding box (longitudes are scaled by the cosine of the latitude, so that
+      "closest" is meant on the ground); the first one wins a tie.
+    """
+    pts = list(struct.iter_unpack("<ii", feature.points))
+    if not pts:
+        return feature.bbox[0], feature.bbox[1]
+    layer = layer_index_for_code(feature.code)
+    if layer in (0, 1):
+        return pts[len(pts) // 2]
+    parts = list(feature.parts) if feature.parts else [0]
+    end = parts[1] if len(parts) > 1 else len(pts)
+    ring = pts[parts[0]:end] or pts
+    cx = (feature.bbox[0] + feature.bbox[2]) / 2.0
+    cy = (feature.bbox[1] + feature.bbox[3]) / 2.0
+    k = math.cos(math.radians(cy / 1e7))
+    best = ring[0]
+    best_d = None
+    for x, y in ring:
+        d = ((x - cx) * k) ** 2 + (y - cy) ** 2
+        if best_d is None or d < best_d:
+            best, best_d = (x, y), d
+    return best
+
+
+def _layer_entries(features: Sequence, keywords: frozenset) -> List[Tuple]:
+    """
+    Search entries of one non-POI layer: [(lon, lat, db_idx, code, subtype, words)].
+
+    Only named objects (v2 >= 2: record 1 of the layer .db is the dummy one) are
+    indexed. Objects with the same code range (one layer), the same folded name and
+    the representative point in the same cell are merged; the first one in .db
+    order is kept.
+    """
+    seen = set()
+    out: List[Tuple] = []
+    for f in sorted(features, key=lambda x: x.v2):
+        if f.v2 < 2 or not f.name or not f.points:
+            continue
+        raw = pgo_encode(f.name, 100).rstrip(b"\x00")
+        words = split_words(raw)
+        if not words:
+            continue
+        lon, lat = anchor_point(f)
+        cell = ((lon + 1_800_000_000) // SEARCH_MERGE_CELL,
+                (lat + 900_000_000) // SEARCH_MERGE_CELL)
+        key = (b" ".join(words), cell)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append((lon, lat, f.v2, f.code, f.subtype, words))
+    return out
+
 # ---------------------------------------------------------------------------
 # search.idx writer
 # ---------------------------------------------------------------------------
@@ -235,15 +319,52 @@ def _pack_entry(lon: int, lat: int, db_idx: int, code: int, subtype: int,
                        key_len, key)
 
 
-def build_search_index(pois: Sequence, db_records: int) -> bytes:
+def _name_rows_for(words: List[bytes], lon: int, lat: int, db_idx: int, code: int,
+                   subtype: int, skip_secondary: frozenset) -> List[Tuple]:
+    """NAME rows of one object: [(key16, db_idx, secondary, packed entry)] (21.5)."""
+    rows: List[Tuple] = []
+    w = words[0]
+    first_key = w[:SEARCH_KEY_SIZE]
+    first_flags = FLAG_KEY_TRUNC if len(w) > SEARCH_KEY_SIZE else 0
+    kp = first_key.ljust(SEARCH_KEY_SIZE, b"\x00")
+    rows.append((kp, db_idx, 0,
+                 _pack_entry(lon, lat, db_idx, code, subtype, first_flags, kp,
+                             len(first_key))))
+    seen = {first_key}
+    secondary = 0
+    for w in words[1:]:
+        if secondary >= SEARCH_MAX_SECONDARY:
+            break
+        if len(w) < 2:
+            continue
+        k = w[:SEARCH_KEY_SIZE]
+        if k in seen or k in skip_secondary:
+            continue
+        seen.add(k)
+        secondary += 1
+        fl = FLAG_SECONDARY | (FLAG_KEY_TRUNC if len(w) > SEARCH_KEY_SIZE else 0)
+        kp = k.ljust(SEARCH_KEY_SIZE, b"\x00")
+        rows.append((kp, db_idx, 1,
+                     _pack_entry(lon, lat, db_idx, code, subtype, fl, kp, len(k))))
+    return rows
+
+
+def build_search_index(pois: Sequence, db_records: int,
+                       layers: Sequence[Tuple[Sequence, int]] = ()) -> bytes:
     """
     Whole search.idx file content (including the PGO header).
 
     `pois` are PoiFeature objects after compile_db (v2 = record number in
     pois.db); `db_records` is the number of records in pois.db.
+
+    `layers` are the other named layers: [(features, db_records)] after compile_db,
+    where db_records is the number of records of the layer .db including the dummy
+    record 1. The layer is taken from the feature codes (SEARCH_LAYER_CODE_RANGES).
+    Layers without named objects are not passed (their layer_records entry is 0).
     """
     name_rows: List[Tuple[bytes, int, int, bytes]] = []
     cat_rows: List[Tuple[int, int, int, bytes]] = []
+    layer_records = [0] * len(SEARCH_LAYERS)
 
     for poi in pois:
         if poi.code in SEARCH_EXCLUDED_CODES:
@@ -261,32 +382,12 @@ def build_search_index(pois: Sequence, db_records: int) -> bytes:
         first_key = b""
         first_flags = 0
         if named and words:
-            w = words[0]
-            first_key = w[:SEARCH_KEY_SIZE]
-            if len(w) > SEARCH_KEY_SIZE:
+            rows = _name_rows_for(words, lon, lat, db_idx, poi.code, subtype,
+                                  frozenset())
+            name_rows.extend(rows)
+            first_key = words[0][:SEARCH_KEY_SIZE]
+            if len(words[0]) > SEARCH_KEY_SIZE:
                 first_flags |= FLAG_KEY_TRUNC
-            name_rows.append((
-                first_key.ljust(SEARCH_KEY_SIZE, b"\x00"), db_idx, 0,
-                _pack_entry(lon, lat, db_idx, poi.code, subtype, first_flags,
-                            first_key.ljust(SEARCH_KEY_SIZE, b"\x00"),
-                            len(first_key))))
-            seen = {first_key}
-            secondary = 0
-            for w in words[1:]:
-                if secondary >= SEARCH_MAX_SECONDARY:
-                    break
-                if len(w) < 2:
-                    continue
-                k = w[:SEARCH_KEY_SIZE]
-                if k in seen:
-                    continue
-                seen.add(k)
-                secondary += 1
-                fl = FLAG_SECONDARY | (FLAG_KEY_TRUNC if len(w) > SEARCH_KEY_SIZE else 0)
-                kp = k.ljust(SEARCH_KEY_SIZE, b"\x00")
-                name_rows.append((kp, db_idx, 1,
-                                  _pack_entry(lon, lat, db_idx, poi.code, subtype,
-                                              fl, kp, len(k))))
 
         if subtype:
             fl = first_flags if named else FLAG_UNNAMED
@@ -296,8 +397,42 @@ def build_search_index(pois: Sequence, db_records: int) -> bytes:
                              _pack_entry(lon, lat, db_idx, poi.code, subtype,
                                          fl, kp, kl)))
 
-    name_rows.sort(key=lambda r: (r[0], r[1], r[2]))
-    cat_rows.sort(key=lambda r: (r[0], r[1], r[2]))
+    # Line and polygon layers: named objects only; the words equal to a dictionary
+    # keyword ("улица", "river") are not indexed as secondary words: a query word that
+    # is a keyword is a category word and never selects a NAME range (21.9).
+    keywords = frozenset(k.rstrip(b"\x00") for k, _ in SearchCategories.dictionary())
+    for feats, recs in layers:
+        feats = list(feats)
+        if not feats or recs < 2:
+            continue
+        li = layer_index_for_code(feats[0].code)
+        if li < 0:
+            raise ValueError(f"search: code {feats[0].code} is not a layer code")
+        if layer_records[li]:
+            raise ValueError(f"search: layer {SEARCH_LAYERS[li]} given twice")
+        layer_records[li] = recs
+        for lon, lat, db_idx, code, subtype, words in _layer_entries(feats, keywords):
+            if layer_index_for_code(code) != li:
+                raise ValueError(f"search: code {code} outside layer "
+                                 f"{SEARCH_LAYERS[li]}")
+            name_rows.extend(_name_rows_for(words, lon, lat, db_idx, code, subtype,
+                                            keywords))
+            if subtype:
+                first_key = words[0][:SEARCH_KEY_SIZE]
+                fl = FLAG_KEY_TRUNC if len(words[0]) > SEARCH_KEY_SIZE else 0
+                cat_rows.append((subtype, morton(lon, lat), db_idx,
+                                 _pack_entry(lon, lat, db_idx, code, subtype, fl,
+                                             first_key.ljust(SEARCH_KEY_SIZE, b"\x00"),
+                                             len(first_key))))
+
+    # Order (21.5, 21.6). db_idx is unique only inside a layer, so the layer (code
+    # range) comes before it: otherwise the order of NAME rows with an equal key would
+    # depend on the order the layers were passed.
+    def lkey(code_byte: int) -> int:
+        return layer_index_for_code(code_byte) + 1 if code_byte < 128 else 0
+
+    name_rows.sort(key=lambda r: (r[0], lkey(r[3][12]), r[1], r[2]))
+    cat_rows.sort(key=lambda r: (r[0], r[1], lkey(r[3][12]), r[2]))
 
     dict_entries = SearchCategories.dictionary()
     dict_blob = struct.pack("<HHI", len(dict_entries), SEARCH_DICT_ENTRY_SIZE, 0)
@@ -312,14 +447,14 @@ def build_search_index(pois: Sequence, db_records: int) -> bytes:
     cat_size = _align(len(cat_blob))
 
     srch = struct.pack(
-        "<4sHHIIIIIIIIII16s",
+        "<4sHHIIIIIIIIII4I",
         b"SRCH", 1, SEARCH_ENTRY_SIZE, 0,
         db_records,
         name_offset, len(name_rows),
         cat_offset, len(cat_rows),
         dict_offset, len(dict_blob),
         0, 0,
-        bytes(16),
+        *layer_records,
     )
     assert len(srch) == SEARCH_HEADER_SIZE
 

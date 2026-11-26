@@ -108,6 +108,7 @@ class MapFeature:
     v1: int = 0        # Absolute geometry offset in the .mlp file
     v2: int = 0        # Row index in the attribute DB .db
     mlp_size: int = 0  # Binary body size in the .mlp file
+    subtype: int = 0   # search subtype (search_categories.csv, 21.8); 0 = none
 
     def calculate_bbox(self) -> None:
         """Direct bounding box calculation (optimized O(N) single pass)."""
@@ -150,7 +151,6 @@ class MapFeature:
 @dataclass(slots=True)
 class PoiFeature(MapFeature):
     """POI: добавляет данные для search.idx (docs/map-format-v4.md, раздел 21)."""
-    subtype: int = 0   # подтип поиска (search_categories.csv), 0 = нет
     flags: int = 0     # POI_NAME_SUBSTITUTED / POI_NAME_EMPTY (purrgo_osmparser)
 
 

@@ -36,6 +36,12 @@ def check_lods(features: Sequence[MapFeature], layer: str) -> None:
 class MapCompilerV4(MapCompiler):
 
     @staticmethod
+    def named_db_records(features: Sequence[MapFeature]) -> int:
+        """Records of the layer .db after compile_db (with the dummy one); 0 - no .db."""
+        named = sum(1 for f in features if f.v2 >= 2)
+        return named + 1 if named else 0
+
+    @staticmethod
     def _write_pgo_container(filepath: str, payload: bytes, file_type: int,
                              lod_offsets: Sequence[int]) -> None:
         if file_type not in (1, 2, 3, 4):
@@ -195,8 +201,13 @@ class MapCompilerV4(MapCompiler):
     # ------------------------------------------------------------------
 
     @classmethod
-    def compile_search(cls, pois: Sequence[MapFeature], filepath: str) -> None:
+    def compile_search(cls, pois: Sequence[MapFeature], filepath: str,
+                       layers: Sequence[Tuple[Sequence[MapFeature], int]] = ()) -> None:
+        """
+        pois: POI after compile_db. layers: [(features, db_records)] of the line and
+        polygon layers after compile_db (db_records includes the dummy record 1).
+        """
         print(f"[>] Compiling search index: {filepath}...")
-        data = build_search_index(pois, db_records=len(pois))
+        data = build_search_index(pois, db_records=len(pois), layers=layers)
         with open(filepath, "wb") as f:
             f.write(data)

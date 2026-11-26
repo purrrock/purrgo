@@ -15,7 +15,9 @@
 #include "purrgo/book_reader.h"
 #include "purrgo/battery.h"
 #include "purrgo/waypoint.h"
+#include "purrgo/map_search.h"
 #include "purrgo/poi_search.h"
+#include "purrgo/search_screen.h"
 #include "purrgo/sound.h"
 #include "purrgo/hw_fault.h"
 #include "gnss/gnss_feed.h"
@@ -183,7 +185,7 @@ bool purrgo_app_tracker_mode_active(void) {
  * Условия платформы (дисплей, кнопки, вход GNSS) проверяет она сама.
  */
 bool purrgo_app_deep_sleep_allowed(uint32_t now_ms) {
-    if (purrgo_book_reader_search_running() || purrgo_poi_search_running()) {
+    if (purrgo_book_reader_search_running() || purrgo_poi_search_running() || purrgo_search_screen_busy()) {
         return false;
     }
     if (render_gate_active) {
@@ -213,6 +215,7 @@ void purrgo_app_init(void) {
     sun_countdown_known = false;
     last_pos_known = false;
     purrgo_poi_search_cancel();
+    purrgo_map_search_close();
     last_sun_update_ms = 0;
     last_gnss_update_ms = purrgo_system_time_ms();
     purrgo_ui_dirty_throttle_reset(last_gnss_update_ms);
@@ -307,6 +310,22 @@ static void handle_book_button(purrgo_btn_t button, purrgo_state_t prev_state) {
 }
 
 /*
+ * Умный поиск: кнопки (короткие и длинные) разбирает экран поиска, а не общая схема
+ * "кнопка -> действие". Выход - в главное меню, показ объекта - на карту.
+ */
+static void handle_search_button(purrgo_btn_t button, purrgo_state_t prev_state) {
+    purrgo_state_t next_state = current_state;
+
+    render_gate_active = false;
+    const bool redraw = purrgo_search_screen_handle_button(button, &next_state);
+    current_state = next_state;
+    if (current_state == APP_STATE_MENU_MAIN) {
+        purrgo_menu_controller_on_enter(APP_STATE_MENU_MAIN);
+    }
+    ui_input_done(prev_state, redraw);
+}
+
+/*
  * Действие передаётся контроллеру экрана. true - контроллер принял кнопку (состояние
  * экрана могло измениться). Меню может сменить состояние: вход в читалку или трекер
  * подготавливает режим.
@@ -379,6 +398,11 @@ void purrgo_app_handle_button(purrgo_btn_t button) {
      * подтверждает, что нажатие дошло до прибора (purrgo/sound.h; при SOUND = OFF - тишина).
      */
     purrgo_sound_play(PURRGO_SOUND_CLICK);
+
+    if (current_state == APP_STATE_SEARCH) {
+        handle_search_button(button, prev_state);
+        return;
+    }
 
     if (is_book_state(current_state)) {
         handle_book_button(button, prev_state);
@@ -522,6 +546,11 @@ void purrgo_app_tick(uint32_t current_time_ms) {
         if (purrgo_poi_search_step() != PURRGO_POI_SEARCH_RUNNING) {
             purrgo_ui_dirty_mark(UI_DIRTY_SCREEN);
         }
+    }
+
+    // Умный поиск: пауза набора и порция расчёта за такт; список выводится, когда расчёт закончен.
+    if (current_state == APP_STATE_SEARCH && purrgo_search_screen_tick(current_time_ms)) {
+        purrgo_ui_dirty_mark(UI_DIRTY_SCREEN);
     }
 
     // Читалка: запись позиции чтения на SD по тайм-ауту бездействия и очередной шаг поиска по книге.
@@ -727,6 +756,7 @@ void purrgo_app_update(const purrgo_gnss_solution_t* current_fix) {
         case APP_STATE_MENU_WPT_SELECT:
         case APP_STATE_MENU_POI_CATEGORY:
         case APP_STATE_MENU_POI_RESULTS:
+        case APP_STATE_SEARCH:
             break;  // меню не требует периодического обновления
 
         case APP_STATE_BOOK_LIST:

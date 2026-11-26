@@ -24,6 +24,7 @@ typedef enum {
     APP_STATE_MENU_WPT_SELECT, // Подсостояние: Выбор цели навигации (Waypoint): снять, HERE, центр карты, точки из GPX
     APP_STATE_MENU_POI_CATEGORY, // Подсостояние: Поиск объектов (SEARCH) - выбор категории (см. menu_poi.c)
     APP_STATE_MENU_POI_RESULTS,  // Подсостояние: Поиск объектов - ближайшие объекты категории (идёт поиск, затем список)
+    APP_STATE_SEARCH,         // Умный поиск объектов карты: ввод запроса и список ближайших (см. search_screen.h)
     APP_STATE_BOOK_LIST,      // Читалка: список книг из каталога BOOKS (GNSS и запись трека выключены)
     APP_STATE_BOOK_READ,      // Читалка: страница книги, 1-bit (см. book_reader.h)
     APP_STATE_BOOK_SEARCH_INPUT, // Читалка: экранная клавиатура для ввода строки поиска по книге

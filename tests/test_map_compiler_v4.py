@@ -96,6 +96,14 @@ def make_osm(n_roads=7000):
                                                   "name": "Озеро"})
     f = [b.node(0.2, 0.2), b.node(0.2, 0.21), b.node(0.21, 0.21), b.node(0.21, 0.2)]
     b.way(f + [f[0]], {"landuse": "forest"})
+    # named street of three ways inside one search merge cell (0.05 deg) and one
+    # way far away (another cell); the stop word moves to the end: "Ленина улица"
+    for dlon, dlat in ((0.41, 0.31), (0.42, 0.32), (0.43, 0.33), (0.58, 0.05)):
+        b.way([b.node(dlon, dlat), b.node(dlon + 0.001, dlat + 0.0005)],
+              {"highway": "residential", "name": "улица Ленина"})
+    # named forest polygon (landuse)
+    f = [b.node(0.30, 0.10), b.node(0.30, 0.14), b.node(0.34, 0.14), b.node(0.34, 0.10)]
+    b.way(f + [f[0]], {"landuse": "forest", "name": "Беловежская пуща"})
     # POIs
     b.node(0.15, 0.15, {"place": "city", "name": "Минск"})
     b.node(0.16, 0.15, {"amenity": "cafe", "name": "Кафе Пушкин"})
@@ -232,8 +240,8 @@ class CompilerV4Test(unittest.TestCase):
         res, _ = self._layer("roads")
         counts = [len(r[2]) for r in res]
         self.assertGreater(res[0][0], 2, "depth 3 expected for 7000+ objects")
-        self.assertEqual(counts[0], 7000 + 3)           # all roads
-        self.assertEqual(counts[1], 7000 + 2)           # lod >= 1
+        self.assertEqual(counts[0], 7000 + 3 + 4)       # all roads (+4 ways of the named street)
+        self.assertEqual(counts[1], 7000 + 2 + 4)       # lod >= 1
         self.assertEqual(counts[2], 2)                  # motorway, primary
         self.assertEqual(counts[3], 1)                  # motorway
         for depth, roots, leaves in res:
@@ -325,12 +333,14 @@ class CompilerV4Test(unittest.TestCase):
         for a, b in zip(parts, list(parts[1:]) + [len(pts)]):
             self.assertEqual(pts[a], pts[b - 1])
 
-    def test_search_idx(self):
+    def _search(self):
+        """search.idx parsed independently: (bytes, header dict, names, cats)."""
         d, ftype, lods = read_pgo(self.out / "search.idx")
         self.assertEqual(ftype, 4)
         self.assertEqual(lods, (0, 0, 0, 0))
         (magic, ver, rec, flags, dbrec, noff, ncnt, coff, ccnt, doff, dsz,
-         roff, rcnt) = struct.unpack_from("<4sHHIIIIIIIIII", d, 0x20)
+         roff, rcnt, l_roads, l_ww, l_water, l_land) = struct.unpack_from(
+             "<4sHHIIIIIIIIII4I", d, 0x20)
         self.assertEqual((magic, ver, rec, flags, dbrec), (b"SRCH", 1, 32, 0, 6))
         self.assertEqual((doff, roff, rcnt), (0x60, 0, 0))
         self.assertEqual(noff % 512, 0)
@@ -351,33 +361,91 @@ class CompilerV4Test(unittest.TestCase):
                 out.append((lon, lat, db_idx, code, sub, fl, kl, key))
             return out
 
-        names = entries(noff, ncnt)
-        keys = [(e[7], e[2], e[5] & 1) for e in names]
+        hdr = {"layer_records": (l_roads, l_ww, l_water, l_land), "dict_words": set(
+            w.rstrip(b"\0") for w in words)}
+        return d, hdr, entries(noff, ncnt), entries(coff, ccnt)
+
+    def test_search_idx(self):
+        d, hdr, names, cats = self._search()
+        # .db records (with the dummy one): roads - "Трасса М1" and four ways of the
+        # street (merging is done by the index, not by the .db); waterways - river;
+        # water - lake; landuse - named forest
+        self.assertEqual(hdr["layer_records"], (6, 2, 2, 2))
+        layer_of = lambda c: ps.layer_index_for_code(c)
+
+        # order: key, layer (POI first), db_idx, primary before secondary
+        lk = lambda e: layer_of(e[3]) + 1 if e[3] < 128 else 0
+        keys = [(e[7], lk(e), e[2], e[5] & 1) for e in names]
         self.assertEqual(keys, sorted(keys))
         for e in names:
-            self.assertTrue(1 <= e[2] <= 6 and e[6] <= 16)
+            self.assertTrue(e[6] <= 16)
             self.assertEqual(e[7][e[6]:], bytes(16 - e[6]))
             self.assertNotIn(0xFF, e[7])
             self.assertEqual(e[5] & ~7, 0)
+        pois = [e for e in names if e[3] >= 128]
         # barrier (code 152) is not searchable, substituted names are not in NAME
         self.assertTrue(all(e[3] != 152 for e in names))
+        self.assertTrue(all(1 <= e[2] <= 6 for e in pois))
         # "Пушкин кафе": primary 'пушкин', secondary 'кафе'
-        by_key = {e[7].rstrip(b"\0") for e in names}
+        by_key = {e[7].rstrip(b"\0") for e in pois}
         enc = lambda s: ps.pgo_encode(s, 16).rstrip(b"\0")
         self.assertIn(ps.split_words(enc("Пушкин"))[0], by_key)
         self.assertIn(ps.split_words(enc("кафе"))[0], by_key)
-        sec = [e for e in names if e[5] & 1]
-        self.assertTrue(sec)
-        cats = entries(coff, ccnt)
-        order = [(e[4], ps.morton(e[0], e[1]), e[2]) for e in cats]
+        self.assertTrue([e for e in pois if e[5] & 1])
+        order = [(e[4], ps.morton(e[0], e[1]), lk(e), e[2]) for e in cats]
         self.assertEqual(order, sorted(order))
         self.assertTrue(all(e[4] != 0 for e in cats))
         self.assertTrue(any(e[5] & 2 and e[6] == 0 for e in cats), "unnamed cafe in CAT")
+        self.assertTrue(all(not (e[5] & 2) for e in cats if e[3] < 128),
+                        "unnamed objects of the line and polygon layers are not indexed")
         # cross-check with pois.idx: lon/lat/code agree for every db_idx
         res, _ = self._layer("pois")
         node = {l[3]: (l[0][0], l[0][1], l[1]) for l in res[0][2]}
-        for e in names + cats:
+        for e in [x for x in names + cats if x[3] >= 128]:
             self.assertEqual(node[e[2]], (e[0], e[1], e[3]))
+
+    def test_search_idx_layers(self):
+        """Streets, rivers, lakes and landuse: layer from the code, point on the object."""
+        d, hdr, names, cats = self._search()
+        enc = lambda t: ps.split_words(ps.pgo_encode(t, 100).rstrip(b"\0"))
+        layer_files = ("roads", "waterways", "water", "landuse")
+        non_poi = [e for e in names if e[3] < 128]
+        self.assertTrue(non_poi)
+        for e in non_poi:
+            lname = layer_files[ps.layer_index_for_code(e[3])]
+            res, _ = self._layer(lname)
+            leaf = [l for l in res[0][2] if l[3] == e[2]]
+            self.assertEqual(len(leaf), 1, f"{lname}: db_idx {e[2]} is a leaf of LOD 0")
+            self.assertEqual(leaf[0][1], e[3], "code is the code of the object")
+            mlp = (self.out / f"{lname}.mlp").read_bytes()
+            _, _, pts = read_geometry(mlp, leaf[0][2])
+            self.assertIn((e[0], e[1]), pts, "representative point is a vertex")
+            db, _, _ = read_pgo(self.out / f"{lname}.db")
+            rec = db[0x20 + 129 + (e[2] - 1) * 117:0x20 + 129 + e[2] * 117]
+            self.assertEqual(rec[0], 0x20)
+            full = ps.split_words(rec[17:117].rstrip(b"\0"))
+            self.assertIn(e[7].rstrip(b"\0"), [w[:16] for w in full])
+        # .db record counts of the layers match layer_records
+        for i, lname in enumerate(layer_files):
+            db, _, _ = read_pgo(self.out / f"{lname}.db")
+            self.assertEqual(struct.unpack_from("<I", db, 0x24)[0], hdr["layer_records"][i])
+
+        # merging: three ways of one street in one cell -> one entry; the far way -> another
+        lenina = enc("Ленина")[0]
+        streets = [e for e in names if e[3] < 32 and e[7].rstrip(b"\0") == lenina]
+        self.assertEqual(len(streets), 2)
+        self.assertTrue(all(e[5] & 1 == 0 for e in streets))
+        # "улица" is a dictionary keyword: not indexed as a secondary word of a street
+        self.assertIn(enc("улица")[0], hdr["dict_words"])
+        self.assertFalse([e for e in non_poi if e[5] & 1 and e[7].rstrip(b"\0") == enc("улица")[0]])
+        # but "М1" is: second word of "Трасса М1"
+        self.assertTrue([e for e in non_poi if e[5] & 1 and e[7].rstrip(b"\0") == enc("м1")[0]])
+        # subtypes: street 130, river 140, lake 150, forest 160
+        sub = {ps.layer_index_for_code(e[3]): e[4] for e in names if e[3] < 128 and not e[5] & 1}
+        self.assertEqual(sub, {0: 130, 1: 140, 2: 150, 3: 160})
+        # CAT holds the named non-POI objects once each
+        cat_non_poi = [e for e in cats if e[3] < 128]
+        self.assertEqual(len(cat_non_poi), 6)   # M1, 2 x Ленина, river, lake, forest
 
     def test_deterministic(self):
         t = Path(self.tmp.name)
@@ -399,6 +467,24 @@ class SearchHelpers(unittest.TestCase):
         self.assertEqual(ps.split_words(enc("Ёж_и-Ёлка")), [enc("еж"), enc("и"), enc("елка")])
         self.assertEqual(ps.split_words(enc("ABC def")), [b"abc", b"def"])
         self.assertEqual(ps.split_words(b""), [])
+
+    def test_layer_index_and_anchor(self):
+        self.assertEqual([ps.layer_index_for_code(c) for c in (0, 31, 32, 63, 64, 95, 96, 127, 128)],
+                         [0, 0, 1, 1, 2, 2, 3, 3, -1])
+
+        class F:
+            pass
+
+        line = F()
+        line.code, line.parts = 1, (0,)
+        line.points = struct.pack("<8i", 0, 0, 10, 0, 20, 0, 30, 0)
+        line.bbox = (0, 0, 30, 0)
+        self.assertEqual(ps.anchor_point(line), (20, 0), "middle vertex of a line")
+        poly = F()
+        poly.code, poly.parts = 64, (0,)
+        poly.points = struct.pack("<10i", 0, 0, 0, 100, 40, 100, 100, 100, 0, 0)
+        poly.bbox = (0, 0, 100, 100)
+        self.assertEqual(ps.anchor_point(poly), (40, 100), "vertex nearest to the bbox centre")
 
     def test_morton(self):
         self.assertEqual(ps.morton(-1_800_000_000, -900_000_000), 0)

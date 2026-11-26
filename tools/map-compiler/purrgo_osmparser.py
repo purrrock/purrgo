@@ -142,6 +142,14 @@ def _resolve_name(tags: dict, rule=None, is_poi: bool = False,
     return _resolve_name_ex(tags, rule, is_poi, v4)[0]
 
 
+def _search_subtype(tags: dict, name: str) -> int:
+    """Подтип поиска объекта слоя (docs/map-format-v4.md, 21.8). Только для названных объектов:
+    без названия объект в индекс поиска не попадает (21.5), подтип не нужен."""
+    if not name:
+        return 0
+    return SearchCategories.subtype_for(tags)
+
+
 class OSMParser:
     """Two-pass streaming OSM parser with hybrid memory optimization (C-Arrays + lxml)."""
 
@@ -837,7 +845,8 @@ class OSMParser:
                 code=rule.code,
                 name=name,
                 points=points_bytes,
-                lod=rule.lod
+                lod=rule.lod,
+                subtype=_search_subtype(tags, name)
             )
 
             feature.calculate_bbox()
@@ -859,7 +868,8 @@ class OSMParser:
                 code=rule.code,
                 name=name,
                 points=points_bytes,
-                lod=rule.lod
+                lod=rule.lod,
+                subtype=_search_subtype(tags, name)
             )
 
             feature.calculate_bbox()
@@ -884,7 +894,8 @@ class OSMParser:
                     code=rule.code,
                     name=name,
                     points=points_bytes,
-                    lod=rule.lod
+                    lod=rule.lod,
+                    subtype=_search_subtype(tags, name)
                 )
 
                 feature.calculate_bbox()
@@ -1043,7 +1054,8 @@ class OSMParser:
         name: str,
         lod: int,
         outers: List[List[Tuple[int, int]]],
-        inners: List[List[Tuple[int, int]]]
+        inners: List[List[Tuple[int, int]]],
+        subtype: int = 0
     ) -> Optional[MapFeature]:
         combined, parts = self._orient_rings(outers, inners)
 
@@ -1064,7 +1076,8 @@ class OSMParser:
             name=name,
             points=points_bytes,
             parts=parts,
-            lod=lod
+            lod=lod,
+            subtype=subtype
         )
 
         feature.calculate_bbox()
@@ -1155,7 +1168,8 @@ class OSMParser:
                 _resolve_name(tags, rule),
                 rule.lod,
                 outers,
-                inners
+                inners,
+                _search_subtype(tags, _resolve_name(tags, rule))
             )
 
             if feature is not None and rule.layer == 'water':
@@ -1200,7 +1214,8 @@ class OSMParser:
                 standalone.name,
                 standalone.lod,
                 [own_ring],
-                holes
+                holes,
+                standalone.subtype
             )
 
             if feature is not None:

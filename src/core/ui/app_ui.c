@@ -8,6 +8,7 @@
 #include "ui_poi_results.h"
 #include "ui_map_layers.h"
 #include "ui_book.h"
+#include "ui_search.h"
 #include "purrgo/ui/ui_dirty.h"
 
 #include "purrgo/gfx_text.h"
@@ -282,6 +283,12 @@ void purrgo_app_ui_render(
             }
             ui_render_menu_map_layers(gfx);
             break;
+        case APP_STATE_SEARCH:
+            if (prev_state != APP_STATE_SEARCH || s_full_refresh_requested) {
+                ui_search_reset();   /* экран мог быть перерисован другим режимом */
+            }
+            ui_render_search(gfx);
+            break;
         case APP_STATE_BOOK_LIST:
             if (prev_state != APP_STATE_BOOK_LIST) {
                 ui_book_list_reset();
@@ -320,6 +327,7 @@ void purrgo_app_ui_render(
      */
     if (current_state != APP_STATE_BOOK_READ &&
         current_state != APP_STATE_BOOK_SEARCH_INPUT &&
+        current_state != APP_STATE_SEARCH &&
         current_state != APP_STATE_TRACKER_SCREEN_OFF) {
         ui_draw_key_hints(gfx, current_state, current_state != prev_state);
     }

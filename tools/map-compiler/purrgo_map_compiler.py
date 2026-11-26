@@ -33,6 +33,7 @@ def compile_layers_v4(args, out_path, roads_data, landuse_data, water_data,
     from purrgo_bin_writer_v4 import MapCompilerV4, check_lods
 
     meta_all: List[MapFeature] = []
+    search_layers = []   # (features, .db records) of the layers with names, for search.idx
     layers = (
         ("roads", roads_data, False),
         ("landuse", landuse_data, True),
@@ -52,6 +53,9 @@ def compile_layers_v4(args, out_path, roads_data, landuse_data, water_data,
         MapCompilerV4.compile_db(data, out_path(name + ".db"))
         MapCompilerV4.compile_idx_v4(data, out_path(name + ".idx"), var_v1, variants)
         meta_all.extend(data)
+        recs = MapCompilerV4.named_db_records(data)
+        if recs:
+            search_layers.append((data, recs))
 
     if pois_data:
         check_lods(pois_data, "pois")
@@ -60,11 +64,15 @@ def compile_layers_v4(args, out_path, roads_data, landuse_data, water_data,
         MapCompilerV4.compile_idx_v4(pois_data, out_path("pois.idx"), is_poi=True)
         meta_all.extend(pois_data)
         if args.search:
-            MapCompilerV4.compile_search(pois_data, out_path("search.idx"))
+            MapCompilerV4.compile_search(pois_data, out_path("search.idx"),
+                                         search_layers)
     else:
         print("[~] Point objects (POI) are missing in the source data.")
-        if args.search:
-            print("[~] search.idx skipped: no POI.")
+        if args.search and search_layers:
+            # No POI: search.idx still holds streets, waterways, water and landuse.
+            MapCompilerV4.compile_search([], out_path("search.idx"), search_layers)
+        elif args.search:
+            print("[~] search.idx skipped: no POI and no named objects.")
     return meta_all
 
 
