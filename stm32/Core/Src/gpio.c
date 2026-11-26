@@ -53,10 +53,10 @@ void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(SD_PWR_GPIO_Port, SD_PWR_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, GNSS_EN_Pin|SD_CS_Pin|EINK_CS_Pin|EINK_RST_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(GPIOB, GNSS_EN_Pin|EINK_CS_Pin|EINK_RST_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(EINK_DC_GPIO_Port, EINK_DC_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, SD_CS_Pin|EINK_DC_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : Alive_LED_Pin */
   GPIO_InitStruct.Pin = Alive_LED_Pin;
@@ -99,8 +99,8 @@ void MX_GPIO_Init(void)
 
   /*Configure GPIO pin : Detect_SD_Pin */
   GPIO_InitStruct.Pin = Detect_SD_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(Detect_SD_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : SD_CS_Pin */

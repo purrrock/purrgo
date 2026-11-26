@@ -606,7 +606,7 @@
  * в VDD при ST выше 3,3 В).
  */
 #ifndef PURRGO_HW_ORING_PRESENT
-#define PURRGO_HW_ORING_PRESENT          0
+#define PURRGO_HW_ORING_PRESENT          1
 #endif
 
 /*
