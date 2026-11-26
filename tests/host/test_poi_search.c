@@ -13,6 +13,7 @@
 #include <string.h>
 #include "purrgo/map.h"
 #include "purrgo/fs_hal.h"
+#include "purrgo/geo.h"
 #include "purrgo/pgo_text.h"
 #include "purrgo/poi_search.h"
 #include "map/map_internal.h"
@@ -166,17 +167,6 @@ static void ib_tree(ib_t *b, const uint8_t *leaves, uint32_t n, uint32_t leaf_fa
             }
         }
     }
-}
-
-/* Цепочка из depth навигационных узлов по одному на блок; в конце один узел данных. */
-static void ib_chain(ib_t *b, uint32_t depth, const uint8_t *leaf)
-{
-    uint32_t s = ib_section(b, depth, 1, depth + 1u);   /* depth навигационных блоков и лист */
-    static const int32_t bb[4] = { 0, 0, 1000, 1000 };
-    for (uint32_t k = 0; k < depth; k++) {
-        nav_node(b->o->d + s + BLK * (1u + k), s + BLK * (2u + k), bb, depth - 1u - k, 1);
-    }
-    memcpy(b->o->d + s + BLK * (1u + depth), leaf, 25);
 }
 
 /* ----------------------------------------------------------- карта --- */
@@ -443,7 +433,7 @@ static void test_shares_map_files(void)
 
 static void test_pgo_to_utf8(void)
 {
-    char pgo[32], back[64], u[64];
+    char pgo[64], back[64], u[64];
 
     (void)snprintf(u, sizeof u, "Mir %s", "Минск Ёж ёлка");
     (void)snprintf(pgo, sizeof pgo, "%s", u);
