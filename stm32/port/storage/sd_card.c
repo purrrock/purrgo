@@ -90,6 +90,23 @@
 #endif
 #endif
 
+/*
+ * Парковка карты по тайм-ауту простоя (purrgo_sd_idle_service()): если в течение
+ * PURRGO_SD_PARK_TIMEOUT_MS нет открытых файлов и обмена с картой, питание снимается;
+ * первое же обращение к ФС (purrgo_fs_open/opendir/exists/replace) включает его снова
+ * (purrgo_sd_wake()). Работает только с ключом питания. 0 - парковка выключена:
+ * -DPURRGO_SD_PARK_TIMEOUT_MS=0.
+ */
+#ifndef PURRGO_SD_PARK_TIMEOUT_MS
+#define PURRGO_SD_PARK_TIMEOUT_MS 30000U
+#endif
+
+#if PURRGO_SD_POWER_SWITCH && (PURRGO_SD_PARK_TIMEOUT_MS > 0)
+#define PURRGO_SD_PARK_ENABLED 1
+#else
+#define PURRGO_SD_PARK_ENABLED 0
+#endif
+
 /* Уровень на SD_PWR, включающий ключ: 1 - High (EN активный высокий), 0 - Low. */
 #ifndef PURRGO_SD_POWER_ACTIVE_HIGH
 #define PURRGO_SD_POWER_ACTIVE_HIGH 1
@@ -121,6 +138,13 @@ static FATFS s_fs;
 static sd_spi_t s_card;
 static sd_power_t s_pwr;
 static bool s_pwr_inited;
+
+/* Парковка по тайм-ауту: питание снято автоматически, ФС поднимется при первом обращении. */
+static bool s_parked;
+/* Последнее включение было пробуждением из парковки (открытых файлов при этом не было). */
+static bool s_park_wake;
+/* Время (HAL_GetTick()) последнего обращения к карте или к ФС. */
+static volatile uint32_t s_last_activity_ms;
 static volatile DSTATUS s_stat = STA_NOINIT;
 static purrgo_sd_state_t s_state = PURRGO_SD_OFF;
 
@@ -461,8 +485,9 @@ static void gpio_hiz(GPIO_TypeDef *port, uint32_t pin)
 #define PURRGO_SD_DETECT_PARK 0
 #endif
 
-#if PURRGO_SD_DETECT_PARK
-/* Detect_SD - вход с подтяжкой к питанию МК (как в MX_GPIO_Init). */
+#if PURRGO_SD_DETECT_MODE != PURRGO_SD_DETECT_NONE
+/* Detect_SD - вход с подтяжкой к питанию МК. Не зависит от режима вывода в CubeMX
+ * (там он может быть Analog, чтобы подтяжка не подпитывала карту с момента сброса). */
 static void gpio_detect_input(void)
 {
     GPIO_InitTypeDef gi = {0};
@@ -643,6 +668,7 @@ DSTATUS disk_initialize(BYTE pdrv)
 
 DRESULT disk_read(BYTE pdrv, BYTE *buff, LBA_t sector, UINT count)
 {
+    s_last_activity_ms = HAL_GetTick();
     if (pdrv != 0U)
     {
         return RES_PARERR;
@@ -682,6 +708,7 @@ DRESULT disk_read(BYTE pdrv, BYTE *buff, LBA_t sector, UINT count)
 
 DRESULT disk_write(BYTE pdrv, const BYTE *buff, LBA_t sector, UINT count)
 {
+    s_last_activity_ms = HAL_GetTick();
     if (pdrv != 0U)
     {
         return RES_PARERR;
@@ -846,6 +873,9 @@ static void power_ensure_init(void)
     {
         /* Состояние ключа после сброса МК неизвестно: карту обесточиваем явно. */
         (void)sd_power_init(&s_pwr, &s_pwr_port);
+#if (PURRGO_SD_DETECT_MODE != PURRGO_SD_DETECT_NONE) && !PURRGO_SD_POWER_SWITCH
+        gpio_detect_input();    /* без ключа в OFF вход Detect_SD не паркуется: он нужен всегда */
+#endif
         s_pwr_inited = true;
         s_state = PURRGO_SD_OFF;
     }
@@ -860,6 +890,9 @@ void purrgo_sd_park(void)
 static bool power_up_and_mount(void)
 {
     const uint32_t t0 = HAL_GetTick();
+
+    s_parked = false;
+    s_last_activity_ms = t0;
 
     power_ensure_init();
 
@@ -916,7 +949,7 @@ bool purrgo_sd_power_up(void)
     return power_up_and_mount();
 }
 
-void purrgo_sd_power_down(void)
+static void do_power_down(void)
 {
     power_ensure_init();
 
@@ -943,6 +976,78 @@ void purrgo_sd_power_down(void)
     s_retry_armed = false;
     s_card_lost = false;
     PURRGO_LOG("SD: power off%s\r\n", sd_power_has_switch(&s_pwr) ? "" : " (no switch: card deselected)");
+}
+
+void purrgo_sd_power_down(void)
+{
+    do_power_down();
+    s_parked = false;      /* выключено явно: само не включится (purrgo_sd_wake() ничего не делает) */
+    s_park_wake = false;
+}
+
+void purrgo_sd_touch(void)
+{
+    s_last_activity_ms = HAL_GetTick();
+}
+
+bool purrgo_sd_wake(void)
+{
+    s_last_activity_ms = HAL_GetTick();
+
+#if PURRGO_SD_PARK_ENABLED
+    if (s_parked)
+    {
+        /* Парковка допускалась только без открытых файлов: после перемонтирования
+         * ничего недействительного нет, ядру закрывать слои не нужно. */
+        const bool ok = power_up_and_mount();
+
+        s_park_wake = ok;
+        return ok;
+    }
+#endif
+    return (s_state == PURRGO_SD_READY) && !s_card_lost;
+}
+
+bool purrgo_sd_take_park_wake(void)
+{
+    const bool v = s_park_wake;
+
+    s_park_wake = false;
+    return v;
+}
+
+bool purrgo_sd_is_parked(void)
+{
+    return s_parked;
+}
+
+void purrgo_sd_idle_service(void)
+{
+#if PURRGO_SD_PARK_ENABLED
+    if ((s_state != PURRGO_SD_READY) || s_card_lost)
+    {
+        return;
+    }
+
+    const uint32_t now = HAL_GetTick();
+
+    /* Пока есть открытые файлы или каталоги, питание снимать нельзя; отсчёт идёт от последнего закрытия. */
+    if (purrgo_fs_stm32_open_count() != 0U)
+    {
+        s_last_activity_ms = now;
+        return;
+    }
+
+    if ((uint32_t)(now - s_last_activity_ms) < PURRGO_SD_PARK_TIMEOUT_MS)
+    {
+        return;
+    }
+
+    PURRGO_LOG("SD: idle %lu ms, parking\r\n", (unsigned long)(now - s_last_activity_ms));
+    do_power_down();
+    s_parked = true;
+    s_park_wake = false;
+#endif
 }
 
 bool purrgo_sd_is_powered(void)

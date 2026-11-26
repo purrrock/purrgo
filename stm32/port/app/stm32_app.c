@@ -563,6 +563,9 @@ void purrgo_stm32_process(void)
    */
   purrgo_sd_poll(current_time_ms);
 
+  /* Парковка карты по тайм-ауту простоя (без открытых файлов); просыпается при первом обращении к ФС. */
+  purrgo_sd_idle_service();
+
   /* Запись лога на SD (если включена в меню): сбрасывает накопленные сообщения пачкой. */
   purrgo_logger_sd_service(current_time_ms);
 
@@ -575,8 +578,12 @@ void purrgo_stm32_process(void)
     purrgo_sd_state_t sd_state = purrgo_sd_state();
     if (sd_state == PURRGO_SD_READY && s_prev_sd_state != PURRGO_SD_READY)
     {
-      purrgo_map_shutdown();
-      purrgo_ui_dirty_mark(UI_DIRTY_MAP);
+      /* Пробуждение из парковки: открытых файлов не было, слои закрывать и перерисовывать не нужно. */
+      if (!purrgo_sd_take_park_wake())
+      {
+        purrgo_map_shutdown();
+        purrgo_ui_dirty_mark(UI_DIRTY_MAP);
+      }
     }
     s_prev_sd_state = sd_state;
   }
