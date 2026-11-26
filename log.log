@@ -1,197 +1,0 @@
-[0.000] BOOT: SBF=0 WUF1=0 RCC_CSR=0x0C004400 PA0=1
-[0.002] PurrGO STM32 boot
-[0.005] UART1 logger OK
-[0.009] Supply: PVD level 0x000000A0, VDD above threshold
-[0.015] Display OK
-[0.017] GFX OK
-[3.382] Boot banner OK (v0.1.0, 498a1d9-dirty, Debug)
-[3.397] SD: Detect_SD level 1
-[3.612] SD: read data at 40 MHz (High Speed)
-[3.618] SD: SDHC/SDXC, 7600 MB, SPI2 prescaler 0x10000000
-[3.631] SD: mount OK, tree verified
-[3.635] SD: power-up to ready 249 ms
-[3.638] GNSS: listening for NMEA at 38400 baud
-[3.642] GNSS LPUART1 INIT FINISHED
-[3.646] BUTTONS INIT
-[3.648] Buttons OK
-[3.649] Sound: TIM16 1000000 Hz tick, tone 4000 Hz
-[3.654] Stop2: ready (wake timer: LPTIM1 on LSI)
-[3.659] DEFAULT CONFIG VALUES SET
-[3.664] purrgo_fs_open: 0:/PURRGO/PURRGO.CFG opened OK
-[3.669] LOADING CONFIG FROM FILE: 0:/PURRGO/PURRGO.CFG
-[3.675] purrgo_fs_open: 0:/PURRGO/PURRGO.CFG opened OK
-[3.681] App FSM OK
-[3.709] purrgo_fs_open: 0:/PURRGO/MAPS/belarus/water.idx CLMT ok (4 of 64 dwords)
-[3.716] purrgo_fs_open: 0:/PURRGO/MAPS/belarus/water.idx opened OK
-[3.774] purrgo_fs_open: 0:/PURRGO/MAPS/belarus/water.mlp CLMT ok (4 of 64 dwords)
-[3.781] purrgo_fs_open: 0:/PURRGO/MAPS/belarus/water.mlp opened OK
-[3.792] purrgo_fs_open: 0:/PURRGO/MAPS/belarus/water.db CLMT ok (4 of 64 dwords)
-[3.799] purrgo_fs_open: 0:/PURRGO/MAPS/belarus/water.db opened OK
-[3.813] purrgo_fs_open: 0:/PURRGO/MAPS/belarus/waterways.idx CLMT ok (4 of 64 dwords)
-[3.821] purrgo_fs_open: 0:/PURRGO/MAPS/belarus/waterways.idx opened OK
-[3.860] purrgo_fs_open: 0:/PURRGO/MAPS/belarus/waterways.mlp CLMT ok (4 of 64 dwords)
-[3.868] purrgo_fs_open: 0:/PURRGO/MAPS/belarus/waterways.mlp opened OK
-[3.950] purrgo_fs_open: 0:/PURRGO/MAPS/belarus/roads.idx CLMT ok (4 of 64 dwords)
-[3.957] purrgo_fs_open: 0:/PURRGO/MAPS/belarus/roads.idx opened OK
-[4.152] purrgo_fs_open: 0:/PURRGO/MAPS/belarus/roads.mlp CLMT ok (4 of 64 dwords)
-[4.159] purrgo_fs_open: 0:/PURRGO/MAPS/belarus/roads.mlp opened OK
-[4.176] purrgo_fs_open: 0:/PURRGO/MAPS/belarus/pois.idx CLMT ok (4 of 64 dwords)
-[4.183] purrgo_fs_open: 0:/PURRGO/MAPS/belarus/pois.idx opened OK
-[4.219] purrgo_fs_open: 0:/PURRGO/MAPS/belarus/pois.db CLMT ok (4 of 64 dwords)
-[4.226] purrgo_fs_open: 0:/PURRGO/MAPS/belarus/pois.db opened OK
-[4.407] wpt layer: 0 points (route=0 dir=1)
-[4.417] Map files released (idle 4294967285 ms)
-[4.939] GNSS: listening for NMEA at 115200 baud
-[5.132] GNSS: PVT fixType=0 fixOK=0 sv=0 validTime=1 hAcc=1965198 mm pDOP=9999
-[5.139] GNSS: link OK at 115200 baud
-[5.143] GNSS: TX NMEA/rate VALSET[RAM] RATE-MEAS=1000 RATE-NAV=1 MSGOUT-GGA=1 MSGOUT-RMC=1 MSGOUT-GSA=1 MSGOUT-GLL=0 MSGOUT-GSV=0 MSGOUT-VTG=0 (54 B)
-[5.161] GNSS: TX Signals VALSET[RAM] SIGNAL-SBAS=0 SIGNAL-GLO=0 SIGNAL-BDS-B1C=0 SIGNAL-BDS-B1I=1 SIGNAL-BDS=1 (37 B)
-[5.175] GNSS: TX NAV-PVT VALSET[RAM] MSGOUT-NAV-PVT=1 (17 B)
-[5.182] GNSS: TX NAV-ODO VALSET[RAM] MSGOUT-NAV-ODO=1 (17 B)
-[5.189] GNSS: TX MON-RF VALSET[RAM] MSGOUT-MON-RF=1 (17 B)
-[5.196] GNSS: TX NAV-DOP VALSET[RAM] MSGOUT-NAV-DOP=1 (17 B)
-[5.203] GNSS: TX NAV-STATUS VALSET[RAM] MSGOUT-NAV-STATUS=1 (17 B)
-[5.211] GNSS: TX ITFM VALSET[RAM] ITFM-ENABLE=1 (17 B)
-[5.217] GNSS: TX ODO enable/profile VALSET[RAM] ODO-USE=1 ODO-PROFILE=1 (22 B)
-[5.226] GNSS: TX DYNMODEL VALSET[RAM] DYNMODEL=0 (17 B)
-[5.233] GNSS: TX TIMEPULSE quiet VALSET[RAM] TP1-ENA=1 TP-LEN=0 TP-LEN-LOCK=0 (33 B)
-[5.243] GNSS: TX NMEA off VALSET[RAM] UART1OUTPROT-NMEA=0 (17 B)
-[5.251] GNSS: TX PSM no-off VALSET[RAM] PM-DONOTENTEROFF=1 (17 B)
-[5.258] GNSS: TX PSM mode VALSET[RAM] PM-OPERATEMODE=PSMCT (17 B)
-[5.266] GNSS: TX poll UBX-MON-VER (8 B)
-[5.270] GNSS: STATUS gpsFix=0 flags=0x5C psm=0 spoof=1
-[5.300] GNSS: u-blox SW "ROM SPG 5.10 (7b202e)" HW "000A0000"
-[5.305] GNSS:   FWVER=SPG 5.10
-[5.308] GNSS:   PROTVER=34.10
-[5.311] GNSS:   GPS;GLO;GAL;BDS
-[5.314] GNSS:   SBAS;QZSS
-[5.778] GNSS: RF jam=0 ant=1/2 noise=84 agc=4464 cw=4
-[7.290] GNSS: config confirmed by module (14/14 replies), retry skipped
-[7.317] Stop2: first entry, wake period <= 262 ms
-[9.103] GNSS: UBX replies: ACK=14 NAK=0 (last: ACK class 0x06 id 0x8A)
-[9.109] GNSS: PSM state 2 (acquisition)
-[9.113] GNSS: UBX OK, no fix yet (5 s): bytes=1562 (+1562) frames=45 nmea ok=0 PVT fixType=0 sv=0 validTime=1 FE=0 NE=0 ORE=0 DMA=0
-[10.251] GNSS: PVT fixType=0 fixOK=0 sv=0 validTime=1 hAcc=516080 mm pDOP=9999
-[10.762] GNSS: STATUS gpsFix=2 flags=0x5C psm=0 spoof=1
-[12.711] GNSS: RF jam=1 ant=1/2 noise=91 agc=4464 cw=4
-[12.721] purrgo_fs_open: 0:/PURRGO/TRACKS/329ADAEB.gpx opened OK
-[12.727] Track logging started
-[12.730] Sound: INFO (LOW)
-[14.933] GNSS: UBX replies: ACK=15 NAK=0 (last: ACK class 0x01 id 0x10)
-[14.939] GNSS: PSM state 3 (tracking)
-[14.943] GNSS: FIX after 11 s, sats used=6 (bytes=3212, ubx frames=84)
-[15.690] GNSS: PVT fixType=3 fixOK=1 sv=6 validTime=1 hAcc=12328 mm pDOP=211
-[17.542] GNSS: STATUS gpsFix=3 flags=0xDD psm=1 spoof=1
-[19.572] GNSS: RF jam=1 ant=1/2 noise=92 agc=4464 cw=4
-[20.702] GNSS: PVT fixType=3 fixOK=1 sv=5 validTime=1 hAcc=8148 mm pDOP=336
-[24.526] GNSS: STATUS gpsFix=3 flags=0xDD psm=2 spoof=1
-
-...
-
-[361.913] GNSS: profile TRACKER (PSMOO, fix every 15 s)
-[361.918] GNSS: TX NMEA/rate VALSET[RAM+BBR] RATE-MEAS=1000 RATE-NAV=1 MSGOUT-GGA=1 MSGOUT-RMC=1 MSGOUT-GSA=1 MSGOUT-GLL=0 MSGOUT-GSV=0 MSGOUT-VTG=0 (54 B)
-[361.937] GNSS: TX Signals VALSET[RAM+BBR] SIGNAL-SBAS=0 SIGNAL-GLO=0 SIGNAL-BDS-B1C=0 SIGNAL-BDS-B1I=1 SIGNAL-BDS=1 (37 B)
-[361.951] GNSS: TX NAV-PVT VALSET[RAM+BBR] MSGOUT-NAV-PVT=1 (17 B)
-[361.958] GNSS: TX NAV-ODO VALSET[RAM+BBR] MSGOUT-NAV-ODO=1 (17 B)
-[361.966] GNSS: TX MON-RF VALSET[RAM+BBR] MSGOUT-MON-RF=1 (17 B)
-[361.973] GNSS: TX NAV-DOP VALSET[RAM+BBR] MSGOUT-NAV-DOP=1 (17 B)
-[361.981] GNSS: TX NAV-STATUS VALSET[RAM+BBR] MSGOUT-NAV-STATUS=1 (17 B)
-[361.989] GNSS: TX ITFM VALSET[RAM+BBR] ITFM-ENABLE=1 (17 B)
-[361.996] GNSS: TX ODO enable/profile VALSET[RAM+BBR] ODO-USE=1 ODO-PROFILE=1 (22 B)
-[362.006] GNSS: TX DYNMODEL VALSET[RAM+BBR] DYNMODEL=0 (17 B)
-[362.013] GNSS: TX TIMEPULSE quiet VALSET[RAM+BBR] TP1-ENA=1 TP-LEN=0 TP-LEN-LOCK=0 (33 B)
-[362.024] GNSS: TX UART baud VALSET[RAM+BBR] UART1-BAUDRATE=115200 (20 B)
-[362.033] GNSS: TX NMEA off VALSET[RAM+BBR] UART1OUTPROT-NMEA=0 (17 B)
-[362.041] GNSS: TX PSMOO params VALSET[RAM+BBR] PM-POSUPDATEPERIOD=15 PM-ACQPERIOD=15 PM-ONTIME=2 PM-DONOTENTEROFF=0 (39 B)
-[362.055] GNSS: TX PSMOO mode VALSET[RAM+BBR] PM-OPERATEMODE=PSMOO (17 B)
-[362.063] GNSS: TX poll UBX-MON-VER (8 B)
-[362.090] GNSS: u-blox SW "ROM SPG 5.10 (7b202e)" HW "000A0000"
-[362.096] GNSS:   FWVER=SPG 5.10
-[362.099] GNSS:   PROTVER=34.10
-[362.102] GNSS:   GPS;GLO;GAL;BDS
-[362.105] GNSS:   SBAS;QZSS
-[364.087] GNSS: config confirmed by module (15/15 replies), retry skipped
-[371.376] GNSS: RF jam=0 ant=1/2 noise=94 agc=4464 cw=4
-[376.313] GNSS: UBX replies: ACK=30 NAK=0 (last: ACK class 0x06 id 0x8A)
-[376.320] GNSS: PSM state 2 (acquisition)
-[381.360] GNSS: tracker #1: FIX sv=6 hAcc=36191 mm (PVT 11, with fix 6) psm=3 bytes=+2576 err=+0
-[395.315] GNSS: tracker #2: FIX sv=6 hAcc=31851 mm (PVT 9, with fix 4) psm=3 bytes=+1902 err=+0
-[409.195] GNSS: tracker #3: FIX sv=6 hAcc=25512 mm (PVT 10, with fix 5) psm=3 bytes=+2080 err=+0
-[409.204] GNSS: PSM state 3 (tracking)
-[422.622] GNSS: tracker #4: FIX sv=7 hAcc=26298 mm (PVT 10, with fix 5) psm=3 bytes=+2080 err=+0
-[422.632] GNSS: PVT fixType=3 fixOK=1 sv=7 validTime=1 hAcc=23807 mm pDOP=517
-[422.639] GNSS: STATUS gpsFix=3 flags=0xDD psm=1 spoof=1
-[422.645] GNSS: RF jam=1 ant=1/2 noise=93 agc=4464 cw=7
-[425.714] GNSS RX error 0x4 (PE=1 NE=2 FE=4 ORE=8 DMA=0x10), dma err 0x20 (DTE=1 ULE=2 USE=4; 0x20 = abort of an idle channel, not a transfer error), restarting RX
-[425.729] GNSS RX error: 24 bytes before it: 01 02 00 00 00 00 00 00 00 00 5D 00 70 11 04 0C 87 09 87 00 00 00 68 FE 
-[425.760] GNSS RX error 0xC (PE=1 NE=2 FE=4 ORE=8 DMA=0x10), dma err 0x20 (DTE=1 ULE=2 USE=4; 0x20 = abort of an idle channel, not a transfer error), restarting RX
-[425.774] GNSS RX error: 24 bytes before it: 58 A2 B5 62 01 07 5C 00 50 D2 2F 17 EA 07 0B 1A 0C 03 0C 37 B8 00 00 00 
-[425.848] GNSS: RX error storm (5 in 3000 ms), restarting the link
-[425.854] GNSS: listening for NMEA at 38400 baud
-[426.677] GNSS: TX UART1-BAUDRATE=115200 (20 B)
-[426.686] GNSS: NMEA at 38400 baud, module -> 115200 baud
-[426.797] GNSS: UART at 115200 baud, waiting for NMEA
-[427.666] GNSS: link OK at 115200 baud
-[427.670] GNSS: TX NMEA/rate VALSET[RAM+BBR] RATE-MEAS=1000 RATE-NAV=1 MSGOUT-GGA=1 MSGOUT-RMC=1 MSGOUT-GSA=1 MSGOUT-GLL=0 MSGOUT-GSV=0 MSGOUT-VTG=0 (54 B)
-[427.688] GNSS: TX Signals VALSET[RAM+BBR] SIGNAL-SBAS=0 SIGNAL-GLO=0 SIGNAL-BDS-B1C=0 SIGNAL-BDS-B1I=1 SIGNAL-BDS=1 (37 B)
-[427.703] GNSS: TX NAV-PVT VALSET[RAM+BBR] MSGOUT-NAV-PVT=1 (17 B)
-[427.710] GNSS: TX NAV-ODO VALSET[RAM+BBR] MSGOUT-NAV-ODO=1 (17 B)
-[427.718] GNSS: TX MON-RF VALSET[RAM+BBR] MSGOUT-MON-RF=1 (17 B)
-[427.725] GNSS: TX NAV-DOP VALSET[RAM+BBR] MSGOUT-NAV-DOP=1 (17 B)
-[427.733] GNSS: TX NAV-STATUS VALSET[RAM+BBR] MSGOUT-NAV-STATUS=1 (17 B)
-[427.741] GNSS: TX ITFM VALSET[RAM+BBR] ITFM-ENABLE=1 (17 B)
-[427.748] GNSS: TX ODO enable/profile VALSET[RAM+BBR] ODO-USE=1 ODO-PROFILE=1 (22 B)
-[427.758] GNSS: TX DYNMODEL VALSET[RAM+BBR] DYNMODEL=0 (17 B)
-[427.765] GNSS: TX TIMEPULSE quiet VALSET[RAM+BBR] TP1-ENA=1 TP-LEN=0 TP-LEN-LOCK=0 (33 B)
-[427.776] GNSS: TX UART baud VALSET[RAM+BBR] UART1-BAUDRATE=115200 (20 B)
-[427.784] GNSS: TX NMEA off VALSET[RAM+BBR] UART1OUTPROT-NMEA=0 (17 B)
-[427.792] GNSS: TX PSMOO params VALSET[RAM+BBR] PM-POSUPDATEPERIOD=15 PM-ACQPERIOD=15 PM-ONTIME=2 PM-DONOTENTEROFF=0 (39 B)
-[427.807] GNSS: TX PSMOO mode VALSET[RAM+BBR] PM-OPERATEMODE=PSMOO (17 B)
-[427.815] GNSS: TX poll UBX-MON-VER (8 B)
-[427.856] GNSS: u-blox SW "ROM SPG 5.10 (7b202e)" HW "000A0000"
-[427.862] GNSS:   FWVER=SPG 5.10
-[427.865] GNSS:   PROTVER=34.10
-[427.868] GNSS:   GPS;GLO;GAL;BDS
-[427.871] GNSS:   SBAS;QZSS
-[429.830] GNSS: config confirmed by module (15/15 replies), retry skipped
-[433.226] GNSS: UBX replies: ACK=15 NAK=0 (last: ACK class 0x06 id 0x8A)
-[433.232] GNSS: PSM state 2 (acquisition)
-[433.241] GNSS: TX UBX-MGA-INI-TIME_UTC epoch=849009808 tAcc=2 s (session)
-[433.250] GNSS: TX UBX-MGA-INI-POS_LLH lat=537136427 lon=284193845 acc=2180 m
-[443.675] GNSS: tracker #1: NO FIX (PVT 26) fixType=0 sv=0 validTime=1 psm=2 bytes=+6141 err=+0
-[458.723] GNSS: tracker #2: NO FIX (PVT 6) fixType=0 sv=0 validTime=1 psm=2 bytes=+1176 err=+0
-[466.151] GNSS: TX UBX-MGA-INI-TIME_UTC epoch=849009841 tAcc=2 s (session)
-[466.161] GNSS: TX UBX-MGA-INI-POS_LLH lat=537136427 lon=284193845 acc=3170 m
-[473.944] GNSS: tracker #3: NO FIX (PVT 26) fixType=0 sv=0 validTime=1 psm=2 bytes=+5072 err=+0
-[488.990] GNSS: tracker #4: NO FIX (PVT 5) fixType=0 sv=0 validTime=1 psm=2 bytes=+998 err=+0
-[488.999] GNSS: PVT fixType=0 fixOK=0 sv=0 validTime=0 hAcc=4294967295 mm pDOP=9999
-[489.007] GNSS: STATUS gpsFix=0 flags=0x40 psm=0 spoof=1
-[491.113] GNSS: RF jam=0 ant=1/2 noise=95 agc=4464 cw=7
-[493.598] GNSS: TX UBX-MGA-INI-TIME_UTC epoch=849009868 tAcc=2 s (session)
-[493.607] GNSS: TX UBX-MGA-INI-POS_LLH lat=537136427 lon=284193845 acc=3980 m
-[506.583] GNSS: tracker #5: NO FIX (PVT 26) fixType=0 sv=0 validTime=1 psm=2 bytes=+5108 err=+0
-[518.607] GNSS: tracker #6: NO FIX (PVT 4) fixType=0 sv=0 validTime=1 psm=2 bytes=+784 err=+0
-[524.504] GNSS: TX UBX-MGA-INI-TIME_UTC epoch=849009899 tAcc=3 s (session)
-[524.514] GNSS: TX UBX-MGA-INI-POS_LLH lat=537136427 lon=284193845 acc=4910 m
-[536.973] GNSS: tracker #7: NO FIX (PVT 27) fixType=0 sv=0 validTime=1 psm=2 bytes=+5286 err=+0
-[549.431] GNSS: tracker #8: NO FIX (PVT 4) fixType=0 sv=0 validTime=1 psm=2 bytes=+784 err=+0
-[549.441] GNSS: PVT fixType=0 fixOK=0 sv=0 validTime=0 hAcc=4294967295 mm pDOP=9999
-[549.448] GNSS: STATUS gpsFix=0 flags=0x40 psm=0 spoof=1
-[551.952] GNSS: RF jam=0 ant=1/2 noise=95 agc=4464 cw=4
-[554.435] GNSS: TX UBX-MGA-INI-TIME_UTC epoch=849009929 tAcc=3 s (session)
-[554.444] GNSS: TX UBX-MGA-INI-POS_LLH lat=537136427 lon=284193845 acc=5810 m
-[567.180] GNSS: tracker #9: NO FIX (PVT 28) fixType=0 sv=0 validTime=1 psm=2 bytes=+5464 err=+0
-[579.391] GNSS: tracker #10: NO FIX (PVT 3) fixType=0 sv=0 validTime=1 psm=2 bytes=+606 err=+0
-[584.361] GNSS: TX UBX-MGA-INI-TIME_UTC epoch=849009959 tAcc=3 s (session)
-[584.371] GNSS: TX UBX-MGA-INI-POS_LLH lat=537136427 lon=284193845 acc=6710 m
-[596.934] GNSS: tracker #11: NO FIX (PVT 28) fixType=0 sv=0 validTime=1 psm=2 bytes=+5464 err=+0
-[609.323] GNSS: tracker #12: NO FIX (PVT 3) fixType=0 sv=0 validTime=1 psm=2 bytes=+606 err=+0
-[612.246] GNSS: PVT fixType=0 fixOK=0 sv=0 validTime=0 hAcc=4294967295 mm pDOP=9999
-[612.254] GNSS: STATUS gpsFix=0 flags=0x40 psm=0 spoof=1
-[612.260] GNSS: RF jam=0 ant=1/2 noise=95 agc=4464 cw=4
-[614.770] GNSS: TX UBX-MGA-INI-TIME_UTC epoch=849009990 tAcc=3 s (session)
-[614.780] GNSS: TX UBX-MGA-INI-POS_LLH lat=537136427 lon=284193845 acc=7640 m
-[627.258] GNSS: tracker #13: NO FIX (PVT 28) fixType=0 sv=0 validTime=1 psm=2 bytes=+5500 err=+0
-[639.729] GNSS: tracker #14: NO FIX (PVT 3) fixType=0 sv=0 validTime=1 psm=2 bytes=+570 err=+0
-[644.698] GNSS: TX UBX-MGA-INI-TIME_UTC epoch=849010020 tAcc=4 s (session)
-[644.707] GNSS: TX UBX-MGA-INI-POS_LLH lat=537136427 lon=284193845 acc=8540 m
