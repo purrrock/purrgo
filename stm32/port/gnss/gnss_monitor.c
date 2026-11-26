@@ -39,12 +39,12 @@ static uint8_t s_bad_reports;   /* подряд отчётов "нет данн�
 #define MONITOR_BAD_REPORTS_FAULT 2U
 
 /*
- * Отчёт по периодам трекера (только сборка с уровнем DEBUG): раз в PURRGO_GNSS_TRACKER_PERIOD_S строка
+ * Отчёт по периодам трекера (только сборка с уровнем DEBUG и PURRGO_GNSS_LOG_PERIODIC = 1): раз в PURRGO_GNSS_TRACKER_PERIOD_S строка
  * "GNSS: tracker #N: FIX/NO FIX ..." - было ли за период действительное решение (PVT с fixOK). Окно
  * отсчитывается от входа в трекер: период приёмника (PSMOO/PSMCT) считает тот же кварц с точностью до ppm,
  * так что окно держится в фазе с циклами приёмника, но сдвиг от начала цикла произвольный.
  */
-#if PURRGO_GNSS_TRACKER_ACTIVE && (PURRGO_LOG_LEVEL >= PURRGO_LOG_LEVEL_DEBUG)
+#if PURRGO_GNSS_TRACKER_ACTIVE && PURRGO_GNSS_LOG_PERIODIC && (PURRGO_LOG_LEVEL >= PURRGO_LOG_LEVEL_DEBUG)
 #define MONITOR_TRACKER_REPORT 1
 #else
 #define MONITOR_TRACKER_REPORT 0
@@ -335,6 +335,7 @@ void purrgo_gnss_monitor_process(void)
     {
         if (!s_last_reported_fix || (s_last_state != GNSS_DIAG_FIX))
         {
+#if PURRGO_GNSS_LOG_PERIODIC
 #if PURRGO_GNSS_NMEA_OFF
             PURRGO_LOG("GNSS: FIX after %lu s, sats used=%u (bytes=%lu, ubx frames=%lu)\r\n",
                        up_s, (unsigned)purrgo_gnss_ubx_status()->pvt_num_sv,
@@ -344,6 +345,7 @@ void purrgo_gnss_monitor_process(void)
                        up_s, (unsigned)s_diag.gga_sats_used,
                        (unsigned)gnss_diag_sats_in_view(&s_diag),
                        (unsigned long)s_diag.bytes, (unsigned long)s_diag.sentences_ok);
+#endif
 #endif
             s_last_reported_fix = true;
         }
@@ -395,6 +397,7 @@ void purrgo_gnss_monitor_process(void)
             PURRGO_LOGW("GNSS: DATA STOPPED: no bytes in the last report period (total %lu bytes)\r\n",
                        (unsigned long)s_diag.bytes);
         }
+#if PURRGO_GNSS_LOG_PERIODIC
 #if PURRGO_GNSS_NMEA_OFF
         {
             const purrgo_gnss_ubx_status_t *ubx = purrgo_gnss_ubx_status();
@@ -417,6 +420,9 @@ void purrgo_gnss_monitor_process(void)
                    (unsigned)s_diag.gga_quality, (unsigned long)s_diag.err_fe,
                    (unsigned long)s_diag.err_ne, (unsigned long)s_diag.err_ore,
                    (unsigned long)s_diag.err_dma);
+#endif
+#else
+        (void)seen;
 #endif
         break;
     }

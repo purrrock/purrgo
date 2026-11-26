@@ -578,10 +578,7 @@ purrgo_file_t* purrgo_fs_open(const char* filepath, fs_mode_t mode) {
         file->fil.cltbl = file->clmt;
 
         FRESULT clmt_res = f_lseek(&file->fil, CREATE_LINKMAP);
-        if (clmt_res == FR_OK) {
-            PURRGO_LOG("purrgo_fs_open: %s CLMT ok (%lu of %lu dwords)\n\r", filepath,
-                       (unsigned long)file->clmt[0], (unsigned long)PURRGO_FS_CLMT_ENTRIES);
-        } else {
+        if (clmt_res != FR_OK) {   /* успех не логируем: достаточно строки "opened OK" */
             PURRGO_LOGW("purrgo_fs_open: %s CLMT off: err %d, needs %lu dwords (have %lu)\n\r", filepath,
                        (int)clmt_res, (unsigned long)file->clmt[0], (unsigned long)PURRGO_FS_CLMT_ENTRIES);
             file->fil.cltbl = NULL;
