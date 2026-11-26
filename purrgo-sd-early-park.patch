@@ -1,0 +1,68 @@
+diff --git a/docs/hardware.md b/docs/hardware.md
+index 61f8ae7..65ca944 100644
+--- a/docs/hardware.md
++++ b/docs/hardware.md
+@@ -197,7 +197,8 @@ SCK = Low, MOSI = Low, CS = High; пауз при включении нет. П
+ 
+ В OFF вывод `Detect_SD` (PB10) тоже переводится в Hi-Z (Analog): иначе его внутренняя подтяжка к 3V3 через вывод CD модуля подпитывает VCC обесточенной
+ карты (на плате с картой в модуле при выключенном ключе было около 1,9 В на `VO`, без карты 0 В), карта не сбрасывается питанием и потребляет ток. При включении
+-вход с подтяжкой восстанавливается до того, как читается уровень Detect; в OFF `Detect_SD` читается как 0 и ничего не значит.
++вход с подтяжкой восстанавливается до того, как читается уровень Detect. Состояние OFF устанавливает `purrgo_sd_park()` в самом начале `purrgo_stm32_init()`
++(до баннера и ожидания панели; иначе первые секунды после старта на `VO` было ~1,9 В); в OFF `Detect_SD` читается как 0 и ничего не значит.
+ 
+ Пока питание снято, `purrgo_sd_poll()` ничего не делает (вставка не отслеживается), `disk_initialize()` отказывает. После `purrgo_sd_power_up()`
+ файлы, открытые до выключения, недействительны: ядро открывает слои карты заново (`stm32_app.c` по переходу в `READY` вызывает
+diff --git a/stm32/port/app/stm32_app.c b/stm32/port/app/stm32_app.c
+index 8163836..3f02d79 100644
+--- a/stm32/port/app/stm32_app.c
++++ b/stm32/port/app/stm32_app.c
+@@ -372,6 +372,12 @@ static void purrgo_stm32_display_and_banner(void)
+ 
+ void purrgo_stm32_init(void)
+ {
++  /*
++   * Карта обесточена сразу (и Detect_SD в Hi-Z): баннер и ожидание панели идут секундами,
++   * а до purrgo_sd_init() подтяжка Detect_SD подпитывала бы обесточенную карту.
++   */
++  purrgo_sd_park();
++
+   /*
+    * -------------------------------------------------------------------------
+    * Диагностический UART.
+diff --git a/stm32/port/storage/sd_card.c b/stm32/port/storage/sd_card.c
+index 2d8e6a6..06f7002 100644
+--- a/stm32/port/storage/sd_card.c
++++ b/stm32/port/storage/sd_card.c
+@@ -851,6 +851,11 @@ static void power_ensure_init(void)
+     }
+ }
+ 
++void purrgo_sd_park(void)
++{
++    power_ensure_init();
++}
++
+ /* Подать питание (если снято), определить наличие карты и смонтировать ФС. */
+ static bool power_up_and_mount(void)
+ {
+diff --git a/stm32/port/storage/sd_card.h b/stm32/port/storage/sd_card.h
+index 5cac1d3..bf8e0a9 100644
+--- a/stm32/port/storage/sd_card.h
++++ b/stm32/port/storage/sd_card.h
+@@ -84,6 +84,16 @@ typedef enum
+  */
+ bool purrgo_sd_init(void);
+ 
++/**
++ * @brief Обесточить карту и перевести её выводы (в том числе Detect_SD) в состояние OFF.
++ *
++ * Вызывать как можно раньше после MX_GPIO_Init(), до долгих этапов старта (баннер,
++ * ожидание панели): до этого подтяжка Detect_SD подпитывает VCC карты через модуль
++ * (около 1,9 В на выходе ключа). Повторные вызовы и purrgo_sd_init() безопасны; время
++ * выдержки в OFF перед включением отсчитывается от этого вызова.
++ */
++void purrgo_sd_park(void);
++
+ /**
+  * @brief Обслуживание горячей замены карты.
+  *

@@ -851,6 +851,11 @@ static void power_ensure_init(void)
     }
 }
 
+void purrgo_sd_park(void)
+{
+    power_ensure_init();
+}
+
 /* Подать питание (если снято), определить наличие карты и смонтировать ФС. */
 static bool power_up_and_mount(void)
 {
