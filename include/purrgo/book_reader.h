@@ -26,8 +26,10 @@
  *     обращается к SD;
  *   - позиция чтения (имя файла, file_crc32, страница) хранится в app_config
  *     (BOOK_FILE, BOOK_CRC, BOOK_PAGE в PURRGO.CFG). В RAM она обновляется на
- *     каждом перелистывании, а на SD записывается ТОЛЬКО по тайм-ауту
- *     бездействия PURRGO_BOOK_SAVE_TIMEOUT_MS и при выходе из режима.
+ *     каждом перелистывании, а на SD записывается не чаще раза в
+ *     PURRGO_BOOK_SAVE_TIMEOUT_MS и ТОЛЬКО если позиция отличается от уже
+ *     записанной (вернулись на ту же страницу - SD не будим); при выходе из
+ *     режима - так же только при изменении, но сразу.
  *
  * Экраны: APP_STATE_BOOK_LIST (список книг), APP_STATE_BOOK_READ (страница) и
  * APP_STATE_BOOK_SEARCH_INPUT (экранная клавиатура для строки поиска).
@@ -76,7 +78,7 @@
 #define PURRGO_BOOK_RAM_BYTES PURRGO_ARENA_BYTES
 #endif
 
-/* Через сколько мс без перелистывания позиция записывается на SD. */
+/* Период записи позиции на SD, мс (пишется только если позиция изменилась). */
 #ifndef PURRGO_BOOK_SAVE_TIMEOUT_MS
 #define PURRGO_BOOK_SAVE_TIMEOUT_MS 60000u
 #endif

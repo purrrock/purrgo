@@ -62,8 +62,12 @@ static struct {
     uint8_t       jump_percent;
 
     /* запись позиции */
-    bool          pos_dirty;
-    uint32_t      pos_changed_ms;
+    bool          pos_dirty;                    /* позиция в RAM отличается от записанной на SD */
+    uint32_t      pos_saved_ms;                 /* когда последний раз писали (или пытались) / открыли книгу */
+    bool          saved_valid;                  /* saved_* заполнены */
+    char          saved_file[PURRGO_BOOK_NAME_MAX];   /* что лежит в PURRGO.CFG на SD */
+    uint32_t      saved_crc32;
+    uint32_t      saved_page;
 
     /* поиск по книге */
     purrgo_keyboard_t kbd;                      /* клавиатура ввода запроса */
@@ -135,10 +139,27 @@ static void copy_trunc(char *dst, size_t dst_cols, const char *src)
 
 /* ---- Позиция чтения --------------------------------------------------------- */
 
+/* Что сейчас записано на SD (снимок app_config на момент загрузки или последней удачной записи). */
+static void saved_snapshot(void)
+{
+    purrgo_snprintf(s.saved_file, sizeof(s.saved_file), "%s", app_config.book_file);
+    s.saved_crc32 = app_config.book_crc32;
+    s.saved_page = app_config.book_page;
+    s.saved_valid = true;
+}
+
+/* Позиция в RAM отличается от записанной на SD? Вернулись на ту же страницу - писать нечего. */
+static bool position_differs(void)
+{
+    return !s.saved_valid ||
+           s.saved_page != app_config.book_page ||
+           s.saved_crc32 != app_config.book_crc32 ||
+           strcmp(s.saved_file, app_config.book_file) != 0;
+}
+
 static void position_changed(void)
 {
-    s.pos_dirty = true;
-    s.pos_changed_ms = purrgo_system_time_ms();
+    s.pos_dirty = position_differs();
 }
 
 bool purrgo_book_reader_position_dirty(void)
@@ -153,15 +174,17 @@ bool purrgo_book_reader_search_running(void)
 
 bool purrgo_book_reader_flush(void)
 {
+    s.pos_dirty = position_differs();
     if (!s.pos_dirty) {
-        return true;
+        return true;   /* позиция не менялась: SD не трогаем */
     }
+    s.pos_saved_ms = purrgo_system_time_ms();
     if (purrgo_config_save()) {
+        saved_snapshot();
         s.pos_dirty = false;
         return true;
     }
-    /* Не записалось (нет карты и т.п.): следующая попытка через тайм-аут. */
-    s.pos_changed_ms = purrgo_system_time_ms();
+    /* Не записалось (нет карты и т.п.): следующая попытка не раньше чем через период. */
     return false;
 }
 
@@ -665,8 +688,9 @@ bool purrgo_book_reader_tick(uint32_t now_ms)
 {
     bool redraw = false;
 
+    /* Раз в PURRGO_BOOK_SAVE_TIMEOUT_MS и только если позиция изменилась с прошлой записи. */
     if (s.pos_dirty &&
-        (uint32_t)(now_ms - s.pos_changed_ms) >= PURRGO_BOOK_SAVE_TIMEOUT_MS) {
+        (uint32_t)(now_ms - s.pos_saved_ms) >= PURRGO_BOOK_SAVE_TIMEOUT_MS) {
         (void)purrgo_book_reader_flush();
     }
 
@@ -794,6 +818,10 @@ bool purrgo_book_list_is_last(int index)
 purrgo_state_t purrgo_book_reader_enter(void)
 {
     s.active = true;
+    if (!s.saved_valid) {
+        saved_snapshot();   /* app_config только что загружен с SD */
+    }
+    s.pos_saved_ms = purrgo_system_time_ms();
 
     /* Режим энергосбережения: без трека и без GNSS. */
     purrgo_logger_stop();
@@ -1140,7 +1168,8 @@ void purrgo_book_reader_reset(void)
     s.cursor = 0;
     s.error = PGB_OK;
     s.pos_dirty = false;
-    s.pos_changed_ms = 0u;
+    s.pos_saved_ms = 0u;
+    s.saved_valid = false;
     s.file[0] = '\0';
     s.page = 0u;
     s.query[0] = '\0';

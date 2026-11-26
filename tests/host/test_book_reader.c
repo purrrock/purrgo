@@ -332,8 +332,8 @@ static void test_position_save_policy(void)
     CHECK(purrgo_book_reader_position_dirty());
     CHECK(fake_fs_sync_calls() == sync0);
 
-    /* Тайм-аут считается от последнего перелистывания. */
-    g_now += PURRGO_BOOK_SAVE_TIMEOUT_MS - 1u;
+    /* Период считается от открытия книги / прошлой записи, а не от последнего перелистывания. */
+    g_now += PURRGO_BOOK_SAVE_TIMEOUT_MS - 25u * 1000u - 1u;
     purrgo_book_reader_tick(g_now);
     CHECK(fake_fs_sync_calls() == sync0);
     CHECK(purrgo_book_reader_position_dirty());
@@ -349,7 +349,16 @@ static void test_position_save_policy(void)
     purrgo_book_reader_tick(g_now);
     CHECK(fake_fs_sync_calls() == sync0 + 1);
 
-    /* Выход сохраняет сразу, не дожидаясь тайм-аута. */
+    /* Вернулись на ту же страницу, что на SD: позиция не отличается, SD не будим. */
+    st = press(st, PURRGO_BTN_KEY2_SHORT, NULL);
+    st = press(st, PURRGO_BTN_KEY1_SHORT, NULL);
+    CHECK(app_config.book_page == 25);
+    CHECK(!purrgo_book_reader_position_dirty());
+    g_now += 3u * PURRGO_BOOK_SAVE_TIMEOUT_MS;
+    purrgo_book_reader_tick(g_now);
+    CHECK(fake_fs_sync_calls() == sync0 + 1);
+
+    /* Выход сохраняет сразу, не дожидаясь периода (если позиция изменилась). */
     st = press(st, PURRGO_BTN_KEY2_LONG, NULL);
     CHECK(purrgo_book_reader_position_dirty());
     st = press(st, PURRGO_BTN_KEY4_SHORT, NULL);
@@ -388,6 +397,22 @@ static void test_position_save_policy(void)
     CHECK(g_now < 0xFFFFFFF0u);
     purrgo_book_reader_tick(g_now);
     CHECK(!purrgo_book_reader_position_dirty());
+    (void)press(st, PURRGO_BTN_KEY4_SHORT, NULL);
+
+    /* Непрерывное чтение (страница каждые 20 с): запись раз в минуту, а не только при паузе. */
+    reset_all();
+    put_book(BOOK_A, 60, "Alpha", "A", 0);
+    snprintf(app_config.book_file, sizeof app_config.book_file, "ALPHA.PGB");
+    purrgo_config_save();
+    st = purrgo_book_reader_enter();
+    const int s_before = fake_fs_sync_calls();
+    for (int i = 0; i < 9; i++) {                        /* 180 с */
+        g_now += 20000u;
+        st = press(st, PURRGO_BTN_KEY2_SHORT, NULL);
+        purrgo_book_reader_tick(g_now);
+    }
+    CHECK(fake_fs_sync_calls() == s_before + 3);         /* на 60-й, 120-й и 180-й секундах */
+    CHECK(file_has("PURRGO.CFG", "BOOK_PAGE=9"));
     (void)press(st, PURRGO_BTN_KEY4_SHORT, NULL);
 }
 
