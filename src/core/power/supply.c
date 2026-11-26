@@ -39,6 +39,7 @@ static bool battery_low(uint32_t now_ms)
 
     const uint16_t stop_mv = purrgo_battery_stop_mv(src);
     if (stop_mv == 0u) {
+        /* Порога нет (в том числе при питании 5 В): АЦП не опрашивается. */
         s_supply.batt_low = false;
         s_supply.batt_polls = 0;
         return false;

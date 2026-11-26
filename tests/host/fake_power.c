@@ -16,6 +16,7 @@ static int s_seq, s_unmount_calls, s_standby_calls, s_unmount_seq, s_standby_seq
 static int s_gnss_off_calls, s_gnss_off_seq, s_gnss_on_calls, s_gnss_on_seq;
 static void (*s_probe)(void);
 static uint16_t s_battery_pin_mv;
+static int s_battery_pin_calls;
 static bool s_supply_low;
 static bool s_ext_power;
 static int s_gnss_profile_calls, s_gnss_profile_last;
@@ -59,6 +60,7 @@ void fake_power_reset(void)
     s_probe = NULL;
     fake_sound_reset();
     s_battery_pin_mv = 0;
+    s_battery_pin_calls = 0;
     s_supply_low = false;
     s_ext_power = false;
     fake_gnss_tx_reset();
@@ -136,7 +138,8 @@ void purrgo_platform_enter_standby(void)
 }
 
 void fake_power_set_battery_pin_mv(uint16_t mv) { s_battery_pin_mv = mv; }
-uint16_t purrgo_platform_battery_pin_mv(void) { return s_battery_pin_mv; }
+uint16_t purrgo_platform_battery_pin_mv(void) { s_battery_pin_calls++; return s_battery_pin_mv; }
+int fake_power_battery_pin_calls(void) { return s_battery_pin_calls; }
 
 void fake_power_set_supply_low(bool low) { s_supply_low = low; }
 bool purrgo_platform_supply_low(void) { return s_supply_low; }

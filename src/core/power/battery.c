@@ -189,6 +189,8 @@ bool purrgo_battery_read(purrgo_battery_t* out)
     out->external = (src == PURRGO_POWER_SRC_EXTERNAL_5V);
 
     if (out->external) {
+        /* Питание 5 В: батарея не измеряется, АЦП не включается
+         * (purrgo_platform_battery_pin_mv() не вызывается). */
         return false;
     }
 

@@ -86,6 +86,9 @@ purrgo_power_source_t purrgo_battery_active_source(void);
 /*
  * Платформенный хук: напряжение на выводе АЦП (середина делителя), мВ;
  * 0 - не измерено. STM32: stm32/port/power/battery_adc.c.
+ *
+ * При питании 5 В (источник PURRGO_POWER_SRC_EXTERNAL_5V: сигнал ORing или ручной
+ * выбор в меню) ядро хук не вызывает: АЦП не включается, батарея не измеряется.
  */
 uint16_t purrgo_platform_battery_pin_mv(void);
 

@@ -363,6 +363,52 @@ static void test_ext_power(void)
  * Автоостановка записи по батарее (солевые, 3000 мВ на блок) при питании 5 В не
  * срабатывает, а накопленное состояние сбрасывается сменой источника.
  */
+static void test_ext_power_no_adc(void)
+{
+    char buf[PURRGO_BATTERY_STATUS_TEXT_SIZE];
+    purrgo_battery_t b;
+    uint32_t t = 1000u;
+
+    purrgo_config_init();
+    fake_power_reset();
+    purrgo_battery_monitor_reset();
+    purrgo_supply_reset();
+    app_config.power_source = PURRGO_POWER_SRC_ZINC_CARBON;   /* у них есть порог остановки записи */
+    fake_power_set_battery_pin_mv(fake_power_pin_for_pack_mv(3600));
+    fake_power_set_ext_power(true);
+
+    /* Питание 5 В: ни чтение, ни монитор статуса, ни контроль питания не включают АЦП. */
+    CHECK(!purrgo_battery_read(&b));
+    purrgo_battery_format(buf, sizeof(buf));
+    CHECK(strcmp(buf, "5V") == 0);
+    CHECK(strcmp(purrgo_battery_status_text(), "5V") == 0);
+    CHECK(strcmp(purrgo_battery_voltage_text(), "EXT 5V") == 0);
+    for (int i = 0; i < 8; i++) {
+        (void)purrgo_battery_monitor_tick(t);
+        (void)purrgo_supply_tick(t);
+        t += PURRGO_SUPPLY_BATT_POLL_MS;
+    }
+    CHECK(fake_power_battery_pin_calls() == 0);
+
+    /* Ручной выбор 5V в меню без сигнала ORing: то же самое. */
+    fake_power_set_ext_power(false);
+    app_config.power_source = PURRGO_POWER_SRC_EXTERNAL_5V;
+    purrgo_battery_monitor_reset();
+    purrgo_supply_reset();
+    (void)purrgo_battery_status_text();
+    (void)purrgo_supply_tick(t);
+    CHECK(fake_power_battery_pin_calls() == 0);
+
+    /* Сняли 5 В и вернули батареи: АЦП снова работает. */
+    app_config.power_source = PURRGO_POWER_SRC_ZINC_CARBON;
+    CHECK(purrgo_battery_read(&b));
+    CHECK(fake_power_battery_pin_calls() == 1);
+
+    fake_power_reset();
+    purrgo_battery_monitor_reset();
+    purrgo_supply_reset();
+}
+
 static void test_ext_power_supply(void)
 {
     purrgo_config_init();
@@ -404,6 +450,7 @@ static void test_ext_power_supply(void)
 int main(void)
 {
     test_ext_power();
+    test_ext_power_no_adc();
     test_ext_power_supply();
     test_config_key();
     test_menu();

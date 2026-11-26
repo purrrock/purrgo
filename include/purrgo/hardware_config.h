@@ -573,6 +573,10 @@
  *
  * R_TOP и R_BOTTOM - фактические сопротивления резисторов. CAL_PERMILLE - поправка в тысячных: сравнить U_блока в логе
  * (PURRGO_LOG_LEVEL >= 3) с мультиметром, CAL = 1000 * U_мультиметр / U_лога.
+ *
+ * При питании 5 В (источник PURRGO_POWER_SRC_EXTERNAL_5V: сигнал ORing или ручной
+ * выбор в меню) батарея не измеряется: АЦП не опрашивается вообще, чтобы его
+ * регулятор и VREFINT зря не включались (purrgo_battery_read(), purrgo/battery.h).
  */
 #ifndef PURRGO_HW_BATT_DIV_R_TOP_OHM
 #define PURRGO_HW_BATT_DIV_R_TOP_OHM     1004000u

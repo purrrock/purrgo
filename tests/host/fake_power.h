@@ -24,6 +24,8 @@ int fake_power_gnss_on_calls(void);
 int fake_power_gnss_on_seq(void);
 /* Напряжение на выводе АЦП, которое вернёт purrgo_platform_battery_pin_mv() (по умолчанию 0). */
 void fake_power_set_battery_pin_mv(uint16_t mv);
+/* Сколько раз ядро вызвало purrgo_platform_battery_pin_mv() (АЦП) с fake_power_reset(). */
+int fake_power_battery_pin_calls(void);
 
 /*
  * Напряжение на выводе АЦП, при котором purrgo_battery_pack_mv_from_pin() даст
