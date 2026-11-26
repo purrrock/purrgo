@@ -190,6 +190,7 @@ static uint32_t s_status_logged_ms;
 static bool s_sat_logged;
 static uint32_t s_sat_logged_ms;
 
+#if PURRGO_GNSS_LOG_PERIODIC
 static bool log_due(bool *logged, uint32_t *logged_ms, uint32_t now_ms)
 {
     if (*logged && (uint32_t)(now_ms - *logged_ms) < s_log_interval_ms) {
@@ -199,6 +200,7 @@ static bool log_due(bool *logged, uint32_t *logged_ms, uint32_t now_ms)
     *logged_ms = now_ms;
     return true;
 }
+#endif
 
 void purrgo_gnss_ubx_set_log_interval_ms(uint32_t interval_ms)
 {
@@ -486,11 +488,15 @@ static void process_mon_rf(const uint8_t *p, uint16_t length, uint32_t now_ms)
         s_rf_jam_change_logged = true;
         s_rf_jam_change_ms = now_ms;
     }
+#if PURRGO_GNSS_LOG_PERIODIC
     if (log_due(&s_rf_logged, &s_rf_logged_ms, now_ms) || jam_log) {
         PURRGO_LOGD("GNSS: RF jam=%u ant=%u/%u noise=%u agc=%u cw=%u\r\n", (unsigned)jam,
                     (unsigned)b[2], (unsigned)b[3], (unsigned)s_st.noise_per_ms,
                     (unsigned)s_st.agc_cnt, (unsigned)s_st.cw_suppression);
     }
+#else
+    (void)jam_log;
+#endif
 }
 
 /*
@@ -509,10 +515,14 @@ static void process_nav_status(const uint8_t *p, uint16_t length, uint32_t now_m
     s_st.status_valid = true;
     s_st.status_ms = now_ms;
 
+#if PURRGO_GNSS_LOG_PERIODIC
     if (log_due(&s_status_logged, &s_status_logged_ms, now_ms) || spoof_changed) {
         PURRGO_LOGD("GNSS: STATUS gpsFix=%u flags=0x%02X psm=%u spoof=%u\r\n", (unsigned)p[4],
                     (unsigned)p[5], (unsigned)(p[7] & 0x03U), (unsigned)spoof);
     }
+#else
+    (void)spoof_changed;
+#endif
 }
 
 /*
@@ -560,10 +570,14 @@ static void process_nav_sat(const uint8_t *p, uint16_t length, uint32_t now_ms)
     s_st.sat_valid = true;
     s_st.sat_ms = now_ms;
 
+#if PURRGO_GNSS_LOG_PERIODIC
     if (log_due(&s_sat_logged, &s_sat_logged_ms, now_ms)) {
         PURRGO_LOGD("GNSS: SAT listed=%u used=%u cno avg=%u max=%u dBHz\r\n", (unsigned)listed,
                     (unsigned)used, (unsigned)s_st.sat_cno_avg, (unsigned)cno_max);
     }
+#else
+    (void)cno_max;
+#endif
 }
 
 /* Поле фиксированной длины -> C-строка (в кадре строки заканчиваются нулём, но не обязаны). */
@@ -587,6 +601,7 @@ static void process_mon_ver(const uint8_t *p, uint16_t length, uint32_t now_ms)
     copy_field(s_st.hw_version, sizeof s_st.hw_version, &p[30], 10U);
     s_st.ver_valid = true;
 
+#if PURRGO_GNSS_POLL_VERSION
     /* Ответы на повторные опросы (настройка отправляется несколько раз) не дублируем. */
     if (s_ver_logged && (uint32_t)(now_ms - s_ver_logged_ms) < VER_LOG_INTERVAL_MS) {
         return;
@@ -610,6 +625,9 @@ static void process_mon_ver(const uint8_t *p, uint16_t length, uint32_t now_ms)
             PURRGO_LOGW("GNSS: protocol %s, UBX features are written for 34.xx (SPG 5.30)\r\n", &ext[8]);
         }
     }
+#else
+    (void)now_ms;
+#endif
 }
 
 bool purrgo_gnss_ubx_process_frame(uint8_t msg_class, uint8_t msg_id, const uint8_t *payload,
@@ -625,6 +643,7 @@ bool purrgo_gnss_ubx_process_frame(uint8_t msg_class, uint8_t msg_id, const uint
             if (!purrgo_gnss_ubx_apply_pvt(payload, length, solution)) {
                 return false;
             }
+#if PURRGO_GNSS_LOG_PERIODIC
             /* Раз в несколько секунд: видно, есть ли время без позиции. */
             if (!s_pvt_logged || (uint32_t)(now_ms - s_pvt_logged_ms) >= s_log_interval_ms) {
                 s_pvt_logged = true;
@@ -634,6 +653,7 @@ bool purrgo_gnss_ubx_process_frame(uint8_t msg_class, uint8_t msg_id, const uint
                             (unsigned)((payload[11] >> 1) & 1U), (unsigned long)rd_u32(&payload[40]),
                             (unsigned)rd_u16(&payload[76]));
             }
+#endif
             s_st.pvt_valid = true;
             s_st.pvt_fix_type = payload[20];
             s_st.pvt_fix_ok = solution->valid;

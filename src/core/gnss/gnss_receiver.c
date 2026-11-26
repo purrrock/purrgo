@@ -722,7 +722,7 @@ void purrgo_gnss_receiver_configure_ubx_profile(purrgo_gnss_tx_fn tx, purrgo_gns
         send_group(tx, &groups[i]);
     }
 
-#if PURRGO_GNSS_UBX
+#if PURRGO_GNSS_UBX && PURRGO_GNSS_POLL_VERSION
     /* 7. Опрос версии прошивки: ответ UBX-MON-VER разбирает gnss_ubx.c и пишет в лог. */
     uint8_t ver[8];
     const size_t ver_len = purrgo_ubx_build_frame(ver, sizeof ver, UBX_CLASS_MON, UBX_ID_MON_VER,

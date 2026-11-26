@@ -20,7 +20,7 @@
 | UBX-NAV-SAT | `0x20910016` | C/N0 спутников решения (`svUsed`): средний и максимум (`PURRGO_GNSS_NAV_SAT`) |
 | CFG-ITFM-ENABLE | `0x1041000D` | не сообщение, а ключ: включает монитор помех, без него `jammingState` всегда 0 (`PURRGO_GNSS_ITFM`) |
 | CFG-TP-LEN_TP1, CFG-TP-LEN_LOCK_TP1 | `0x40050004`, `0x40050005` | длина импульса 0: таймпульс (1PPS) включён, но без импульсов, светодиод PPS не мигает (`PURRGO_GNSS_TIMEPULSE`) |
-| UBX-MON-VER | опрос | версия прошивки в лог |
+| UBX-MON-VER | опрос | версия прошивки в лог (только при `PURRGO_GNSS_POLL_VERSION` = 1) |
 
 ## SIG и RF без SEC-SIG (SPG 5.10)
 
@@ -140,7 +140,7 @@ PVT. Число спутников "в поле зрения" (GSV) в мони�
 HDOP/VDOP и запасной путь, после `PURRGO_GNSS_PVT_HOLD_EPOCHS` эпох RMC без PVT решением снова владеет NMEA).
 
 Настройка уходит отдельными `UBX-CFG-VALSET` (базовая NMEA, по одному на каждое
-сообщение PVT/ODO/MON-RF/NAV-DOP, одометр, модель динамики, выключение NMEA) и опросом MON-VER: модуль применяет
+сообщение PVT/ODO/MON-RF/NAV-DOP, одометр, модель динамики, выключение NMEA) и (при `PURRGO_GNSS_POLL_VERSION` = 1) опросом MON-VER: модуль применяет
 VALSET целиком или отклоняет целиком, поэтому NAK по одному кадру не отменяет остальные.
 Ответы ACK/NAK приходят в порядке отправки, поэтому отказ пишется в лог с именем группы:
 `GNSS: config "NAV-ODO" rejected by module (NAK)` (имена: `NMEA/rate`, `NAV-PVT`, `NAV-ODO`,
@@ -149,12 +149,16 @@ VALSET целиком или отклоняет целиком, поэтому N
 
 ## Диагностика в логе
 
-- `GNSS: u-blox SW ... HW ...`, `FWVER`, `PROTVER` - ответ на опрос MON-VER.
-- `GNSS: PVT fixType=.. fixOK=.. sv=.. validTime=.. hAcc=.. mm pDOP=..` - раз в 5 с (уровень INFO):
+По умолчанию периодические строки и опрос версии выключены (`PURRGO_GNSS_LOG_PERIODIC` = 0,
+`PURRGO_GNSS_POLL_VERSION` = 0), чтобы не забивать лог; включаются через `#define` в `hardware_config.h`
+или `-D`.
+
+- `GNSS: u-blox SW ... HW ...`, `FWVER`, `PROTVER` - ответ на опрос MON-VER (`PURRGO_GNSS_POLL_VERSION` = 1).
+- `GNSS: PVT fixType=.. fixOK=.. sv=.. validTime=.. hAcc=.. mm pDOP=..` - раз в 5 с (уровень INFO, `PURRGO_GNSS_LOG_PERIODIC` = 1):
   видно, есть ли уже время без позиции. Импульсы таймпульса (1PPS) выключены (длина 0, `PURRGO_GNSS_TIMEPULSE`); по заводской
   настройке он выдаётся, как только приёмник синхронизировался по времени GNSS, позиция для этого не нужна,
   поэтому мигание светодиода PPS не означало 3D-фикс.
-- Только в сборке Debug (`PURRGO_LOGD`, уровень 4), раз в 5 с и сразу при смене `jammingState`/`spoofDetState`:
+- Только в сборке Debug (`PURRGO_LOGD`, уровень 4) и при `PURRGO_GNSS_LOG_PERIODIC` = 1, раз в 5 с и сразу при смене `jammingState`/`spoofDetState`:
   `GNSS: RF jam=.. ant=../.. noise=.. agc=.. cw=..`, `GNSS: STATUS gpsFix=.. flags=0x.. psm=.. spoof=..`,
   `GNSS: SAT listed=.. used=.. cno avg=.. max=.. dBHz`. По ним на железе видно, какие значения выдаёт
   именно эта прошивка (`jam=0` при включённом ITFM после фикса или `spoof=0` постоянно - не поддержано).
@@ -173,6 +177,8 @@ VALSET целиком или отклоняет целиком, поэтому N
 | `PURRGO_GNSS_SIGNALS` | `PURRGO_GNSS_SIG_FACTORY` (0) | набор систем (`CFG-SIGNAL-*`): 0 - ничего сверх требований PSM; 1 (`PURRGO_GNSS_SIG_GPS_GAL`) - GPS+Galileo; 2 (`PURRGO_GNSS_SIG_GPS_GAL_BDS`) - GPS+Galileo+BeiDou B1I вместо GLONASS (QZSS остаётся). Кадр `Signals`, уходит при настройке после включения модуля |
 | `PURRGO_GNSS_DYNMODEL` | `PURRGO_GNSS_DYN_BICYCLE` (= Portable, 0) | `CFG-NAVSPG-DYNMODEL`; значения `PURRGO_GNSS_DYN_*` |
 | `PURRGO_GNSS_ODO_PROFILE` | `PURRGO_GNSS_ODO_CYCL` (1) | `CFG-ODO-PROFILE` |
+| `PURRGO_GNSS_LOG_PERIODIC` | 0 | 1 - периодические строки лога `PVT`, `RF`, `STATUS`, `SAT` |
+| `PURRGO_GNSS_POLL_VERSION` | 0 | 1 - опрос UBX-MON-VER при настройке и вывод версии в лог |
 | `PURRGO_GNSS_TRACK_MAX_HACC_M` | 20 | точка с hAcc выше в трек не пишется |
 
 Велосипедной модели динамики у приёмника нет. В даташите G10A-F30 перечислены Portable,

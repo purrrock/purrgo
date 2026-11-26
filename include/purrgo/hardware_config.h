@@ -315,7 +315,7 @@
  *                         нет pg:hacc, фильтр точек работает по HDOP, строки
  *                         TRP/ACC/SIG/RF на экране Trip computer не рисуются.
  *   PURRGO_GNSS_UBX = 1 - дополнительно UBX (по умолчанию для приёмника UBX):
- *     - при старте опрос UBX-MON-VER, версия прошивки пишется в лог;
+ *     - опрос UBX-MON-VER при старте (только при PURRGO_GNSS_POLL_VERSION = 1), версия в лог;
  *     - UBX-NAV-PVT (время, позиция, скорость, оценки точности hAcc/vAcc/sAcc);
  *       пока PVT приходит, он главнее RMC/GGA/GSA (те дают только HDOP/VDOP и
  *       резерв при пропаже PVT);
@@ -444,6 +444,28 @@
     (PURRGO_GNSS_NAV_SAT != 0 && PURRGO_GNSS_NAV_SAT != 1)
 #error "PURRGO_GNSS_ITFM, PURRGO_GNSS_NAV_STATUS and PURRGO_GNSS_NAV_SAT must be 0 or 1"
 #endif
+/*
+ * Отладочный вывод GNSS в лог (по умолчанию выключен, чтобы не забивать лог).
+ *   PURRGO_GNSS_LOG_PERIODIC = 1 - периодически (раз в PVT_LOG_INTERVAL) писать строки
+ *                                  "GNSS: PVT ...", "GNSS: RF ...", "GNSS: STATUS ...",
+ *                                  "GNSS: SAT ..." (и смену состояния помех/спуфинга).
+ *   PURRGO_GNSS_POLL_VERSION = 1 - при настройке запрашивать версию прошивки (UBX-MON-VER)
+ *                                  и писать ответ в лог. При 0 запрос не отправляется.
+ * Включить: #define PURRGO_GNSS_LOG_PERIODIC 1 до этого места или -D в сборке.
+ */
+#ifndef PURRGO_GNSS_LOG_PERIODIC
+#define PURRGO_GNSS_LOG_PERIODIC 0
+#endif
+#ifndef PURRGO_GNSS_POLL_VERSION
+#define PURRGO_GNSS_POLL_VERSION 0
+#endif
+#if (PURRGO_GNSS_LOG_PERIODIC != 0 && PURRGO_GNSS_LOG_PERIODIC != 1) || \
+    (PURRGO_GNSS_POLL_VERSION != 0 && PURRGO_GNSS_POLL_VERSION != 1)
+#error "PURRGO_GNSS_LOG_PERIODIC and PURRGO_GNSS_POLL_VERSION must be 0 or 1"
+#endif
+/* Кадр опроса MON-VER в настройке (учитывается в тестах). */
+#define PURRGO_GNSS_VERSION_FRAMES (PURRGO_GNSS_UBX && PURRGO_GNSS_POLL_VERSION)
+
 /* Кадры настройки VALSET (по одному на ключ), только для приёмника с UBX-расширениями. */
 #define PURRGO_GNSS_ITFM_FRAMES       (PURRGO_GNSS_UBX && PURRGO_GNSS_ITFM)
 #define PURRGO_GNSS_NAV_STATUS_FRAMES (PURRGO_GNSS_UBX && PURRGO_GNSS_NAV_STATUS)

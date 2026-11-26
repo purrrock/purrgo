@@ -626,13 +626,13 @@ static void test_configure_frames(void)
     const int valsets = 7 + PURRGO_GNSS_SIGNAL_FRAME + PURRGO_GNSS_SEC_SIG + PURRGO_GNSS_DIAG_FRAMES +
                         PURRGO_GNSS_NAV_PM_FRAMES + PURRGO_GNSS_NMEA_OFF_FRAMES +
                         PURRGO_GNSS_TIMEPULSE_FRAMES;
-    CHECK(g_cfg_count == valsets + 1);
+    CHECK(g_cfg_count == valsets + PURRGO_GNSS_VERSION_FRAMES);
 
     /*
      * Все кадры, кроме последнего (опрос версии), - VALSET в слое PURRGO_GNSS_UBX_LAYERS (RAM). Ключи
      * режима энергосбережения тоже только в RAM: PSMCT в слое BBR приёмник отклонил (NAK на железе).
      */
-    for (int i = 0; i < g_cfg_count - 1; i++) {
+    for (int i = 0; i < g_cfg_count - PURRGO_GNSS_VERSION_FRAMES; i++) {
         CHECK(g_cfg[i][2] == 0x06 && g_cfg[i][3] == 0x8A && g_cfg[i][7] == (uint8_t)PURRGO_GNSS_UBX_LAYERS);
     }
 
@@ -758,9 +758,11 @@ static void test_configure_frames(void)
     CHECK(no_off == -1 && mode == -1);
 #endif
 
-    /* Последний кадр - опрос версии. */
+#if PURRGO_GNSS_POLL_VERSION
+    /* Последний кадр - опрос версии (только при PURRGO_GNSS_POLL_VERSION = 1). */
     static const uint8_t poll_frame[8] = { 0xB5, 0x62, 0x0A, 0x04, 0x00, 0x00, 0x0E, 0x34 };
     CHECK(g_cfg_len[g_cfg_count - 1] == 8 && memcmp(g_cfg[g_cfg_count - 1], poll_frame, 8) == 0);
+#endif
 
     /* Имена групп для лога NAK совпадают с кадрами (число и порядок). */
     CHECK(purrgo_gnss_ubx_cfg_name((uint8_t)valsets) == NULL);
@@ -793,7 +795,7 @@ static void test_configure_frames(void)
      * порядку кадров. Отклоняем NAV-ODO и последнюю группу (DYNMODEL) и проверяем, что
      * маска указывает именно на их кадры.
      */
-    const int groups = g_cfg_count - 1;
+    const int groups = g_cfg_count - PURRGO_GNSS_VERSION_FRAMES;
     purrgo_gnss_solution_t sol;
     memset(&sol, 0, sizeof sol);
     CHECK(purrgo_gnss_ubx_cfg_replies() == 0 && purrgo_gnss_ubx_cfg_nak_mask() == 0);
@@ -858,7 +860,7 @@ static void test_tracker_profile(void)
     g_cfg_count = 0;
     purrgo_gnss_receiver_configure_profile(cfg_tx, PURRGO_GNSS_PROFILE_TRACKER, 115200U);
     const int valsets = common + PURRGO_GNSS_TRACKER_PM_FRAMES + PURRGO_GNSS_TRACKER_BAUD_FRAME;
-    CHECK(g_cfg_count == valsets + 1);
+    CHECK(g_cfg_count == valsets + PURRGO_GNSS_VERSION_FRAMES);
 
     /* Все VALSET - в слои RAM и BBR. */
     for (int i = 0; i < valsets; i++) {
@@ -895,7 +897,7 @@ static void test_tracker_profile(void)
     /* Скорость неизвестна (0): кадра скорости нет. */
     g_cfg_count = 0;
     purrgo_gnss_receiver_configure_profile(cfg_tx, PURRGO_GNSS_PROFILE_TRACKER, 0U);
-    CHECK(g_cfg_count == common + PURRGO_GNSS_TRACKER_PM_FRAMES + 1);
+    CHECK(g_cfg_count == common + PURRGO_GNSS_TRACKER_PM_FRAMES + PURRGO_GNSS_VERSION_FRAMES);
     CHECK(frame_with_key(0x40520001U) == -1);
 
     /*
@@ -904,13 +906,13 @@ static void test_tracker_profile(void)
      */
     g_cfg_count = 0;
     purrgo_gnss_receiver_configure_profile(cfg_tx, PURRGO_GNSS_PROFILE_NAV, 115200U);
-    CHECK(g_cfg_count == common + PURRGO_GNSS_NAV_PM_FRAMES + 1);
+    CHECK(g_cfg_count == common + PURRGO_GNSS_NAV_PM_FRAMES + PURRGO_GNSS_VERSION_FRAMES);
     CHECK(frame_with_key(0x40D00002U) == -1 && frame_with_key(0x40520001U) == -1);
-    for (int i = 0; i < g_cfg_count - 1; i++) {
+    for (int i = 0; i < g_cfg_count - PURRGO_GNSS_VERSION_FRAMES; i++) {
         CHECK(g_cfg[i][7] == (uint8_t)PURRGO_GNSS_UBX_LAYERS);
     }
     const int nav_mode = frame_with_key(0x20D00001U);
-    CHECK(nav_mode == g_cfg_count - 2);
+    CHECK(nav_mode == g_cfg_count - 1 - PURRGO_GNSS_VERSION_FRAMES);
     CHECK(valset_value_n(nav_mode, 0x20D00001U, &v) && v != 1);
 
     /*
@@ -919,7 +921,7 @@ static void test_tracker_profile(void)
      */
     g_cfg_count = 0;
     purrgo_gnss_receiver_configure_profile(cfg_tx, PURRGO_GNSS_PROFILE_NAV_AFTER_TRACKER, 115200U);
-    CHECK(g_cfg_count == common + PURRGO_GNSS_NAV_PM_FRAMES + 2);      /* + VALDEL и опрос версии */
+    CHECK(g_cfg_count == common + PURRGO_GNSS_NAV_PM_FRAMES + 1 + PURRGO_GNSS_VERSION_FRAMES);   /* + VALDEL и опрос версии */
     int del = -1;
     for (int i = 0; i < g_cfg_count; i++) {
         if (g_cfg[i][2] == 0x06 && g_cfg[i][3] == 0x8C) { del = i; }
@@ -980,7 +982,7 @@ static void test_tracker_profile_ct(void)
     g_cfg_count = 0;
     purrgo_gnss_receiver_configure_profile(cfg_tx, PURRGO_GNSS_PROFILE_TRACKER, 115200U);
     const int valsets = common + PURRGO_GNSS_TRACKER_PM_FRAMES;
-    CHECK(g_cfg_count == valsets + 1);
+    CHECK(g_cfg_count == valsets + PURRGO_GNSS_VERSION_FRAMES);
 
     /* Все VALSET - только в основной слой (RAM), без BBR. */
     for (int i = 0; i < valsets; i++) {
@@ -1015,12 +1017,12 @@ static void test_tracker_profile_ct(void)
     /* Навигация (в том числе после трекера): обычная частота решений, без VALDEL. */
     g_cfg_count = 0;
     purrgo_gnss_receiver_configure_profile(cfg_tx, PURRGO_GNSS_PROFILE_NAV, 115200U);
-    CHECK(g_cfg_count == common + PURRGO_GNSS_NAV_PM_FRAMES + 1);
+    CHECK(g_cfg_count == common + PURRGO_GNSS_NAV_PM_FRAMES + PURRGO_GNSS_VERSION_FRAMES);
     CHECK(valset_value_n(0, 0x30210001U, &v) && v == (uint32_t)PURRGO_GNSS_UPDATE_PERIOD_MS);
 
     g_cfg_count = 0;
     purrgo_gnss_receiver_configure_profile(cfg_tx, PURRGO_GNSS_PROFILE_NAV_AFTER_TRACKER, 115200U);
-    CHECK(g_cfg_count == common + PURRGO_GNSS_NAV_PM_FRAMES + 1);
+    CHECK(g_cfg_count == common + PURRGO_GNSS_NAV_PM_FRAMES + PURRGO_GNSS_VERSION_FRAMES);
     CHECK(valset_value_n(0, 0x30210001U, &v) && v == (uint32_t)PURRGO_GNSS_UPDATE_PERIOD_MS);
     for (int i = 0; i < g_cfg_count; i++) {
         CHECK(!(g_cfg[i][2] == 0x06 && g_cfg[i][3] == 0x8C));

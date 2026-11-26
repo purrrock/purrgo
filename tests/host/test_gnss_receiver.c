@@ -13,7 +13,7 @@
  * (выключение таймпульса, NMEA) и опрос MON-VER.
  */
 #define EXPECTED_FRAMES (1 + PURRGO_GNSS_SIGNAL_FRAME + PURRGO_GNSS_NAV_PM_FRAMES + \
-                         (PURRGO_GNSS_UBX ? (7 + PURRGO_GNSS_SEC_SIG + PURRGO_GNSS_DIAG_FRAMES + \
+                         (PURRGO_GNSS_UBX ? (6 + PURRGO_GNSS_VERSION_FRAMES + PURRGO_GNSS_SEC_SIG + PURRGO_GNSS_DIAG_FRAMES + \
                                              PURRGO_GNSS_NMEA_OFF_FRAMES + \
                                              PURRGO_GNSS_TIMEPULSE_FRAMES) : 0))
 
