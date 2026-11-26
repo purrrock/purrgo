@@ -994,7 +994,7 @@ bool purrgo_sd_wake(void)
 {
     s_last_activity_ms = HAL_GetTick();
 
-#if PURRGO_SD_PARK_ENABLED
+#if PURRGO_SD_POWER_SWITCH
     if (s_parked)
     {
         /* Парковка допускалась только без открытых файлов: после перемонтирования
@@ -1019,6 +1019,27 @@ bool purrgo_sd_take_park_wake(void)
 bool purrgo_sd_is_parked(void)
 {
     return s_parked;
+}
+
+bool purrgo_sd_park_now(void)
+{
+#if PURRGO_SD_POWER_SWITCH
+    if ((s_state != PURRGO_SD_READY) || s_card_lost)
+    {
+        return false;
+    }
+    if (purrgo_fs_stm32_open_count() != 0U)
+    {
+        return false;       /* открытые файлы после снятия питания стали бы недействительными */
+    }
+
+    do_power_down();        /* ждёт конца внутренней записи карты (CTRL_SYNC), размонтирует */
+    s_parked = true;
+    s_park_wake = false;
+    return true;
+#else
+    return false;
+#endif
 }
 
 void purrgo_sd_idle_service(void)
