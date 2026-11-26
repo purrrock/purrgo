@@ -566,6 +566,9 @@ void purrgo_stm32_process(void)
   /* Парковка карты по тайм-ауту простоя (без открытых файлов); просыпается при первом обращении к ФС. */
   purrgo_sd_idle_service();
 
+  /* Файлы карты отпускаются после простоя (иначе открытые слои не дают SD припарковаться). */
+  (void)purrgo_map_release_idle(current_time_ms, PURRGO_MAP_IDLE_RELEASE_MS);
+
   /* Запись лога на SD (если включена в меню): сбрасывает накопленные сообщения пачкой. */
   purrgo_logger_sd_service(current_time_ms);
 
