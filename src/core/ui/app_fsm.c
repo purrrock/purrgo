@@ -232,6 +232,8 @@ void purrgo_app_init(void) {
      * unconditionally here: doing so would overwrite the values
      * loaded from PURRGO.CFG.
      */
+    /* Время сеанса прежнего запуска не переносим; "пол" (LAST_UTC) загрузит purrgo_config_load(). */
+    purrgo_utc_hint_reset();
     purrgo_config_load();
 
     /* Запись лога на SD, если включена в настройках (сам файл откроется, когда карта будет готова). */
@@ -607,7 +609,13 @@ static void track_logger_service(const purrgo_gnss_solution_t* current_fix) {
     /* Сбой SD во время сессии - без звука, сигнал только при критическом разряде (supply.c). */
     purrgo_logger_retry_observe(&logger_retry, now, logger_state);
 
-    if (!current_fix->valid) {
+    /*
+     * Имя файла и метки точек берутся из даты и времени решения, поэтому запись возможна только при
+     * действующем времени: приёмник с неизвестным или отвергнутым временем (purrgo_utc_hint_filter())
+     * оставляет в полях нули или чужую дату. Без time_valid трек не стартует, а точки не пишутся,
+     * пока время не подтвердится (обычно оно приходит вместе с фиксом, секундой раньше или позже).
+     */
+    if (!current_fix->valid || !current_fix->time_valid) {
         return;
     }
 

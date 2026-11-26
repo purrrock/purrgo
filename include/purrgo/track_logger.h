@@ -39,6 +39,11 @@ track_logger_mode_t purrgo_logger_get_mode(void);
 typedef void (*purrgo_logger_new_track_cb_t)(void);
 void purrgo_logger_set_new_track_callback(purrgo_logger_new_track_cb_t cb);
 
+/*
+ * Имя файла и время точек берутся из полей даты/времени решения, поэтому вызывающий передаёт только
+ * решения с time_valid (приложение: track_logger_service() в app_fsm.c). Сам логгер time_valid не
+ * проверяет - поля при time_valid = false могут быть нулями или чужой датой.
+ */
 bool purrgo_logger_start(const purrgo_gnss_solution_t* first_fix);
 bool purrgo_logger_add_point(const purrgo_gnss_solution_t* fix);
 void purrgo_logger_stop(void);
