@@ -82,6 +82,17 @@ for t in tests/host/test_*.c; do
     run_one "$name" $COMMON $extra "$t"
 done
 
+# Режимы трекера, которые не выбраны по умолчанию (по умолчанию цикл по EN, 3): PSMCT (1) и PSMOO (2). Профили приёмника
+# и вход/выход из трекера зависят от PURRGO_GNSS_TRACKER_MODE на этапе компиляции, поэтому два теста перегоняются
+# с этим режимом и с исходниками ядра, которые от него зависят (явно заданные объекты имеют приоритет над библиотекой).
+for mode in 1 2; do
+    for base in test_gnss_ubx test_tracker_mode; do
+        run_one "${base}_mode${mode}" $COMMON -DPURRGO_GNSS_TRACKER_MODE=$mode \
+            src/core/gnss/gnss_receiver.c src/core/ui/app_fsm.c src/core/gnss/gnss_duty.c \
+            "tests/host/$base.c"
+    done
+done
+
 # Самотест частичного обновления E-Ink на модели панели: модель 1 и 2 (смена ролей плоскостей RAM).
 if [ -f $EPD/src/epd4g.c ]; then
     for model in 1 2; do

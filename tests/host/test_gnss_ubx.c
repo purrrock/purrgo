@@ -1032,6 +1032,72 @@ static void test_tracker_profile_ct(void)
 static void test_tracker_profile_ct(void) {}
 #endif
 
+/*
+ * Профили цикла по EN (PURRGO_GNSS_TRACKER_MODE_EN, по умолчанию): после каждого включения слой RAM приёмника пуст,
+ * поэтому вся настройка идёт заново и только в RAM; BBR не трогается (нет VALDEL), скорость UART не меняется,
+ * параметров PSMOO нет. _EN: те же сообщения, что в навигации, полная мощность. _CT: приёмник остаётся включённым
+ * (слабое небо): PSMCT с периодом PURRGO_GNSS_TRACKER_CT_PERIOD_S. Ни в одном нет NAV-SAT (список спутников
+ * трекеру не нужен).
+ */
+#if PURRGO_GNSS_UBX && PURRGO_GNSS_TRACKER_EN_ACTIVE
+static void test_tracker_profile_en(void)
+{
+    uint32_t v = 99;
+    const uint32_t key_sat = 0x20910016U;
+    const uint32_t key_baud = 0x40520001U;
+
+    /* Эталон: навигация. */
+    g_cfg_count = 0;
+    purrgo_gnss_receiver_configure_profile(cfg_tx, PURRGO_GNSS_PROFILE_NAV, 115200U);
+    const int nav_count = g_cfg_count;
+    CHECK((frame_with_key(key_sat) >= 0) == (PURRGO_GNSS_NAV_SAT != 0));
+
+    /* Короткое включение. */
+    g_cfg_count = 0;
+    purrgo_gnss_receiver_configure_profile(cfg_tx, PURRGO_GNSS_PROFILE_TRACKER_EN, 115200U);
+    const int en_count = g_cfg_count;
+    /* В навигации при PURRGO_GNSS_PSM_ACTIVE два кадра PSM (DONOTENTEROFF и OPERATEMODE), в профиле EN - один (FULL). */
+    CHECK(en_count == nav_count - PURRGO_GNSS_NAV_SAT - (PURRGO_GNSS_NAV_PM_FRAMES - 1));
+    for (int i = 0; i < en_count - 1; i++) {                          /* последний кадр - опрос версии (MON-VER) */
+        CHECK(g_cfg[i][2] == 0x06);
+        CHECK(g_cfg[i][3] == 0x8A);                                   /* только VALSET, ни одного VALDEL */
+        CHECK(g_cfg[i][7] == (uint8_t)PURRGO_GNSS_UBX_LAYERS);
+        CHECK((g_cfg[i][7] & 0x02U) == 0U);                           /* BBR не трогается */
+    }
+    CHECK(frame_with_key(key_baud) == -1);                            /* скорость UART не меняется */
+    CHECK(frame_with_key(key_sat) == -1);
+    CHECK(frame_with_key(0x40D00002U) == -1 && frame_with_key(0x40D00003U) == -1 && frame_with_key(0x30D00005U) == -1);
+    CHECK(valset_value_n(0, 0x30210001U, &v) && v == (uint32_t)PURRGO_GNSS_UPDATE_PERIOD_MS);
+    const int mode = frame_with_key(0x20D00001U);
+    CHECK(mode > 0 && valset_value_n(mode, 0x20D00001U, &v) && v == 0U);   /* OPERATEMODE = FULL: полная мощность */
+    CHECK(frame_with_key(0x10D00008U) == -1);                         /* DONOTENTEROFF (PSMCT) не пишется */
+
+    /* Непрерывный режим: PSMCT, период решений CT. */
+    g_cfg_count = 0;
+    purrgo_gnss_receiver_configure_profile(cfg_tx, PURRGO_GNSS_PROFILE_TRACKER_CT, 115200U);
+    CHECK(g_cfg_count == en_count + 1);                               /* лишний кадр: DONOTENTEROFF */
+    for (int i = 0; i < g_cfg_count - 1; i++) {
+        CHECK(g_cfg[i][2] == 0x06 && g_cfg[i][3] == 0x8A);
+        CHECK((g_cfg[i][7] & 0x02U) == 0U);
+    }
+    CHECK(frame_with_key(key_baud) == -1 && frame_with_key(key_sat) == -1);
+    CHECK(valset_value_n(0, 0x30210001U, &v) && v == (uint32_t)PURRGO_GNSS_TRACKER_CT_PERIOD_S * 1000U);
+    const int no_off = frame_with_key(0x10D00008U);
+    const int ct_mode = frame_with_key(0x20D00001U);
+    CHECK(no_off > 0 && ct_mode == no_off + 1);
+    CHECK(valset_value_n(no_off, 0x10D00008U, &v) && v == 1U);
+    CHECK(valset_value_n(ct_mode, 0x20D00001U, &v) && v == 2U);       /* PSMCT */
+
+    /* Навигация не изменилась и не заражена трекером. */
+    g_cfg_count = 0;
+    purrgo_gnss_receiver_configure_profile(cfg_tx, PURRGO_GNSS_PROFILE_NAV, 115200U);
+    CHECK(g_cfg_count == nav_count);
+    CHECK(valset_value_n(0, 0x30210001U, &v) && v == (uint32_t)PURRGO_GNSS_UPDATE_PERIOD_MS);
+}
+#else
+static void test_tracker_profile_en(void) {}
+#endif
+
 /* ------------------------------------------------------------------------- */
 /* Логгер: колбэк нового трека, фильтр hAcc, теги GPX                        */
 /* ------------------------------------------------------------------------- */
@@ -1697,6 +1763,7 @@ int main(void)
     test_configure_frames();
     test_tracker_profile();
     test_tracker_profile_ct();
+    test_tracker_profile_en();
     test_valdel_builder();
     test_logger_hacc_and_gpx();
 #if PURRGO_GNSS_UBX

@@ -66,6 +66,16 @@ void purrgo_gnss_power_off(void);
 bool purrgo_gnss_write(const uint8_t *data, uint16_t length);
 
 /**
+ * @brief Включить GNSS с заданным профилем настройки (цикл по EN, purrgo/gnss_duty.h).
+ *
+ * Выключен - как purrgo_gnss_power_on(), но с профилем profile (для PURRGO_GNSS_PROFILE_TRACKER_EN и _CT связь
+ * ищется и остаётся на 38400, настройка уходит только в RAM). Уже включён - перезапуск: EN = Low на 200 мс,
+ * затем High (так приёмник гарантированно перезапускается, RAM стирается, BBR остаётся).
+ * PC: заглушка.
+ */
+void purrgo_gnss_restart_profile(purrgo_gnss_profile_t profile);
+
+/**
  * @brief Переключить профиль настройки приёмника (см. purrgo_gnss_profile_t в gnss_receiver.h).
  *
  * Навигация (PURRGO_GNSS_PROFILE_NAV) - данные каждую секунду, PSMCT; трекер

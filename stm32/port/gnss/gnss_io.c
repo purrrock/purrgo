@@ -267,10 +267,11 @@ static void gnss_apply_config(void)
     {
         gnss_bbr_dirty = true;
     }
-    else if (gnss_bbr_dirty)
+    else if ((profile == PURRGO_GNSS_PROFILE_NAV) && gnss_bbr_dirty)
     {
         profile = PURRGO_GNSS_PROFILE_NAV_AFTER_TRACKER;   /* заодно очистить BBR от PSMOO */
     }
+    /* Профили цикла по EN (_EN, _CT) настройку пишут только в RAM: BBR не трогается, чистить нечего. */
 #endif
     purrgo_gnss_receiver_configure_profile(gnss_uart_tx, profile, gnss_link_baud(&gnss_link));
     /* В трекере приёмник молчит между фиксами: монитору не сообщать об этом как о сбое. */
@@ -357,8 +358,14 @@ void purrgo_gnss_init(void)
  * @brief Выключить GNSS по EN.
  *
  * Порядок: остановить приём (DMA) -> EN Low -> выключить LPUART1 (HAL сводит
- * PA2/PA3 в Analog без подтяжки) -> PA2 (TX в сторону модуля) в Low. Иначе
- * модуль мог бы подпитываться через защитные диоды линии UART.
+ * PA2/PA3 в Analog без подтяжки, то есть в Hi-Z). Линии UART не драйвятся ни в High, ни в Low:
+ *   - High: модуль в режиме "hardware backup" (VCC и V_IO = 0), в нём "PIOs must not be driven"
+ *     (MAX-M10S datasheet, 3.2), и он подпитывался бы через защитные диоды;
+ *   - Low: если V_IO у модуля остаётся, вход RXD подтянут к V_IO внутренним резистором 17 кОм
+ *     (Rpu,IO 6-72 кОм, там же), и Low даёт постоянный ток V_IO / 17 кОм (около 190 мкА);
+ *   - Hi-Z: тока нет в обоих случаях, а RXD при V_IO удерживается подтяжкой в High (в состояниях
+ *     модуля "continuous" и "software standby" RXD - Input pull-up).
+ * PURRGO_GNSS_OFF_TX_HIZ = 0 возвращает прежнее поведение (PA2 в Low) для сравнения замером тока.
  */
 void purrgo_gnss_power_off(void)
 {
@@ -406,16 +413,20 @@ void purrgo_gnss_power_off(void)
     /* 2. EN в Low: модуль выключен (PB0 - Push-Pull). */
     HAL_GPIO_WritePin(GNSS_EN_GPIO_Port, GNSS_EN_Pin, GPIO_PIN_RESET);
 
-    /* 3. LPUART1 выключен; PA2/PA3 -> Analog, без подтяжек. */
+    /* 3. LPUART1 выключен; PA2/PA3 -> Analog, без подтяжек (Hi-Z). */
     (void)HAL_UART_DeInit(&hlpuart1);
 
-    /* 4. PA2 (TX в сторону модуля) в Low. PA3 (RX) остаётся Analog без подтяжки. */
+#if !PURRGO_GNSS_OFF_TX_HIZ
+    /* 4. Прежнее поведение: PA2 (TX в сторону модуля) в Low. PA3 (RX) остаётся Analog без подтяжки. */
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_RESET);
     gpio.Pin = GPIO_PIN_2;
     gpio.Mode = GPIO_MODE_OUTPUT_PP;
     gpio.Pull = GPIO_NOPULL;
     gpio.Speed = GPIO_SPEED_FREQ_LOW;
     HAL_GPIO_Init(GPIOA, &gpio);
+#else
+    (void)gpio;   /* PA2 остаётся Analog: ни ток через подтяжку RXD модуля, ни подпитка через диоды */
+#endif
 
     PURRGO_LOG("GNSS: power off (EN low)\r\n");
 }
@@ -428,7 +439,7 @@ void purrgo_gnss_power_off(void)
  * настройка приёмника). Модуль после включения загружается не сразу, поэтому
  * первая настройка может потеряться; её повторяет PURRGO_GNSS_CONFIG_RETRY_MS.
  */
-void purrgo_gnss_power_on(void)
+static void gnss_power_on_profile(purrgo_gnss_profile_t profile)
 {
     if (gnss_powered)
     {
@@ -443,7 +454,7 @@ void purrgo_gnss_power_on(void)
 
     /* 3. DMA-приём, затем связь с модулем (скорость, набор NMEA). Модуль после EN Low -> High
      *    снова на заводской скорости (настройка слоя RAM потеряна). */
-    gnss_profile = PURRGO_GNSS_PROFILE_NAV;
+    gnss_profile = profile;   /* профиль нужен до purrgo_gnss_init(): от него зависит скорость связи */
 #if PURRGO_GNSS_TRACKER_ACTIVE
     gnss_profile_apply_pending = false;
     gnss_bbr_dirty = false;
@@ -454,6 +465,31 @@ void purrgo_gnss_power_on(void)
     purrgo_gnss_monitor_init();
 
     PURRGO_LOG("GNSS: power on (EN high)\r\n");
+}
+
+void purrgo_gnss_power_on(void)
+{
+    gnss_power_on_profile(PURRGO_GNSS_PROFILE_NAV);
+}
+
+/**
+ * @brief Включить GNSS с профилем; уже включён - перезапуск по EN (см. purrgo/gnss_io.h).
+ *
+ * Выключение без отката настройки трекера: профиль сбрасывается в навигацию заранее (откат не нужен: слой RAM
+ * при EN = Low всё равно стирается, а профили цикла по EN в BBR ничего не пишут).
+ */
+void purrgo_gnss_restart_profile(purrgo_gnss_profile_t profile)
+{
+    if (gnss_powered)
+    {
+        gnss_profile = PURRGO_GNSS_PROFILE_NAV;
+#if PURRGO_GNSS_TRACKER_ACTIVE
+        gnss_profile_apply_pending = false;
+#endif
+        purrgo_gnss_power_off();
+        HAL_Delay(GNSS_EN_LOW_MS);
+    }
+    gnss_power_on_profile(profile);
 }
 
 /**
@@ -578,7 +614,7 @@ static void link_on_state(gnss_link_state_t state, uint32_t baud, void *ctx)
 
     case GNSS_LINK_SWITCH:
         PURRGO_LOG("GNSS: NMEA at %lu baud, module -> %lu baud\r\n",
-                   (unsigned long)baud, (unsigned long)PURRGO_GNSS_BAUD_TARGET);
+                   (unsigned long)baud, (unsigned long)gnss_link.cfg.target_baud);
         break;
 
     case GNSS_LINK_VERIFY:
@@ -594,7 +630,7 @@ static void link_on_state(gnss_link_state_t state, uint32_t baud, void *ctx)
         else
         {
             PURRGO_LOGW("GNSS: module did not switch to %lu baud, staying at %lu baud\r\n",
-                       (unsigned long)PURRGO_GNSS_BAUD_TARGET, (unsigned long)baud);
+                       (unsigned long)gnss_link.cfg.target_baud, (unsigned long)baud);
         }
         /* Диагностика с нуля на рабочей скорости, затем настройка набора NMEA. */
         purrgo_gnss_monitor_link(baud, true);
@@ -607,7 +643,7 @@ static void link_on_state(gnss_link_state_t state, uint32_t baud, void *ctx)
 
     case GNSS_LINK_FAILED:
         purrgo_hw_fault(PURRGO_HWF_GNSS, "no NMEA at %lu and %lu baud, link failed (UART left at %lu baud)",
-                        (unsigned long)PURRGO_GNSS_BAUD_DEFAULT, (unsigned long)PURRGO_GNSS_BAUD_TARGET,
+                        (unsigned long)PURRGO_GNSS_BAUD_DEFAULT, (unsigned long)gnss_link.cfg.target_baud,
                         (unsigned long)PURRGO_GNSS_BAUD_DEFAULT);
         /* Монитор объяснит причину (нет данных / не NMEA / неверное подключение). */
         purrgo_gnss_monitor_link(gnss_link_baud(&gnss_link), true);
@@ -629,8 +665,19 @@ static void gnss_link_begin(void)
     gnss_link_stop(&gnss_link);
     purrgo_gnss_receiver_configure(gnss_uart_tx);
 #else
+    /*
+     * Рабочая скорость: PURRGO_GNSS_BAUD_TARGET, но профили цикла по EN (приёмник включён на секунды, после каждого
+     * включения слой RAM пуст) остаются на заводской: переключение скорости не окупается и добавляет отказы.
+     */
+    uint32_t target_baud = PURRGO_GNSS_BAUD_TARGET;
+#if PURRGO_GNSS_TRACKER_EN_ACTIVE
+    if ((gnss_profile == PURRGO_GNSS_PROFILE_TRACKER_EN) || (gnss_profile == PURRGO_GNSS_PROFILE_TRACKER_CT))
+    {
+        target_baud = PURRGO_GNSS_BAUD_DEFAULT;
+    }
+#endif
     const gnss_link_cfg_t cfg = {
-        PURRGO_GNSS_BAUD_DEFAULT, PURRGO_GNSS_BAUD_TARGET,
+        PURRGO_GNSS_BAUD_DEFAULT, target_baud,
         PURRGO_GNSS_LINK_PROBE_MS, GNSS_LINK_SETTLE_MS, (uint8_t)PURRGO_GNSS_LINK_ATTEMPTS
     };
     const gnss_link_ops_t ops = { link_set_baud, link_send_baud_cmd, link_on_state, NULL };
@@ -659,6 +706,21 @@ static void gnss_wake_receiver(void)
 }
 #endif
 
+#if PURRGO_GNSS_TRACKER_ACTIVE
+static const char *gnss_profile_name(purrgo_gnss_profile_t profile)
+{
+    switch (profile)
+    {
+    case PURRGO_GNSS_PROFILE_TRACKER:    return "TRACKER";
+    case PURRGO_GNSS_PROFILE_TRACKER_EN: return "TRACKER_EN";
+    case PURRGO_GNSS_PROFILE_TRACKER_CT: return "TRACKER_CT";
+    case PURRGO_GNSS_PROFILE_NAV_AFTER_TRACKER:
+    case PURRGO_GNSS_PROFILE_NAV:
+    default:                             return "NAV";
+    }
+}
+#endif
+
 /**
  * @brief Переключить профиль настройки приёмника (см. purrgo/gnss_io.h).
  */
@@ -678,12 +740,21 @@ void purrgo_gnss_set_profile(purrgo_gnss_profile_t profile)
     if (!gnss_powered || ((link != GNSS_LINK_READY) && (link != GNSS_LINK_DEGRADED)))
     {
         /* GNSS выключен или идёт поиск скорости: профиль применится при установлении связи. */
-        PURRGO_LOG("GNSS: profile %s (deferred)\r\n",
-                   (profile == PURRGO_GNSS_PROFILE_TRACKER) ? "TRACKER" : "NAV");
+        PURRGO_LOG("GNSS: profile %s (deferred)\r\n", gnss_profile_name(profile));
         return;
     }
 
-    if (profile == PURRGO_GNSS_PROFILE_TRACKER)
+    if ((profile == PURRGO_GNSS_PROFILE_TRACKER_EN) || (profile == PURRGO_GNSS_PROFILE_TRACKER_CT))
+    {
+        /* Цикл по EN: приёмник работает на заводской скорости, настройка в RAM сразу (и повтор по таймеру). */
+        PURRGO_LOG("GNSS: profile %s\r\n", gnss_profile_name(profile));
+        gnss_apply_config();
+#if (PURRGO_GNSS_CONFIG_RETRY_MS > 0)
+        gnss_t_cfg = HAL_GetTick();
+        gnss_cfg_retry_pending = true;
+#endif
+    }
+    else if (profile == PURRGO_GNSS_PROFILE_TRACKER)
     {
         /* Вход: приёмник работает, настройка сразу (и повтор через PURRGO_GNSS_CONFIG_RETRY_MS). */
         PURRGO_LOG("GNSS: profile TRACKER (%s, fix every %u s)\r\n",

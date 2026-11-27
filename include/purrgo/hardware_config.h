@@ -127,14 +127,23 @@
  *                                     PSMCT; CFG-RATE-MEAS). Настройка только в RAM, приёмник не уходит в "off".
  *                                     По умолчанию.
  *   PURRGO_GNSS_TRACKER_MODE_OO  (2) - PSMOO (ON/OFF): приёмник просыпается раз в период, ищет фикс и засыпает.
- *                                     Проверить на G10A-F30: см. ниже.
- *
- * По умолчанию PSMOO.
+ *                                     Сбои этого режима в рабочей прошивке не объяснены (docs/gnss-retention.md).
+ *   PURRGO_GNSS_TRACKER_MODE_EN  (3) - цикл по EN: прошивка сама включает приёмник (EN = High) раз в период,
+ *                                     ждёт фикс (не дольше таймаута), записывает точку и выключает (EN = Low).
+ *                                     Скорость UART 38400, настройка только в RAM после каждого включения (BBR не
+ *                                     трогается). Политика таймаутов и пауз - purrgo/gnss_duty.h: после промахов
+ *                                     паузы растут, при долгом поиске (слабое небо) приёмник не выключается и
+ *                                     работает как PSMCT (PURRGO_GNSS_TRACKER_CT_PERIOD_S).
+ *                                     По умолчанию.
  *   PURRGO_GNSS_TRACKER_PERIOD_S  период решений, с. MODE_CT: 1..10 (по умолчанию 10); MODE_OO: 5..3600 (по
  *                                 умолчанию 15; по manual PSMOO - для периодов дольше 10 с). Время ядра в трекере:
  *                                 фикс считается устаревшим по PURRGO_GNSS_TRACKER_FIX_TIMEOUT_MS.
  *   PURRGO_GNSS_TRACKER_ONTIME_S  только MODE_OO: сколько секунд приёмник остаётся в слежении после фикса и выдаёт
  *                                 решения (по умолчанию 2).
+ *
+ * MODE_EN (результаты теста GNSS_BBR, docs/gnss-retention.md): EN = Low стирает RAM приёмника, но BBR, эфемериды
+ * и время сохраняются, поэтому после включения старт горячий (rx-ttff около 1 с на хорошем небе, 7-11 с при 4-5
+ * спутниках). Включённое время на точку: загрузка ~0,3 с + время до фикса.
  *
  * MODE_OO по manual (MAX-M10S, 3.6.2.4): в состоянии "off" RAM приёмника очищается вместе с настройкой, поэтому всё,
  * что должно сохраниться (скорость UART, набор сообщений, параметры PSM), отправляется в слои RAM и BBR
@@ -143,22 +152,97 @@
 #define PURRGO_GNSS_TRACKER_MODE_OFF 0
 #define PURRGO_GNSS_TRACKER_MODE_CT  1
 #define PURRGO_GNSS_TRACKER_MODE_OO  2
+#define PURRGO_GNSS_TRACKER_MODE_EN  3
 
 #ifndef PURRGO_GNSS_TRACKER_MODE
-#define PURRGO_GNSS_TRACKER_MODE PURRGO_GNSS_TRACKER_MODE_OO // PSMOO
+#define PURRGO_GNSS_TRACKER_MODE PURRGO_GNSS_TRACKER_MODE_EN // цикл по EN
 #endif
 #if (PURRGO_GNSS_TRACKER_MODE != PURRGO_GNSS_TRACKER_MODE_OFF) && \
     (PURRGO_GNSS_TRACKER_MODE != PURRGO_GNSS_TRACKER_MODE_CT) && \
-    (PURRGO_GNSS_TRACKER_MODE != PURRGO_GNSS_TRACKER_MODE_OO)
-#error "PURRGO_GNSS_TRACKER_MODE must be PURRGO_GNSS_TRACKER_MODE_OFF (0), _CT (1) or _OO (2)"
+    (PURRGO_GNSS_TRACKER_MODE != PURRGO_GNSS_TRACKER_MODE_OO) && \
+    (PURRGO_GNSS_TRACKER_MODE != PURRGO_GNSS_TRACKER_MODE_EN)
+#error "PURRGO_GNSS_TRACKER_MODE must be PURRGO_GNSS_TRACKER_MODE_OFF (0), _CT (1), _OO (2) or _EN (3)"
 #endif
 
 #ifndef PURRGO_GNSS_TRACKER_PERIOD_S
-#if PURRGO_GNSS_TRACKER_MODE == PURRGO_GNSS_TRACKER_MODE_OO
+#if (PURRGO_GNSS_TRACKER_MODE == PURRGO_GNSS_TRACKER_MODE_OO) || (PURRGO_GNSS_TRACKER_MODE == PURRGO_GNSS_TRACKER_MODE_EN)
 #define PURRGO_GNSS_TRACKER_PERIOD_S 15
 #else
 #define PURRGO_GNSS_TRACKER_PERIOD_S 10
 #endif
+#endif
+
+/*
+ * Политика цикла по EN (PURRGO_GNSS_TRACKER_MODE_EN, purrgo/gnss_duty.h). PURRGO_GNSS_TRACKER_PERIOD_S - период
+ * между началами включений.
+ *   PURRGO_GNSS_DUTY_FIX_TIMEOUT_S   сколько ждать фикс при горячем старте (BBR жив): по логам GNSS_BBR rx-ttff
+ *                                    не превышал ~11 с даже при 4-5 спутниках.
+ *   PURRGO_GNSS_DUTY_COLD_TIMEOUT_S  то же при холодном старте: первое включение без известного фикса, фикса не было
+ *                                    дольше PURRGO_GNSS_DUTY_COLD_AGE_S или приёмник сообщил, что времени не знает
+ *                                    (холодный старт на слабом небе занимал 65-82 с).
+ *   PURRGO_GNSS_DUTY_COLD_AGE_S      возраст последнего фикса, после которого эфемериды считаются устаревшими
+ *                                    (живут 2-4 ч).
+ *   PURRGO_GNSS_DUTY_HOLD_MS         после первого фикса ждать точность hAcc не хуже PURRGO_GNSS_DUTY_ACCEPT_HACC_M
+ *                                    не дольше этого времени, потом принять любой фикс (0 - принимать сразу).
+ *   PURRGO_GNSS_DUTY_MIN_FIX_TYPE    минимальный тип фикса (2 - 2D, 3 - 3D).
+ *   PURRGO_GNSS_DUTY_MIN_PAUSE_S     наименьшая пауза с EN = Low.
+ *   PURRGO_GNSS_DUTY_BACKOFF_MAX_S   пауза после промахов удваивается (период, 2 периода, ...) до этого предела.
+ *   PURRGO_GNSS_DUTY_SLOW_FIX_S      фикс дольше этого времени считается медленным: если медленных подряд
+ *   PURRGO_GNSS_DUTY_SLOW_COUNT      штук, приёмник дешевле не выключать (рабочий ток ~13 мА при поиске против
+ *                                    ~7 мА в PSMCT: граница около 8 с на период 15 с) и он остаётся включённым в
+ *                                    PSMCT с периодом PURRGO_GNSS_TRACKER_CT_PERIOD_S. 0 - режим выключен.
+ *   PURRGO_GNSS_DUTY_CONT_RETRY_S    через это время непрерывной работы снова пробуется цикл по EN.
+ *   PURRGO_GNSS_DUTY_CONT_LOSS_S     фикса нет столько секунд - непрерывный режим кончается, дальше паузы как после
+ *                                    промаха.
+ */
+#ifndef PURRGO_GNSS_DUTY_FIX_TIMEOUT_S
+#define PURRGO_GNSS_DUTY_FIX_TIMEOUT_S 25
+#endif
+/*
+ * Состояние линий UART, пока GNSS выключен по EN. 1 (по умолчанию) - обе в Hi-Z (Analog без подтяжки): у входа RXD
+ * модуля есть внутренняя подтяжка к V_IO около 17 кОм, поэтому TX микроконтроллера в Low давал бы ток около 190 мкА,
+ * а в High подпитывал бы модуль через защитные диоды (datasheet MAX-M10S, 3.2 и таблица Digital IO).
+ * 0 - прежнее поведение: PA2 в Low (для сравнения замером тока).
+ */
+#ifndef PURRGO_GNSS_OFF_TX_HIZ
+#define PURRGO_GNSS_OFF_TX_HIZ 1
+#endif
+#ifndef PURRGO_GNSS_DUTY_COLD_TIMEOUT_S
+#define PURRGO_GNSS_DUTY_COLD_TIMEOUT_S 90
+#endif
+#ifndef PURRGO_GNSS_DUTY_COLD_AGE_S
+#define PURRGO_GNSS_DUTY_COLD_AGE_S 7200
+#endif
+#ifndef PURRGO_GNSS_DUTY_HOLD_MS
+#define PURRGO_GNSS_DUTY_HOLD_MS 3000
+#endif
+#ifndef PURRGO_GNSS_DUTY_ACCEPT_HACC_M
+#define PURRGO_GNSS_DUTY_ACCEPT_HACC_M 30
+#endif
+#ifndef PURRGO_GNSS_DUTY_MIN_FIX_TYPE
+#define PURRGO_GNSS_DUTY_MIN_FIX_TYPE 3
+#endif
+#ifndef PURRGO_GNSS_DUTY_MIN_PAUSE_S
+#define PURRGO_GNSS_DUTY_MIN_PAUSE_S 1
+#endif
+#ifndef PURRGO_GNSS_DUTY_BACKOFF_MAX_S
+#define PURRGO_GNSS_DUTY_BACKOFF_MAX_S 300
+#endif
+#ifndef PURRGO_GNSS_DUTY_SLOW_FIX_S
+#define PURRGO_GNSS_DUTY_SLOW_FIX_S 8
+#endif
+#ifndef PURRGO_GNSS_DUTY_SLOW_COUNT
+#define PURRGO_GNSS_DUTY_SLOW_COUNT 3
+#endif
+#ifndef PURRGO_GNSS_DUTY_CONT_RETRY_S
+#define PURRGO_GNSS_DUTY_CONT_RETRY_S 600
+#endif
+#ifndef PURRGO_GNSS_DUTY_CONT_LOSS_S
+#define PURRGO_GNSS_DUTY_CONT_LOSS_S 60
+#endif
+/* Период решений в непрерывном режиме (PSMCT, предел 10 с). */
+#ifndef PURRGO_GNSS_TRACKER_CT_PERIOD_S
+#define PURRGO_GNSS_TRACKER_CT_PERIOD_S 10
 #endif
 #ifndef PURRGO_GNSS_TRACKER_ONTIME_S
 #define PURRGO_GNSS_TRACKER_ONTIME_S 2
@@ -166,6 +250,12 @@
 
 #if (PURRGO_HW_GNSS_RECEIVER == PURRGO_GNSS_RECEIVER_UBX) && (PURRGO_GNSS_TRACKER_MODE != PURRGO_GNSS_TRACKER_MODE_OFF)
 #define PURRGO_GNSS_TRACKER_ACTIVE 1
+#if PURRGO_GNSS_TRACKER_MODE == PURRGO_GNSS_TRACKER_MODE_EN
+#define PURRGO_GNSS_TRACKER_EN_ACTIVE 1
+#define PURRGO_GNSS_TRACKER_PM_FRAMES 1   /* профиль EN: один кадр OPERATEMODE = FULL (непрерывный профиль CT - два) */
+/* Срок действия фикса в трекере меняется с паузами и берётся у политики: purrgo_gnss_tracker_fix_timeout_ms(). */
+#else
+#define PURRGO_GNSS_TRACKER_EN_ACTIVE 0
 #define PURRGO_GNSS_TRACKER_PM_FRAMES 2   /* PSMCT: DONOTENTEROFF и OPERATEMODE; PSMOO: параметры и OPERATEMODE */
 /*
  * Фикс в трекере моложе этого срока считается действующим: два периода (пропущенный цикл) и запас
@@ -173,7 +263,19 @@
  */
 #define PURRGO_GNSS_TRACKER_FIX_TIMEOUT_MS \
     ((2U * (unsigned)PURRGO_GNSS_TRACKER_PERIOD_S + 30U) * 1000U)
-#if PURRGO_GNSS_TRACKER_MODE == PURRGO_GNSS_TRACKER_MODE_OO
+#endif
+#if PURRGO_GNSS_TRACKER_MODE == PURRGO_GNSS_TRACKER_MODE_EN
+/* Профили EN и CT выбираются во время работы (purrgo/gnss_duty.h); PSMOO и PSMCT "трекера" как режим не активны. */
+#define PURRGO_GNSS_TRACKER_PSMOO_ACTIVE 0
+#define PURRGO_GNSS_TRACKER_PSMCT_ACTIVE 0
+#define PURRGO_GNSS_TRACKER_BAUD_FRAME 0
+#if (PURRGO_GNSS_TRACKER_CT_PERIOD_S < 1) || (PURRGO_GNSS_TRACKER_CT_PERIOD_S > 10)
+#error "PURRGO_GNSS_TRACKER_CT_PERIOD_S must be 1..10 for PSMCT (CFG-RATE-MEAS)"
+#endif
+#if PURRGO_GNSS_TRACKER_PERIOD_S < 1
+#error "PURRGO_GNSS_TRACKER_PERIOD_S must be >= 1"
+#endif
+#elif PURRGO_GNSS_TRACKER_MODE == PURRGO_GNSS_TRACKER_MODE_OO
 #define PURRGO_GNSS_TRACKER_PSMOO_ACTIVE 1
 #define PURRGO_GNSS_TRACKER_PSMCT_ACTIVE 0
 #define PURRGO_GNSS_TRACKER_BAUD_FRAME 1  /* скорость UART в слой BBR (после пробуждения RAM пуста) */
@@ -193,6 +295,7 @@
 #endif
 #else
 #define PURRGO_GNSS_TRACKER_ACTIVE 0
+#define PURRGO_GNSS_TRACKER_EN_ACTIVE 0
 #define PURRGO_GNSS_TRACKER_PSMOO_ACTIVE 0
 #define PURRGO_GNSS_TRACKER_PSMCT_ACTIVE 0
 #define PURRGO_GNSS_TRACKER_PM_FRAMES 0

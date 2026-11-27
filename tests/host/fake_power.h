@@ -52,6 +52,9 @@ int fake_sound_stops(void);                          /* число purrgo_platfo
 /* Вызовы purrgo_gnss_set_profile(): число вызовов и последний профиль (purrgo_gnss_profile_t). */
 int fake_gnss_profile_calls(void);
 int fake_gnss_profile_last(void);
+/* Вызовы purrgo_gnss_restart_profile() (цикл по EN) и профиль последнего вызова. */
+int fake_gnss_restart_calls(void);
+int fake_gnss_restart_profile(void);
 
 /*
  * Команды, отправленные ядром приёмнику через purrgo_gnss_write() (сброс одометра,

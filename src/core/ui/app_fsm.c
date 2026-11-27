@@ -5,6 +5,7 @@
 #include "purrgo/system_time.h"
 #include "purrgo/gnss_ubx.h"
 #include "purrgo/gnss_io.h"
+#include "purrgo/gnss_duty.h"
 #include "purrgo/sun.h"
 #include "purrgo/trip_computer.h"
 #include "purrgo/menu_controller.h"
@@ -126,6 +127,21 @@ static void book_mode_left(void) {
  * по выходу логгеру возвращается выбранный пользователем режим. Экран один раз
  * перерисовывается в предупреждение (purrgo_app_ui_render), дальше не меняется.
  */
+#if PURRGO_GNSS_TRACKER_EN_ACTIVE
+/* Что политика цикла по EN (purrgo/gnss_duty.h) знает о текущем решении приёмника. */
+static purrgo_gnss_duty_input_t tracker_duty_input(void) {
+    purrgo_gnss_duty_input_t in;
+
+    in.fix_seq = gnss_feed.fix_seq;
+    in.valid = gnss_feed.solution.valid;
+    in.time_valid = gnss_feed.solution.time_valid;
+    in.fix_type = gnss_feed.solution.fix_type;
+    in.acc_valid = gnss_feed.solution.acc_valid;
+    in.hacc_mm = gnss_feed.solution.acc_valid ? gnss_feed.solution.hacc_mm : 0U;
+    return in;
+}
+#endif
+
 static void tracker_mode_entered(void) {
     purrgo_logger_set_mode(LOGGER_MODE_EXPEDITION);
     render_gate_active = false;
@@ -133,11 +149,22 @@ static void tracker_mode_entered(void) {
     tracker_logged_seq = gnss_feed.fix_seq - 1U;   /* действующий фикс уходит логгеру один раз сразу */
 
     /*
-     * Экрану и трекеру не нужен фикс каждую секунду: приёмник - в PSMOO (просыпается раз в период).
+     * Экрану и трекеру не нужен фикс каждую секунду. Цикл по EN (PURRGO_GNSS_TRACKER_MODE_EN): прошивка сама
+     * включает приёмник раз в период, ждёт фикс и выключает (purrgo_gnss_tracker_*). Иначе приёмник - в PSMOO
+     * или PSMCT (просыпается раз в период или работает с редкими решениями).
      * Таймаут фикса длиннее на всё время режима (gnss_fix_timeout_ms); отсчёт молчания начинается
      * заново, чтобы последняя секунда до входа не считалась.
      */
+#if PURRGO_GNSS_TRACKER_EN_ACTIVE
+    {
+        const purrgo_gnss_duty_input_t in = tracker_duty_input();
+
+        /* Решение, действовавшее при входе, делает первый старт горячим (эфемериды у приёмника есть). */
+        purrgo_gnss_tracker_start(purrgo_system_time_ms(), &in, gnss_feed.solution.valid);
+    }
+#else
     purrgo_gnss_set_profile(PURRGO_GNSS_PROFILE_TRACKER);
+#endif
     purrgo_gnss_feed_restart_silence(&gnss_feed, purrgo_system_time_ms());
 #if PURRGO_GNSS_UBX
     purrgo_gnss_ubx_set_log_interval_ms(TRACKER_DIAG_LOG_INTERVAL_MS);   /* реже, чем на карте */
@@ -152,8 +179,15 @@ static void tracker_mode_entered(void) {
 static void tracker_mode_left(void) {
     const uint32_t now = purrgo_system_time_ms();
 
-    /* Приёмник возвращается к данным каждую секунду (будится активностью на RX, см. gnss_io.h). */
+    /*
+     * Приёмник возвращается к данным каждую секунду. Цикл по EN: он перезапускается с профилем навигации (115200 бод,
+     * полный набор сообщений); иначе будится активностью на RX (см. gnss_io.h).
+     */
+#if PURRGO_GNSS_TRACKER_EN_ACTIVE
+    purrgo_gnss_tracker_stop();
+#else
     purrgo_gnss_set_profile(PURRGO_GNSS_PROFILE_NAV);
+#endif
 #if PURRGO_GNSS_UBX
     purrgo_gnss_ubx_set_log_interval_ms(0U);
 #endif
@@ -472,7 +506,11 @@ void purrgo_app_feed_gnss_byte(uint8_t byte) {
  * между фиксами (период PURRGO_GNSS_TRACKER_PERIOD_S), поэтому там срок длиннее.
  */
 static uint32_t gnss_fix_timeout_ms(void) {
-#if PURRGO_GNSS_TRACKER_ACTIVE
+#if PURRGO_GNSS_TRACKER_EN_ACTIVE
+    if (current_state == APP_STATE_TRACKER_SCREEN_OFF) {
+        return purrgo_gnss_tracker_fix_timeout_ms();   /* растёт вместе с паузами при промахах */
+    }
+#elif PURRGO_GNSS_TRACKER_ACTIVE
     if (current_state == APP_STATE_TRACKER_SCREEN_OFF) {
         return PURRGO_GNSS_TRACKER_FIX_TIMEOUT_MS;
     }
@@ -574,6 +612,13 @@ void purrgo_app_tick(uint32_t current_time_ms) {
         purrgo_ui_dirty_defer();
     }
 
+#if PURRGO_GNSS_TRACKER_EN_ACTIVE
+    if (current_state == APP_STATE_TRACKER_SCREEN_OFF) {
+        const purrgo_gnss_duty_input_t duty_in = tracker_duty_input();
+
+        purrgo_gnss_tracker_tick(current_time_ms, &duty_in);   /* включение, приём фикса, выключение, паузы */
+    }
+#endif
     purrgo_gnss_feed_check_timeout(&gnss_feed, current_time_ms, gnss_fix_timeout_ms());
 
     // Накопленные изменения данных выводим не чаще минимального интервала.

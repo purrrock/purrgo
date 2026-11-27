@@ -15,6 +15,7 @@
 #include "purrgo/app_ui.h"
 #include "purrgo/config.h"
 #include "purrgo/gnss_receiver.h"
+#include "purrgo/gnss_duty.h"
 #include "purrgo/menu_controller.h"
 #include "purrgo/track_logger.h"
 #include "purrgo/hardware_config.h"
@@ -127,9 +128,17 @@ static void test_tracker_mode(void)
     CHECK(purrgo_app_get_state() == APP_STATE_TRACKER_SCREEN_OFF);
     CHECK(purrgo_app_tracker_mode_active());
 
+#if PURRGO_GNSS_TRACKER_EN_ACTIVE
+    /* Цикл по EN: приёмник перезапускается с профилем TRACKER_EN (38400 бод, настройка в RAM), set_profile не нужен. */
+    CHECK(fake_gnss_restart_calls() == 1);
+    CHECK(fake_gnss_restart_profile() == (int)PURRGO_GNSS_PROFILE_TRACKER_EN);
+    CHECK(fake_gnss_profile_calls() == 0);
+    CHECK(purrgo_gnss_tracker_active());
+#else
     /* Приёмник - в профиль трекера (PSMOO). */
     CHECK(fake_gnss_profile_calls() == 1);
     CHECK(fake_gnss_profile_last() == (int)PURRGO_GNSS_PROFILE_TRACKER);
+#endif
 
     /* Запись как в EXPEDITION; настройка пользователя не тронута. */
     CHECK(purrgo_logger_get_mode() == LOGGER_MODE_EXPEDITION);
@@ -169,8 +178,14 @@ static void test_tracker_mode(void)
     purrgo_app_handle_button(PURRGO_BTN_COMBO_K1_K4);
     CHECK(purrgo_app_get_state() == APP_STATE_MAP);
     CHECK(!purrgo_app_tracker_mode_active());
+#if PURRGO_GNSS_TRACKER_EN_ACTIVE
+    CHECK(fake_gnss_restart_profile() == (int)PURRGO_GNSS_PROFILE_NAV);     /* последний перезапуск - с профилем навигации */
+    CHECK(!purrgo_gnss_tracker_active());
+    CHECK(fake_power_gnss_off_calls() >= 1);                                /* циклы включения/выключения шли */
+#else
     CHECK(fake_gnss_profile_calls() == 2);                                  /* вход и выход */
     CHECK(fake_gnss_profile_last() == (int)PURRGO_GNSS_PROFILE_NAV);        /* приёмник снова отдаёт данные каждую секунду */
+#endif
     CHECK(purrgo_logger_get_mode() == LOGGER_MODE_STANDARD);
     CHECK(purrgo_app_ui_needs_render(g_now));
     CHECK(purrgo_logger_get_track_point_count() >= points_before);
@@ -221,6 +236,10 @@ static void test_tracker_exit_restores_off(void)
 }
 
 /*
+ * Цикл по EN (по умолчанию): приёмник включается раз в период и после фикса выключается. Срок действия фикса
+ * задаёт политика purrgo_gnss_tracker_fix_timeout_ms(): пауза плюс ожидание фикса плюс запас, а не 5 с.
+ * Без новых решений политика фиксирует промахи и растит паузы, дольше срока фикс сбрасывается.
+ *
  * PSMOO: приёмник выдаёт решение раз в период и молчит между ними. Фикс остаётся действующим до
  * длинного таймаута трекера (а не 5 с); без решений дольше таймаута фикс сбрасывается.
  *
@@ -230,7 +249,53 @@ static void test_tracker_exit_restores_off(void)
  */
 static void test_tracker_sparse_fixes(void)
 {
-#if PURRGO_GNSS_TRACKER_ACTIVE
+#if PURRGO_GNSS_TRACKER_EN_ACTIVE
+    gfx_context_t g;
+
+    fake_fs_reset();
+    fake_power_reset();
+    memset(&app_config, 0, sizeof app_config);
+    g_now = 800000;
+    purrgo_logger_reset();
+    purrgo_app_ui_reset();
+    purrgo_app_init();
+    app_config.log_mode = LOGGER_MODE_STANDARD;
+    purrgo_logger_set_mode(app_config.log_mode);
+    CHECK(gfx_init(&g, W, H, g_fb, cb_draw, cb_read));
+
+    run_ticks(1000);
+    feed_epoch(10, 0);
+    run_ticks(1000);
+    purrgo_app_ui_render(&g, purrgo_app_get_gnss_solution(), NULL);
+    purrgo_app_handle_button(PURRGO_BTN_KEY4_LONG);
+    purrgo_app_handle_button(PURRGO_BTN_KEY4_SHORT);
+    for (int i = 0; i < 2; i++) { purrgo_app_handle_button(PURRGO_BTN_KEY2_SHORT); }
+    purrgo_app_handle_button(PURRGO_BTN_KEY3_SHORT);
+    CHECK(purrgo_app_tracker_mode_active());
+    CHECK(purrgo_gnss_tracker_active());
+    CHECK(fake_gnss_restart_calls() == 1 && fake_gnss_restart_profile() == (int)PURRGO_GNSS_PROFILE_TRACKER_EN);
+
+    /* Приёмник получил фикс и ушёл в паузу: решения нет дольше обычных 5 с, но фикс действует. */
+    feed_epoch(11, 1);
+    run_ticks(5000);                                       /* HOLD (точность NMEA неизвестна) кончился: EN = Low */
+    CHECK(fake_power_gnss_off_calls() >= 1);
+    CHECK(purrgo_logger_get_state() == LOGGER_STATE_RECORDING);
+    CHECK(purrgo_gnss_tracker_fix_timeout_ms() > 5000U);
+    run_ticks(((uint32_t)PURRGO_GNSS_TRACKER_PERIOD_S * 1000U) - 3000U);
+    CHECK(purrgo_app_get_gnss_solution()->valid);
+
+    /* Новых решений нет: приёмник включается снова и снова, каждый промах удлиняет паузу, а фикс в конце сброшен. */
+    const int restarts_before = fake_gnss_restart_calls();
+
+    run_ticks(500000U);
+    CHECK(fake_gnss_restart_calls() > restarts_before);
+    CHECK(!purrgo_app_get_gnss_solution()->valid);
+    CHECK(purrgo_gnss_tracker_wait_ms(g_now) <= 300000U);  /* пауза не больше предела BACKOFF_MAX */
+
+    purrgo_app_handle_button(PURRGO_BTN_COMBO_K1_K4);
+    CHECK(fake_gnss_restart_profile() == (int)PURRGO_GNSS_PROFILE_NAV);
+    CHECK(purrgo_gnss_tracker_wait_ms(g_now) == UINT32_MAX);   /* политика остановлена */
+#elif PURRGO_GNSS_TRACKER_ACTIVE
     gfx_context_t g;
 
     fake_fs_reset();

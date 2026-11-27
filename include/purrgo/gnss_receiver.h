@@ -29,6 +29,12 @@ typedef void (*purrgo_gnss_tx_fn)(const uint8_t *data, size_t len);
  *                                 PURRGO_GNSS_TRACKER_PERIOD_S, PSMCT (PURRGO_GNSS_TRACKER_MODE_CT, по умолчанию)
  *                                 или PSMOO (MODE_OO); при PURRGO_GNSS_TRACKER_MODE_OFF совпадает с
  *                                 PURRGO_GNSS_PROFILE_NAV.
+ *   PURRGO_GNSS_PROFILE_TRACKER_EN / _CT - цикл по EN (PURRGO_GNSS_TRACKER_MODE_EN, purrgo/gnss_duty.h):
+ *                                 _EN - короткое включение: полная мощность, скорость UART не меняется (38400),
+ *                                 настройка только в RAM (после каждого включения слой RAM пуст);
+ *                                 _CT - приёмник остаётся включённым при слабом небе: PSMCT с периодом
+ *                                 PURRGO_GNSS_TRACKER_CT_PERIOD_S, тоже на 38400. Оба: набор сообщений навигации
+ *                                 без NAV-SAT. Вне MODE_EN совпадают с PURRGO_GNSS_PROFILE_NAV.
  */
 typedef enum {
     PURRGO_GNSS_PROFILE_NAV = 0,
@@ -39,7 +45,9 @@ typedef enum {
      * перекрывается настройкой навигации и так, удаление нужно, чтобы PSMOO не вернулся из BBR, если
      * RAM приёмника когда-нибудь очистится (сброс, состояние "off").
      */
-    PURRGO_GNSS_PROFILE_NAV_AFTER_TRACKER
+    PURRGO_GNSS_PROFILE_NAV_AFTER_TRACKER,
+    PURRGO_GNSS_PROFILE_TRACKER_EN,
+    PURRGO_GNSS_PROFILE_TRACKER_CT
 } purrgo_gnss_profile_t;
 
 /*

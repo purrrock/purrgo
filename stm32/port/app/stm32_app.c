@@ -16,6 +16,7 @@
 #include <purrgo/system_time.h>
 #include <purrgo/sun.h>
 #include "purrgo/gnss_io.h"
+#include "purrgo/gnss_duty.h"
 #include "purrgo/logger.h"
 #include "buttons.h"
 #include "display_stm32.h"
@@ -256,10 +257,13 @@ static void purrgo_stm32_idle(uint32_t now_ms)
 #if (PURRGO_STOP2 != 0)
   bool on_busy = false;
   const uint32_t display_ms = display_stm32_wait_ms(&on_busy);
+  /* Цикл по EN в трекере: следующее включение, таймаут фикса и т. п. наступают без прерывания (UINT32_MAX - ничего не ждёт). */
+  const uint32_t duty_ms = purrgo_gnss_tracker_wait_ms(now_ms);
 
   if (purrgo_app_deep_sleep_allowed(now_ms) &&
       !purrgo_sound_stm32_busy() &&   /* TIM16 в Stop 2 не работает: сигнал доигрывается в Sleep */
       (display_ms >= PURRGO_STOP2_MIN_MS) &&
+      (duty_ms >= PURRGO_STOP2_MIN_MS) &&   /* срок политики вот-вот наступит: главному циклу нужно сработать сразу */
       purrgo_stm32_buttons_idle() &&
       purrgo_gnss_stop_ready(now_ms))
   {
@@ -272,6 +276,10 @@ static void purrgo_stm32_idle(uint32_t now_ms)
     if (display_ms < max_ms)
     {
       max_ms = display_ms;
+    }
+    if (duty_ms < max_ms)
+    {
+      max_ms = duty_ms;   /* точность включения по EN: просыпаемся к сроку, а не по периоду PURRGO_STOP2_MAX_MS */
     }
 
     if (purrgo_stop2_enter(max_ms, on_busy))

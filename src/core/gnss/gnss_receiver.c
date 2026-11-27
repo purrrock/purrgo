@@ -454,7 +454,23 @@ void purrgo_gnss_receiver_configure_ubx_profile(purrgo_gnss_tx_fn tx, purrgo_gns
     const bool tracker_ct = false;
 #endif
     (void)tracker_ct;
+    /* Цикл по EN (PURRGO_GNSS_TRACKER_MODE_EN): короткое включение (EN) или непрерывный PSMCT (CT). */
+#if PURRGO_GNSS_TRACKER_EN_ACTIVE
+    const bool prof_en = (profile == PURRGO_GNSS_PROFILE_TRACKER_EN);
+    const bool prof_ct = (profile == PURRGO_GNSS_PROFILE_TRACKER_CT);
+#else
+    const bool prof_en = false;
+    const bool prof_ct = false;
+#endif
+    (void)prof_en;
+    (void)prof_ct;
     uint32_t rate_ms = (uint32_t)PURRGO_GNSS_UPDATE_PERIOD_MS;
+
+#if PURRGO_GNSS_TRACKER_EN_ACTIVE
+    if (prof_ct) {
+        rate_ms = (uint32_t)PURRGO_GNSS_TRACKER_CT_PERIOD_S * 1000U;
+    }
+#endif
 
 #if PURRGO_GNSS_TRACKER_PSMCT_ACTIVE
     if (tracker_ct) {
@@ -579,7 +595,9 @@ void purrgo_gnss_receiver_configure_ubx_profile(purrgo_gnss_tx_fn tx, purrgo_gns
     add_group(groups, &n, "NAV-STATUS", &msg_status, 1U, layers);
 #endif
 #if PURRGO_GNSS_NAV_SAT
-    add_group(groups, &n, "NAV-SAT", &msg_sat, 1U, layers);
+    if (!prof_en && !prof_ct) {   /* список спутников трекеру не нужен: меньше обмена за короткое включение */
+        add_group(groups, &n, "NAV-SAT", &msg_sat, 1U, layers);
+    }
 #endif
 #if PURRGO_GNSS_ITFM
     add_group(groups, &n, "ITFM", &itfm, 1U, layers);
@@ -685,9 +703,9 @@ void purrgo_gnss_receiver_configure_ubx_profile(purrgo_gnss_tx_fn tx, purrgo_gns
          * задаёт CFG-RATE-MEAS из базового кадра.
          */
 #if PURRGO_GNSS_PSM_ACTIVE
-        const bool psmct = true;
+        const bool psmct = !prof_en;   /* EN: приёмник включён на секунды, полная мощность */
 #else
-        const bool psmct = tracker_ct;
+        const bool psmct = tracker_ct || prof_ct;
 #endif
         if (psmct) {
             static const purrgo_ubx_cfg_item_t psm_no_off = { UBX_KEY_PM_DONOTENTEROFF, 1U };
