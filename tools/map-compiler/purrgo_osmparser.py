@@ -46,9 +46,13 @@ _STOP_WORDS = (
     "ул.", "пер.", "пл.", "st.", "rd.", "ln.", "dr.", "sq.", "way", "pl."
 )
 
+# Стоп-слово должно быть отдельным словом: после него обязателен пробел, иначе
+# "Кафетерий" превращается в "Терий кафе", "Паркинг" - в "Инг парк", а
+# "Кафе-бар" - в "-бар кафе". Сокращения на точку ("ул.", "пер.", "vul.")
+# допускают слитное написание: "ул.Ленина".
 _sorted_stop_words = sorted(_STOP_WORDS, key=len, reverse=True)
 _STOP_WORDS_RX = re.compile(
-    r"^(" + "|".join(re.escape(w) for w in _sorted_stop_words) + r")\s*(.*)$",
+    r"^(" + "|".join(re.escape(w) for w in _sorted_stop_words) + r")(?:(?<=\.)|\s+)\s*(.*)$",
     re.IGNORECASE
 )
 
