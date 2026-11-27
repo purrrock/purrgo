@@ -29,10 +29,9 @@
   /* Корпус устройства */
   .device { background: var(--card); border: 1px solid var(--line); border-radius: 14px;
     padding: 14px; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 12px; }
-  .screen { position: relative; width: min(100%, calc((100vh - 230px) * 176 / 264), 352px); min-width: 176px;
-    aspect-ratio: 176 / 264; background: #fff; border: 2px solid #000; border-radius: 2px; }
-  canvas#canvas { display: block; width: 100% !important; height: 100% !important;
-    image-rendering: pixelated; image-rendering: crisp-edges; outline: none; touch-action: none; }
+  .screen { position: relative; width: fit-content; background: #fff; border: 2px solid #000; border-radius: 2px; }
+  /* Размер canvas задаётся из JS (fitScreen): целое число физических пикселей на пиксель дисплея. */
+  canvas#canvas { display: block; image-rendering: pixelated; image-rendering: crisp-edges; outline: none; touch-action: none; }
   #loading { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center;
     justify-content: center; gap: 8px; background: #fff; color: #000; font-size: .85rem; text-align: center; padding: 12px; }
   #loading progress { width: 70%; }
@@ -107,6 +106,24 @@
     onAbort: function () { statusEl.textContent = 'Ошибка запуска (см. консоль браузера)'; loadingEl.classList.remove('hidden'); }
   };
   window.onerror = function () { statusEl.textContent = 'Ошибка запуска (см. консоль браузера)'; };
+
+  // Целочисленное масштабирование: backing store canvas = 176x264 (1 px дисплея = 1 px canvas),
+  // CSS-размер = 176*k / devicePixelRatio, т.е. ровно k физических пикселей на пиксель дисплея.
+  // Иначе (дробный масштаб, как на десктопе с 100%/125%/150%) пиксели получаются разной ширины.
+  var DISP_W = 176, DISP_H = 264;
+  function fitScreen() {
+    var dpr = window.devicePixelRatio || 1;
+    var mainW = document.querySelector('.device').clientWidth - 28 - 4;   /* padding + border */
+    var availW = Math.min(mainW, 352);
+    var availH = window.innerHeight - 230;
+    var cssW = Math.min(availW, availH * DISP_W / DISP_H);
+    var k = Math.max(1, Math.floor(cssW * dpr / DISP_W + 1e-6));
+    var c = Module.canvas;
+    c.style.width = (DISP_W * k / dpr) + 'px';
+    c.style.height = (DISP_H * k / dpr) + 'px';
+  }
+  window.addEventListener('resize', fitScreen);
+  fitScreen();
 
   function key(idx, down) {
     if (Module.ccall) { Module.ccall('purrgo_web_key', null, ['number', 'number'], [idx, down]); }

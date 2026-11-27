@@ -4,7 +4,12 @@
 #include <SDL2/SDL.h>
 #include <stdbool.h>
 
+#ifdef __EMSCRIPTEN__
+/* Браузер: canvas 1:1 с дисплеем, масштабирование делает CSS (целым множителем, см. shell.html). */
+#define PIXEL_SCALE 1
+#else
 #define PIXEL_SCALE 2
+#endif
 #define WINDOW_WIDTH (DISPLAY_WIDTH * PIXEL_SCALE)
 #ifdef __EMSCRIPTEN__
 /* В браузере кнопки - HTML-элементы страницы, область кнопок в canvas не нужна. */
