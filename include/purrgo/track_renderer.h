@@ -57,4 +57,38 @@ bool purrgo_track_render_new_segments(
     purrgo_rect_t *out_rect
 );
 
+/**
+ * @brief Рамка хвоста трека (без рисования): отрезка от последней точки трека до позиции
+ *        (lat_1e7, lon_1e7), с запасом на обводку, внутри окна карты.
+ *
+ * @return true, если в RAM-треке есть точка и отрезок попадает в окно (out_rect заполнен).
+ */
+bool purrgo_track_tail_rect(
+    const purrgo_bbox_t *camera,
+    const purrgo_viewport_t *vp,
+    int32_t lat_1e7,
+    int32_t lon_1e7,
+    purrgo_rect_t *out_rect
+);
+
+/**
+ * @brief Рисует "хвост" трека: отрезок от последней записанной точки до текущей позиции
+ *        (маркёра GNSS), тем же стилем, что и сам трек.
+ *
+ * Запись точек идёт по фильтру (отклонение, шаг, таймаут), поэтому конец записанного
+ * трека обычно отстаёт от маркёра. Хвост - временное изображение: его не хранят, а
+ * стирают возвратом сохранённого фона и рисуют заново при каждом движении маркёра.
+ * Рисование ограничено окном карты vp.
+ *
+ * @return true, если что-то нарисовано (out_rect - рамка, как у purrgo_track_tail_rect()).
+ */
+bool purrgo_track_render_tail(
+    gfx_context_t *gfx,
+    const purrgo_bbox_t *camera,
+    const purrgo_viewport_t *vp,
+    int32_t lat_1e7,
+    int32_t lon_1e7,
+    purrgo_rect_t *out_rect
+);
+
 #endif // PURRGO_TRACK_RENDERER_H

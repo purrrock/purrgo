@@ -20,8 +20,11 @@
 #include "purrgo/hardware_config.h"
 #include "purrgo/map_controller.h"
 #include "purrgo/pc_display_stats.h"
+#include "purrgo/geo.h"
 #include "purrgo/track_logger.h"
+#include "purrgo/track_renderer.h"
 #include "purrgo/ui/ui_dirty.h"
+#include "map/map_projection.h"
 #include "fake_fs.h"
 #include "test_common.h"
 
@@ -60,6 +63,16 @@ static void feed_epoch_ll(double lat_min, double lon_min)
     snprintf(b, sizeof b, "GPRMC,093015.00,A,31%08.5f,N,035%08.5f,E,2.00,0.00,191026,,,A", lat_min, lon_min);
     feed(b);
     snprintf(b, sizeof b, "GPGGA,093015.00,31%08.5f,N,035%08.5f,E,1,08,1.1,100.0,M,18.9,M,,", lat_min, lon_min);
+    feed(b);
+}
+
+/* Эпоха с заданным HDOP (строка): при HDOP > 5 точка в трек не пишется, фикс остаётся. */
+static void feed_epoch_hdop(double lat_min, double lon_min, const char *hdop)
+{
+    char b[140];
+    snprintf(b, sizeof b, "GPRMC,093015.00,A,31%08.5f,N,035%08.5f,E,2.00,0.00,191026,,,A", lat_min, lon_min);
+    feed(b);
+    snprintf(b, sizeof b, "GPGGA,093015.00,31%08.5f,N,035%08.5f,E,1,08,%s,100.0,M,18.9,M,,", lat_min, lon_min, hdop);
     feed(b);
 }
 
@@ -246,6 +259,177 @@ static void test_track_segments_not_lost(void)
     int black = 0;
     for (int y = 9; y < H - 9; y++) for (int x = 0; x < W; x++) if (full[y * W + x] == BLACK + 1) black++;
     CHECK(black > 50);
+}
+
+/*
+ * Хвост трека: отрезок от последней записанной точки до маркёра.
+ * Точка пишется не на каждом шаге (фильтр по отклонению, шагу и таймауту), поэтому
+ * конец записанного трека отстаёт от маркёра: трек и маркёр должны быть соединены линией,
+ * а когда маркёр движется, старый хвост стирается, не оставляя следов.
+ */
+static void screen_xy(int32_t lat, int32_t lon, int *x, int *y)
+{
+    purrgo_viewport_t vp = { PURRGO_HW_DISPLAY_WIDTH_PX, PURRGO_MAP_VIEWPORT_HEIGHT_PX, 0,
+                             PURRGO_MAP_STATUS_BAR_H_PX };
+    purrgo_bbox_t cam;
+    int16_t sx, sy;
+    purrgo_geo_bbox_from_center(map_app_get_map_center_lat(), map_app_get_map_center_lon(),
+                                map_app_get_map_scale_width_m(), &vp, &cam);
+    project_to_screen(lon, lat, &cam, &vp, &sx, &sy);
+    *x = sx;
+    *y = sy;
+}
+
+/* Число чёрных точек на отрезке между двумя точками экрана (без концов cut px - там маркёр). */
+static int black_on_segment(const uint8_t *fb, int x0, int y0, int x1, int y1, int cut, int *total)
+{
+    const int n = (abs(x1 - x0) > abs(y1 - y0)) ? abs(x1 - x0) : abs(y1 - y0);
+    int black = 0;
+    *total = 0;
+    for (int i = cut; i <= n - cut; i++) {
+        const int x = x0 + (x1 - x0) * i / n;
+        const int y = y0 + (y1 - y0) * i / n;
+        (*total)++;
+        /* Ядро линии толщиной 2 px: на диагонали идеальная точка может попасть на соседний пиксель. */
+        if (fb[y * W + x] == BLACK + 1 || fb[y * W + x + 1] == BLACK + 1 ||
+            fb[(y + 1) * W + x] == BLACK + 1 || fb[(y + 1) * W + x + 1] == BLACK + 1) { black++; }
+    }
+    return black;
+}
+
+static void test_track_tail_connects_marker(void)
+{
+    gfx_context_t g;
+    static uint8_t inc[W * H], full[W * H];
+
+    app_start(&g, (uint16_t)(1u << PURRGO_LAYER_TRACK));
+    for (int i = 0; i < 4; i++) { run_ticks(1000); feed_epoch_lat(33.54000); render(&g); }
+    CHECK(purrgo_map_controller_handle_button(PURRGO_ACTION_LEFT));   /* камера стоит */
+    purrgo_ui_dirty_mark(UI_DIRTY_SCREEN);
+    render(&g);
+
+    /* Зигзаг на север (камера стоит выше маркёра): точки трека пишутся, по ним строится трек. */
+    double lat = 33.54000;
+    for (int k = 1; k <= 12; k++) {
+        lat += 0.004;
+        run_ticks(1000);
+        feed_epoch_ll(lat, (k & 1) ? 28.39400 : 28.39000);
+        purrgo_ui_dirty_mark(UI_DIRTY_SCREEN);
+        render(&g);
+    }
+    const size_t n0 = purrgo_logger_get_track_point_count();
+    CHECK(n0 >= 5);
+
+    /*
+     * Прямой отрезок дальше на север без отклонения от курса: точек трека не добавляется
+     * (фильтр), маркёр уходит от конца трека на десятки пикселей.
+     */
+    track_point_t last;
+    CHECK(purrgo_logger_get_track_point(n0 - 1U, &last));
+    lat += 0.060;
+    run_ticks(1000);
+    feed_epoch_ll(lat, 28.39000);
+    purrgo_ui_dirty_mark(UI_DIRTY_SCREEN);
+    render(&g);
+    memcpy(inc, g_fb, sizeof inc);
+    CHECK(purrgo_logger_get_track_point_count() == n0 || purrgo_logger_get_track_point_count() == n0 + 1U);
+
+    track_point_t end_pt;
+    const size_t n1 = purrgo_logger_get_track_point_count();
+    CHECK(purrgo_logger_get_track_point(n1 - 1U, &end_pt));
+    const purrgo_gnss_solution_t *gnss = purrgo_app_get_gnss_solution();
+    CHECK(gnss->valid);
+
+    int tx, ty, mx, my;
+    screen_xy(end_pt.lat_1e7, end_pt.lon_1e7, &tx, &ty);
+    screen_xy(gnss->lat_1e7, gnss->lon_1e7, &mx, &my);
+    const int dist = (abs(mx - tx) > abs(my - ty)) ? abs(mx - tx) : abs(my - ty);
+    CHECK(dist >= 20);   /* между концом трека и маркёром есть заметный промежуток */
+
+    /* Промежуток закрыт линией хвоста; у маркёра (его размер 13 px) и у стыка не проверяем. */
+    int total = 0;
+    int black = black_on_segment(inc, tx, ty, mx, my, 9, &total);
+    CHECK(total > 0 && black == total);
+
+    /* Рамка хвоста лежит в окне карты и охватывает оба конца. */
+    purrgo_viewport_t vp = { PURRGO_HW_DISPLAY_WIDTH_PX, PURRGO_MAP_VIEWPORT_HEIGHT_PX, 0,
+                             PURRGO_MAP_STATUS_BAR_H_PX };
+    purrgo_bbox_t cam;
+    purrgo_rect_t r;
+    purrgo_geo_bbox_from_center(map_app_get_map_center_lat(), map_app_get_map_center_lon(),
+                                map_app_get_map_scale_width_m(), &vp, &cam);
+    CHECK(purrgo_track_tail_rect(&cam, &vp, gnss->lat_1e7, gnss->lon_1e7, &r));
+    CHECK(r.x >= 0 && r.y >= PURRGO_MAP_STATUS_BAR_H_PX);
+    CHECK(r.x + r.w <= W && r.y + r.h <= PURRGO_MAP_STATUS_BAR_H_PX + PURRGO_MAP_VIEWPORT_HEIGHT_PX);
+    CHECK(mx >= r.x && mx < r.x + r.w && my >= r.y && my < r.y + r.h);
+
+    /* Полная перерисовка карты рисует тот же хвост: кадры совпадают пиксель в пиксель. */
+    purrgo_ui_dirty_mark(UI_DIRTY_MAP);
+    render(&g);
+    memcpy(full, g_fb, sizeof full);
+    CHECK(memcmp(inc, full, sizeof inc) == 0);
+
+    /*
+     * Дальше маркёр двигается без добавления точек в трек (HDOP 9,9 фильтр качества
+     * отвергает, фикс при этом остаётся). Логгер обрабатывает прежнюю эпоху на тике, так
+     * что сначала тик: конец трека - прежнее положение маркёра.
+     */
+    run_ticks(1000);
+    const size_t n2 = purrgo_logger_get_track_point_count();
+    track_point_t p2;
+    CHECK(purrgo_logger_get_track_point(n2 - 1U, &p2));
+    int lx, ly;
+    screen_xy(p2.lat_1e7, p2.lon_1e7, &lx, &ly);
+
+    /* Маркёр на север от конца трека: хвост - вертикальная линия. */
+    feed_epoch_hdop(lat + 0.040, 28.39000, "9.9");
+    run_ticks(1000);
+    purrgo_ui_dirty_mark(UI_DIRTY_SCREEN);
+    render(&g);
+    CHECK(purrgo_logger_get_track_point_count() == n2);
+    int m1x, m1y;
+    screen_xy(gnss->lat_1e7, gnss->lon_1e7, &m1x, &m1y);
+    CHECK(ly - m1y >= 20 && m1x == lx);
+    total = 0;
+    black = black_on_segment(g_fb, lx, ly, m1x, m1y, 9, &total);
+    CHECK(total > 0 && black == total);
+
+    /*
+     * Маркёр уходит вбок: хвост меняет направление. Старый хвост и старый маркёр стираются
+     * возвратом фона: на их месте чистый фон (на этой карте под треком ничего нет), новый
+     * хвост ведёт от прежнего конца трека к новому положению маркёра.
+     */
+    feed_epoch_hdop(lat + 0.040, 28.39000 + 0.030, "9.9");
+    run_ticks(1000);
+    purrgo_ui_dirty_mark(UI_DIRTY_SCREEN);
+    render(&g);
+    CHECK(purrgo_logger_get_track_point_count() == n2);
+    int m2x, m2y;
+    screen_xy(gnss->lat_1e7, gnss->lon_1e7, &m2x, &m2y);
+    CHECK(m2x - m1x >= 12 && m2y == m1y);
+
+    /* Старый маркёр стёрт (квадрат 15 x 15 вокруг его центра чист). */
+    int left = 0;
+    for (int y = m1y - 7; y <= m1y + 7; y++) {
+        for (int x = m1x - 7; x <= m1x + 7; x++) {
+            if (g_fb[y * W + x] == BLACK + 1) { left++; }
+        }
+    }
+    CHECK(left == 0);
+
+    /* Старая вертикальная линия хвоста стёрта (новый хвост от неё уже далеко). */
+    left = 0;
+    for (int y = m1y + 9; y <= ly - 16; y++) {
+        for (int x = lx - 2; x <= lx + 2; x++) {
+            if (g_fb[y * W + x] == BLACK + 1) { left++; }
+        }
+    }
+    CHECK(left == 0);
+
+    /* Новый хвост соединяет конец трека с новым положением маркёра. */
+    total = 0;
+    black = black_on_segment(g_fb, lx, ly, m2x, m2y, 9, &total);
+    CHECK(total > 0 && black == total);
 }
 
 /* ------------------------- сдвиг карты (частичное) ------------------------ */
@@ -466,6 +650,7 @@ int main(void)
     test_menu_value_change_refreshes_row();
     test_map_layers_toggle_refreshes_row();
     test_track_segments_not_lost();
+    test_track_tail_connects_marker();
     test_map_shift_is_partial_refresh();
     test_marker_fill_inside_frame();
     return test_finish("test_ui_refresh_fixes");

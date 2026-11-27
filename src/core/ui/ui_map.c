@@ -65,12 +65,14 @@ typedef struct {
 static status_bar_state_t prev_status_state = {0};
 
 /*
- * Background cache to avoid re-rendering the whole map when marker changes.
- * Size 24x24 is enough for the marker (rotated bbox up to ~17 px at
- * PURRGO_MAP_POS_MARK_SIZE_PX = 13) + safety margin 2 px on each side.
+ * Кэш фона под динамической частью карты (маркёр GNSS и "хвост" трека от последней
+ * записанной точки до маркёра), чтобы не перерисовывать всю карту при каждом движении
+ * маркёра. Хвост может быть длинным (хорда трека до 250 м, в режиме EXPEDITION до 1 км),
+ * поэтому кэш рассчитан на всё окно карты. Пиксель - 2 бита (gfx_color_t: 0..3, четыре
+ * градации серого), окно 176 x 246 px занимает около 10,8 КБ.
  */
-#define MARKER_BG_CACHE_W 24
-#define MARKER_BG_CACHE_H 24
+#define OVERLAY_BG_W PURRGO_HW_DISPLAY_WIDTH_PX
+#define OVERLAY_BG_H PURRGO_MAP_VIEWPORT_HEIGHT_PX
 
 static struct {
     int16_t x;
@@ -78,8 +80,11 @@ static struct {
     int16_t w;
     int16_t h;
     bool valid;
-    gfx_color_t pixels[MARKER_BG_CACHE_W * MARKER_BG_CACHE_H];
+    uint8_t packed[(OVERLAY_BG_W * OVERLAY_BG_H + 3) / 4];
 } marker_bg_cache = {0};
+
+/* Нарисован ли сейчас хвост трека (его нужно стереть при следующем обновлении). */
+static bool s_tail_drawn = false;
 
 //static void log_marker_diagnostic(const char* reason, const marker_state_t* m) {
 //    if (m->rendered) {
@@ -106,7 +111,7 @@ static struct {
 
 /*
  * Размер маркёра, px (нечётный: у фигуры есть центральный пиксель). Был 10.
- * Если менять, проверить размер кэша фона MARKER_BG_CACHE_W/H.
+ * Кэш фона (marker_bg_cache) рассчитан на всё окно карты и от размера маркёра не зависит.
  */
 #define PURRGO_MAP_POS_MARK_SIZE_PX 13
 
@@ -374,63 +379,87 @@ static void ui_calc_marker_state(
     out_state->rendered = true;
 }
 
-static void ui_save_marker_bg(gfx_context_t* gfx, const marker_state_t* state) {
-    if (!state->rendered) {
+/*
+ * Область под маркёром и хвостом: рамка маркёра с запасом 2 px (антиалиасинг, округление),
+ * объединённая с рамкой хвоста (tail - NULL, если хвоста нет), обрезанная окном карты.
+ * false - рисовать нечего (маркёр и хвост вне окна).
+ */
+static bool ui_overlay_rect(const marker_state_t* m, const purrgo_rect_t* tail, purrgo_rect_t* out) {
+    const int32_t margin = 2;
+    int32_t x0 = INT32_MAX, y0 = INT32_MAX, x1 = INT32_MIN, y1 = INT32_MIN;
+
+    if (m->rendered) {
+        x0 = m->min_x - margin;
+        y0 = m->min_y - margin;
+        x1 = m->max_x + margin;
+        y1 = m->max_y + margin;
+    }
+    if (tail != NULL) {
+        if (tail->x - 1 < x0) x0 = tail->x - 1;
+        if (tail->y - 1 < y0) y0 = tail->y - 1;
+        if (tail->x + tail->w > x1) x1 = tail->x + tail->w;
+        if (tail->y + tail->h > y1) y1 = tail->y + tail->h;
+    }
+    if (x0 > x1 || y0 > y1) {
+        return false;
+    }
+
+    /* Границы окна карты (offset_y = строка статуса, высота = экран без двух строк статуса). */
+    const int32_t vp_y0 = PURRGO_MAP_STATUS_BAR_H_PX;
+    const int32_t vp_y1 = PURRGO_MAP_STATUS_BAR_H_PX + PURRGO_MAP_VIEWPORT_HEIGHT_PX - 1;
+
+    if (x0 < 0) x0 = 0;
+    if (y0 < vp_y0) y0 = vp_y0;
+    if (x1 > PURRGO_HW_DISPLAY_WIDTH_PX - 1) x1 = PURRGO_HW_DISPLAY_WIDTH_PX - 1;
+    if (y1 > vp_y1) y1 = vp_y1;
+    if (x0 > x1 || y0 > y1) {
+        return false;
+    }
+
+    out->x = (int16_t)x0;
+    out->y = (int16_t)y0;
+    out->w = (int16_t)(x1 - x0 + 1);
+    out->h = (int16_t)(y1 - y0 + 1);
+    return true;
+}
+
+/* Сохраняет фон области (NULL - нечего сохранять, кэш становится пустым). */
+static void ui_save_overlay_bg(gfx_context_t* gfx, const purrgo_rect_t* area) {
+    if (area == NULL || area->w <= 0 || area->h <= 0 ||
+        area->w > OVERLAY_BG_W || area->h > OVERLAY_BG_H) {
         marker_bg_cache.valid = false;
         return;
     }
 
-    // Safety margin is important to cover anti-aliasing or slight rounding errors
-    int margin = 2;
-    int16_t x = (int16_t)(state->min_x - margin);
-    int16_t y = (int16_t)(state->min_y - margin);
-    int16_t w = (int16_t)((state->max_x - state->min_x + 1) + 2 * margin);
-    int16_t h = (int16_t)((state->max_y - state->min_y + 1) + 2 * margin);
-
-    // Clip to screen to prevent buffer overflow
-    // Map viewport offset_y is 9 and height is HEIGHT - 18
-    // So viewport bounds are y: 9 to HEIGHT - 9.
-    int16_t map_vp_offset_y = PURRGO_MAP_STATUS_BAR_H_PX;
-    int16_t map_vp_height = PURRGO_MAP_VIEWPORT_HEIGHT_PX;
-
-    if (x < 0) { w += x; x = 0; }
-    if (y < map_vp_offset_y) { h = (int16_t)(h - (map_vp_offset_y - y)); y = map_vp_offset_y; }
-    if (x + w > PURRGO_HW_DISPLAY_WIDTH_PX) { w = PURRGO_HW_DISPLAY_WIDTH_PX - x; }
-    if (y + h > map_vp_offset_y + map_vp_height) { h = (int16_t)(map_vp_offset_y + map_vp_height - y); }
-
-    if (w <= 0 || h <= 0 || w > MARKER_BG_CACHE_W || h > MARKER_BG_CACHE_H) {
-        // Can't fit in cache or invalid size, invalidate cache
-        marker_bg_cache.valid = false;
-        return;
-    }
-
-    marker_bg_cache.x = x;
-    marker_bg_cache.y = y;
-    marker_bg_cache.w = w;
-    marker_bg_cache.h = h;
+    marker_bg_cache.x = area->x;
+    marker_bg_cache.y = area->y;
+    marker_bg_cache.w = area->w;
+    marker_bg_cache.h = area->h;
     marker_bg_cache.valid = true;
 
-    int idx = 0;
+    const size_t total = (size_t)area->w * (size_t)area->h;
+    memset(marker_bg_cache.packed, 0, (total + 3U) / 4U);
 
-    // We need to bypass the current clipping area of gfx_context to read background
-    // because it might be clipped to the union region during a partial refresh.
-    // However, we just clamped the read rectangle to the map viewport, so we are safe
-    // to read directly.
+    /*
+     * Область читается напрямую, в обход текущей области отсечения gfx: при частичном
+     * обновлении она может быть сужена. Прямоугольник уже ограничен окном карты.
+     */
     int16_t old_clip_x = gfx->clip_x;
     int16_t old_clip_y = gfx->clip_y;
     int16_t old_clip_w = gfx->clip_w;
     int16_t old_clip_h = gfx->clip_h;
     gfx_reset_clip(gfx);
 
-    for (int16_t cy = 0; cy < h; cy++) {
-        for (int16_t cx = 0; cx < w; cx++) {
-            marker_bg_cache.pixels[idx++] = gfx_read_pixel(gfx, x + cx, y + cy);
+    size_t idx = 0;
+    for (int16_t cy = 0; cy < area->h; cy++) {
+        for (int16_t cx = 0; cx < area->w; cx++, idx++) {
+            const uint8_t v = (uint8_t)(gfx_read_pixel(gfx, (int16_t)(area->x + cx),
+                                                       (int16_t)(area->y + cy)) & 0x03U);
+            marker_bg_cache.packed[idx >> 2] |= (uint8_t)(v << ((idx & 3U) * 2U));
         }
     }
 
     gfx_set_clip(gfx, old_clip_x, old_clip_y, old_clip_w, old_clip_h);
-
-    // PURRGO_LOG("MARKER BG SAVE x=%d y=%d w=%d h=%d\n", x, y, w, h);
 }
 
 static void ui_restore_marker_bg(gfx_context_t* gfx) {
@@ -438,24 +467,23 @@ static void ui_restore_marker_bg(gfx_context_t* gfx) {
 
     gfx_color_t old_fg = gfx->color_fg;
 
-    int idx = 0;
     int16_t old_clip_x = gfx->clip_x;
     int16_t old_clip_y = gfx->clip_y;
     int16_t old_clip_w = gfx->clip_w;
     int16_t old_clip_h = gfx->clip_h;
     gfx_reset_clip(gfx);
 
+    size_t idx = 0;
     for (int16_t cy = 0; cy < marker_bg_cache.h; cy++) {
-        for (int16_t cx = 0; cx < marker_bg_cache.w; cx++) {
-            gfx->color_fg = marker_bg_cache.pixels[idx++];
-            gfx_draw_pixel(gfx, marker_bg_cache.x + cx, marker_bg_cache.y + cy);
+        for (int16_t cx = 0; cx < marker_bg_cache.w; cx++, idx++) {
+            gfx->color_fg = (gfx_color_t)((marker_bg_cache.packed[idx >> 2] >> ((idx & 3U) * 2U)) & 0x03U);
+            gfx_draw_pixel(gfx, (int16_t)(marker_bg_cache.x + cx), (int16_t)(marker_bg_cache.y + cy));
         }
     }
 
     gfx_set_clip(gfx, old_clip_x, old_clip_y, old_clip_w, old_clip_h);
 
     gfx->color_fg = old_fg;
-    // PURRGO_LOG("MARKER BG RESTORE x=%d y=%d w=%d h=%d\n", marker_bg_cache.x, marker_bg_cache.y, marker_bg_cache.w, marker_bg_cache.h);
 }
 
 static void ui_draw_marker(gfx_context_t* gfx, const marker_state_t* state) {
@@ -672,6 +700,7 @@ static void ui_map_render_dynamic_data(gfx_context_t* gfx, const purrgo_viewport
     }
     /* Все точки, имеющиеся сейчас, нарисованы (или трек не показывается). */
     s_track_drawn_serial = purrgo_logger_get_track_serial();
+    s_tail_drawn = false;
 }
 
 /*
@@ -710,6 +739,48 @@ static bool ui_marker_needs_redraw(const marker_state_t* prev, const marker_stat
     return false;
 }
 
+/*
+ * Нужен ли хвост трека: есть фикс (маркёр стоит в текущей позиции), трек рисуется
+ * и в нём есть хотя бы одна точка. Без фикса маркёр показывает последнюю известную
+ * позицию, а не движение, и к треку его не тянем.
+ */
+static bool ui_tail_wanted(const purrgo_gnss_solution_t* gnss) {
+    return gnss->valid && ui_map_track_visible() &&
+           purrgo_logger_get_track_point_count() > 0U;
+}
+
+/*
+ * Рисует хвост трека и маркёр поверх уже восстановленного фона: сохраняет фон под ними,
+ * потом рисует хвост (от последней точки трека до центра маркёра) и маркёр. Маркёр
+ * идёт последним: его белая рамка закрывает стык хвоста с центром маркёра.
+ * area_out - сохранённая область (false - ничего не сохранено).
+ */
+static bool ui_draw_marker_and_tail(
+    gfx_context_t* gfx,
+    const marker_state_t* marker,
+    bool tail_wanted,
+    const purrgo_viewport_t* map_vp,
+    const purrgo_bbox_t* dynamic_cam,
+    purrgo_rect_t* area_out)
+{
+    purrgo_rect_t tail_rect;
+    const bool tail_ok = tail_wanted &&
+        purrgo_track_tail_rect(dynamic_cam, map_vp, marker->lat_1e7, marker->lon_1e7, &tail_rect);
+
+    const bool area_ok = ui_overlay_rect(marker, tail_ok ? &tail_rect : NULL, area_out);
+    ui_save_overlay_bg(gfx, area_ok ? area_out : NULL);
+
+    if (tail_ok) {
+        purrgo_rect_t drawn;
+        (void)purrgo_track_render_tail(gfx, dynamic_cam, map_vp,
+                                       marker->lat_1e7, marker->lon_1e7, &drawn);
+    }
+    ui_draw_marker(gfx, marker);
+
+    s_tail_drawn = tail_wanted;
+    return area_ok;
+}
+
 static void ui_map_render_gnss_marker(
     gfx_context_t* gfx,
     const purrgo_gnss_solution_t* gnss,
@@ -719,12 +790,13 @@ static void ui_map_render_gnss_marker(
 {
     marker_state_t new_marker_state;
     ui_calc_marker_state(gnss, map_vp, dynamic_cam, &new_marker_state);
+    const bool tail_wanted = ui_tail_wanted(gnss);
 
     if (full_redraw) {
         prev_marker_state_valid = true;
 
-        ui_save_marker_bg(gfx, &new_marker_state);
-        ui_draw_marker(gfx, &new_marker_state);
+        purrgo_rect_t area;
+        (void)ui_draw_marker_and_tail(gfx, &new_marker_state, tail_wanted, map_vp, dynamic_cam, &area);
         prev_marker_state = new_marker_state;
 
         if (new_marker_state.rendered) {
@@ -733,20 +805,26 @@ static void ui_map_render_gnss_marker(
     } else {
         const bool track_pending = purrgo_ui_dirty_test(UI_DIRTY_TRACK);
         const bool changed = ui_marker_needs_redraw(&prev_marker_state, &new_marker_state);
+        const bool tail_changed = (tail_wanted != s_tail_drawn);
 
         /*
-         * Новые отрезки трека тянутся к маркёру, то есть ложатся на область
-         * вокруг него. Порядок обязателен: сначала снять старый маркёр
-         * (вернуть сохранённый фон), потом дорисовать трек, и только потом
-         * сохранить фон и нарисовать маркёр. Иначе возврат фона затирает
-         * только что нарисованный отрезок (короткие отрезки пропадали целиком),
-         * а рисование трека поверх маркёра портит его рамку. Поэтому при
-         * новых точках трека маркёр перерисовывается всегда; если он при этом
-         * сместился меньше порога, он остаётся на прежнем месте (рисуется
-         * прежнее состояние), чтобы порог смещения продолжал работать.
+         * Хвост (отрезок от последней записанной точки до маркёра) и новые отрезки трека
+         * ложатся на область вокруг маркёра. Порядок обязателен: сначала снять старые
+         * маркёр и хвост (вернуть сохранённый фон), потом дорисовать новые отрезки трека,
+         * и только потом сохранить фон, нарисовать хвост и маркёр. Иначе возврат фона
+         * затирает только что нарисованный отрезок (короткие отрезки пропадали целиком),
+         * а рисование поверх маркёра портит его рамку. Поэтому при новых точках трека
+         * маркёр перерисовывается всегда; если он при этом сместился меньше порога, он
+         * остаётся на прежнем месте (рисуется прежнее состояние), чтобы порог смещения
+         * продолжал работать. Конец хвоста - это центр нарисованного маркёра.
          */
-        if (changed || track_pending) {
+        if (changed || track_pending || tail_changed) {
             const marker_state_t draw_state = changed ? new_marker_state : prev_marker_state;
+
+            /* Область, занятая прежними маркёром и хвостом: её тоже надо обновить на экране. */
+            const bool old_valid = marker_bg_cache.valid;
+            const purrgo_rect_t old_area = { marker_bg_cache.x, marker_bg_cache.y,
+                                             marker_bg_cache.w, marker_bg_cache.h };
 
             // Restore the old background
             ui_restore_marker_bg(gfx);
@@ -764,41 +842,27 @@ static void ui_map_render_gnss_marker(
                 purrgo_ui_dirty_clear(UI_DIRTY_TRACK);
             }
 
-            int16_t min_x = 32767;
-            int16_t max_x = -32768;
-            int16_t min_y = 32767;
-            int16_t max_y = -32768;
+            purrgo_rect_t new_area;
+            const bool new_valid = ui_draw_marker_and_tail(gfx, &draw_state, tail_wanted,
+                                                           map_vp, dynamic_cam, &new_area);
 
-            if (prev_marker_state.rendered) {
-                if (prev_marker_state.min_x < min_x) min_x = prev_marker_state.min_x;
-                if (prev_marker_state.max_x > max_x) max_x = prev_marker_state.max_x;
-                if (prev_marker_state.min_y < min_y) min_y = prev_marker_state.min_y;
-                if (prev_marker_state.max_y > max_y) max_y = prev_marker_state.max_y;
+            int32_t min_x = INT32_MAX, min_y = INT32_MAX, max_x = INT32_MIN, max_y = INT32_MIN;
+            if (old_valid) {
+                min_x = old_area.x;
+                min_y = old_area.y;
+                max_x = old_area.x + old_area.w - 1;
+                max_y = old_area.y + old_area.h - 1;
             }
-
-            if (draw_state.rendered) {
-                if (draw_state.min_x < min_x) min_x = draw_state.min_x;
-                if (draw_state.max_x > max_x) max_x = draw_state.max_x;
-                if (draw_state.min_y < min_y) min_y = draw_state.min_y;
-                if (draw_state.max_y > max_y) max_y = draw_state.max_y;
+            if (new_valid) {
+                if (new_area.x < min_x) min_x = new_area.x;
+                if (new_area.y < min_y) min_y = new_area.y;
+                if (new_area.x + new_area.w - 1 > max_x) max_x = new_area.x + new_area.w - 1;
+                if (new_area.y + new_area.h - 1 > max_y) max_y = new_area.y + new_area.h - 1;
             }
-
-            ui_save_marker_bg(gfx, &draw_state);
-            ui_draw_marker(gfx, &draw_state);
 
             if (min_x <= max_x && min_y <= max_y) {
-                // Clamp to viewport
-                if (min_x < map_vp->offset_x) min_x = map_vp->offset_x;
-                if (max_x >= map_vp->offset_x + map_vp->width) max_x = (int16_t)(map_vp->offset_x + map_vp->width - 1);
-                if (min_y < map_vp->offset_y) min_y = map_vp->offset_y;
-                if (max_y >= map_vp->offset_y + map_vp->height) max_y = (int16_t)(map_vp->offset_y + map_vp->height - 1);
-
-                int16_t clip_w = (int16_t)(max_x - min_x + 1);
-                int16_t clip_h = (int16_t)(max_y - min_y + 1);
-
-                if (clip_w > 0 && clip_h > 0) {
-                    display_refresh_region(min_x, min_y, clip_w, clip_h);
-                }
+                display_refresh_region((int16_t)min_x, (int16_t)min_y,
+                                       (int16_t)(max_x - min_x + 1), (int16_t)(max_y - min_y + 1));
             }
             prev_marker_state = draw_state;
 
@@ -907,4 +971,5 @@ void ui_map_reset(void) {
     memset(&prev_status_state, 0, sizeof(prev_status_state));
     s_map_render_attempts = 0;
     s_track_drawn_serial = purrgo_logger_get_track_serial();
+    s_tail_drawn = false;
 }

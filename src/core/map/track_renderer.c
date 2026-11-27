@@ -96,16 +96,16 @@ static void rect_union(purrgo_rect_t *acc, bool *acc_valid, const purrgo_rect_t 
 }
 
 /*
- * Рисует один отрезок трека (по точкам p0 -> p1) с отсечением по окну карты.
- * true - отрезок попал в окно; out_rect - его рамка (с запасом на обводку, внутри окна).
+ * Геометрия одного отрезка трека (по точкам p0 -> p1): координаты на экране после
+ * отсечения и рамка с запасом на обводку, обрезанная окном карты.
+ * false - отрезок целиком вне окна карты (рисовать нечего).
  */
-static bool draw_segment(
-    gfx_context_t *gfx,
+static bool segment_geom(
     const purrgo_bbox_t *camera,
     const purrgo_viewport_t *vp,
     const track_point_t *p0,
     const track_point_t *p1,
-    bool casing,
+    int32_t *ox0, int32_t *oy0, int32_t *ox1, int32_t *oy1,
     purrgo_rect_t *out_rect)
 {
     int32_t x0, y0, x1, y1;
@@ -133,14 +133,6 @@ static bool draw_segment(
         return false;
     }
 
-    if (casing) {
-        gfx_draw_thick_line_halo(gfx, (int16_t)x0, (int16_t)y0, (int16_t)x1, (int16_t)y1,
-                                 TRACK_CORE_PX, TRACK_HALO_PX);
-    } else {
-        gfx_draw_thick_line(gfx, (int16_t)x0, (int16_t)y0, (int16_t)x1, (int16_t)y1,
-                            TRACK_CORE_PX);
-    }
-
     if (min_x < vp->offset_x) min_x = vp->offset_x;
     if (max_x >= vp->offset_x + vp->width) max_x = (int16_t)(vp->offset_x + vp->width - 1);
     if (min_y < vp->offset_y) min_y = vp->offset_y;
@@ -150,7 +142,37 @@ static bool draw_segment(
     out_rect->y = min_y;
     out_rect->w = (int16_t)(max_x - min_x + 1);
     out_rect->h = (int16_t)(max_y - min_y + 1);
+    *ox0 = x0; *oy0 = y0; *ox1 = x1; *oy1 = y1;
     return out_rect->w > 0 && out_rect->h > 0;
+}
+
+/*
+ * Рисует один отрезок трека (по точкам p0 -> p1) с отсечением по окну карты.
+ * true - отрезок попал в окно; out_rect - его рамка (с запасом на обводку, внутри окна).
+ */
+static bool draw_segment(
+    gfx_context_t *gfx,
+    const purrgo_bbox_t *camera,
+    const purrgo_viewport_t *vp,
+    const track_point_t *p0,
+    const track_point_t *p1,
+    bool casing,
+    purrgo_rect_t *out_rect)
+{
+    int32_t x0, y0, x1, y1;
+
+    if (!segment_geom(camera, vp, p0, p1, &x0, &y0, &x1, &y1, out_rect)) {
+        return false;
+    }
+
+    if (casing) {
+        gfx_draw_thick_line_halo(gfx, (int16_t)x0, (int16_t)y0, (int16_t)x1, (int16_t)y1,
+                                 TRACK_CORE_PX, TRACK_HALO_PX);
+    } else {
+        gfx_draw_thick_line(gfx, (int16_t)x0, (int16_t)y0, (int16_t)x1, (int16_t)y1,
+                            TRACK_CORE_PX);
+    }
+    return true;
 }
 
 bool purrgo_track_render_new_segments(
@@ -216,6 +238,87 @@ bool purrgo_track_render_new_segments(
             }
             prev = cur;
         }
+    }
+
+    gfx_set_clip(gfx, old_clip_x, old_clip_y, old_clip_w, old_clip_h);
+    return any;
+}
+
+bool purrgo_track_tail_rect(
+    const purrgo_bbox_t *camera,
+    const purrgo_viewport_t *vp,
+    int32_t lat_1e7,
+    int32_t lon_1e7,
+    purrgo_rect_t *out_rect)
+{
+    if (!camera || !vp || !out_rect) return false;
+
+    const size_t count = purrgo_logger_get_track_point_count();
+    track_point_t last;
+    if (count == 0U || !purrgo_logger_get_track_point(count - 1U, &last)) {
+        return false;
+    }
+
+    const track_point_t end = { lat_1e7, lon_1e7 };
+    int32_t x0, y0, x1, y1;
+    return segment_geom(camera, vp, &last, &end, &x0, &y0, &x1, &y1, out_rect);
+}
+
+bool purrgo_track_render_tail(
+    gfx_context_t *gfx,
+    const purrgo_bbox_t *camera,
+    const purrgo_viewport_t *vp,
+    int32_t lat_1e7,
+    int32_t lon_1e7,
+    purrgo_rect_t *out_rect)
+{
+    if (!gfx || !camera || !vp || !out_rect) return false;
+
+    const size_t count = purrgo_logger_get_track_point_count();
+    track_point_t last;
+    if (count == 0U || !purrgo_logger_get_track_point(count - 1U, &last)) {
+        return false;
+    }
+    const track_point_t end = { lat_1e7, lon_1e7 };
+
+    const int16_t old_clip_x = gfx->clip_x;
+    const int16_t old_clip_y = gfx->clip_y;
+    const int16_t old_clip_w = gfx->clip_w;
+    const int16_t old_clip_h = gfx->clip_h;
+    gfx_set_clip(gfx, vp->offset_x, vp->offset_y, (int16_t)vp->width, (int16_t)vp->height);
+
+    purrgo_rect_t r;
+    bool any = false;
+
+    /* Сначала белая обводка хвоста. */
+    gfx_set_color(gfx, WHITE, gfx->color_bg);
+    if (draw_segment(gfx, camera, vp, &last, &end, true, &r)) {
+        rect_union(out_rect, &any, &r);
+    }
+
+    /*
+     * Обводка хвоста затирает конец чёрной линии последнего настоящего отрезка у стыка:
+     * как и в purrgo_track_render_new_segments(), чёрная линия перерисовывается на два
+     * отрезка вглубь (они уже нарисованы, без своей обводки), потом чёрная линия хвоста.
+     */
+    gfx_set_color(gfx, BLACK, gfx->color_bg);
+    if (count >= 2U) {
+        const size_t from = (count >= 3U) ? (count - 2U) : 1U;
+        track_point_t prev;
+        if (purrgo_logger_get_track_point(from - 1U, &prev)) {
+            for (size_t i = from; i < count; i++) {
+                track_point_t cur;
+                purrgo_rect_t unused;
+                if (!purrgo_logger_get_track_point(i, &cur)) {
+                    break;
+                }
+                (void)draw_segment(gfx, camera, vp, &prev, &cur, false, &unused);
+                prev = cur;
+            }
+        }
+    }
+    if (draw_segment(gfx, camera, vp, &last, &end, false, &r)) {
+        rect_union(out_rect, &any, &r);
     }
 
     gfx_set_clip(gfx, old_clip_x, old_clip_y, old_clip_w, old_clip_h);
