@@ -142,8 +142,26 @@ static purrgo_gnss_duty_input_t tracker_duty_input(void) {
 }
 #endif
 
+/* Что трекер делает с приёмником, для строки лога. */
+#if PURRGO_GNSS_TRACKER_EN_ACTIVE
+#define TRACKER_LOG_GNSS "EN cycle"
+#elif PURRGO_GNSS_TRACKER_PSMOO_ACTIVE
+#define TRACKER_LOG_GNSS "PSMOO"
+#elif PURRGO_GNSS_TRACKER_PSMCT_ACTIVE
+#define TRACKER_LOG_GNSS "PSMCT"
+#else
+#define TRACKER_LOG_GNSS "receiver untouched"
+#endif
+
+/* Между записями файл трека закрывается и SD отключается сразу (purrgo_logger_set_release_between_writes). */
+#define TRACKER_SD_RELEASE \
+    ((PURRGO_TRACKER_SD_RELEASE_MIN_PERIOD_S > 0) && (PURRGO_GNSS_TRACKER_PERIOD_S >= PURRGO_TRACKER_SD_RELEASE_MIN_PERIOD_S))
+
 static void tracker_mode_entered(void) {
+    PURRGO_LOG("Tracker mode: entered (%s, period %u s, SD %s between writes)\r\n", TRACKER_LOG_GNSS,
+               (unsigned)PURRGO_GNSS_TRACKER_PERIOD_S, TRACKER_SD_RELEASE ? "parked" : "kept on");
     purrgo_logger_set_mode(LOGGER_MODE_EXPEDITION);
+    purrgo_logger_set_release_between_writes(TRACKER_SD_RELEASE);
     render_gate_active = false;
     purrgo_ui_dirty_defer_cancel();
     tracker_logged_seq = gnss_feed.fix_seq - 1U;   /* действующий фикс уходит логгеру один раз сразу */
@@ -178,6 +196,9 @@ static void tracker_mode_entered(void) {
  */
 static void tracker_mode_left(void) {
     const uint32_t now = purrgo_system_time_ms();
+
+    PURRGO_LOG("Tracker mode: left\r\n");
+    purrgo_logger_set_release_between_writes(false);
 
     /*
      * Приёмник возвращается к данным каждую секунду. Цикл по EN: он перезапускается с профилем навигации (115200 бод,

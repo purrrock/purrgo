@@ -220,6 +220,10 @@ bool purrgo_fs_replace(const char* src, const char* dst) {
 }
 
 
+/* PC: питанием карты управлять нечем. */
+void purrgo_fs_idle_hint(void) {
+}
+
 bool purrgo_fs_exists(const char* path) {
     struct stat st;
     return path != NULL && stat(path, &st) == 0;

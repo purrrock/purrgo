@@ -1034,8 +1034,9 @@ static void test_tracker_profile_ct(void) {}
 
 /*
  * Профили цикла по EN (PURRGO_GNSS_TRACKER_MODE_EN, по умолчанию): после каждого включения слой RAM приёмника пуст,
- * поэтому вся настройка идёт заново и только в RAM; BBR не трогается (нет VALDEL), скорость UART не меняется,
- * параметров PSMOO нет. _EN: те же сообщения, что в навигации, полная мощность. _CT: приёмник остаётся включённым
+ * настройка записывается в RAM и BBR (PURRGO_GNSS_TRACKER_EN_BBR): после EN = Low модуль включается уже настроенным,
+ * а прошивка шлёт её только первый раз после старта МК или при потере BBR (gnss_io.c). Только в RAM остаётся режим
+ * питания (OPERATEMODE). VALDEL нет, скорость UART не меняется, параметров PSMOO нет. _EN: те же сообщения, что в навигации, полная мощность. _CT: приёмник остаётся включённым
  * (слабое небо): PSMCT с периодом PURRGO_GNSS_TRACKER_CT_PERIOD_S. Ни в одном нет NAV-SAT (список спутников
  * трекеру не нужен).
  */
@@ -1061,8 +1062,13 @@ static void test_tracker_profile_en(void)
     for (int i = 0; i < en_count - 1; i++) {                          /* последний кадр - опрос версии (MON-VER) */
         CHECK(g_cfg[i][2] == 0x06);
         CHECK(g_cfg[i][3] == 0x8A);                                   /* только VALSET, ни одного VALDEL */
-        CHECK(g_cfg[i][7] == (uint8_t)PURRGO_GNSS_UBX_LAYERS);
-        CHECK((g_cfg[i][7] & 0x02U) == 0U);                           /* BBR не трогается */
+        uint32_t pm_v = 0;
+        if (valset_value_n(i, 0x20D00001U, &pm_v)) {                  /* OPERATEMODE: только RAM (PSMCT в BBR отклоняется) */
+            CHECK(g_cfg[i][7] == (uint8_t)PURRGO_GNSS_UBX_LAYERS);
+        } else {                                                      /* остальное: RAM+BBR, после EN = Low слать не нужно */
+            CHECK(g_cfg[i][7] == (uint8_t)(PURRGO_GNSS_TRACKER_EN_BBR ? PURRGO_GNSS_UBX_LAYERS_PERSIST
+                                                                      : PURRGO_GNSS_UBX_LAYERS));
+        }
     }
     CHECK(frame_with_key(key_baud) == -1);                            /* скорость UART не меняется */
     CHECK(frame_with_key(key_sat) == -1);

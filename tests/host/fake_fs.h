@@ -19,6 +19,10 @@ int fake_fs_open_calls(void);   /* число вызовов purrgo_fs_open с �
 void fake_fs_log_reset(void);
 int fake_fs_log_count(void);
 const char* fake_fs_log_at(int i);   /* "open <путь>", "close <файл>", "read <файл>" */
+/* purrgo_fs_idle_hint(): число вызовов, число открытых файлов в последний вызов (-1 - не вызывалась). */
+int fake_fs_idle_hint_calls(void);
+int fake_fs_open_at_last_idle_hint(void);
+void fake_fs_idle_hint_reset(void);
 int fake_fs_sync_calls(void);   /* число вызовов purrgo_fs_sync с момента fake_fs_reset() */
 /* Статистика чтения (сбрасывается fake_fs_reset() и fake_fs_reset_read_stats()). */
 uint32_t fake_fs_read_calls(void);      /* число вызовов purrgo_fs_read */

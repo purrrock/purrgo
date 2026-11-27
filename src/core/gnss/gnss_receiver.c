@@ -509,8 +509,19 @@ void purrgo_gnss_receiver_configure_ubx_profile(purrgo_gnss_tx_fn tx, purrgo_gns
 #endif
     (void)after_tracker;
     (void)profile;
-    const uint8_t layers = tracker ? (uint8_t)PURRGO_GNSS_UBX_LAYERS_PERSIST
-                                   : (uint8_t)PURRGO_GNSS_UBX_LAYERS;
+    /*
+     * Профиль EN (PURRGO_GNSS_TRACKER_EN_BBR): набор систем, вывод сообщений, NMEA и прочее - в RAM и BBR, чтобы
+     * после EN = Low модуль включался уже настроенным и настройку не нужно было слать заново. PM-ключи остаются
+     * только в RAM (PSMCT в BBR приёмник отклоняет, а после EN = Low RAM пуста и режим - полная мощность).
+     */
+#if PURRGO_GNSS_TRACKER_EN_ACTIVE && PURRGO_GNSS_TRACKER_EN_BBR
+    const bool persist_en = prof_en;
+#else
+    const bool persist_en = false;
+#endif
+    (void)persist_en;
+    const uint8_t layers = (tracker || persist_en) ? (uint8_t)PURRGO_GNSS_UBX_LAYERS_PERSIST
+                                                   : (uint8_t)PURRGO_GNSS_UBX_LAYERS;
 #if PURRGO_GNSS_PSM_ANY
     /*
      * PM-ключи: в профиле трекера - RAM и BBR (PSMOO обязан пережить состояние "off"), в навигации - только

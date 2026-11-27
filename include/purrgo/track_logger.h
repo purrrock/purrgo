@@ -44,6 +44,15 @@ void purrgo_logger_set_new_track_callback(purrgo_logger_new_track_cb_t cb);
  * решения с time_valid (приложение: track_logger_service() в app_fsm.c). Сам логгер time_valid не
  * проверяет - поля при time_valid = false могут быть нулями или чужой датой.
  */
+/*
+ * Режим трекера: файл трека открыт только на время записи. После каждого обращения к карте (сброс буфера GPX,
+ * синхронизация) файл закрывается и вызывается purrgo_fs_idle_hint() - платформа может сразу отключить питание
+ * SD. Точки между записями копятся в буфере в RAM, следующая запись (буфер полон или срок синхронизации)
+ * открывает файл на дозапись. Состояние логгера и RAM-трек не меняются. false - обычный режим: файл открыт всё время
+ * записи (при выключении режима закрытый файл открывается снова). Сбрасывается purrgo_logger_reset().
+ */
+void purrgo_logger_set_release_between_writes(bool enable);
+
 bool purrgo_logger_start(const purrgo_gnss_solution_t* first_fix);
 bool purrgo_logger_add_point(const purrgo_gnss_solution_t* fix);
 void purrgo_logger_stop(void);

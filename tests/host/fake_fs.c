@@ -22,6 +22,8 @@ static int open_calls;
 static uint32_t read_calls;
 static uint32_t max_read_end;
 static int sync_calls;
+static int g_idle_hints;
+static int g_open_at_last_hint = -1;
 int fake_fs_open_calls(void) { return open_calls; }
 
 /* Журнал событий: "open <путь>" (каждый вызов, в том числе неудачный), "close <файл>", "read <файл>". */
@@ -46,6 +48,8 @@ void fake_fs_reset(void) {
     sync_calls = 0;
     read_calls = 0;
     max_read_end = 0;
+    g_idle_hints = 0;
+    g_open_at_last_hint = -1;
 }
 
 uint32_t fake_fs_read_calls(void) { return read_calls; }
@@ -156,6 +160,11 @@ bool purrgo_fs_replace(const char* s, const char* d) {
     return true;
 }
 bool purrgo_fs_exists(const char* p) { return find(p) >= 0; }
+/* Подсказка "карта не нужна": тест считает вызовы и число открытых файлов в этот момент. */
+void purrgo_fs_idle_hint(void) { g_idle_hints++; g_open_at_last_hint = fake_fs_open_handles(); }
+int fake_fs_idle_hint_calls(void) { return g_idle_hints; }
+int fake_fs_open_at_last_idle_hint(void) { return g_open_at_last_hint; }
+void fake_fs_idle_hint_reset(void) { g_idle_hints = 0; g_open_at_last_hint = -1; }
 /* Каталог = файлы с именем "<путь>/<имя>" (без вложенных); подкаталогов нет. */
 purrgo_dir_t* purrgo_fs_opendir(const char* p) {
     if (fdir.used) return NULL;

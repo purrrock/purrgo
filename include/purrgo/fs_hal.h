@@ -89,6 +89,14 @@ bool purrgo_fs_readdir(purrgo_dir_t* dir, purrgo_fs_dirent_t* dirent);
 void purrgo_fs_closedir(purrgo_dir_t* dir);
 
 
+/*
+ * Подсказка HAL: серия обращений к ФС закончена, все файлы закрыты, и карта не понадобится ближайшие секунды
+ * (трекер: следующая запись через десятки секунд). Платформа с управляемым питанием карты отключает его сразу, не
+ * дожидаясь тайм-аута простоя; следующее обращение к ФС включает питание и монтирует карту само. Если файлы или
+ * каталоги ещё открыты, ничего не делается. Платформа без управления питанием (PC): пустая функция.
+ */
+void purrgo_fs_idle_hint(void);
+
 const char* purrgo_fs_get_config_path(void);
 const char* purrgo_fs_get_maps_path(void);
 const char* purrgo_fs_get_tracks_path(void);

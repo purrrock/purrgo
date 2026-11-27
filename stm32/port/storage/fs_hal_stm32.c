@@ -757,6 +757,11 @@ bool purrgo_fs_replace(const char* src, const char* dst) {
     return true;
 }
 
+void purrgo_fs_idle_hint(void) {
+    /* Открытые файлы и каталоги (карта, журнал на SD) парковку не пускают: purrgo_sd_park_now() вернёт false. */
+    (void)purrgo_sd_park_now();
+}
+
 bool purrgo_fs_exists(const char* path) {
     if (!path) return false;
     (void)purrgo_sd_wake();

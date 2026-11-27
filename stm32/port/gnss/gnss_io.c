@@ -123,6 +123,27 @@ static bool gnss_cfg_retry_pending = false;
  * будится активностью на RX, настройка навигации отправляется после паузы (gnss_profile_apply_pending).
  */
 static purrgo_gnss_profile_t gnss_profile = PURRGO_GNSS_PROFILE_NAV;
+
+#if PURRGO_GNSS_TRACKER_EN_ACTIVE && PURRGO_GNSS_TRACKER_EN_BBR
+/*
+ * Цикл по EN: настройка профиля EN записана в BBR модуля (RAM+BBR, gnss_receiver.c), после EN = High её слать не
+ * нужно. Ход:
+ *   - первое включение после перезапуска МК настройку отправляет всегда (gnss_en_cfg_written = false): BBR мог
+ *     остаться от другой версии прошивки или быть пустым;
+ *   - дальше после установления связи отправка откладывается на PURRGO_GNSS_EN_CFG_WAIT_MS: пришёл NAV-PVT
+ *     (счётчик вырос с момента включения) - настройка из BBR применена, слать нечего; не пришёл - BBR потерян,
+ *     настройка отправляется и больше отправку не пропускаем (gnss_en_skip_disabled) до перезапуска МК;
+ *   - после отправки модуль не выключается PURRGO_GNSS_EN_CFG_SETTLE_MS (purrgo_gnss_power_off()).
+ */
+static bool gnss_en_cfg_written = false;     /* настройка EN отправлялась после старта МК */
+static bool gnss_en_skip_disabled = false;   /* проверка не подтвердилась: слать после каждого включения */
+static bool gnss_en_probe_pending = false;   /* ждём NAV-PVT вместо отправки настройки */
+static uint32_t gnss_en_probe_t0 = 0U;
+static uint32_t gnss_en_pvt_base = 0U;       /* значение pvt_count в момент включения модуля */
+static bool gnss_en_settle_pending = false;
+static uint32_t gnss_en_t_tx = 0U;           /* когда ушла последняя настройка EN */
+#endif
+
 #if PURRGO_GNSS_TRACKER_ACTIVE
 static bool gnss_profile_apply_pending = false;
 static uint32_t gnss_profile_t_apply = 0U;
@@ -273,7 +294,21 @@ static void gnss_apply_config(void)
     }
     /* Профили цикла по EN (_EN, _CT) настройку пишут только в RAM: BBR не трогается, чистить нечего. */
 #endif
+#if PURRGO_GNSS_TRACKER_EN_ACTIVE && PURRGO_GNSS_TRACKER_EN_BBR
+    if (profile == PURRGO_GNSS_PROFILE_TRACKER_EN)
+    {
+        gnss_en_cfg_written = true;
+        gnss_en_settle_pending = true;
+        gnss_en_t_tx = HAL_GetTick();
+    }
+#endif
     purrgo_gnss_receiver_configure_profile(gnss_uart_tx, profile, gnss_link_baud(&gnss_link));
+#if PURRGO_GNSS_TRACKER_EN_ACTIVE && PURRGO_GNSS_TRACKER_EN_BBR
+    if (profile == PURRGO_GNSS_PROFILE_TRACKER_EN)
+    {
+        gnss_en_t_tx = HAL_GetTick();   /* отсчёт от конца передачи (кадры уходят блокирующе) */
+    }
+#endif
     /* В трекере приёмник молчит между фиксами: монитору не сообщать об этом как о сбое. */
     purrgo_gnss_monitor_expect_gaps(gnss_profile == PURRGO_GNSS_PROFILE_TRACKER);
 }
@@ -399,6 +434,25 @@ void purrgo_gnss_power_off(void)
     }
 #endif
 
+#if PURRGO_GNSS_TRACKER_EN_ACTIVE && PURRGO_GNSS_TRACKER_EN_BBR
+    /*
+     * Настройка EN ушла в BBR только что (фикс пришёл раньше, чем модуль применил её): EN = Low сразу оборвал бы
+     * запись, и следующее включение пришло бы с пустым BBR. Выдержка от конца передачи; ждать приходится только
+     * при отправке настройки (первое включение после старта МК, потеря BBR).
+     */
+    if (gnss_en_settle_pending)
+    {
+        const uint32_t since_tx = HAL_GetTick() - gnss_en_t_tx;
+
+        gnss_en_settle_pending = false;
+        if (since_tx < (uint32_t)PURRGO_GNSS_EN_CFG_SETTLE_MS)
+        {
+            HAL_Delay((uint32_t)PURRGO_GNSS_EN_CFG_SETTLE_MS - since_tx);
+        }
+    }
+    gnss_en_probe_pending = false;
+#endif
+
     gnss_powered = false;
     gnss_link_stop(&gnss_link);
 #if (PURRGO_GNSS_CONFIG_RETRY_MS > 0)
@@ -461,6 +515,11 @@ static void gnss_power_on_profile(purrgo_gnss_profile_t profile)
 #endif
     gnss_powered = true;
     gnss_last_head = 0U;
+#if PURRGO_GNSS_TRACKER_EN_ACTIVE && PURRGO_GNSS_TRACKER_EN_BBR
+    gnss_en_pvt_base = purrgo_gnss_ubx_status()->pvt_count;   /* до начала приёма: гонки с разбором нет */
+    gnss_en_probe_pending = false;
+    gnss_en_settle_pending = false;
+#endif
     purrgo_gnss_init();
     purrgo_gnss_monitor_init();
 
@@ -634,6 +693,15 @@ static void link_on_state(gnss_link_state_t state, uint32_t baud, void *ctx)
         }
         /* Диагностика с нуля на рабочей скорости, затем настройка набора NMEA. */
         purrgo_gnss_monitor_link(baud, true);
+#if PURRGO_GNSS_TRACKER_EN_ACTIVE && PURRGO_GNSS_TRACKER_EN_BBR
+        if ((gnss_profile == PURRGO_GNSS_PROFILE_TRACKER_EN) && gnss_en_cfg_written && !gnss_en_skip_disabled)
+        {
+            /* Настройка лежит в BBR: сначала посмотреть, применил ли её модуль (NAV-PVT без единой команды от нас). */
+            gnss_en_probe_pending = true;
+            gnss_en_probe_t0 = HAL_GetTick();
+            break;
+        }
+#endif
         gnss_apply_config();
 #if (PURRGO_GNSS_CONFIG_RETRY_MS > 0)
         gnss_t_cfg = HAL_GetTick();
@@ -911,6 +979,30 @@ bool purrgo_gnss_read_byte(uint8_t *byte)
 
     /* Определение скорости и её смена: таймауты, переходы (после READY отправляется настройка). */
     gnss_link_poll(&gnss_link, HAL_GetTick());
+
+#if PURRGO_GNSS_TRACKER_EN_ACTIVE && PURRGO_GNSS_TRACKER_EN_BBR
+    if (gnss_en_probe_pending)
+    {
+        if (purrgo_gnss_ubx_status()->pvt_count != gnss_en_pvt_base)
+        {
+            gnss_en_probe_pending = false;
+            PURRGO_LOG("GNSS: settings kept by module (BBR), NAV-PVT after EN without TX, config not sent\r\n");
+        }
+        else if ((uint32_t)(HAL_GetTick() - gnss_en_probe_t0) >= (uint32_t)PURRGO_GNSS_EN_CFG_WAIT_MS)
+        {
+            /* Модуль включился с пустым BBR (потеря резервного питания): настройка нужна, и проверке больше не верим. */
+            gnss_en_probe_pending = false;
+            gnss_en_skip_disabled = true;
+            PURRGO_LOGW("GNSS: no NAV-PVT %u ms after EN, BBR settings lost: sending config, skip disabled\r\n",
+                        (unsigned)PURRGO_GNSS_EN_CFG_WAIT_MS);
+            gnss_apply_config();
+#if (PURRGO_GNSS_CONFIG_RETRY_MS > 0)
+            gnss_t_cfg = HAL_GetTick();
+            gnss_cfg_retry_pending = true;
+#endif
+        }
+    }
+#endif
 
 #if (PURRGO_GNSS_CONFIG_RETRY_MS > 0)
     /*

@@ -17,6 +17,7 @@ uint32_t purrgo_system_time_ms(void) { return 0; }
 /* Парковка SD (sd_card.c) в этом тесте не участвует: карта "всегда на связи". */
 void purrgo_sd_touch(void) { }
 bool purrgo_sd_wake(void) { return true; }
+bool purrgo_sd_park_now(void) { return false; }
 
 /* ---- Заглушка FatFs ------------------------------------------------------ */
 

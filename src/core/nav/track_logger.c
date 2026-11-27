@@ -28,6 +28,13 @@
 #endif
 
 static purrgo_file_t* active_file = NULL;
+/*
+ * Режим трекера (purrgo_logger_set_release_between_writes): файл трека закрывается после каждой записи на SD и
+ * открывается на дозапись при следующей, чтобы карту можно было сразу отключить. Пока файл закрыт,
+ * s_file_released = true: состояние RECORDING, имя в s_active_filename, несброшенные точки - в write_buffer.
+ */
+static bool s_release_between_writes = false;
+static bool s_file_released = false;
 static track_logger_state_t current_state = LOGGER_STATE_IDLE;
 static char s_active_filename[64] = {0};
 
@@ -169,7 +176,27 @@ static void enter_error_state(const char* reason) {
         (void)purrgo_fs_close(active_file);
         active_file = NULL;
     }
+    s_file_released = false;
     current_state = LOGGER_STATE_ERROR;
+}
+
+/*
+ * Файл, закрытый между записями (s_file_released), открывается на дозапись; открытый возвращается как есть.
+ * false - файла нет и открыть его не удалось.
+ */
+static bool ensure_file_open(void) {
+    if (active_file != NULL) {
+        return true;
+    }
+    if (!s_file_released || s_active_filename[0] == '\0') {
+        return false;
+    }
+    active_file = purrgo_fs_open(s_active_filename, FS_WRITE_APPEND);
+    if (active_file == NULL) {
+        return false;
+    }
+    s_file_released = false;
+    return true;
 }
 
 // Сброс накопленных данных на файловую систему.
@@ -178,7 +205,7 @@ static bool flush_buffer(void) {
     if (buffer_pos == 0) {
         return true;
     }
-    if (active_file == NULL) {
+    if (!ensure_file_open()) {
         return false;
     }
 
@@ -197,11 +224,14 @@ static bool flush_buffer(void) {
 
 // Сброс буфера и синхронизация FAT-таблицы (защита от внезапного отключения питания).
 static bool sync_active_file(void) {
-    if (active_file == NULL) {
+    if ((active_file == NULL) && !s_file_released) {
         return false;
     }
     if (!flush_buffer()) {
         return false;
+    }
+    if (active_file == NULL) {
+        return true;    // файл закрыт между записями: всё, что было в нём, уже на карте
     }
     // Данные переданы FatFs, но на носитель не попали: файл нужно переоткрыть.
     return purrgo_fs_sync(active_file);
@@ -232,8 +262,12 @@ static bool finalize_active_file(void) {
     if (ok) {
         ok = flush_buffer();
     }
-    bool closed = purrgo_fs_close(active_file);
-    active_file = NULL;
+    bool closed = true;
+    if (active_file != NULL) {
+        closed = purrgo_fs_close(active_file);
+        active_file = NULL;
+    }
+    s_file_released = false;
     return ok && closed;
 }
 
@@ -791,7 +825,7 @@ static bool reject_point(const purrgo_gnss_solution_t* fix, uint8_t rej) {
     return false;
 }
 
-bool purrgo_logger_add_point(const purrgo_gnss_solution_t* fix) {
+static bool logger_add_point_impl(const purrgo_gnss_solution_t* fix) {
     if (current_mode == LOGGER_MODE_OFF) return false;
     if (current_state != LOGGER_STATE_RECORDING || !fix || !fix->valid) return false;
     uint8_t quality_rej = quality_reject_mask(fix);
@@ -897,6 +931,46 @@ bool purrgo_logger_add_point(const purrgo_gnss_solution_t* fix) {
     sync_if_due(utc_epoch);
 
     return true;
+}
+
+/*
+ * Режим трекера: после обращения к карте файл закрывается (close синхронизирует FAT), и платформе сообщается, что
+ * карта не понадобится, пока не заполнится буфер GPX или не придёт срок синхронизации. Несброшенные точки остаются
+ * в write_buffer. Ошибка закрытия - как любой сбой записи: ERROR и повтор из app_fsm.
+ */
+static void release_file_if_idle(void) {
+    if (!s_release_between_writes || (active_file == NULL) || (current_state != LOGGER_STATE_RECORDING)) {
+        return;
+    }
+    purrgo_file_t* const f = active_file;
+
+    active_file = NULL;
+    if (purrgo_fs_close(f)) {
+        s_file_released = true;
+        purrgo_fs_idle_hint();
+    } else {
+        enter_error_state("close");
+    }
+}
+
+bool purrgo_logger_add_point(const purrgo_gnss_solution_t* fix) {
+    const bool added = logger_add_point_impl(fix);
+
+    release_file_if_idle();
+    return added;
+}
+
+void purrgo_logger_set_release_between_writes(bool enable) {
+    if (enable == s_release_between_writes) {
+        return;
+    }
+    s_release_between_writes = enable;
+    if (enable) {
+        release_file_if_idle();
+    } else if (s_file_released && !ensure_file_open()) {
+        // Вне режима трекера открытый файл - норма записи: вернуть его, иначе повторит app_fsm (ERROR).
+        enter_error_state("reopen");
+    }
 }
 
 static void logger_stop_impl(bool clear_ram) {
@@ -1009,6 +1083,8 @@ void purrgo_logger_reset(void) {
         (void)purrgo_fs_close(active_file);
         active_file = NULL;
     }
+    s_file_released = false;
+    s_release_between_writes = false;
     current_state = LOGGER_STATE_IDLE;
     current_mode = LOGGER_MODE_STANDARD;
     s_active_filename[0] = '\0';
