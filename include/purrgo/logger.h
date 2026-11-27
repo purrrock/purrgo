@@ -84,6 +84,19 @@ void purrgo_logger_sd_service(uint32_t now_ms);
 /* Исторический макрос: обычное сообщение уровня INFO. */
 #define PURRGO_LOG(...)  PURRGO_LOGI(__VA_ARGS__)
 
+/*
+ * PURRGO_LOG_INPUT - лог событий ввода: "BUTTON ..." (buttons.c) и "Sound: CLICK" (щелчок на
+ * нажатие кнопки, драйверы звука). Эти строки идут на каждое нажатие и забивают лог, поэтому по
+ * умолчанию выключены (0). Включить: -DPURRGO_LOG_INPUT=1, в CMake - опция PURRGO_LOG_INPUT=ON.
+ * Выключенный лог превращается в `if (0)` и не занимает флеш; остальные звуки логируются как раньше.
+ */
+#ifndef PURRGO_LOG_INPUT
+#define PURRGO_LOG_INPUT 0
+#endif
+
+#define PURRGO_LOG_INPUT_MSG(...) \
+    do { if (PURRGO_LOG_INPUT) { PURRGO_LOGI(__VA_ARGS__); } } while (0)
+
 #ifdef __cplusplus
 }
 #endif

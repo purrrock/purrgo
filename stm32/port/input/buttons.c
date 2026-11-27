@@ -393,39 +393,39 @@ static void queue_event(purrgo_btn_t event)
     switch (event)
     {
         case PURRGO_BTN_KEY1_SHORT:
-            PURRGO_LOG("BUTTON KEY1 SHORT\r\n");
+            PURRGO_LOG_INPUT_MSG("BUTTON KEY1 SHORT\r\n");
             break;
 
         case PURRGO_BTN_KEY2_SHORT:
-            PURRGO_LOG("BUTTON KEY2 SHORT\r\n");
+            PURRGO_LOG_INPUT_MSG("BUTTON KEY2 SHORT\r\n");
             break;
 
         case PURRGO_BTN_KEY3_SHORT:
-            PURRGO_LOG("BUTTON KEY3 SHORT\r\n");
+            PURRGO_LOG_INPUT_MSG("BUTTON KEY3 SHORT\r\n");
             break;
 
         case PURRGO_BTN_KEY4_SHORT:
-            PURRGO_LOG("BUTTON KEY4 SHORT\r\n");
+            PURRGO_LOG_INPUT_MSG("BUTTON KEY4 SHORT\r\n");
             break;
 
         case PURRGO_BTN_KEY1_LONG:
-            PURRGO_LOG("BUTTON KEY1 LONG\r\n");
+            PURRGO_LOG_INPUT_MSG("BUTTON KEY1 LONG\r\n");
             break;
 
         case PURRGO_BTN_KEY2_LONG:
-            PURRGO_LOG("BUTTON KEY2 LONG\r\n");
+            PURRGO_LOG_INPUT_MSG("BUTTON KEY2 LONG\r\n");
             break;
 
         case PURRGO_BTN_KEY3_LONG:
-            PURRGO_LOG("BUTTON KEY3 LONG\r\n");
+            PURRGO_LOG_INPUT_MSG("BUTTON KEY3 LONG\r\n");
             break;
 
         case PURRGO_BTN_KEY4_LONG:
-            PURRGO_LOG("BUTTON KEY4 LONG\r\n");
+            PURRGO_LOG_INPUT_MSG("BUTTON KEY4 LONG\r\n");
             break;
 
         case PURRGO_BTN_COMBO_K1_K4:
-            PURRGO_LOG("BUTTON K1+K4 COMBO\r\n");
+            PURRGO_LOG_INPUT_MSG("BUTTON K1+K4 COMBO\r\n");
             break;
 
         default:

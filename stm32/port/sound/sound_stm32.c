@@ -252,7 +252,11 @@ void purrgo_platform_sound_play(purrgo_sound_t sound, purrgo_sound_level_t level
         return;
     }
 
-    PURRGO_LOG("Sound: %s (%s)\r\n", purrgo_sound_name(sound), purrgo_sound_level_name(level));
+    if (sound == PURRGO_SOUND_CLICK) {
+        PURRGO_LOG_INPUT_MSG("Sound: %s (%s)\r\n", purrgo_sound_name(sound), purrgo_sound_level_name(level));
+    } else {
+        PURRGO_LOG("Sound: %s (%s)\r\n", purrgo_sound_name(sound), purrgo_sound_level_name(level));
+    }
 #if !PURRGO_SOUND_HW
     return;   /* заглушка: только лог */
 #else
