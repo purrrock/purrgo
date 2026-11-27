@@ -80,7 +80,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: web-root/maps
-          key: web-map-${{ env.MAP_NAME }}-${{ steps.mapkey.outputs.src }}-${{ hashFiles('tools/map-compiler/*.py', 'tools/map-compiler/features.csv') }}-${{ hashFiles('.github/workflows/pages.yml') }}
+          key: web-map-${{ env.MAP_NAME }}-${{ steps.mapkey.outputs.src }}-${{ hashFiles('tools/map-compiler/*.py', 'tools/map-compiler/features.csv', 'tools/map-compiler/search_categories.csv') }}-${{ hashFiles('.github/workflows/pages.yml') }}
 
       - name: Install osmium-tool
         if: steps.map-cache.outputs.cache-hit != 'true'
@@ -113,8 +113,8 @@ jobs:
           rm -f "$WORK/source.osm.pbf"
           cd tools/map-compiler
           python purrgo_osm_optimizer.py "$WORK/raw.osm" "$WORK/$MAP_NAME.osm"
-          python purrgo_map_compiler.py "$WORK/$MAP_NAME.osm" --format 4
-          for f in map.name roads.idx roads.mlp; do
+          python purrgo_map_compiler.py "$WORK/$MAP_NAME.osm" --format 4 --search
+          for f in map.name roads.idx roads.mlp search.idx; do
             [ -s "$MAP_NAME/$f" ] || { echo "::error::missing or empty $f"; exit 1; }
           done
           cp "$MAP_NAME"/* ../../web-root/maps/
