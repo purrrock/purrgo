@@ -25,6 +25,7 @@ PurrGO **не выполняет turn-by-turn route calculation**. Это нав
   цель навигации (расстояние и пеленг).
 - **Запись трека** в GPX на microSD с фильтрацией точек (режимы OFF / STANDARD / EXPEDITION) и режим
   **трекера с отключённым дисплеем** (пункт меню TRACKER).
+- **Поиск объектов** (SEARCH - по категориям, SMART SEARCH - по названию и категории): ближайшие POI, улицы, реки, водоёмы, землепользование; результат - на карту или цель навигации.
 - **Путевые точки и маршруты**: цель навигации (WAYPOINT: HERE, MAP CENTER, точка из GPX), слой Waypoints,
   слой Route из GPX-файла.
 - **Читалка книг** (BOOKS): формат PGB, поиск по книге, GNSS на время чтения выключен.
@@ -181,7 +182,7 @@ cmake --preset stm32u5-release && cmake --build --preset stm32u5-release        
 | [`tools/map-compiler/README.md`](tools/map-compiler/README.md) | Создание карт |
 | [`tools/book-compiler/README.md`](tools/book-compiler/README.md), [`PGB-format.md`](tools/book-compiler/PGB-format.md) | Конвертер книг и формат PGB |
 | [`docs/font-encoding.md`](docs/font-encoding.md) | Кодировка PurrGO-256 |
-| [`docs/design/poi-search.md`](docs/design/poi-search.md), [`docs/design/pgo-v4.md`](docs/design/pgo-v4.md) | Проекты: поиск объектов, блочный индекс карты V4 |
+| [`docs/design/poi-search.md`](docs/design/poi-search.md) | Проект: поиск объектов на карте |
 | [`docs/measurements/`](docs/measurements/README.md) | Результаты замеров и логи |
 | [`docs/datasheets/`](docs/datasheets/) | Даташиты, схемы, фотографии |
 | [`TODO.md`](TODO.md) | Открытые задачи и проверки на железе |

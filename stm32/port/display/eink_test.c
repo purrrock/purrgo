@@ -348,7 +348,7 @@ static void et_scene_menu(int scene, display_mode_t mode, bool whole_screen, uin
         }
         else
         {
-            /* как ui_config.c: строка, с которой ушёл курсор, и строка, на которую пришёл */
+            /* как в меню (ui_rows.h): строка, с которой ушёл курсор, и строка, на которую пришёл */
             display_refresh_region(0, (int16_t)(ET_ROW_Y0 + prev * ET_ROW_STEP), DISPLAY_WIDTH, ET_ROW_STEP);
             display_refresh_region(0, (int16_t)(ET_ROW_Y0 + cur * ET_ROW_STEP), DISPLAY_WIDTH, ET_ROW_STEP);
         }

@@ -81,12 +81,12 @@ cmake --build --preset stm32u5-debug
 | `PURRGO_TRACK_DIAG=ON` | CMake-опция | Диагностическая запись трека (каждая эпоха GNSS), см. раздел [«Полевой тест фильтров трека»](#полевой-тест-фильтров-трека) |
 | `PURRGO_WERROR=ON` | CMake-опция | Предупреждения кода проекта - ошибки (включена в CI: host-тесты и сборка прошивки) |
 | `PURRGO_LOG_LEVEL=0..4` | CMake-опция | Уровень логирования, см. выше |
-| `PURRGO_GNSS_TRACKER_MODE=2` | флаг компилятора | Режим приёмника в трекере PSMOO (по умолчанию 1 - PSMCT). Stop 2 при этом не затрагивается. На G10A-F30 PSMOO не работает, это эксперимент, см. `include/purrgo/hardware_config.h` |
+| `PURRGO_GNSS_TRACKER_MODE=0..3` | флаг компилятора | Режим приёмника в трекере: 0 не трогать, 1 PSMCT, 2 PSMOO, 3 цикл по EN (по умолчанию). Stop 2 при этом не затрагивается. На G10A-F30 PSMOO не работает, это эксперимент, см. `include/purrgo/hardware_config.h` и [`gnss-ubx.md`](gnss-ubx.md) |
 | `PURRGO_STOP2=0` | флаг компилятора | Отключить Stop 2 целиком (по умолчанию 1) |
 | `PURRGO_STOP_HSI_KERNEL_ON=1` | флаг компилятора | HSI16 не гаснет в Stop (по умолчанию 0) |
 | `PURRGO_GNSS_TIMEPULSE=0` | флаг компилятора | Заводской 1PPS модуля, светодиод мигает (по умолчанию 1 - импульс не выдаётся, 2 - вывод отпущен) |
 
-Пример: PSMOO при включённом Stop 2:
+Пример: PSMOO вместо цикла по EN при включённом Stop 2:
 
 ```sh
 cmake --preset stm32u5-debug -DCMAKE_C_FLAGS="-DPURRGO_GNSS_TRACKER_MODE=2"
@@ -153,14 +153,15 @@ ctest --preset linux-gcc-test
 
 | Подсистема | Тесты |
 |---|---|
-| GNSS | `test_gnss` (кольцевой буфер, разбор NMEA на записанном логе), `test_gnss_receiver` (UBX-кадры, UBX-CFG-VALSET), `test_gnss_ubx` (UBX-расширения M10: PVT, ODO, hAcc, SEC-SIG, MON-RF/VER, [`docs/gnss-ubx.md`](gnss-ubx.md)), `test_gnss_link` (поиск скорости и её смена), `test_gnss_diag` |
-| Карта и графика | `test_map` (парсер Map Format V4, фаззинг), `test_map_mlp_stream`, `test_geometry_clip`, `test_gfx_fast_paths` |
-| Экран и интерфейс | `test_marker_pan_battery`, `test_ui_refresh_fixes`, `test_display_eink` (очередь E-Ink поверх `epd4g`, нужен сабмодуль), `test_keyboard`, `test_pgo_text` |
-| Трек и время | `test_time_logger`, `test_track_filter`, `test_track_diag`, `test_tracker_mode`, `test_negative_altitude` |
-| Навигация | `test_navigation`, `test_waypoint`, `test_wpt_layer`, `test_route` |
+| GNSS | `test_gnss` (кольцевой буфер, разбор NMEA на записанном логе), `test_gnss_receiver` (UBX-кадры, UBX-CFG-VALSET), `test_gnss_ubx` (UBX-расширения M10: PVT, ODO, hAcc, SEC-SIG, MON-RF/VER, [`docs/gnss-ubx.md`](gnss-ubx.md)), `test_gnss_link` (поиск скорости и её смена), `test_gnss_diag`, `test_gnss_duty` (цикл по EN), `test_gnss_feed`, `test_utc_hint` |
+| Карта и графика | `test_map` (парсер Map Format V4, фаззинг), `test_map_mlp_stream`, `test_map_layers`, `test_map_center_persist`, `test_geometry_clip`, `test_gfx_fast_paths`, `test_gfx_line_equiv`, `test_gfx_line_halo` |
+| Поиск | `test_poi_search` (простой поиск), `test_map_search` (индекс `search.idx`), `test_smart_search_menu` |
+| Экран и интерфейс | `test_marker_pan_battery`, `test_ui_refresh_fixes`, `test_display_eink` (очередь E-Ink поверх `epd4g`, нужен сабмодуль), `test_keyboard`, `test_pgo_text`, `test_app_keymap`, `test_app_data_change`, `test_boot_banner`, `test_sound` |
+| Трек и время | `test_time_logger`, `test_track_filter`, `test_track_diag`, `test_tracker_mode`, `test_negative_altitude`, `test_logger_retry`, `test_logger_time_gate`, `test_time_unknown`, `test_sd_log_setting`, `test_trig` |
+| Навигация | `test_navigation`, `test_waypoint`, `test_wpt_layer`, `test_route`, `test_open_track`, `test_gpx_repair` |
 | Питание | `test_power_off_screen`, `test_power_sequence`, `test_power_source`, `test_supply_low`, `test_supply_ui` (индикатор причины остановки записи на карте и в путевом компьютере), `test_sd_power` (последовательность питания microSD) |
 | Читалка | `test_pgb`, `test_book_reader`, `test_book_search`, `test_book_resume_track` |
-| Хранилище и ошибки | `test_sd_spi`, `test_refact_critical` |
+| Хранилище и ошибки | `test_sd_spi`, `test_refact_critical`, `test_ram_arena`, `test_fs_cache_stm32` (кэш секторов и read-ahead STM32) |
 
 Python-проверки в CI: `tests/check_pgo_text_table.py` (таблица PurrGO-256 в прошивке и компиляторе совпадает) и
 `python3 -m unittest tests/test_book_compiler.py` (конвертер книг). `tests/audit_maps.py` (аудит бинарных файлов карты, версии V3 и V4 определяются по magic)
@@ -322,7 +323,7 @@ cmake --preset linux-gcc-debug -DPURRGO_MOCK_LAT_1E7=315590000 \
 Подтверждение по батарее идёт `PURRGO_SUPPLY_BATT_CONFIRM_POLLS` опросов с периодом
 `PURRGO_SUPPLY_BATT_POLL_MS` (10 с), так что плашка появится через 20-30 с после выбора источника питания.
 `--supply-low` даёт `STOP:VDD` через `PURRGO_SUPPLY_LOW_CONFIRM_MS`. Значения задаются при
-запуске; в web-версии `argv` берётся из `Module.arguments` (`web/shell.html` его сейчас не задаёт). Реализация:
+запуске; в web-версии `argv` берётся из `Module.arguments` (`emulator/web/shell.html` его сейчас не задаёт). Реализация:
 `purrgo/pc_power.h`, `src/platform/pc/power_pc.c`.
 
 ---
@@ -337,7 +338,7 @@ PC-эмулятор (`emulator`) собирается в WebAssembly через 
 |-----|---------|---------|
 | Окно, рендер | SDL2 (системный) | SDL2 из портов Emscripten, `<canvas>` |
 | Основной цикл | `while` + `SDL_Delay` | `emscripten_set_main_loop` (requestAnimationFrame) |
-| Кнопки K1-K4 | нарисованы в окне SDL, клавиши 1-4 | HTML-кнопки страницы (`web/shell.html`), клавиши 1-4, 5 = K1+K4 |
+| Кнопки K1-K4 | нарисованы в окне SDL, клавиши 1-4 | HTML-кнопки страницы (`emulator/web/shell.html`), клавиши 1-4, 5 = K1+K4 |
 | Файлы | диск, пути `../../../../tests/data/...` | MEMFS: `/maps`, `/books`, `/routes`, `/waypts`, `/tracks`, `/PURRGO.CFG` |
 | GNSS | mock или COM-порт | только mock (старт задаётся при сборке) |
 

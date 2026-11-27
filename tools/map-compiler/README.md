@@ -11,12 +11,12 @@ The compiler generates the files used by the PurrGO map renderer:
 map.name
 ```
 
-The generated map uses **PurrGO Map Format V3**.
+By default the compiler writes the legacy **Map Format V3**, which the firmware does not read (the V3 specification was removed from the repository). Use `--format 4` for the current format (see section 3.1).
 
 For the binary format, see:
 
 ```text
-docs/map-format-v3.md
+docs/map-format-v4.md
 ```
 
 ---
@@ -163,7 +163,7 @@ its range. The compiler stops with an error if a rule uses a code outside the ra
 The detailed semantics of the feature codes and generated map format are defined in:
 
 ```text
-docs/map-format-v3.md
+docs/map-format-v4.md
 ```
 
 ---
@@ -238,7 +238,7 @@ The compiler is a build-time tool. Map rendering and map navigation are performe
 
 ---
 
-## 5. Comparing V3 and V4 (load estimate)
+## 8. Comparing V3 and V4 (load estimate)
 
 `sim_map_io.py` models the SD-card load of one map frame (sectors read, random vs sequential transfers, projected vertices, time). It detects the map format (V3 or V4) automatically.
 

@@ -235,7 +235,7 @@ size_t purrgo_ubx_build_valset(uint8_t *out, size_t out_size, uint8_t layers,
 #define UBX_KEY_SIGNAL_GLO_ENA       0x10310025U  /* L */
 
 /*
- * Параметры PSMOO для трекера (PURRGO_GNSS_TRACKER_PSMOO, см. hardware_config.h) и скорость UART.
+ * Параметры PSMOO для трекера (PURRGO_GNSS_TRACKER_MODE_OO, см. hardware_config.h) и скорость UART.
  * Ключи: UBX-M10 SPG 5.10 Interface Description, группы CFG-PM и CFG-UART1.
  */
 #define UBX_KEY_PM_POSUPDATEPERIOD   0x40D00002U  /* U4, с: период фиксов PSMOO (>= 5) */

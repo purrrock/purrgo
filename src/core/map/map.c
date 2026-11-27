@@ -306,11 +306,11 @@ void purrgo_map_shutdown(void)
 }
 
 /*
- * Выбор LOD по масштабу (docs/design/pgo-v4.md, "LOD 3"). Секция LOD n содержит объекты с
+ * Выбор LOD по масштабу (docs/map-format-v4.md, разделы 0.1 и 3.5). Секция LOD n содержит объекты с
  * LOD >= n, поэтому чем крупнее масштаб (шире окно карты), тем больший номер LOD.
  * Для каждой детализации - наибольший масштаб (включительно), на котором ещё используется
- * LOD 0, 1 и 2; выше - LOD 3. Пороги LOD 3 (50 км и 20 км) - предложение проекта, уточнить
- * замером времени кадра на железе.
+ * LOD 0, 1 и 2; выше - LOD 3 (при LOW - выше 10 км, при HIGH - выше 20 км). Пороги - предложение
+ * проекта, уточнить замером времени кадра на железе.
  */
 static const purrgo_map_scale_t k_lod_max_scale[2][PURRGO_MAP_LOD_COUNT - 1u] = {
     /* PURRGO_MAP_DETAILS_LOW  */ { PURRGO_MAP_SCALE_100M, PURRGO_MAP_SCALE_2KM, PURRGO_MAP_SCALE_10KM },

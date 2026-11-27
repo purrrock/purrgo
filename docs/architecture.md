@@ -174,11 +174,13 @@ grouped by function (`app`, `input`, `display`, `gnss`, `storage`, `power`);
 * microSD + FatFs (`fs_hal_stm32.c`, `sd_card.c`, `storage/`):
   the card is on SPI2 (the 48-pin package has no SDMMC) with the HAL-free card
   protocol in `storage/sd_spi.c` (host-tested) and FatFs R0.16 in `storage/fatfs`
-  (see `docs/hardware.md`, section microSD). `fs_hal_stm32.c` keeps a 64-sector LRU cache,
+  (see `docs/hardware.md`, section microSD). `fs_hal_stm32.c` keeps a built-in 64-sector LRU cache
+  (in map mode a 768-sector cache is attached from the shared RAM arena, `ram_arena.h`),
   builds a FatFs cluster link map (CLMT, fast seek) for read-only files of 256 KB and
   more (map files), and supports an optional per-file read-ahead
   (`purrgo_fs_set_read_ahead`, a single multi-sector SD request per cache miss; the map
-  enables it for `.mlp` only);
+  uses a fixed 4-sector block for `.mlp` and an adaptive block of up to 8 sectors for `.idx`,
+  `purrgo_fs_set_adaptive_read_ahead`);
 * display drivers (`display_eink.c`, `display_stm32.c`);
 * buttons (`buttons.c`, `debug_buttons.c`);
 * system time and logger (`system_time.c`, `purrgo_logger.c`);
@@ -467,6 +469,7 @@ TRACKS/        recorded tracks (GPX)
 ROUTES/        routes (GPX)
 WAYPTS/        waypoints (GPX)
 BOOKS/         e-books (.PGB)
+LOGS/          diagnostic log (SD LOG)
 PURRGO.CFG     configuration
 ```
 
@@ -500,11 +503,15 @@ Display refreshes, storage operations and GNSS activity should therefore be cont
 
 Hardware-specific power control belongs to the STM32 platform adapters.
 
-Current state (details and open work: `TODO.md`, P1): between events the MCU waits in Sleep (`WFI`); Stop modes
-are not used yet. The GNSS receiver is switched off through its EN pin on POWER OFF and in the book reader
-mode (`purrgo_gnss_power_off()`), the e-ink panel is put to sleep after one second of inactivity, the card stays
-powered. Shutdown (`src/core/power/power.c`) stops the logger, saves the configuration, unmounts the card, shows the
-final screen and enters Standby.
+Current state (details and open work: `TODO.md`, P1): between events the MCU waits in Stop 2 in every mode
+(`purrgo_stm32_idle()`, woken by buttons, GNSS data, E-Ink BUSY or an LPTIM1 alarm; plain Sleep (`WFI`) is used
+when Stop 2 is not allowed at that moment). The GNSS receiver is switched off through its EN pin on POWER OFF and
+in the book reader mode (`purrgo_gnss_power_off()`); in navigation it runs in u-blox PSMCT, and in the screen-off
+tracker the firmware cycles it through EN (`docs/gnss-ubx.md`). The e-ink panel is put to sleep after one second
+of inactivity. The SD card is parked (power switch off) after 30 s without open files and wakes on the next
+file access (`docs/hardware.md`, «Питание карты»). Shutdown (`src/core/power/power.c`) stops the logger, saves the
+configuration, unmounts the card, shows the final screen and enters Stop 2 woken by K1 (wake-up resets the MCU);
+Standby is the fallback (`-DPURRGO_POWEROFF_STOP2=0`).
 
 ---
 
@@ -607,7 +614,8 @@ Portable core functionality is tested on the PC using deterministic input
 (`tests/host`, run with `ctest --preset linux-gcc-test` or `sh tests/host/run.sh`; the code
 runs under AddressSanitizer and UndefinedBehaviorSanitizer, and CI runs the suite on every
 push). The platform layer is replaced by a fake filesystem with fault injection.
-The list of host tests and what each covers is in the root `README.md`, section *Testing*.
+The list of host tests is in `docs/development.md`, section *Тестирование*; what each test covers is described
+in the comment at the top of its `tests/host/test_*.c`.
 
 Examples:
 
