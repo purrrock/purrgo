@@ -127,18 +127,15 @@ static purrgo_gnss_profile_t gnss_profile = PURRGO_GNSS_PROFILE_NAV;
 #if PURRGO_GNSS_TRACKER_EN_ACTIVE && PURRGO_GNSS_TRACKER_EN_BBR
 /*
  * Цикл по EN: настройка профиля EN записана в BBR модуля (RAM+BBR, gnss_receiver.c), после EN = High её слать не
- * нужно. Ход:
+ * нужно. Решает первый кадр после включения, без таймеров (модуль может молчать секунды, а МК спать в Stop 2):
  *   - первое включение после перезапуска МК настройку отправляет всегда (gnss_en_cfg_written = false): BBR мог
  *     остаться от другой версии прошивки или быть пустым;
- *   - дальше после установления связи отправка откладывается на PURRGO_GNSS_EN_CFG_WAIT_MS: пришёл NAV-PVT
- *     (счётчик вырос с момента включения) - настройка из BBR применена, слать нечего; не пришёл - BBR потерян,
- *     настройка отправляется и больше отправку не пропускаем (gnss_en_skip_disabled) до перезапуска МК;
+ *   - дальше связь установлена по кадру UBX без единого предложения NMEA - в BBR NMEA выключен, настройка на месте,
+ *     слать нечего;
+ *   - связь установлена по предложению NMEA - BBR пуст (потеря резервного питания), настройка отправляется сразу;
  *   - после отправки модуль не выключается PURRGO_GNSS_EN_CFG_SETTLE_MS (purrgo_gnss_power_off()).
  */
 static bool gnss_en_cfg_written = false;     /* настройка EN отправлялась после старта МК */
-static bool gnss_en_skip_disabled = false;   /* проверка не подтвердилась: слать после каждого включения */
-static bool gnss_en_probe_pending = false;   /* ждём NAV-PVT вместо отправки настройки */
-static uint32_t gnss_en_probe_t0 = 0U;
 static uint32_t gnss_en_pvt_base = 0U;       /* значение pvt_count в момент включения модуля */
 static bool gnss_en_settle_pending = false;
 static uint32_t gnss_en_t_tx = 0U;           /* когда ушла последняя настройка EN */
@@ -450,7 +447,6 @@ void purrgo_gnss_power_off(void)
             HAL_Delay((uint32_t)PURRGO_GNSS_EN_CFG_SETTLE_MS - since_tx);
         }
     }
-    gnss_en_probe_pending = false;
 #endif
 
     gnss_powered = false;
@@ -517,7 +513,6 @@ static void gnss_power_on_profile(purrgo_gnss_profile_t profile)
     gnss_last_head = 0U;
 #if PURRGO_GNSS_TRACKER_EN_ACTIVE && PURRGO_GNSS_TRACKER_EN_BBR
     gnss_en_pvt_base = purrgo_gnss_ubx_status()->pvt_count;   /* до начала приёма: гонки с разбором нет */
-    gnss_en_probe_pending = false;
     gnss_en_settle_pending = false;
 #endif
     purrgo_gnss_init();
@@ -694,12 +689,20 @@ static void link_on_state(gnss_link_state_t state, uint32_t baud, void *ctx)
         /* Диагностика с нуля на рабочей скорости, затем настройка набора NMEA. */
         purrgo_gnss_monitor_link(baud, true);
 #if PURRGO_GNSS_TRACKER_EN_ACTIVE && PURRGO_GNSS_TRACKER_EN_BBR
-        if ((gnss_profile == PURRGO_GNSS_PROFILE_TRACKER_EN) && gnss_en_cfg_written && !gnss_en_skip_disabled)
+        if ((gnss_profile == PURRGO_GNSS_PROFILE_TRACKER_EN) && gnss_en_cfg_written)
         {
-            /* Настройка лежит в BBR: сначала посмотреть, применил ли её модуль (NAV-PVT без единой команды от нас). */
-            gnss_en_probe_pending = true;
-            gnss_en_probe_t0 = HAL_GetTick();
-            break;
+            /* Что пришло, пока искали связь: NMEA - у модуля заводская настройка, только UBX - настройка из BBR. */
+            const uint32_t nmea = gnss_link.diag.sentences_ok;
+            const uint32_t ubx = gnss_link.diag.ubx_frames_ok;
+
+            if (nmea == 0U)
+            {
+                PURRGO_LOG("GNSS: after EN only UBX (%u frames), NMEA off: settings kept in BBR, config not sent\r\n",
+                           (unsigned)ubx);
+                break;
+            }
+            PURRGO_LOGW("GNSS: after EN NMEA (%u sentences, %u UBX): BBR settings lost, sending config\r\n",
+                        (unsigned)nmea, (unsigned)ubx);
         }
 #endif
         gnss_apply_config();
@@ -980,30 +983,6 @@ bool purrgo_gnss_read_byte(uint8_t *byte)
     /* Определение скорости и её смена: таймауты, переходы (после READY отправляется настройка). */
     gnss_link_poll(&gnss_link, HAL_GetTick());
 
-#if PURRGO_GNSS_TRACKER_EN_ACTIVE && PURRGO_GNSS_TRACKER_EN_BBR
-    if (gnss_en_probe_pending)
-    {
-        if (purrgo_gnss_ubx_status()->pvt_count != gnss_en_pvt_base)
-        {
-            gnss_en_probe_pending = false;
-            PURRGO_LOG("GNSS: settings kept by module (BBR), NAV-PVT after EN without TX, config not sent\r\n");
-        }
-        else if ((uint32_t)(HAL_GetTick() - gnss_en_probe_t0) >= (uint32_t)PURRGO_GNSS_EN_CFG_WAIT_MS)
-        {
-            /* Модуль включился с пустым BBR (потеря резервного питания): настройка нужна, и проверке больше не верим. */
-            gnss_en_probe_pending = false;
-            gnss_en_skip_disabled = true;
-            PURRGO_LOGW("GNSS: no NAV-PVT %u ms after EN, BBR settings lost: sending config, skip disabled\r\n",
-                        (unsigned)PURRGO_GNSS_EN_CFG_WAIT_MS);
-            gnss_apply_config();
-#if (PURRGO_GNSS_CONFIG_RETRY_MS > 0)
-            gnss_t_cfg = HAL_GetTick();
-            gnss_cfg_retry_pending = true;
-#endif
-        }
-    }
-#endif
-
 #if (PURRGO_GNSS_CONFIG_RETRY_MS > 0)
     /*
      * Повторяем настройку один раз после установления связи: команда могла потеряться. Если приёмник
@@ -1019,6 +998,15 @@ bool purrgo_gnss_read_byte(uint8_t *byte)
             PURRGO_LOG("GNSS: config confirmed by module (%u/%u replies), retry skipped\r\n",
                        (unsigned)purrgo_gnss_ubx_cfg_replies(), (unsigned)purrgo_gnss_ubx_cfg_count());
         }
+#if PURRGO_GNSS_TRACKER_EN_ACTIVE && PURRGO_GNSS_TRACKER_EN_BBR
+        else if ((gnss_profile == PURRGO_GNSS_PROFILE_TRACKER_EN) &&
+                 (purrgo_gnss_ubx_status()->pvt_count != gnss_en_pvt_base))
+        {
+            /* NAV-PVT пошёл: модуль настройку принял (ответы ACK могли ещё не дойти из-за паузы главного цикла). */
+            PURRGO_LOG("GNSS: NAV-PVT flowing, config applied (%u/%u replies seen), retry skipped\r\n",
+                       (unsigned)purrgo_gnss_ubx_cfg_replies(), (unsigned)purrgo_gnss_ubx_cfg_count());
+        }
+#endif
         else
         {
             PURRGO_LOG("GNSS: config not confirmed (%u/%u replies), retry\r\n",

@@ -1058,12 +1058,12 @@ static void test_tracker_profile_en(void)
     purrgo_gnss_receiver_configure_profile(cfg_tx, PURRGO_GNSS_PROFILE_TRACKER_EN, 115200U);
     const int en_count = g_cfg_count;
     /* В навигации при PURRGO_GNSS_PSM_ACTIVE два кадра PSM (DONOTENTEROFF и OPERATEMODE), в профиле EN - один (FULL). */
-    CHECK(en_count == nav_count - PURRGO_GNSS_NAV_SAT - (PURRGO_GNSS_NAV_PM_FRAMES - 1));
+    CHECK(en_count == nav_count - PURRGO_GNSS_NAV_SAT - PURRGO_GNSS_NAV_PM_FRAMES + PURRGO_GNSS_TRACKER_PM_FRAMES);
     for (int i = 0; i < en_count - 1; i++) {                          /* последний кадр - опрос версии (MON-VER) */
         CHECK(g_cfg[i][2] == 0x06);
         CHECK(g_cfg[i][3] == 0x8A);                                   /* только VALSET, ни одного VALDEL */
         uint32_t pm_v = 0;
-        if (valset_value_n(i, 0x20D00001U, &pm_v)) {                  /* OPERATEMODE: только RAM (PSMCT в BBR отклоняется) */
+        if (valset_value_n(i, 0x20D00001U, &pm_v) || valset_value_n(i, 0x10D00008U, &pm_v)) {   /* OPERATEMODE/DONOTENTEROFF: только RAM (PSMCT в BBR отклоняется) */
             CHECK(g_cfg[i][7] == (uint8_t)PURRGO_GNSS_UBX_LAYERS);
         } else {                                                      /* остальное: RAM+BBR, после EN = Low слать не нужно */
             CHECK(g_cfg[i][7] == (uint8_t)(PURRGO_GNSS_TRACKER_EN_BBR ? PURRGO_GNSS_UBX_LAYERS_PERSIST
@@ -1075,13 +1075,19 @@ static void test_tracker_profile_en(void)
     CHECK(frame_with_key(0x40D00002U) == -1 && frame_with_key(0x40D00003U) == -1 && frame_with_key(0x30D00005U) == -1);
     CHECK(valset_value_n(0, 0x30210001U, &v) && v == (uint32_t)PURRGO_GNSS_UPDATE_PERIOD_MS);
     const int mode = frame_with_key(0x20D00001U);
-    CHECK(mode > 0 && valset_value_n(mode, 0x20D00001U, &v) && v == 0U);   /* OPERATEMODE = FULL: полная мощность */
-    CHECK(frame_with_key(0x10D00008U) == -1);                         /* DONOTENTEROFF (PSMCT) не пишется */
+    CHECK(mode > 0 && valset_value_n(mode, 0x20D00001U, &v));
+    if (PURRGO_GNSS_TRACKER_EN_PSMCT) {                               /* PURRGO_GNSS_TRACKER_EN_PSMCT = 1: как в навигации */
+        CHECK(v == 2U);                                               /* OPERATEMODE = PSMCT */
+        CHECK(frame_with_key(0x10D00008U) == mode - 1);               /* DONOTENTEROFF = 1 прямо перед ним */
+    } else {
+        CHECK(v == 0U);                                               /* OPERATEMODE = FULL: полная мощность */
+        CHECK(frame_with_key(0x10D00008U) == -1);                     /* DONOTENTEROFF (PSMCT) не пишется */
+    }
 
     /* Непрерывный режим: PSMCT, период решений CT. */
     g_cfg_count = 0;
     purrgo_gnss_receiver_configure_profile(cfg_tx, PURRGO_GNSS_PROFILE_TRACKER_CT, 115200U);
-    CHECK(g_cfg_count == en_count + 1);                               /* лишний кадр: DONOTENTEROFF */
+    CHECK(g_cfg_count == en_count + 2 - PURRGO_GNSS_TRACKER_PM_FRAMES);   /* у CT два PM-кадра: DONOTENTEROFF и OPERATEMODE */
     for (int i = 0; i < g_cfg_count - 1; i++) {
         CHECK(g_cfg[i][2] == 0x06 && g_cfg[i][3] == 0x8A);
         CHECK((g_cfg[i][7] & 0x02U) == 0U);

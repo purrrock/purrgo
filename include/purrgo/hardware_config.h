@@ -246,11 +246,21 @@
 #define PURRGO_GNSS_TRACKER_ONTIME_S 2
 #endif
 
+/*
+ * Режим питания приёмника в коротком включении цикла по EN (профиль TRACKER_EN): 0 - FULL (по умолчанию после EN = Low, кадр
+ * OPERATEMODE = 0); 1 - PSMCT (DONOTENTEROFF = 1 и OPERATEMODE = 2, как в навигации; слой RAM: после EN = Low пропадает).
+ * Эксперимент: по логу режима карты PSM доходит до power-optimized tracking только через ~26 с после включения, а окно EN -
+ * секунды, так что выигрыш по току сомнителен; важно сравнить время фикса (`GNSS duty: fix in ... ms`) и число промахов.
+ */
+#ifndef PURRGO_GNSS_TRACKER_EN_PSMCT
+#define PURRGO_GNSS_TRACKER_EN_PSMCT 1
+#endif
+
 #if (PURRGO_HW_GNSS_RECEIVER == PURRGO_GNSS_RECEIVER_UBX) && (PURRGO_GNSS_TRACKER_MODE != PURRGO_GNSS_TRACKER_MODE_OFF)
 #define PURRGO_GNSS_TRACKER_ACTIVE 1
 #if PURRGO_GNSS_TRACKER_MODE == PURRGO_GNSS_TRACKER_MODE_EN
 #define PURRGO_GNSS_TRACKER_EN_ACTIVE 1
-#define PURRGO_GNSS_TRACKER_PM_FRAMES 1   /* профиль EN: один кадр OPERATEMODE = FULL (непрерывный профиль CT - два) */
+#define PURRGO_GNSS_TRACKER_PM_FRAMES (PURRGO_GNSS_TRACKER_EN_PSMCT ? 2 : 1)   /* профиль EN: FULL - один кадр OPERATEMODE, PSMCT - два (как непрерывный профиль CT) */
 /* Срок действия фикса в трекере меняется с паузами и берётся у политики: purrgo_gnss_tracker_fix_timeout_ms(). */
 #else
 #define PURRGO_GNSS_TRACKER_EN_ACTIVE 0
@@ -411,20 +421,15 @@
  * выдавать NAV-PVT/STATUS и молчит по NMEA, поэтому настройку после каждого включения слать не нужно.
  *   PURRGO_GNSS_TRACKER_EN_BBR      1 - так (по умолчанию); 0 - как раньше: настройка только в RAM и после каждого
  *                                   включения заново.
- *   PURRGO_GNSS_EN_CFG_WAIT_MS      сколько ждать после установления связи первый кадр NAV-PVT, прежде чем решить,
- *                                   что настройка в BBR потеряна (нет резервного питания, сброс) и отправить её снова.
- *                                   Кадр идёт раз в эпоху (1 Гц), поэтому не меньше ~1200.
  *   PURRGO_GNSS_EN_CFG_SETTLE_MS    после отправки настройки модуль не выключается, пока не пройдёт столько мс:
  *                                   запись в BBR применяется не мгновенно, а выключение по EN сразу после фикса
  *                                   оборвало бы её.
- * Первое включение после перезапуска МК всегда отправляет настройку (BBR мог остаться от другой версии прошивки).
- * Если после этого NAV-PVT не пришёл, отправка после каждого включения возвращается до перезапуска МК.
+ * Первое включение после перезапуска МК всегда отправляет настройку (BBR мог остаться от другой версии прошивки). Дальше
+ * решает первый кадр после включения: только UBX (NMEA в BBR выключен) - настройка на месте, слать нечего; предложение
+ * NMEA - BBR пуст, настройка отправляется сразу.
  */
 #ifndef PURRGO_GNSS_TRACKER_EN_BBR
 #define PURRGO_GNSS_TRACKER_EN_BBR 1
-#endif
-#ifndef PURRGO_GNSS_EN_CFG_WAIT_MS
-#define PURRGO_GNSS_EN_CFG_WAIT_MS 1500
 #endif
 #ifndef PURRGO_GNSS_EN_CFG_SETTLE_MS
 #define PURRGO_GNSS_EN_CFG_SETTLE_MS 200

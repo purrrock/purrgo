@@ -714,9 +714,9 @@ void purrgo_gnss_receiver_configure_ubx_profile(purrgo_gnss_tx_fn tx, purrgo_gns
          * задаёт CFG-RATE-MEAS из базового кадра.
          */
 #if PURRGO_GNSS_PSM_ACTIVE
-        const bool psmct = !prof_en;   /* EN: приёмник включён на секунды, полная мощность */
+        const bool psmct = !prof_en || PURRGO_GNSS_TRACKER_EN_PSMCT;   /* EN: на секунды; FULL или PSMCT (PURRGO_GNSS_TRACKER_EN_PSMCT) */
 #else
-        const bool psmct = tracker_ct || prof_ct;
+        const bool psmct = tracker_ct || prof_ct || (prof_en && PURRGO_GNSS_TRACKER_EN_PSMCT);
 #endif
         if (psmct) {
             static const purrgo_ubx_cfg_item_t psm_no_off = { UBX_KEY_PM_DONOTENTEROFF, 1U };
