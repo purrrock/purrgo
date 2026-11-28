@@ -476,7 +476,7 @@ static void ui_restore_marker_bg(gfx_context_t* gfx) {
     size_t idx = 0;
     for (int16_t cy = 0; cy < marker_bg_cache.h; cy++) {
         for (int16_t cx = 0; cx < marker_bg_cache.w; cx++, idx++) {
-            gfx->color_fg = (gfx_color_t)((marker_bg_cache.packed[idx >> 2] >> ((idx & 3U) * 2U)) & 0x03U);
+            gfx->color_fg = (gfx_color_t)(((uint32_t)marker_bg_cache.packed[idx >> 2] >> ((idx & 3U) * 2U)) & 0x03U);
             gfx_draw_pixel(gfx, (int16_t)(marker_bg_cache.x + cx), (int16_t)(marker_bg_cache.y + cy));
         }
     }
